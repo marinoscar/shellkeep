@@ -122,7 +122,7 @@ cd infra/compose && docker compose -f base.compose.yml -f prod.compose.yml up -d
 
 ShellKeep uses same-origin hosting via Nginx. The UI is served at `/`, the API at `/api`, and the Swagger docs at `/api/docs` — all from a single domain. No CORS, no cross-origin token juggling.
 
-Terminal I/O flows over a WebSocket connection (`/api/terminal/ws`) directly to the NestJS gateway, which manages tmux sessions on the host. SSH credentials are encrypted with AES-256-GCM before being written to the database — the API layer holds the encryption key, the database never sees plaintext credentials.
+Terminal I/O flows over a WebSocket connection (`/api/terminal/ws`) directly to the NestJS gateway, which SSHs into your remote servers and launches tmux sessions there. The sessions persist on the remote machines — ShellKeep just reconnects to them. SSH credentials are encrypted with AES-256-GCM before being written to the database — the API layer holds the encryption key, the database never sees plaintext credentials.
 
 Auth is JWT-based with short-lived access tokens (15 minutes) and rotating refresh tokens stored in HttpOnly cookies. Every API endpoint requires authentication by default. The device authorization flow (RFC 8628) issues tokens to CLI tools and agents through a browser-approval step, with no special cases or backdoors in the auth stack.
 
