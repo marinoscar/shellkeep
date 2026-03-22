@@ -144,7 +144,6 @@ services:
     restart: unless-stopped
     networks:
       - shellkeep-internal
-      - proxy
 
   # ---------------------------------------------------------------------------
   # API — NestJS Backend (Fastify) with SSH/tmux terminal management
@@ -190,10 +189,6 @@ networks:
   # Internal network for service-to-service communication
   shellkeep-internal:
     driver: bridge
-
-  # Shared VPS proxy network (external, created by /opt/infra/proxy)
-  proxy:
-    external: true
 COMPOSE_EOF
 
 log "  compose.yml generated."
@@ -226,7 +221,7 @@ server {
 
     # Terminal WebSocket — long-lived connections for SSH sessions
     location /api/terminal/ws {
-        proxy_pass http://shellkeep-nginx;
+        proxy_pass http://127.0.0.1:${HOST_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -242,7 +237,7 @@ server {
 
     # API routes
     location /api {
-        proxy_pass http://shellkeep-nginx;
+        proxy_pass http://127.0.0.1:${HOST_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -255,7 +250,7 @@ server {
 
     # Frontend (React SPA)
     location / {
-        proxy_pass http://shellkeep-nginx;
+        proxy_pass http://127.0.0.1:${HOST_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -296,10 +291,30 @@ log "  Images built."
 log ""
 log "  Running database migrations..."
 
-docker compose run --rm -T api sh -c \
-    "npx prisma migrate deploy 2>/dev/null || echo 'Schema already up to date'"
+# Source .env to get database connection parameters
+set -a
+. "${SHELLKEEP_DIR}/.env"
+set +a
+
+# URL-encode the password (handles special characters like ! @ # etc.)
+ENCODED_PW=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${POSTGRES_PASSWORD}', safe=''))")
+
+DATABASE_URL="postgresql://${POSTGRES_USER}:${ENCODED_PW}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+if [ "${POSTGRES_SSL}" = "true" ]; then
+    DATABASE_URL="${DATABASE_URL}?sslmode=require"
+fi
+
+docker compose run --rm -T -e DATABASE_URL="${DATABASE_URL}" api sh -c \
+    "npx prisma migrate deploy"
 
 log "  Migrations complete."
+
+log "  Running database seeds..."
+
+docker compose run --rm -T -e DATABASE_URL="${DATABASE_URL}" -e INITIAL_ADMIN_EMAIL="${INITIAL_ADMIN_EMAIL}" api sh -c \
+    "npx prisma db seed"
+
+log "  Seeds complete."
 
 # ---------------------------------------------------------------------------
 # Step 6: Start all services
