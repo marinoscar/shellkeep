@@ -53,10 +53,10 @@ export function useServerProfiles(): UseServerProfilesResult {
       try {
         const response: ServerProfilesResponse =
           await fetchProfilesApi(params);
-        setProfiles(response.data);
-        setTotal(response.total);
-        setPage(response.page);
-        setPageSize(response.pageSize);
+        setProfiles(response?.data ?? []);
+        setTotal(response?.total ?? 0);
+        setPage(response?.page ?? 1);
+        setPageSize(response?.pageSize ?? 20);
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to fetch server profiles';

@@ -48,10 +48,10 @@ export function useSessions(): UseSessionsResult {
           ...params,
           status: params?.status ?? statusFilter,
         });
-        setSessions(response.data);
-        setTotal(response.total);
-        setPage(response.page);
-        setPageSize(response.pageSize);
+        setSessions(response?.data ?? []);
+        setTotal(response?.total ?? 0);
+        setPage(response?.page ?? 1);
+        setPageSize(response?.pageSize ?? 20);
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to fetch sessions';

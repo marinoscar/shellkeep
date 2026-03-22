@@ -36,9 +36,10 @@ export function NewSessionDialog({ open, onClose, onCreate }: NewSessionDialogPr
       setError(null);
       getServerProfiles({ pageSize: 100 })
         .then((response) => {
-          setServerProfiles(response.data);
-          if (response.data.length > 0 && !selectedProfileId) {
-            setSelectedProfileId(response.data[0].id);
+          const profiles = response?.data ?? [];
+          setServerProfiles(profiles);
+          if (profiles.length > 0 && !selectedProfileId) {
+            setSelectedProfileId(profiles[0].id);
           }
         })
         .catch((err) => {

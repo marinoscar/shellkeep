@@ -47,7 +47,7 @@ export function RecentActivityPanel() {
 
   useEffect(() => {
     getSessions({ pageSize: 5 })
-      .then((res) => setSessions(res.data))
+      .then((res) => setSessions(res?.data ?? []))
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, []);
