@@ -4,7 +4,7 @@ This file provides guidance for AI assistants working on this codebase.
 
 ## Project Overview
 
-Web Application Foundation with React UI + Node API + PostgreSQL. Production-grade foundation with OAuth authentication, RBAC authorization, and flexible settings framework.
+ShellKeep - Browser-based terminal workspace platform with persistent tmux-backed sessions, SSH connectivity, and xterm.js terminal emulation. Built on React UI + NestJS API + PostgreSQL.
 
 ## Technology Stack
 
@@ -24,6 +24,8 @@ Web Application Foundation with React UI + Node API + PostgreSQL. Production-gra
   apps/
     api/                    # Backend API
       src/
+        server-profiles/    # Server profile management
+        terminal/           # Terminal sessions, SSH, WebSocket gateway
       test/
       prisma/
         schema.prisma
@@ -266,6 +268,24 @@ cd apps/api && npm run prisma:migrate
 - `DELETE /api/storage/objects/:id` - Delete object
 - `PATCH /api/storage/objects/:id/metadata` - Update metadata
 
+### Server Profiles
+- `GET /api/server-profiles` - List server profiles (paginated, owner-scoped)
+- `GET /api/server-profiles/:id` - Get server profile by ID
+- `POST /api/server-profiles` - Create server profile
+- `PATCH /api/server-profiles/:id` - Update server profile
+- `DELETE /api/server-profiles/:id` - Delete server profile
+- `POST /api/server-profiles/:id/test` - Test SSH connection
+
+### Terminal Sessions
+- `GET /api/sessions` - List terminal sessions (paginated, status filter)
+- `GET /api/sessions/:id` - Get session by ID
+- `POST /api/sessions` - Create terminal session
+- `PATCH /api/sessions/:id` - Rename session
+- `DELETE /api/sessions/:id` - Terminate session
+
+### Terminal WebSocket
+- `WS /api/terminal/ws` - WebSocket gateway for terminal I/O
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
@@ -285,6 +305,8 @@ cd apps/api && npm run prisma:migrate
 - `allowlist:read/write` - Allowlist management (Admin only)
 - `storage:read/write/delete` - Storage object access (own objects)
 - `storage:read_any/write_any/delete_any` - Storage object access (all objects, Admin only)
+- `servers:read/write/delete` - Server profile management
+- `sessions:read/write/delete` - Terminal session management
 
 ## Database Tables
 
@@ -300,6 +322,8 @@ cd apps/api && npm run prisma:migrate
 - `device_codes` - Device authorization codes (RFC 8628)
 - `storage_objects` - File metadata, status, storage references
 - `storage_object_chunks` - Multipart upload chunk tracking
+- `server_profiles` - SSH connection profiles (encrypted credentials)
+- `terminal_sessions` - Terminal session state and lifecycle tracking
 
 ## Access Control: Email Allowlist
 
@@ -369,6 +393,7 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 - `INITIAL_ADMIN_EMAIL` - First user with this email becomes Admin
 - `DEVICE_CODE_EXPIRY_MINUTES` - Device code lifetime (default: 15)
 - `DEVICE_CODE_POLL_INTERVAL` - Device polling interval in seconds (default: 5)
+- `ENCRYPTION_KEY` - 32-byte key for AES-256-GCM encryption of SSH credentials (generate with: openssl rand -base64 32)
 
 **Observability:**
 - `OTEL_ENABLED` - Enable OpenTelemetry (default: true)
