@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import {
   Home as HomeIcon,
+  Dns as DnsIcon,
   Settings as SettingsIcon,
   AdminPanelSettings as AdminIcon,
   People as PeopleIcon,
@@ -38,6 +39,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       label: 'Home',
       icon: <HomeIcon />,
       path: '/',
+      visible: true,
+    },
+    {
+      label: 'Servers',
+      icon: <DnsIcon />,
+      path: '/servers',
       visible: true,
     },
     {
