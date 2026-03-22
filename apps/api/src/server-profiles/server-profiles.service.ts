@@ -80,6 +80,7 @@ export class ServerProfilesService {
       username: dto.username,
       authMethod: dto.authMethod,
       tags: dto.tags || [],
+      color: dto.color || 'default',
     };
 
     if (dto.password) {
@@ -122,6 +123,7 @@ export class ServerProfilesService {
     if (dto.username !== undefined) data.username = dto.username;
     if (dto.authMethod !== undefined) data.authMethod = dto.authMethod;
     if (dto.tags !== undefined) data.tags = dto.tags;
+    if (dto.color !== undefined) data.color = dto.color;
 
     if (dto.password !== undefined) {
       data.encryptedPassword = dto.password ? encrypt(dto.password, key) : null;
