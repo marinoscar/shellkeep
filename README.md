@@ -6,9 +6,9 @@ Your terminal sessions, alive and waiting — on every server, from any device.
 
 ## The Era of Parallel Infrastructure
 
-AI coding agents don't sleep. They SSH into staging, run migrations, tail logs, and deploy builds — all at the same time, across multiple servers. Meanwhile, you're switching between your laptop, a cloud workstation, and a tablet on the couch.
+AI coding agents don't sleep. They SSH into staging, run migrations, tail logs, and deploy builds, all at the same time, across multiple servers. Meanwhile, you're switching between your laptop, a cloud workstation, and a tablet on the couch.
 
-The old model — open a terminal, SSH in, lose it when you close the lid — doesn't work anymore. ShellKeep is the command center built for how modern developers and their agents actually work. Every session persists. Every server profile is stored securely. Every connection is one click away, from anywhere.
+The old model, open a terminal, SSH in, lose it when you close the lid — doesn't work anymore. ShellKeep is the command center built for how modern developers and their agents actually work. Every session persists. Every server profile is stored securely. Every connection is one click away, from anywhere.
 
 ---
 
