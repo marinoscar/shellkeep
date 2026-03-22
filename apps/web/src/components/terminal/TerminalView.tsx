@@ -6,6 +6,7 @@ import '@xterm/xterm/css/xterm.css';
 
 export interface TerminalViewHandle {
   getTerminal: () => Terminal | null;
+  sendInput: (data: string) => void;
 }
 
 interface TerminalViewProps {
@@ -17,11 +18,12 @@ interface TerminalViewProps {
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
   function TerminalView({ sessionId, onConnectionChange, onError }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { isConnected, error, terminal } = useTerminal(sessionId, containerRef);
+  const { isConnected, error, terminal, sendInput } = useTerminal(sessionId, containerRef);
 
   useImperativeHandle(ref, () => ({
     getTerminal: () => terminal.current,
-  }), [terminal]);
+    sendInput,
+  }), [terminal, sendInput]);
 
   // Notify parent of connection changes
   useEffect(() => {

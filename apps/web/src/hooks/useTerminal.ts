@@ -142,5 +142,10 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     searchAddonRef.current?.findNext(term);
   }, []);
 
-  return { isConnected, error, reconnect, search, terminal: terminalRef };
+  const sendInput = useCallback((data: string) => {
+    const encoder = new TextEncoder();
+    wsRef.current?.send(encoder.encode(data));
+  }, []);
+
+  return { isConnected, error, reconnect, search, terminal: terminalRef, sendInput };
 }
