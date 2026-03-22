@@ -133,3 +133,38 @@ export interface TestConnectionResult {
   success: boolean;
   error?: string;
 }
+
+// Terminal Sessions
+export type SessionStatus = 'active' | 'detached' | 'terminated';
+
+export interface TerminalSession {
+  id: string;
+  name: string;
+  status: SessionStatus;
+  tmuxSessionId: string;
+  cols: number;
+  rows: number;
+  lastActivityAt: string;
+  terminatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  serverProfile: {
+    id: string;
+    name: string;
+    hostname: string;
+    port: number;
+    username: string;
+  };
+}
+
+export interface SessionsResponse {
+  data: TerminalSession[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface CreateSessionData {
+  serverProfileId: string;
+  name?: string;
+}

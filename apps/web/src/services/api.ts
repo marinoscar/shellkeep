@@ -203,6 +203,9 @@ import type {
   ServerProfile,
   ServerProfileFormData,
   TestConnectionResult,
+  SessionsResponse,
+  TerminalSession,
+  CreateSessionData,
 } from '../types';
 
 // Allowlist API
@@ -321,4 +324,37 @@ export async function testServerProfile(
   id: string,
 ): Promise<TestConnectionResult> {
   return api.post<TestConnectionResult>(`/server-profiles/${id}/test`);
+}
+
+// Terminal Sessions API
+export async function getSessions(params?: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+}): Promise<SessionsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+  if (params?.status && params.status !== 'all') searchParams.set('status', params.status);
+  const query = searchParams.toString();
+  return api.get<SessionsResponse>(`/sessions${query ? `?${query}` : ''}`);
+}
+
+export async function getSession(id: string): Promise<TerminalSession> {
+  return api.get<TerminalSession>(`/sessions/${id}`);
+}
+
+export async function createSession(data: CreateSessionData): Promise<TerminalSession> {
+  return api.post<TerminalSession>('/sessions', data);
+}
+
+export async function updateSession(
+  id: string,
+  data: { name: string },
+): Promise<TerminalSession> {
+  return api.patch<TerminalSession>(`/sessions/${id}`, data);
+}
+
+export async function deleteSession(id: string): Promise<void> {
+  await api.delete<void>(`/sessions/${id}`);
 }
