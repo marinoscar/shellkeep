@@ -10,7 +10,7 @@ Deploy ShellKeep on Ubuntu VPS using the `/opt/infra` infrastructure model.
 | **VPS Path** | `/opt/infra/apps/shellkeep/` |
 | **Repository** | `https://github.com/marinoscar/shellkeep.git` |
 | **Internal Port** | `127.0.0.1:8323` (Nginx container -> VPS proxy) |
-| **Database** | External PostgreSQL (via devnet Docker network) |
+| **Database** | Cloud PostgreSQL (e.g. AWS RDS, Neon, Supabase) |
 | **File Storage** | AWS S3 |
 
 ## Architecture
@@ -27,7 +27,7 @@ ShellKeep Nginx (shellkeep-nginx, port 8323)
   |-- /api              -> shellkeep-api:3000  (NestJS + Fastify)
   +-- /                 -> shellkeep-web:80    (React static build)
 
-shellkeep-api -> PostgreSQL (external, via devnet network)
+shellkeep-api -> Cloud PostgreSQL (over the internet, SSL)
              -> AWS S3 (file storage)
 ```
 
@@ -36,11 +36,10 @@ shellkeep-api -> PostgreSQL (external, via devnet network)
 1. Ubuntu VPS with Docker and Docker Compose installed
 2. VPS reverse proxy running (`/opt/infra/proxy/`)
 3. DNS A record: `shellkeep.marin.cr` -> VPS IP
-4. External PostgreSQL server accessible via the `devnet` Docker network
-5. Docker network `devnet` exists: `docker network create devnet`
-6. Google OAuth credentials ([console.cloud.google.com](https://console.cloud.google.com))
+4. Cloud PostgreSQL instance (e.g. AWS RDS, Neon, Supabase) with connection credentials
+5. Google OAuth credentials ([console.cloud.google.com](https://console.cloud.google.com))
    - Authorized redirect URI: `https://shellkeep.marin.cr/api/auth/google/callback`
-7. AWS S3 bucket with CORS configured for `https://shellkeep.marin.cr`
+6. AWS S3 bucket with CORS configured for `https://shellkeep.marin.cr`
 
 ## Step 1: Create Directory Structure
 
@@ -63,13 +62,13 @@ NODE_ENV=production
 PORT=3000
 APP_URL=https://shellkeep.marin.cr
 
-# Database (external PostgreSQL via devnet)
-POSTGRES_HOST=<your-postgres-host>
+# Database (cloud PostgreSQL)
+POSTGRES_HOST=<your-cloud-postgres-host>
 POSTGRES_PORT=5432
-POSTGRES_USER=postgres
+POSTGRES_USER=<your-postgres-user>
 POSTGRES_PASSWORD=<your-postgres-password>
 POSTGRES_DB=shellkeep
-POSTGRES_SSL=false
+POSTGRES_SSL=true
 
 # JWT Authentication
 JWT_SECRET=<generate with: openssl rand -hex 32>
@@ -206,12 +205,12 @@ docker compose -f /opt/infra/apps/shellkeep/compose.yml ps
 ```
 
 ### Database connection refused
-Verify PostgreSQL is reachable from the devnet network:
+Verify PostgreSQL is reachable from the API container:
 ```bash
 docker exec shellkeep-api sh -c 'wget -qO- http://localhost:3000/api/health/ready'
 ```
 
-Check that `POSTGRES_HOST` in `.env` matches the hostname of your PostgreSQL container on the `devnet` network.
+Check that `POSTGRES_HOST` in `.env` is the correct cloud PostgreSQL hostname and that `POSTGRES_SSL=true` is set. Ensure the cloud provider's firewall allows connections from the VPS IP address.
 
 ### Migration errors
 Stop the API before running migrations manually:

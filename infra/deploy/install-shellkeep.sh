@@ -23,9 +23,8 @@
 #
 # Prerequisites:
 #   - Docker and Docker Compose installed
-#   - External PostgreSQL server accessible (via devnet Docker network)
-#   - devnet Docker network created: docker network create devnet
-#   - .env file with production values
+#   - Cloud-hosted PostgreSQL accessible from the VPS (e.g. AWS RDS, Neon, Supabase)
+#   - .env file with production values (including POSTGRES_HOST, POSTGRES_SSL, etc.)
 # =============================================================================
 set -euo pipefail
 
@@ -90,7 +89,8 @@ if [ ! -f "${SHELLKEEP_DIR}/.env" ]; then
     log "  Required values to set:"
     log "    - NODE_ENV=production"
     log "    - APP_URL=https://${DOMAIN}"
-    log "    - POSTGRES_HOST (your PostgreSQL host on devnet)"
+    log "    - POSTGRES_HOST (your cloud PostgreSQL hostname)"
+    log "    - POSTGRES_SSL=true"
     log "    - POSTGRES_PASSWORD"
     log "    - JWT_SECRET (generate with: openssl rand -hex 32)"
     log "    - COOKIE_SECRET (generate with: openssl rand -hex 32)"
@@ -115,7 +115,7 @@ log "[4/7] Generating production configuration..."
 # ---- compose.yml ----
 # Production-ready Docker Compose file that:
 #   - Binds nginx to 127.0.0.1:8323 (VPS proxy routes here)
-#   - Connects to external devnet network for PostgreSQL access
+#   - API connects to cloud PostgreSQL over the internet (via env vars)
 #   - Uses an internal shellkeep-internal network for service-to-service
 #   - Sets restart policies and resource limits
 
@@ -165,7 +165,6 @@ services:
           cpus: '1.0'
     networks:
       - shellkeep-internal
-      - devnet
 
   # ---------------------------------------------------------------------------
   # Web — React Frontend (static build served by Nginx)
@@ -194,10 +193,6 @@ networks:
 
   # Shared VPS proxy network (external, created by /opt/infra/proxy)
   proxy:
-    external: true
-
-  # External network for PostgreSQL access (shared with other projects)
-  devnet:
     external: true
 COMPOSE_EOF
 
