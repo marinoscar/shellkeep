@@ -107,7 +107,7 @@ export default function TerminalFullPage() {
         <Chip
           label={session.serverProfile.name}
           size="small"
-          color={session.serverProfile.color === 'default' || !session.serverProfile.color ? 'default' : session.serverProfile.color}
+          color={session.serverProfile.color === 'default' || !session.serverProfile.color ? 'primary' : session.serverProfile.color}
           variant="filled"
           sx={{ color: 'rgba(255, 255, 255, 0.9)' }}
         />

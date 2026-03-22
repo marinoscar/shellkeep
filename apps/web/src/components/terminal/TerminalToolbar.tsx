@@ -101,7 +101,7 @@ export function TerminalToolbar({
           <Chip
             label={serverProfileName}
             size="small"
-            color={serverProfileColor === 'default' || !serverProfileColor ? 'default' : serverProfileColor}
+            color={serverProfileColor === 'default' || !serverProfileColor ? 'primary' : serverProfileColor}
             variant="filled"
             sx={{ mr: 0.5 }}
           />

@@ -194,7 +194,7 @@ export function ServerProfileList({
                       <Chip
                         label={profile.name}
                         size="small"
-                        color={profile.color === 'default' ? 'default' : profile.color}
+                        color={profile.color === 'default' || !profile.color ? 'primary' : profile.color}
                         variant="filled"
                       />
                     </TableCell>

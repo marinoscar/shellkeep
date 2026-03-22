@@ -82,7 +82,7 @@ export function SessionCard({ session, onOpen, onRename, onTerminate }: SessionC
         <Chip
           label={session.serverProfile.name}
           size="small"
-          color={session.serverProfile.color === 'default' ? 'default' : session.serverProfile.color}
+          color={session.serverProfile.color === 'default' || !session.serverProfile.color ? 'primary' : session.serverProfile.color}
           variant="filled"
         />
 
