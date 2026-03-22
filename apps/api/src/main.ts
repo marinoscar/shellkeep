@@ -10,6 +10,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from '@nestjs/common';
 import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -67,6 +68,9 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document, {
     jsonDocumentUrl: 'api/openapi.json',
   });
+
+  // WebSocket adapter for terminal gateway
+  app.useWebSocketAdapter(new WsAdapter(app));
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
