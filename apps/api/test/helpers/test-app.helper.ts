@@ -4,6 +4,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import fastifyCookie from '@fastify/cookie';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { prismaMock } from '../mocks/prisma.mock';
@@ -65,6 +66,9 @@ export async function createTestApp(
   app.setGlobalPrefix('api');
   // Note: ZodValidationPipe is already registered globally via APP_PIPE in AppModule
   // Do NOT add a standard ValidationPipe here as it conflicts with Zod DTOs
+
+  // WebSocket adapter required for TerminalGateway (same as main.ts)
+  app.useWebSocketAdapter(new WsAdapter(app));
 
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
