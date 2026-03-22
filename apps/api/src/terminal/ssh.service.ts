@@ -13,9 +13,9 @@ export interface DecryptedServerProfile {
   port: number;
   username: string;
   authMethod: string;
-  password?: string;
-  privateKey?: string;
-  passphrase?: string;
+  password?: string | null;
+  privateKey?: string | null;
+  passphrase?: string | null;
 }
 
 @Injectable()
