@@ -57,6 +57,7 @@ export class SessionsService {
       total,
       page,
       pageSize,
+      totalPages: Math.ceil(total / pageSize),
     };
   }
 

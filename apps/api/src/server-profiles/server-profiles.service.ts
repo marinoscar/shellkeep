@@ -47,6 +47,7 @@ export class ServerProfilesService {
       total,
       page,
       pageSize,
+      totalPages: Math.ceil(total / pageSize),
     };
   }
 
