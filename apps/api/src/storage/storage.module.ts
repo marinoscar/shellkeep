@@ -5,6 +5,7 @@ import { CommonModule } from '../common/common.module';
 import { ObjectsController } from './objects/objects.controller';
 import { ObjectsService } from './objects/objects.service';
 import { StorageCleanupTask } from './tasks/storage-cleanup.task';
+import { StorageExpiryTask } from './tasks/storage-expiry.task';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { StorageCleanupTask } from './tasks/storage-cleanup.task';
     CommonModule,
   ],
   controllers: [ObjectsController],
-  providers: [ObjectsService, StorageCleanupTask],
+  providers: [ObjectsService, StorageCleanupTask, StorageExpiryTask],
   exports: [ObjectsService],
 })
 export class StorageModule {}
