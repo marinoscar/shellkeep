@@ -239,6 +239,7 @@ export class SessionsService {
             hostname: serverProfile.hostname,
             port: serverProfile.port,
             username: serverProfile.username,
+            color: serverProfile.color,
           }
         : null,
     };
