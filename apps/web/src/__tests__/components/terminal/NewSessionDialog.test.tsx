@@ -46,7 +46,7 @@ const mockProfile2: ServerProfile = {
 };
 
 const mockProfilesResponse: ServerProfilesResponse = {
-  data: [mockProfile1, mockProfile2],
+  items: [mockProfile1, mockProfile2],
   total: 2,
   page: 1,
   pageSize: 100,
@@ -94,7 +94,7 @@ describe('NewSessionDialog', () => {
       render(<NewSessionDialog {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/Session Name/)).toBeInTheDocument();
+        expect(screen.getByLabelText(/session name/i)).toBeInTheDocument();
       });
     });
   });
@@ -112,13 +112,15 @@ describe('NewSessionDialog', () => {
       render(<NewSessionDialog {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Server Profile')).toBeInTheDocument();
+        // The Select renders a combobox; profiles are loaded when it appears
+        const combobox = screen.getByRole('combobox');
+        expect(combobox).toBeInTheDocument();
       });
     });
 
     it('should show info message when no server profiles exist', async () => {
       vi.mocked(getServerProfiles).mockResolvedValue({
-        data: [],
+        items: [],
         total: 0,
         page: 1,
         pageSize: 100,
@@ -174,10 +176,10 @@ describe('NewSessionDialog', () => {
       const user = userEvent.setup();
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/Session Name/)).toBeInTheDocument();
+        expect(screen.getByLabelText(/session name/i)).toBeInTheDocument();
       });
 
-      await user.type(screen.getByLabelText(/Session Name/), 'My Custom Session');
+      await user.type(screen.getByLabelText(/session name/i), 'My Custom Session');
       await user.click(screen.getByText('Create Session'));
 
       await waitFor(() => {
@@ -207,7 +209,7 @@ describe('NewSessionDialog', () => {
 
     it('should disable Create button when no profiles loaded', async () => {
       vi.mocked(getServerProfiles).mockResolvedValue({
-        data: [],
+        items: [],
         total: 0,
         page: 1,
         pageSize: 100,
