@@ -92,3 +92,44 @@ export interface DeviceAuthorizationResponse {
   success: boolean;
   message: string;
 }
+
+// Server Profiles
+export interface ServerProfile {
+  id: string;
+  name: string;
+  hostname: string;
+  port: number;
+  username: string;
+  authMethod: 'password' | 'key' | 'agent';
+  hasPassword: boolean;
+  hasPrivateKey: boolean;
+  hasPassphrase: boolean;
+  fingerprint: string | null;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServerProfileFormData {
+  name: string;
+  hostname: string;
+  port: number;
+  username: string;
+  authMethod: 'password' | 'key' | 'agent';
+  password?: string;
+  privateKey?: string;
+  passphrase?: string;
+  tags?: string[];
+}
+
+export interface ServerProfilesResponse {
+  data: ServerProfile[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface TestConnectionResult {
+  success: boolean;
+  error?: string;
+}

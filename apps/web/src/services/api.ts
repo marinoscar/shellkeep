@@ -199,6 +199,10 @@ import type {
   UserListItem,
   DeviceActivationInfo,
   DeviceAuthorizationResponse,
+  ServerProfilesResponse,
+  ServerProfile,
+  ServerProfileFormData,
+  TestConnectionResult,
 } from '../types';
 
 // Allowlist API
@@ -276,4 +280,45 @@ export async function authorizeDevice(
     userCode,
     approve,
   });
+}
+
+// Server Profiles API
+export async function getServerProfiles(params?: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+}): Promise<ServerProfilesResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+  if (params?.search) searchParams.set('search', params.search);
+  const query = searchParams.toString();
+  return api.get<ServerProfilesResponse>(`/server-profiles${query ? `?${query}` : ''}`);
+}
+
+export async function getServerProfile(id: string): Promise<ServerProfile> {
+  return api.get<ServerProfile>(`/server-profiles/${id}`);
+}
+
+export async function createServerProfile(
+  data: ServerProfileFormData,
+): Promise<ServerProfile> {
+  return api.post<ServerProfile>('/server-profiles', data);
+}
+
+export async function updateServerProfile(
+  id: string,
+  data: Partial<ServerProfileFormData>,
+): Promise<ServerProfile> {
+  return api.patch<ServerProfile>(`/server-profiles/${id}`, data);
+}
+
+export async function deleteServerProfile(id: string): Promise<void> {
+  await api.delete<void>(`/server-profiles/${id}`);
+}
+
+export async function testServerProfile(
+  id: string,
+): Promise<TestConnectionResult> {
+  return api.post<TestConnectionResult>(`/server-profiles/${id}/test`);
 }
