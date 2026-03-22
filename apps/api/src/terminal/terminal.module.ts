@@ -9,6 +9,7 @@ import { SessionsService } from './sessions.service';
 import { SshService } from './ssh.service';
 import { SessionManagerService } from './session-manager.service';
 import { TerminalGateway } from './terminal.gateway';
+import { SessionCleanupTask } from './tasks/session-cleanup.task';
 
 @Module({
   imports: [
@@ -24,7 +25,7 @@ import { TerminalGateway } from './terminal.gateway';
     }),
   ],
   controllers: [SessionsController],
-  providers: [SessionsService, SshService, SessionManagerService, TerminalGateway],
+  providers: [SessionsService, SshService, SessionManagerService, TerminalGateway, SessionCleanupTask],
   exports: [SessionsService],
 })
 export class TerminalModule {}
