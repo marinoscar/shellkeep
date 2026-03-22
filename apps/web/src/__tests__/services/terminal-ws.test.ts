@@ -48,19 +48,16 @@ class MockWebSocket {
   }
 }
 
-// Install mock
-const originalWebSocket = global.WebSocket;
-
 describe('TerminalWebSocket', () => {
   beforeEach(() => {
     MockWebSocket.reset();
-    (global as any).WebSocket = MockWebSocket;
+    vi.stubGlobal('WebSocket', MockWebSocket);
     vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    (global as any).WebSocket = originalWebSocket;
+    vi.unstubAllGlobals();
   });
 
   describe('connect()', () => {

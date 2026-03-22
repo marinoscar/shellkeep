@@ -59,7 +59,7 @@ const mockProfile2: ServerProfile = {
 };
 
 const mockProfilesResponse: ServerProfilesResponse = {
-  data: [mockProfile, mockProfile2],
+  items: [mockProfile, mockProfile2],
   total: 2,
   page: 1,
   pageSize: 10,

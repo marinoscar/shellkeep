@@ -30,44 +30,57 @@ const {
 // ---------------------------------------------------------------------------
 // Module mocks – all vi.mock calls are hoisted by vitest automatically
 // ---------------------------------------------------------------------------
-vi.mock('@xterm/xterm', () => ({
-  Terminal: vi.fn(() => ({
-    cols: 80,
-    rows: 24,
-    dispose: vi.fn(),
-    open: vi.fn(),
-    write: vi.fn(),
-    onData: vi.fn(),
-    onBinary: vi.fn(),
-    loadAddon: vi.fn(),
-    buffer: { active: { length: 0, getLine: vi.fn() } },
-  })),
-}));
+vi.mock('@xterm/xterm', () => {
+  const TerminalMock = vi.fn(function(this: Record<string, unknown>) {
+    this.cols = 80;
+    this.rows = 24;
+    this.dispose = vi.fn();
+    this.open = vi.fn();
+    this.write = vi.fn();
+    this.onData = vi.fn();
+    this.onBinary = vi.fn();
+    this.loadAddon = vi.fn();
+    this.buffer = { active: { length: 0, getLine: vi.fn() } };
+  });
+  return { Terminal: TerminalMock };
+});
 
-vi.mock('@xterm/addon-fit', () => ({
-  FitAddon: vi.fn(() => ({ fit: vi.fn() })),
-}));
+vi.mock('@xterm/addon-fit', () => {
+  const FitAddonMock = vi.fn(function(this: Record<string, unknown>) {
+    this.fit = vi.fn();
+  });
+  return { FitAddon: FitAddonMock };
+});
 
-vi.mock('@xterm/addon-search', () => ({
-  SearchAddon: vi.fn(() => ({ findNext: vi.fn() })),
-}));
+vi.mock('@xterm/addon-search', () => {
+  const SearchAddonMock = vi.fn(function(this: Record<string, unknown>) {
+    this.findNext = vi.fn();
+  });
+  return { SearchAddon: SearchAddonMock };
+});
 
-vi.mock('@xterm/addon-web-links', () => ({
-  WebLinksAddon: vi.fn(() => ({})),
-}));
+vi.mock('@xterm/addon-web-links', () => {
+  const WebLinksAddonMock = vi.fn(function(this: Record<string, unknown>) {
+    // empty
+  });
+  return { WebLinksAddon: WebLinksAddonMock };
+});
 
-vi.mock('../../services/terminal-ws', () => ({
-  TerminalWebSocket: vi.fn(() => ({
-    get connected() {
-      return wsConnectedState.value;
-    },
-    connect: wsConnectFn,
-    disconnect: wsDisconnectFn,
-    send: wsSendFn,
-    resize: wsResizeFn,
-    on: wsOnFn,
-  })),
-}));
+vi.mock('../../services/terminal-ws', () => {
+  const TerminalWebSocketMock = vi.fn(function(this: Record<string, unknown>) {
+    Object.defineProperty(this, 'connected', {
+      get: () => wsConnectedState.value,
+      enumerable: true,
+      configurable: true,
+    });
+    this.connect = wsConnectFn;
+    this.disconnect = wsDisconnectFn;
+    this.send = wsSendFn;
+    this.resize = wsResizeFn;
+    this.on = wsOnFn;
+  });
+  return { TerminalWebSocket: TerminalWebSocketMock };
+});
 
 vi.mock('../../services/api', () => ({
   api: {
@@ -264,7 +277,8 @@ describe('useTerminal', () => {
 
       expect(wsSendFn).toHaveBeenCalled();
       const sent = wsSendFn.mock.calls[0][0] as Uint8Array;
-      expect(sent).toBeInstanceOf(Uint8Array);
+      // Use constructor name check to avoid cross-realm instanceof issues
+      expect(sent.constructor.name).toBe('Uint8Array');
       // 'l' = 108
       expect(sent[0]).toBe(108);
     });
@@ -365,14 +379,15 @@ describe('useTerminal', () => {
     });
 
     it('should not create a new WebSocket when there is no access token', () => {
-      vi.mocked(api.getAccessToken).mockReturnValueOnce(null);
+      // Return null for both the init call and the reconnect call
+      vi.mocked(api.getAccessToken).mockReturnValueOnce(null).mockReturnValueOnce(null);
       const { result } = renderUseTerminal();
       const callsBefore = vi.mocked(TerminalWebSocket).mock.calls.length;
 
       act(() => { result.current.reconnect(); });
 
       // api.getAccessToken was already used once for init (returned null, so no init ws)
-      // calling reconnect should also check for token
+      // calling reconnect should also check for token and not create WS when null
       expect(vi.mocked(TerminalWebSocket).mock.calls.length).toBe(callsBefore);
     });
   });

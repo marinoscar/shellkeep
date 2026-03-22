@@ -60,7 +60,7 @@ const mockSession2: TerminalSession = {
 };
 
 const mockSessionsResponse: SessionsResponse = {
-  data: [mockSession, mockSession2],
+  items: [mockSession, mockSession2],
   total: 2,
   page: 1,
   pageSize: 10,
@@ -76,16 +76,21 @@ describe('useSessions', () => {
   });
 
   describe('Initial State', () => {
-    it('should start with empty sessions and default values', () => {
+    it('should start with empty sessions and default values', async () => {
       const { result } = renderHook(() => useSessions());
 
+      // Sessions start empty; isLoading may be true as fetch starts immediately
       expect(result.current.sessions).toEqual([]);
       expect(result.current.total).toBe(0);
       expect(result.current.page).toBe(1);
       expect(result.current.pageSize).toBe(10);
-      expect(result.current.isLoading).toBe(false);
       expect(result.current.error).toBeNull();
       expect(result.current.statusFilter).toBe('all');
+
+      // After fetch completes, isLoading should be false
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
     });
 
     it('should provide all expected methods', () => {
@@ -278,7 +283,7 @@ describe('useSessions', () => {
       // Clear mock count from initial fetch
       vi.mocked(getSessions).mockClear();
       vi.mocked(getSessions).mockResolvedValue({
-        data: [mockSession],
+        items: [mockSession],
         total: 1,
         page: 1,
         pageSize: 10,
