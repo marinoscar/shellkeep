@@ -7,6 +7,7 @@ import {
   Tabs,
   Tab,
   Button,
+  IconButton,
   Snackbar,
   Alert,
   CircularProgress,
@@ -16,7 +17,7 @@ import {
   DialogActions,
   TextField,
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useSessions } from '../hooks/useSessions';
 import { SessionCard } from '../components/terminal/SessionCard';
@@ -115,10 +116,15 @@ export default function SessionsPage() {
       <Box sx={{ py: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
-            <Typography variant="h4" component="h1" gutterBottom>
-              Terminal Sessions
-            </Typography>
-            <Typography color="text.secondary">
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <IconButton onClick={() => navigate('/')} aria-label="back to home">
+                <ArrowBackIcon />
+              </IconButton>
+              <Typography variant="h4" component="h1">
+                Terminal Sessions
+              </Typography>
+            </Box>
+            <Typography color="text.secondary" sx={{ ml: 6 }}>
               Manage your SSH terminal sessions
             </Typography>
           </Box>
