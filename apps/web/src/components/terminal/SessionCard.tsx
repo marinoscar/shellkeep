@@ -83,6 +83,7 @@ export function SessionCard({ session, onOpen, onRename, onTerminate }: SessionC
           label={session.serverProfile.name}
           size="small"
           color={session.serverProfile.color === 'default' ? 'default' : session.serverProfile.color}
+          variant="filled"
         />
 
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>

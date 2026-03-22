@@ -102,6 +102,7 @@ export function TerminalToolbar({
             label={serverProfileName}
             size="small"
             color={serverProfileColor === 'default' || !serverProfileColor ? 'default' : serverProfileColor}
+            variant="filled"
             sx={{ mr: 0.5 }}
           />
         )}

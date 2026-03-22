@@ -195,6 +195,7 @@ export function ServerProfileList({
                         label={profile.name}
                         size="small"
                         color={profile.color === 'default' ? 'default' : profile.color}
+                        variant="filled"
                       />
                     </TableCell>
                     <TableCell>
