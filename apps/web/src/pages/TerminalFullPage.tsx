@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Box, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, Chip, IconButton, Tooltip, Typography } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   Circle as CircleIcon,
@@ -102,6 +102,13 @@ export default function TerminalFullPage() {
             fontSize: 10,
             color: isConnected ? '#4caf50' : '#f44336',
           }}
+        />
+
+        <Chip
+          label={session.serverProfile.name}
+          size="small"
+          color={session.serverProfile.color === 'default' || !session.serverProfile.color ? 'default' : session.serverProfile.color}
+          sx={{ color: 'rgba(255, 255, 255, 0.9)' }}
         />
 
         <Typography

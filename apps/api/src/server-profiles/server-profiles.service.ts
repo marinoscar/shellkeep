@@ -250,6 +250,7 @@ export class ServerProfilesService {
       username: profile.username,
       authMethod: profile.authMethod,
       tags: profile.tags,
+      color: profile.color,
       hasPassword: !!profile.encryptedPassword,
       hasPrivateKey: !!profile.encryptedPrivateKey,
       hasPassphrase: !!profile.encryptedPassphrase,

@@ -6,7 +6,9 @@ import {
   Tooltip,
   TextField,
   useTheme,
+  Chip,
 } from '@mui/material';
+import type { ServerProfileColor } from '../../types';
 import {
   OpenInNew as OpenInNewIcon,
   PowerSettingsNew as DisconnectIcon,
@@ -26,6 +28,8 @@ interface TerminalToolbarProps {
   onRename: (newName: string) => void;
   onCopyAll?: () => void;
   onDownload?: () => void;
+  serverProfileName?: string;
+  serverProfileColor?: ServerProfileColor;
 }
 
 export function TerminalToolbar({
@@ -36,6 +40,8 @@ export function TerminalToolbar({
   onRename,
   onCopyAll,
   onDownload,
+  serverProfileName,
+  serverProfileColor,
 }: TerminalToolbarProps) {
   const theme = useTheme();
   const [isEditing, setIsEditing] = useState(false);
@@ -90,6 +96,15 @@ export function TerminalToolbar({
             }}
           />
         </Tooltip>
+
+        {serverProfileName && (
+          <Chip
+            label={serverProfileName}
+            size="small"
+            color={serverProfileColor === 'default' || !serverProfileColor ? 'default' : serverProfileColor}
+            sx={{ mr: 0.5 }}
+          />
+        )}
 
         {isEditing ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

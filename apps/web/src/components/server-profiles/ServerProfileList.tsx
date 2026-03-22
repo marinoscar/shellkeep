@@ -190,7 +190,13 @@ export function ServerProfileList({
               <TableBody>
                 {profiles.map((profile) => (
                   <TableRow key={profile.id} hover>
-                    <TableCell>{profile.name}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={profile.name}
+                        size="small"
+                        color={profile.color === 'default' ? 'default' : profile.color}
+                      />
+                    </TableCell>
                     <TableCell>
                       {profile.hostname}:{profile.port}
                     </TableCell>

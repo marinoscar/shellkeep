@@ -11,6 +11,7 @@ export const createServerProfileSchema = z.object({
   privateKey: z.string().optional(),
   passphrase: z.string().optional(),
   tags: z.array(z.string()).optional().default([]),
+  color: z.enum(['default', 'primary', 'secondary', 'error', 'warning', 'info', 'success']).optional().default('default'),
 });
 
 export class CreateServerProfileDto extends createZodDto(createServerProfileSchema) {}

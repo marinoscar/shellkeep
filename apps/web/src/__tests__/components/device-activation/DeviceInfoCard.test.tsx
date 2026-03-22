@@ -271,8 +271,6 @@ describe('DeviceInfoCard', () => {
     });
 
     it('should show "Approving..." text while onApprove is in progress', async () => {
-      const user = userEvent.setup({ delay: null });
-
       let resolveApprove!: () => void;
       mockOnApprove.mockReturnValue(
         new Promise<void>((res) => {
@@ -289,7 +287,9 @@ describe('DeviceInfoCard', () => {
         />,
       );
 
-      await user.click(screen.getByRole('button', { name: /approve/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /approve/i }));
+      });
 
       expect(screen.getByText(/approving/i)).toBeInTheDocument();
 
@@ -297,8 +297,6 @@ describe('DeviceInfoCard', () => {
     });
 
     it('should show "Denying..." text while onDeny is in progress', async () => {
-      const user = userEvent.setup({ delay: null });
-
       let resolveDeny!: () => void;
       mockOnDeny.mockReturnValue(
         new Promise<void>((res) => {
@@ -315,7 +313,9 @@ describe('DeviceInfoCard', () => {
         />,
       );
 
-      await user.click(screen.getByRole('button', { name: /deny/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /deny/i }));
+      });
 
       expect(screen.getByText(/denying/i)).toBeInTheDocument();
 
@@ -323,8 +323,6 @@ describe('DeviceInfoCard', () => {
     });
 
     it('should disable both buttons while approving', async () => {
-      const user = userEvent.setup({ delay: null });
-
       let resolveApprove!: () => void;
       mockOnApprove.mockReturnValue(
         new Promise<void>((res) => {
@@ -341,7 +339,9 @@ describe('DeviceInfoCard', () => {
         />,
       );
 
-      await user.click(screen.getByRole('button', { name: /approve/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /approve/i }));
+      });
 
       expect(screen.getByRole('button', { name: /approving/i })).toBeDisabled();
       expect(screen.getByRole('button', { name: /deny/i })).toBeDisabled();
@@ -350,8 +350,6 @@ describe('DeviceInfoCard', () => {
     });
 
     it('should disable both buttons while denying', async () => {
-      const user = userEvent.setup({ delay: null });
-
       let resolveDeny!: () => void;
       mockOnDeny.mockReturnValue(
         new Promise<void>((res) => {
@@ -368,7 +366,9 @@ describe('DeviceInfoCard', () => {
         />,
       );
 
-      await user.click(screen.getByRole('button', { name: /deny/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /deny/i }));
+      });
 
       expect(screen.getByRole('button', { name: /denying/i })).toBeDisabled();
       expect(screen.getByRole('button', { name: /approve/i })).toBeDisabled();

@@ -317,6 +317,7 @@ model ServerProfile {
   encryptedPassphrase String?  @map("encrypted_passphrase")
   fingerprint         String?
   tags                String[]
+  color               String   @default("default")
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
 

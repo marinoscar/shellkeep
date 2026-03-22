@@ -14,6 +14,7 @@ const SERVER_PROFILE_SELECT = {
   hostname: true,
   port: true,
   username: true,
+  color: true,
 };
 
 @Injectable()

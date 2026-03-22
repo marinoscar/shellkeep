@@ -115,6 +115,8 @@ export default function TerminalPage() {
             onRename={handleRename}
             onCopyAll={handleCopyAll}
             onDownload={handleDownload}
+            serverProfileName={session.serverProfile.name}
+            serverProfileColor={session.serverProfile.color}
           />
         </Box>
       </Box>
