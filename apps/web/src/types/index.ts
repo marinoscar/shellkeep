@@ -123,7 +123,7 @@ export interface ServerProfileFormData {
 }
 
 export interface ServerProfilesResponse {
-  data: ServerProfile[];
+  items: ServerProfile[];
   total: number;
   page: number;
   pageSize: number;
@@ -158,7 +158,7 @@ export interface TerminalSession {
 }
 
 export interface SessionsResponse {
-  data: TerminalSession[];
+  items: TerminalSession[];
   total: number;
   page: number;
   pageSize: number;

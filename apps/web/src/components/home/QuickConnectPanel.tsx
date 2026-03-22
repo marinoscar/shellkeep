@@ -27,7 +27,7 @@ export function QuickConnectPanel() {
 
   useEffect(() => {
     getServerProfiles({ pageSize: 4 })
-      .then((res) => setProfiles(res?.data ?? []))
+      .then((res) => setProfiles(res?.items ?? []))
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, []);

@@ -44,7 +44,7 @@ export function ActiveSessionsPanel() {
       getSessions({ status: 'detached', pageSize: 6 }),
     ])
       .then(([activeRes, detachedRes]) => {
-        const combined = [...(activeRes?.data ?? []), ...(detachedRes?.data ?? [])].slice(0, 6);
+        const combined = [...(activeRes?.items ?? []), ...(detachedRes?.items ?? [])].slice(0, 6);
         setSessions(combined);
       })
       .catch(() => {})

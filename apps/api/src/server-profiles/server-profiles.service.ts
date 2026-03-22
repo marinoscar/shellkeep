@@ -43,7 +43,7 @@ export class ServerProfilesService {
     ]);
 
     return {
-      data: items.map((item) => this.toResponse(item)),
+      items: items.map((item) => this.toResponse(item)),
       total,
       page,
       pageSize,

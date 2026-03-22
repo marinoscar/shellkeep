@@ -53,7 +53,7 @@ export function useServerProfiles(): UseServerProfilesResult {
       try {
         const response: ServerProfilesResponse =
           await fetchProfilesApi(params);
-        setProfiles(response?.data ?? []);
+        setProfiles(response?.items ?? []);
         setTotal(response?.total ?? 0);
         setPage(response?.page ?? 1);
         setPageSize(response?.pageSize ?? 20);

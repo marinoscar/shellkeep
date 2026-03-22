@@ -48,7 +48,7 @@ export function useSessions(): UseSessionsResult {
           ...params,
           status: params?.status ?? statusFilter,
         });
-        setSessions(response?.data ?? []);
+        setSessions(response?.items ?? []);
         setTotal(response?.total ?? 0);
         setPage(response?.page ?? 1);
         setPageSize(response?.pageSize ?? 20);
