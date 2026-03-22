@@ -32,9 +32,16 @@ export function TerminalView({ sessionId, onConnectionChange, onError }: Termina
         width: '100%',
         height: '100%',
         bgcolor: '#1e1e1e',
+        overflow: 'hidden',
         '& .xterm': {
           height: '100%',
           padding: '4px',
+        },
+        '& .xterm-viewport': {
+          overflow: 'hidden !important',
+        },
+        '& .xterm-screen': {
+          height: '100% !important',
         },
       }}
     />

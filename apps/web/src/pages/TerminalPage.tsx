@@ -55,9 +55,15 @@ export default function TerminalPage() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
+    <Box sx={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: 'calc(100vh - 64px)',
+      m: -3, // counteract Layout's p:3
+      overflow: 'hidden',
+    }}>
       {/* Back button + Toolbar */}
-      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <Tooltip title="Back to sessions">
           <IconButton onClick={() => navigate('/sessions')} sx={{ ml: 1 }}>
             <ArrowBackIcon />
@@ -75,7 +81,7 @@ export default function TerminalPage() {
       </Box>
 
       {/* Terminal */}
-      <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+      <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
         <TerminalView
           sessionId={id}
           onConnectionChange={handleConnectionChange}
