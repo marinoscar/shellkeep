@@ -6,6 +6,7 @@ import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { Layout } from './components/common/Layout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 
 // Pages (lazy loaded)
 import { Suspense, lazy } from 'react';
@@ -75,6 +76,7 @@ export default function App() {
     <ThemeContextProvider>
       <AuthProvider>
         <AppRoutes />
+        <PWAUpdatePrompt />
       </AuthProvider>
     </ThemeContextProvider>
   );
