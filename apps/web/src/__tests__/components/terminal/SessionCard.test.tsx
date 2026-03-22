@@ -93,18 +93,19 @@ describe('SessionCard', () => {
     it('should render action buttons for active sessions', () => {
       render(<SessionCard {...defaultProps} />);
 
-      expect(screen.getByTitle('Open terminal')).toBeInTheDocument();
-      expect(screen.getByTitle('Rename')).toBeInTheDocument();
-      expect(screen.getByTitle('Terminate')).toBeInTheDocument();
+      // MUI Tooltip does not add title attr to child; use icon data-testid instead
+      expect(screen.getByTestId('OpenInNewIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('EditIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
     });
 
     it('should render action buttons for detached sessions', () => {
       const detachedSession = { ...baseSession, status: 'detached' as const };
       render(<SessionCard {...defaultProps} session={detachedSession} />);
 
-      expect(screen.getByTitle('Open terminal')).toBeInTheDocument();
-      expect(screen.getByTitle('Rename')).toBeInTheDocument();
-      expect(screen.getByTitle('Terminate')).toBeInTheDocument();
+      expect(screen.getByTestId('OpenInNewIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('EditIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
     });
 
     it('should hide action buttons for terminated sessions', () => {
@@ -115,9 +116,9 @@ describe('SessionCard', () => {
       };
       render(<SessionCard {...defaultProps} session={terminatedSession} />);
 
-      expect(screen.queryByTitle('Open terminal')).not.toBeInTheDocument();
-      expect(screen.queryByTitle('Rename')).not.toBeInTheDocument();
-      expect(screen.queryByTitle('Terminate')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('OpenInNewIcon')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('EditIcon')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
     });
   });
 
@@ -127,7 +128,8 @@ describe('SessionCard', () => {
       render(<SessionCard {...defaultProps} onOpen={onOpen} />);
 
       const user = userEvent.setup();
-      await user.click(screen.getByTitle('Open terminal'));
+      const openIcon = screen.getByTestId('OpenInNewIcon');
+      await user.click(openIcon.closest('button')!);
 
       expect(onOpen).toHaveBeenCalledWith(baseSession);
     });
@@ -137,7 +139,8 @@ describe('SessionCard', () => {
       render(<SessionCard {...defaultProps} onRename={onRename} />);
 
       const user = userEvent.setup();
-      await user.click(screen.getByTitle('Rename'));
+      const editIcon = screen.getByTestId('EditIcon');
+      await user.click(editIcon.closest('button')!);
 
       expect(onRename).toHaveBeenCalledWith(baseSession);
     });
@@ -147,7 +150,8 @@ describe('SessionCard', () => {
       render(<SessionCard {...defaultProps} onTerminate={onTerminate} />);
 
       const user = userEvent.setup();
-      await user.click(screen.getByTitle('Terminate'));
+      const deleteIcon = screen.getByTestId('DeleteIcon');
+      await user.click(deleteIcon.closest('button')!);
 
       expect(onTerminate).toHaveBeenCalledWith(baseSession);
     });

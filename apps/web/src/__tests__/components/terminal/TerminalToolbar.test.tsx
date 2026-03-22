@@ -27,43 +27,43 @@ describe('TerminalToolbar', () => {
     it('should render the open-in-new-tab button', () => {
       render(<TerminalToolbar {...defaultProps} />);
 
-      expect(screen.getByTitle('Open in new tab')).toBeInTheDocument();
+      expect(screen.getByTestId('OpenInNewIcon')).toBeInTheDocument();
     });
 
     it('should render the disconnect button', () => {
       render(<TerminalToolbar {...defaultProps} />);
 
-      expect(screen.getByTitle('Disconnect')).toBeInTheDocument();
+      expect(screen.getByTestId('PowerSettingsNewIcon')).toBeInTheDocument();
     });
 
     it('should render the rename edit button', () => {
       render(<TerminalToolbar {...defaultProps} />);
 
-      expect(screen.getByTitle('Rename session')).toBeInTheDocument();
+      expect(screen.getByTestId('EditIcon')).toBeInTheDocument();
     });
 
     it('should render copy button when onCopyAll is provided', () => {
       render(<TerminalToolbar {...defaultProps} onCopyAll={vi.fn()} />);
 
-      expect(screen.getByTitle('Copy terminal output')).toBeInTheDocument();
+      expect(screen.getByTestId('ContentCopyIcon')).toBeInTheDocument();
     });
 
     it('should not render copy button when onCopyAll is omitted', () => {
       render(<TerminalToolbar {...defaultProps} />);
 
-      expect(screen.queryByTitle('Copy terminal output')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('ContentCopyIcon')).not.toBeInTheDocument();
     });
 
     it('should render download button when onDownload is provided', () => {
       render(<TerminalToolbar {...defaultProps} onDownload={vi.fn()} />);
 
-      expect(screen.getByTitle('Download as text file')).toBeInTheDocument();
+      expect(screen.getByTestId('DownloadIcon')).toBeInTheDocument();
     });
 
     it('should not render download button when onDownload is omitted', () => {
       render(<TerminalToolbar {...defaultProps} />);
 
-      expect(screen.queryByTitle('Download as text file')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('DownloadIcon')).not.toBeInTheDocument();
     });
   });
 
@@ -96,7 +96,7 @@ describe('TerminalToolbar', () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} onOpenNewTab={onOpenNewTab} />);
 
-      await user.click(screen.getByTitle('Open in new tab'));
+      await user.click(screen.getByTestId('OpenInNewIcon').closest('button')!);
 
       expect(onOpenNewTab).toHaveBeenCalledTimes(1);
     });
@@ -106,7 +106,7 @@ describe('TerminalToolbar', () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} onDisconnect={onDisconnect} />);
 
-      await user.click(screen.getByTitle('Disconnect'));
+      await user.click(screen.getByTestId('PowerSettingsNewIcon').closest('button')!);
 
       expect(onDisconnect).toHaveBeenCalledTimes(1);
     });
@@ -116,7 +116,7 @@ describe('TerminalToolbar', () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} onCopyAll={onCopyAll} />);
 
-      await user.click(screen.getByTitle('Copy terminal output'));
+      await user.click(screen.getByTestId('ContentCopyIcon').closest('button')!);
 
       expect(onCopyAll).toHaveBeenCalledTimes(1);
     });
@@ -126,7 +126,7 @@ describe('TerminalToolbar', () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} onDownload={onDownload} />);
 
-      await user.click(screen.getByTitle('Download as text file'));
+      await user.click(screen.getByTestId('DownloadIcon').closest('button')!);
 
       expect(onDownload).toHaveBeenCalledTimes(1);
     });
@@ -137,17 +137,17 @@ describe('TerminalToolbar', () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} />);
 
-      await user.click(screen.getByTitle('Rename session'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
 
       expect(screen.getByRole('textbox')).toBeInTheDocument();
-      expect(screen.queryByTitle('Rename session')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('EditIcon')).not.toBeInTheDocument();
     });
 
     it('should pre-populate the text field with the current session name', async () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} sessionName="Old Name" />);
 
-      await user.click(screen.getByTitle('Rename session'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
 
       const input = screen.getByRole('textbox') as HTMLInputElement;
       expect(input.value).toBe('Old Name');
@@ -158,7 +158,7 @@ describe('TerminalToolbar', () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} onRename={onRename} sessionName="Old Name" />);
 
-      await user.click(screen.getByTitle('Rename session'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
       const input = screen.getByRole('textbox');
       await user.clear(input);
       await user.type(input, 'New Name');
@@ -178,7 +178,7 @@ describe('TerminalToolbar', () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} onRename={onRename} sessionName="Same Name" />);
 
-      await user.click(screen.getByTitle('Rename session'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
       // Press Enter without changing the value
       await user.keyboard('{Enter}');
 
@@ -190,7 +190,7 @@ describe('TerminalToolbar', () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} onRename={onRename} sessionName="Old Name" />);
 
-      await user.click(screen.getByTitle('Rename session'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
       const input = screen.getByRole('textbox');
       await user.clear(input);
       await user.type(input, 'New Name');
@@ -204,7 +204,7 @@ describe('TerminalToolbar', () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} onRename={onRename} sessionName="Old Name" />);
 
-      await user.click(screen.getByTitle('Rename session'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
       const input = screen.getByRole('textbox');
       await user.clear(input);
       await user.type(input, 'Discarded Name');
@@ -220,7 +220,7 @@ describe('TerminalToolbar', () => {
       const user = userEvent.setup();
       render(<TerminalToolbar {...defaultProps} onRename={onRename} sessionName="Old Name" />);
 
-      await user.click(screen.getByTitle('Rename session'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
       const input = screen.getByRole('textbox');
       await user.clear(input);
       await user.type(input, 'Discarded');

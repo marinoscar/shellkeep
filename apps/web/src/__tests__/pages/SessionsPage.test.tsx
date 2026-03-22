@@ -327,7 +327,7 @@ describe('SessionsPage', () => {
 
       render(<SessionsPage />);
 
-      const terminateButton = screen.getByTitle('Terminate');
+      const terminateButton = screen.getByTestId('DeleteIcon').closest('button')!;
       await userEvent.click(terminateButton);
 
       await waitFor(() => {
@@ -350,7 +350,7 @@ describe('SessionsPage', () => {
 
       render(<SessionsPage />);
 
-      await userEvent.click(screen.getByTitle('Terminate'));
+      await userEvent.click(screen.getByTestId('DeleteIcon').closest('button')!);
 
       await waitFor(() => {
         expect(screen.getByText(/failed to terminate session/i)).toBeInTheDocument();
@@ -369,7 +369,7 @@ describe('SessionsPage', () => {
 
       render(<SessionsPage />);
 
-      await user.click(screen.getByTitle('Rename'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
 
       expect(screen.getByRole('dialog')).toBeInTheDocument();
       expect(screen.getByText(/rename session/i)).toBeInTheDocument();
@@ -385,7 +385,7 @@ describe('SessionsPage', () => {
 
       render(<SessionsPage />);
 
-      await user.click(screen.getByTitle('Rename'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
 
       const input = screen.getByLabelText(/session name/i) as HTMLInputElement;
       expect(input.value).toBe('Current Name');
@@ -403,7 +403,7 @@ describe('SessionsPage', () => {
 
       render(<SessionsPage />);
 
-      await user.click(screen.getByTitle('Rename'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
 
       const input = screen.getByLabelText(/session name/i);
       await user.clear(input);
@@ -432,7 +432,7 @@ describe('SessionsPage', () => {
 
       render(<SessionsPage />);
 
-      await user.click(screen.getByTitle('Rename'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
       const input = screen.getByLabelText(/session name/i);
       await user.clear(input);
       await user.type(input, 'New Name');
@@ -453,7 +453,7 @@ describe('SessionsPage', () => {
 
       render(<SessionsPage />);
 
-      await user.click(screen.getByTitle('Rename'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
       expect(screen.getByRole('dialog')).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: /^cancel$/i }));
@@ -473,7 +473,7 @@ describe('SessionsPage', () => {
 
       render(<SessionsPage />);
 
-      await user.click(screen.getByTitle('Rename'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
       const input = screen.getByLabelText(/session name/i);
       await user.clear(input);
 
@@ -493,7 +493,7 @@ describe('SessionsPage', () => {
 
       render(<SessionsPage />);
 
-      await user.click(screen.getByTitle('Rename'));
+      await user.click(screen.getByTestId('EditIcon').closest('button')!);
       const input = screen.getByLabelText(/session name/i);
       await user.clear(input);
       await user.type(input, 'New Name{Enter}');
@@ -515,10 +515,10 @@ describe('SessionsPage', () => {
 
       render(<SessionsPage />, { wrapperOptions: { route: '/sessions' } });
 
-      await user.click(screen.getByTitle('Open terminal'));
+      await user.click(screen.getByTestId('OpenInNewIcon').closest('button')!);
 
       // Navigation happens inside MemoryRouter - verify open button was actionable
-      expect(screen.getByTitle('Open terminal')).toBeInTheDocument();
+      expect(screen.getByTestId('OpenInNewIcon').closest('button')!).toBeInTheDocument();
     });
   });
 });
