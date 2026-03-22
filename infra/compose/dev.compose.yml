@@ -16,6 +16,7 @@ services:
       target: development
     volumes:
       - ../../apps/api/src:/app/src:ro
+      - ../../apps/api/test:/app/test:ro
       - ../../apps/api/prisma:/app/prisma:ro
     environment:
       - NODE_ENV=development
