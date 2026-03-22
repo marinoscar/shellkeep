@@ -37,6 +37,8 @@ model User {
   allowlistEntry            AllowedEmail?    @relation("AllowlistClaimedBy")
   deviceCodes               DeviceCode[]     @relation("UserDeviceCodes")
   storageObjects            StorageObject[]  @relation("UserStorageObjects")
+  serverProfiles            ServerProfile[]
+  terminalSessions          TerminalSession[]
 
   @@map("users")
 }
@@ -237,6 +239,18 @@ model DeviceCode {
 // Storage Objects
 // =============================================================================
 
+enum AuthMethod {
+  password
+  key
+  agent
+}
+
+enum SessionStatus {
+  active
+  detached
+  terminated
+}
+
 enum StorageObjectStatus {
   pending    // Upload initiated, awaiting chunks
   uploading  // Chunks being uploaded
@@ -284,4 +298,60 @@ model StorageObjectChunk {
   @@unique([objectId, partNumber])
   @@index([objectId])
   @@map("storage_object_chunks")
+}
+
+// =============================================================================
+// Server Profiles (SSH Connection Configuration)
+// =============================================================================
+
+model ServerProfile {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  name                String
+  hostname            String
+  port                Int      @default(22)
+  username            String
+  authMethod          AuthMethod @map("auth_method")
+  encryptedPassword   String?  @map("encrypted_password")
+  encryptedPrivateKey String?  @map("encrypted_private_key")
+  encryptedPassphrase String?  @map("encrypted_passphrase")
+  fingerprint         String?
+  tags                String[]
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions TerminalSession[]
+
+  @@index([userId])
+  @@map("server_profiles")
+}
+
+// =============================================================================
+// Terminal Sessions
+// =============================================================================
+
+model TerminalSession {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  serverProfileId String        @map("server_profile_id") @db.Uuid
+  name            String
+  status          SessionStatus @default(active)
+  tmuxSessionId   String        @map("tmux_session_id")
+  cols            Int           @default(80)
+  rows            Int           @default(24)
+  lastActivityAt  DateTime      @default(now()) @map("last_activity_at") @db.Timestamptz
+  terminatedAt    DateTime?     @map("terminated_at") @db.Timestamptz
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serverProfile ServerProfile @relation(fields: [serverProfileId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([serverProfileId])
+  @@index([status])
+  @@map("terminal_sessions")
 }
