@@ -11,6 +11,7 @@ export class SessionCleanupTask {
   @Cron('0 */5 * * * *')
   async handleCleanup(): Promise<void> {
     await this.markStaleSessions();
+    await this.terminateStaleDetachedSessions();
     await this.purgeOldTerminatedSessions();
   }
 
@@ -29,6 +30,27 @@ export class SessionCleanupTask {
 
     if (result.count > 0) {
       this.logger.log(`Marked ${result.count} stale sessions as detached`);
+    }
+  }
+
+  private async terminateStaleDetachedSessions(): Promise<void> {
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+
+    const result = await this.prisma.terminalSession.updateMany({
+      where: {
+        status: 'detached',
+        lastActivityAt: { lt: twelveHoursAgo },
+      },
+      data: {
+        status: 'terminated',
+        terminatedAt: new Date(),
+      },
+    });
+
+    if (result.count > 0) {
+      this.logger.log(
+        `Terminated ${result.count} stale detached sessions`,
+      );
     }
   }
 

@@ -31,7 +31,7 @@ describe('SessionCleanupTask', () => {
   });
 
   describe('handleCleanup', () => {
-    it('should call markStaleSessions and purgeOldTerminatedSessions', async () => {
+    it('should call markStaleSessions, terminateStaleDetachedSessions, and purgeOldTerminatedSessions', async () => {
       (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({
         count: 0,
       });
@@ -41,8 +41,8 @@ describe('SessionCleanupTask', () => {
 
       await task.handleCleanup();
 
-      expect(prisma.terminalSession.updateMany).toHaveBeenCalled();
-      expect(prisma.terminalSession.deleteMany).toHaveBeenCalled();
+      expect(prisma.terminalSession.updateMany).toHaveBeenCalledTimes(2);
+      expect(prisma.terminalSession.deleteMany).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -70,6 +70,36 @@ describe('SessionCleanupTask', () => {
       const oneHourMs = 60 * 60 * 1000;
       expect(cutoffTime).toBeGreaterThanOrEqual(beforeTime - oneHourMs - 100);
       expect(cutoffTime).toBeLessThanOrEqual(afterTime - oneHourMs + 100);
+    });
+  });
+
+  describe('terminateStaleDetachedSessions', () => {
+    it('should update detached sessions older than 12 hours to terminated', async () => {
+      (prisma.terminalSession.updateMany as jest.Mock)
+        .mockResolvedValueOnce({ count: 0 }) // markStaleSessions
+        .mockResolvedValueOnce({ count: 2 }); // terminateStaleDetachedSessions
+      (prisma.terminalSession.deleteMany as jest.Mock).mockResolvedValue({
+        count: 0,
+      });
+
+      const beforeTime = Date.now();
+      await task.handleCleanup();
+      const afterTime = Date.now();
+
+      const updateCall = (prisma.terminalSession.updateMany as jest.Mock).mock
+        .calls[1][0];
+
+      expect(updateCall.where.status).toBe('detached');
+      expect(updateCall.data.status).toBe('terminated');
+      expect(updateCall.data.terminatedAt).toBeInstanceOf(Date);
+
+      // Verify the cutoff is approximately 12 hours ago
+      const cutoffTime = updateCall.where.lastActivityAt.lt.getTime();
+      const twelveHoursMs = 12 * 60 * 60 * 1000;
+      expect(cutoffTime).toBeGreaterThanOrEqual(
+        beforeTime - twelveHoursMs - 100,
+      );
+      expect(cutoffTime).toBeLessThanOrEqual(afterTime - twelveHoursMs + 100);
     });
   });
 
