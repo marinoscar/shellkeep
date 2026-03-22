@@ -79,9 +79,11 @@ export function SessionCard({ session, onOpen, onRename, onTerminate }: SessionC
           {serverInfo}
         </Typography>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          {session.serverProfile.name}
-        </Typography>
+        <Chip
+          label={session.serverProfile.name}
+          size="small"
+          color={session.serverProfile.color === 'default' ? 'default' : session.serverProfile.color}
+        />
 
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
           Last activity: {getRelativeTime(session.lastActivityAt)}
