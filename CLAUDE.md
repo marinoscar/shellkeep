@@ -184,6 +184,9 @@ If the diff feels “big,” you waited too long. **Split the work and commit so
 # Setup: copy environment template
 cp infra/compose/.env.example infra/compose/.env
 
+# Prerequisites: external PostgreSQL required, devnet Docker network must exist
+# docker network create devnet   # (one-time, shared with other projects)
+
 # Start development (from infra/compose folder)
 cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up
 
@@ -191,7 +194,7 @@ cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up
 cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f otel.compose.yml up
 
 # Start production mode
-cd infra/compose && docker compose -f base.compose.yml -f prod.compose.yml up
+cd infra/compose && docker compose -f base.compose.yml -f prod.compose.yml up -d
 
 # Run API tests
 cd apps/api && npm test
@@ -212,10 +215,15 @@ cd apps/api && npm run prisma:migrate
 # They automatically construct DATABASE_URL from individual env vars
 ```
 
-## Service URLs (Development)
+## Service URLs
 
-- **Application**: http://localhost:3535 (via Nginx)
-- **Swagger UI**: http://localhost:3535/api/docs
+**VPS (production):**
+- **Application**: https://shellkeep.dev.marin.cr
+- **Swagger UI**: https://shellkeep.dev.marin.cr/api/docs
+
+**Local Docker (development):**
+- **Application**: http://localhost:8323 (via Nginx)
+- **Swagger UI**: http://localhost:8323/api/docs
 - **Uptrace**: http://localhost:14318 (when otel stack running)
 
 ## API Endpoints (MVP)
@@ -373,10 +381,10 @@ Key variables (see `infra/compose/.env.example` for full list):
 **Application:**
 - `NODE_ENV` - Environment (development/production)
 - `PORT` - API port (default: 3000)
-- `APP_URL` - Base URL (default: http://localhost:3535)
+- `APP_URL` - Base URL (default: http://localhost:8323)
 
-**Database (individual connection parameters):**
-- `POSTGRES_HOST` - Database hostname (default: db in Docker, localhost otherwise)
+**Database (external PostgreSQL, no DB container):**
+- `POSTGRES_HOST` - Database hostname (**required**, no default -- external PostgreSQL via devnet network)
 - `POSTGRES_PORT` - Database port (default: 5432)
 - `POSTGRES_USER` - Database user (default: postgres)
 - `POSTGRES_PASSWORD` - Database password (default: postgres)
