@@ -463,6 +463,9 @@ describe('TerminalGateway', () => {
       sessionManager.attachWebSocket.mockReturnValue(true);
 
       emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
+      // Flush all async awaits in handleConnect:
+      // findOne + getDecryptedProfile + startSession + updateStatus = 4 ticks
+      await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
