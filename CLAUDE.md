@@ -311,8 +311,8 @@ cd apps/api && npm run prisma:migrate
 - `users:read/write` - User management
 - `rbac:manage` - Role assignment
 - `allowlist:read/write` - Allowlist management (Admin only)
-- `storage:read/write/delete` - Storage object access (own objects)
-- `storage:read_any/write_any/delete_any` - Storage object access (all objects, Admin only)
+- `storage:read/write` - Storage object access (own objects)
+- `storage:delete_any` - Delete any storage object (Admin only)
 - `servers:read/write/delete` - Server profile management
 - `sessions:read/write/delete` - Terminal session management
 
