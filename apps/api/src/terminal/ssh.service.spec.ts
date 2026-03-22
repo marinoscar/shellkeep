@@ -33,7 +33,7 @@ describe('SshService', () => {
   function setupMockClient(options: {
     emitReady?: boolean;
     emitError?: Error;
-    execError?: Error;
+    shellError?: Error;
   } = {}) {
     const clientInstance = new EventEmitter() as any;
     clientInstance.connect = jest.fn();
@@ -44,9 +44,10 @@ describe('SshService', () => {
     mockStream.write = jest.fn();
     mockStream.setWindow = jest.fn();
 
-    clientInstance.exec = jest.fn((_cmd, _opts, cb) => {
-      if (options.execError) {
-        cb(options.execError, null);
+    // The service uses client.shell() to open an interactive shell with PTY
+    clientInstance.shell = jest.fn((_opts: any, cb: (err: Error | null, stream: any) => void) => {
+      if (options.shellError) {
+        cb(options.shellError, null);
       } else {
         cb(null, mockStream);
       }
@@ -173,9 +174,9 @@ describe('SshService', () => {
       ).rejects.toThrow('Connection refused');
     });
 
-    it('should reject on exec error', async () => {
-      const execError = new Error('Command failed');
-      setupMockClient({ emitReady: true, execError });
+    it('should reject on shell error', async () => {
+      const shellError = new Error('Command failed');
+      setupMockClient({ emitReady: true, shellError });
 
       await expect(
         service.connect(mockProfile, mockTmuxSessionId, 80, 24),
