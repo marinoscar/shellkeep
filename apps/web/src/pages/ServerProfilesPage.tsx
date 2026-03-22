@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Container, Typography, Box, Snackbar, Alert } from '@mui/material';
+import { Container, Typography, Box, IconButton, Snackbar, Alert } from '@mui/material';
+import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { ServerProfileList } from '../components/server-profiles/ServerProfileList';
 
 interface SnackbarState {
@@ -9,6 +11,7 @@ interface SnackbarState {
 }
 
 export default function ServerProfilesPage() {
+  const navigate = useNavigate();
   const [snackbar, setSnackbar] = useState<SnackbarState>({
     open: false,
     message: '',
@@ -48,10 +51,15 @@ export default function ServerProfilesPage() {
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Server Profiles
-        </Typography>
-        <Typography color="text.secondary" paragraph>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <IconButton onClick={() => navigate('/')} aria-label="back to home">
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h4" component="h1">
+            Server Profiles
+          </Typography>
+        </Box>
+        <Typography color="text.secondary" sx={{ ml: 6, mb: 2 }}>
           Manage SSH server connections
         </Typography>
 
