@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor, act } from '@testing-library/react';
+import { screen, waitFor, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../../utils/test-utils';
 import { DeviceInfoCard } from '../../../components/device-activation/DeviceInfoCard';
@@ -194,16 +194,14 @@ describe('DeviceInfoCard', () => {
         />,
       );
 
-      act(() => {
-        vi.advanceTimersByTime(2000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
       });
 
-      await waitFor(() => {
-        expect(screen.getByText('Expired')).toBeInTheDocument();
-        expect(
-          screen.getByText(/this code has expired/i),
-        ).toBeInTheDocument();
-      });
+      expect(screen.getByText('Expired')).toBeInTheDocument();
+      expect(
+        screen.getByText(/this code has expired/i),
+      ).toBeInTheDocument();
     });
   });
 
@@ -239,8 +237,6 @@ describe('DeviceInfoCard', () => {
     });
 
     it('should call onApprove when Approve is clicked', async () => {
-      const user = userEvent.setup({ delay: null });
-
       render(
         <DeviceInfoCard
           deviceInfo={makeDeviceInfo()}
@@ -250,16 +246,14 @@ describe('DeviceInfoCard', () => {
         />,
       );
 
-      await user.click(screen.getByRole('button', { name: /approve/i }));
-
-      await waitFor(() => {
-        expect(mockOnApprove).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /approve/i }));
       });
+
+      expect(mockOnApprove).toHaveBeenCalledTimes(1);
     });
 
     it('should call onDeny when Deny is clicked', async () => {
-      const user = userEvent.setup({ delay: null });
-
       render(
         <DeviceInfoCard
           deviceInfo={makeDeviceInfo()}
@@ -269,11 +263,11 @@ describe('DeviceInfoCard', () => {
         />,
       );
 
-      await user.click(screen.getByRole('button', { name: /deny/i }));
-
-      await waitFor(() => {
-        expect(mockOnDeny).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /deny/i }));
       });
+
+      expect(mockOnDeny).toHaveBeenCalledTimes(1);
     });
 
     it('should show "Approving..." text while onApprove is in progress', async () => {
