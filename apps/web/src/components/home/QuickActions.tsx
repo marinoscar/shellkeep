@@ -11,11 +11,8 @@ import {
   Add as AddIcon,
   Terminal as TerminalIcon,
   Dns as DnsIcon,
-  Settings as SettingsIcon,
-  AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { usePermissions } from '../../hooks/usePermissions';
 import { NewSessionDialog } from '../terminal/NewSessionDialog';
 import { createSession } from '../../services/api';
 import type { CreateSessionData } from '../../types';
@@ -27,12 +24,10 @@ interface QuickAction {
   path?: string;
   onClick?: () => void;
   primary?: boolean;
-  adminOnly?: boolean;
 }
 
 export function QuickActions() {
   const navigate = useNavigate();
-  const { isAdmin } = usePermissions();
   const [newSessionOpen, setNewSessionOpen] = useState(false);
 
   const handleCreateSession = async (data: CreateSessionData) => {
@@ -60,25 +55,7 @@ export function QuickActions() {
       icon: <DnsIcon />,
       path: '/servers',
     },
-    {
-      title: 'User Settings',
-      description: 'Profile and preferences',
-      icon: <SettingsIcon />,
-      path: '/settings',
-    },
-    {
-      title: 'System Settings',
-      description: 'Application configuration',
-      icon: <AdminIcon />,
-      path: '/admin/settings',
-      adminOnly: true,
-    },
   ];
-
-  const visibleActions = quickActions.filter((action) => {
-    if (action.adminOnly && !isAdmin) return false;
-    return true;
-  });
 
   return (
     <>
@@ -89,7 +66,7 @@ export function QuickActions() {
           </Typography>
 
           <Grid container spacing={2}>
-            {visibleActions.map((action) => (
+            {quickActions.map((action) => (
               <Grid item xs={12} sm={6} key={action.title}>
                 <Button
                   fullWidth

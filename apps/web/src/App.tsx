@@ -15,8 +15,6 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
 const ActivateDevicePage = lazy(() => import('./pages/ActivateDevicePage'));
 const HomePage = lazy(() => import('./pages/HomePage'));
-const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
-const SystemSettingsPage = lazy(() => import('./pages/SystemSettingsPage'));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
 const ServerProfilesPage = lazy(() => import('./pages/ServerProfilesPage'));
 const SessionsPage = lazy(() => import('./pages/SessionsPage'));
@@ -59,9 +57,7 @@ function AppRoutes() {
                 <Route path="/sessions" element={<SessionsPage />} />
                 <Route path="/sessions/:id/terminal" element={<TerminalPage />} />
                 <Route path="/servers" element={<ServerProfilesPage />} />
-                <Route path="/settings" element={<UserSettingsPage />} />
                 <Route path="/admin/users" element={<UserManagementPage />} />
-                <Route path="/admin/settings" element={<SystemSettingsPage />} />
               </Route>
             </Route>
 

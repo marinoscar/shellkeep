@@ -15,8 +15,6 @@ import {
   Home as HomeIcon,
   Terminal as TerminalIcon,
   Dns as DnsIcon,
-  Settings as SettingsIcon,
-  AdminPanelSettings as AdminIcon,
   People as PeopleIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -55,21 +53,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       visible: true,
     },
     {
-      label: 'User Settings',
-      icon: <SettingsIcon />,
-      path: '/settings',
-      visible: true,
-    },
-    {
       label: 'User Management',
       icon: <PeopleIcon />,
       path: '/admin/users',
-      visible: isAdmin,
-    },
-    {
-      label: 'System Settings',
-      icon: <AdminIcon />,
-      path: '/admin/settings',
       visible: isAdmin,
     },
   ];
