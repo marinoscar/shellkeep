@@ -226,7 +226,9 @@ describe('ProfileSettings', () => {
       const toggle = screen.getByRole('checkbox', { name: /use google profile image/i });
       await user.click(toggle);
 
-      expect(saveButton).toBeEnabled();
+      await waitFor(() => {
+        expect(saveButton).toBeEnabled();
+      });
     });
 
     it('should handle custom image upload', async () => {
