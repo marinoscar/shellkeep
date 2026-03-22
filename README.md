@@ -42,7 +42,24 @@ See all your active and recent sessions at a glance. One click to reconnect. No 
 
 ### Full Terminal Emulation
 
-Powered by xterm.js. Handles color output, cursor movement, wide characters, and everything else your shell throws at it. Copy output to clipboard, download session logs, work across multiple tabs.
+Powered by xterm.js. Handles color output, cursor movement, wide characters, and everything else your shell throws at it. A toolbar above each session gives you quick access to clipboard, session management, and output controls without leaving the terminal.
+
+#### Terminal Toolbar
+
+| Control | What it does |
+|---|---|
+| Paste | Reads from clipboard and sends text directly to the terminal. Pasting an image uploads it to storage, generates a signed 1-hour download URL, and pastes that URL into the terminal instead. Only text and images are supported; other content types are rejected with a notification. |
+| New Session | Opens a dialog to create a new terminal session — choose a server profile and optionally name the session — then opens it in a new browser tab. |
+| Copy Output | Copies the current terminal buffer to the clipboard. |
+| Download Output | Saves the terminal buffer as a plain-text file. |
+| Fullscreen | Opens the session in a dedicated browser tab for distraction-free work. |
+| Rename | Edit the session name inline from the toolbar. |
+| Connection Status | Live indicator showing whether the WebSocket is connected, reconnecting, or disconnected. |
+| Server Profile Chip | Displays the server profile the session is connected to. |
+
+#### Session Lifecycle
+
+Sessions are tracked as `active`, `detached`, or `terminated`. An idle session is automatically detached after 1 hour; a detached session is terminated after 12 hours. Clipboard images and other storage objects uploaded through the terminal are automatically deleted after 24 hours by a daily cleanup job (runs at 9:00 AM UTC).
 
 ### Device Authorization (RFC 8628)
 
