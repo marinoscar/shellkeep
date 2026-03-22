@@ -59,6 +59,13 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     ws.on('connect', () => {
       setIsConnected(true);
       setError(null);
+      // Send resize so tmux knows the correct dimensions, then a newline
+      // to trigger the shell prompt so the terminal isn't blank on first load
+      setTimeout(() => {
+        ws.resize(terminal.cols, terminal.rows);
+        const encoder = new TextEncoder();
+        ws.send(encoder.encode('\n'));
+      }, 200);
     });
 
     ws.on('data', (data: Uint8Array) => {
