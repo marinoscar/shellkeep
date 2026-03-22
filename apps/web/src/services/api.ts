@@ -358,3 +358,40 @@ export async function updateSession(
 export async function deleteSession(id: string): Promise<void> {
   await api.delete<void>(`/sessions/${id}`);
 }
+
+// Storage API
+export async function uploadFile(file: Blob, filename: string): Promise<{ id: string; status: string }> {
+  const formData = new FormData();
+  formData.append('file', file, filename);
+
+  const token = api.getAccessToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}/storage/objects`, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new ApiError(
+      error.message || 'Upload failed',
+      response.status,
+      error.code,
+      error.details,
+    );
+  }
+
+  const data = await response.json();
+  return data.data ?? data;
+}
+
+export async function getDownloadUrl(objectId: string, expiresIn = 3600): Promise<string> {
+  const result = await api.get<{ url: string; expiresIn: number }>(`/storage/objects/${objectId}/download?expiresIn=${expiresIn}`);
+  return result.url;
+}
