@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -7,91 +8,133 @@ import {
   Box,
 } from '@mui/material';
 import {
+  Add as AddIcon,
+  Terminal as TerminalIcon,
+  Dns as DnsIcon,
+  Settings as SettingsIcon,
   AdminPanelSettings as AdminIcon,
-  Person as PersonIcon,
-  Palette as ThemeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../../hooks/usePermissions';
+import { NewSessionDialog } from '../terminal/NewSessionDialog';
+import { createSession } from '../../services/api';
+import type { CreateSessionData } from '../../types';
 
 interface QuickAction {
   title: string;
   description: string;
   icon: React.ReactNode;
-  path: string;
-  permission?: string;
+  path?: string;
+  onClick?: () => void;
+  primary?: boolean;
   adminOnly?: boolean;
 }
 
-const quickActions: QuickAction[] = [
-  {
-    title: 'User Settings',
-    description: 'Manage your profile and preferences',
-    icon: <PersonIcon />,
-    path: '/settings',
-  },
-  {
-    title: 'Theme',
-    description: 'Customize your display preferences',
-    icon: <ThemeIcon />,
-    path: '/settings#theme',
-  },
-  {
-    title: 'System Settings',
-    description: 'Configure application settings',
-    icon: <AdminIcon />,
-    path: '/admin/settings',
-    permission: 'system_settings:read',
-  },
-];
-
 export function QuickActions() {
   const navigate = useNavigate();
-  const { hasPermission, isAdmin } = usePermissions();
+  const { isAdmin } = usePermissions();
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
+
+  const handleCreateSession = async (data: CreateSessionData) => {
+    const session = await createSession(data);
+    navigate(`/sessions/${session.id}/terminal`);
+  };
+
+  const quickActions: QuickAction[] = [
+    {
+      title: 'New Session',
+      description: 'Connect to a server',
+      icon: <AddIcon />,
+      onClick: () => setNewSessionOpen(true),
+      primary: true,
+    },
+    {
+      title: 'All Sessions',
+      description: 'View terminal sessions',
+      icon: <TerminalIcon />,
+      path: '/sessions',
+    },
+    {
+      title: 'Manage Servers',
+      description: 'Configure server profiles',
+      icon: <DnsIcon />,
+      path: '/servers',
+    },
+    {
+      title: 'User Settings',
+      description: 'Profile and preferences',
+      icon: <SettingsIcon />,
+      path: '/settings',
+    },
+    {
+      title: 'System Settings',
+      description: 'Application configuration',
+      icon: <AdminIcon />,
+      path: '/admin/settings',
+      adminOnly: true,
+    },
+  ];
 
   const visibleActions = quickActions.filter((action) => {
     if (action.adminOnly && !isAdmin) return false;
-    if (action.permission && !hasPermission(action.permission)) return false;
     return true;
   });
 
   return (
-    <Card>
-      <CardContent>
-        <Typography variant="h6" gutterBottom>
-          Quick Actions
-        </Typography>
+    <>
+      <Card>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Quick Actions
+          </Typography>
 
-        <Grid container spacing={2}>
-          {visibleActions.map((action) => (
-            <Grid item xs={12} sm={6} key={action.path}>
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={() => navigate(action.path)}
-                sx={{
-                  justifyContent: 'flex-start',
-                  textAlign: 'left',
-                  py: 2,
-                  px: 2,
-                }}
-              >
-                <Box sx={{ mr: 2, display: 'flex', color: 'primary.main' }}>
-                  {action.icon}
-                </Box>
-                <Box>
-                  <Typography variant="subtitle2">
-                    {action.title}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {action.description}
-                  </Typography>
-                </Box>
-              </Button>
-            </Grid>
-          ))}
-        </Grid>
-      </CardContent>
-    </Card>
+          <Grid container spacing={2}>
+            {visibleActions.map((action) => (
+              <Grid item xs={12} sm={6} key={action.title}>
+                <Button
+                  fullWidth
+                  variant={action.primary ? 'contained' : 'outlined'}
+                  onClick={() => {
+                    if (action.onClick) {
+                      action.onClick();
+                    } else if (action.path) {
+                      navigate(action.path);
+                    }
+                  }}
+                  sx={{
+                    justifyContent: 'flex-start',
+                    textAlign: 'left',
+                    py: 2,
+                    px: 2,
+                  }}
+                >
+                  <Box sx={{ mr: 2, display: 'flex', color: action.primary ? 'inherit' : 'primary.main' }}>
+                    {action.icon}
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" color={action.primary ? 'inherit' : undefined}>
+                      {action.title}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color={action.primary ? 'inherit' : 'text.secondary'}
+                      sx={{ opacity: action.primary ? 0.85 : 1 }}
+                    >
+                      {action.description}
+                    </Typography>
+                  </Box>
+                </Button>
+              </Grid>
+            ))}
+          </Grid>
+        </CardContent>
+      </Card>
+
+      <NewSessionDialog
+        open={newSessionOpen}
+        onClose={() => setNewSessionOpen(false)}
+        onCreate={handleCreateSession}
+      />
+    </>
   );
 }

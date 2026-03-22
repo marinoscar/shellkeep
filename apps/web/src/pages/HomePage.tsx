@@ -1,7 +1,10 @@
 import { Box, Container, Typography, Grid } from '@mui/material';
-import { UserProfileCard } from '../components/user/UserProfileCard';
-import { QuickActions } from '../components/home/QuickActions';
 import { useAuth } from '../contexts/AuthContext';
+import { SessionStatsBar } from '../components/home/SessionStatsBar';
+import { ActiveSessionsPanel } from '../components/home/ActiveSessionsPanel';
+import { QuickConnectPanel } from '../components/home/QuickConnectPanel';
+import { RecentActivityPanel } from '../components/home/RecentActivityPanel';
+import { QuickActions } from '../components/home/QuickActions';
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -14,20 +17,32 @@ export default function HomePage() {
           Welcome back{user?.displayName ? `, ${user.displayName}` : ''}
         </Typography>
         <Typography color="text.secondary" paragraph>
-          Your dashboard overview
+          ShellKeep Control Center
         </Typography>
 
-        <Grid container spacing={3}>
-          {/* User Profile Card */}
-          <Grid item xs={12} md={4}>
-            <UserProfileCard />
+        {/* Stats Bar */}
+        <SessionStatsBar />
+
+        {/* Main Grid */}
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          {/* Active Sessions Panel */}
+          <Grid item xs={12} md={8}>
+            <ActiveSessionsPanel />
           </Grid>
 
-          {/* Quick Actions */}
-          <Grid item xs={12} md={8}>
-            <QuickActions />
+          {/* Quick Connect Panel */}
+          <Grid item xs={12} md={4}>
+            <QuickConnectPanel />
           </Grid>
         </Grid>
+
+        {/* Quick Actions */}
+        <Box sx={{ mb: 3 }}>
+          <QuickActions />
+        </Box>
+
+        {/* Recent Activity */}
+        <RecentActivityPanel />
       </Box>
     </Container>
   );
