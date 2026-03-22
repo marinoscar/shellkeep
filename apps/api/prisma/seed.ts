@@ -45,6 +45,16 @@ const PERMISSIONS = [
   { name: 'storage:read', description: 'Read object metadata, get download URLs' },
   { name: 'storage:write', description: 'Upload, update metadata' },
   { name: 'storage:delete_any', description: 'Admin: delete any object' },
+
+  // Server profiles
+  { name: 'servers:read', description: 'View server profiles' },
+  { name: 'servers:write', description: 'Create and update server profiles' },
+  { name: 'servers:delete', description: 'Delete server profiles' },
+
+  // Terminal sessions
+  { name: 'sessions:read', description: 'View terminal sessions' },
+  { name: 'sessions:write', description: 'Create and manage terminal sessions' },
+  { name: 'sessions:delete', description: 'Terminate terminal sessions' },
 ] as const;
 
 // Role to permissions mapping
@@ -62,17 +72,31 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'storage:read',
     'storage:write',
     'storage:delete_any',
+    'servers:read',
+    'servers:write',
+    'servers:delete',
+    'sessions:read',
+    'sessions:write',
+    'sessions:delete',
   ],
   contributor: [
     'user_settings:read',
     'user_settings:write',
     'storage:read',
     'storage:write',
+    'servers:read',
+    'servers:write',
+    'servers:delete',
+    'sessions:read',
+    'sessions:write',
+    'sessions:delete',
   ],
   viewer: [
     'user_settings:read',
     'user_settings:write',
     'storage:read',
+    'servers:read',
+    'sessions:read',
   ],
 };
 

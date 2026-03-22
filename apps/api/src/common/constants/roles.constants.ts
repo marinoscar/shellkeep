@@ -38,6 +38,16 @@ export const PERMISSIONS = {
   STORAGE_READ: 'storage:read',
   STORAGE_WRITE: 'storage:write',
   STORAGE_DELETE_ANY: 'storage:delete_any',
+
+  // Server profiles
+  SERVERS_READ: 'servers:read',
+  SERVERS_WRITE: 'servers:write',
+  SERVERS_DELETE: 'servers:delete',
+
+  // Terminal sessions
+  SESSIONS_READ: 'sessions:read',
+  SESSIONS_WRITE: 'sessions:write',
+  SESSIONS_DELETE: 'sessions:delete',
 } as const;
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
