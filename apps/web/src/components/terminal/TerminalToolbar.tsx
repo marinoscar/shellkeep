@@ -14,6 +14,8 @@ import {
   Close as CloseIcon,
   Edit as EditIcon,
   Circle as CircleIcon,
+  ContentCopy as CopyIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 
 interface TerminalToolbarProps {
@@ -22,6 +24,8 @@ interface TerminalToolbarProps {
   onOpenNewTab: () => void;
   onDisconnect: () => void;
   onRename: (newName: string) => void;
+  onCopyAll?: () => void;
+  onDownload?: () => void;
 }
 
 export function TerminalToolbar({
@@ -30,6 +34,8 @@ export function TerminalToolbar({
   onOpenNewTab,
   onDisconnect,
   onRename,
+  onCopyAll,
+  onDownload,
 }: TerminalToolbarProps) {
   const theme = useTheme();
   const [isEditing, setIsEditing] = useState(false);
@@ -119,6 +125,20 @@ export function TerminalToolbar({
 
       {/* Right: Actions */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        {onCopyAll && (
+          <Tooltip title="Copy terminal output">
+            <IconButton size="small" onClick={onCopyAll}>
+              <CopyIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        {onDownload && (
+          <Tooltip title="Download as text file">
+            <IconButton size="small" onClick={onDownload}>
+              <DownloadIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         <Tooltip title="Open in new tab">
           <IconButton size="small" onClick={onOpenNewTab}>
             <OpenInNewIcon fontSize="small" />

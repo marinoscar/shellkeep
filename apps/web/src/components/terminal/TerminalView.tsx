@@ -1,7 +1,12 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Box } from '@mui/material';
 import { useTerminal } from '../../hooks/useTerminal';
+import type { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
+
+export interface TerminalViewHandle {
+  getTerminal: () => Terminal | null;
+}
 
 interface TerminalViewProps {
   sessionId: string;
@@ -9,9 +14,14 @@ interface TerminalViewProps {
   onError?: (error: string) => void;
 }
 
-export function TerminalView({ sessionId, onConnectionChange, onError }: TerminalViewProps) {
+export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
+  function TerminalView({ sessionId, onConnectionChange, onError }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { isConnected, error } = useTerminal(sessionId, containerRef);
+  const { isConnected, error, terminal } = useTerminal(sessionId, containerRef);
+
+  useImperativeHandle(ref, () => ({
+    getTerminal: () => terminal.current,
+  }), [terminal]);
 
   // Notify parent of connection changes
   useEffect(() => {
@@ -46,4 +56,4 @@ export function TerminalView({ sessionId, onConnectionChange, onError }: Termina
       }}
     />
   );
-}
+});
