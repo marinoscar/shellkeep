@@ -1,6 +1,6 @@
 # ShellKeep
 
-Your terminal sessions, alive and waiting — on every server, from any device.
+Your terminal sessions, alive and waiting, on every server, from any device.
 
 ---
 
