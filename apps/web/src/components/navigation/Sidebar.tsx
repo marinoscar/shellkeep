@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import {
   Home as HomeIcon,
+  Terminal as TerminalIcon,
   Dns as DnsIcon,
   Settings as SettingsIcon,
   AdminPanelSettings as AdminIcon,
@@ -36,9 +37,15 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   const menuItems = [
     {
-      label: 'Home',
+      label: 'Dashboard',
       icon: <HomeIcon />,
       path: '/',
+      visible: true,
+    },
+    {
+      label: 'Sessions',
+      icon: <TerminalIcon />,
+      path: '/sessions',
       visible: true,
     },
     {

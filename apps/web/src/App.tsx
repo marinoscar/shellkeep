@@ -19,6 +19,9 @@ const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
 const SystemSettingsPage = lazy(() => import('./pages/SystemSettingsPage'));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
 const ServerProfilesPage = lazy(() => import('./pages/ServerProfilesPage'));
+const SessionsPage = lazy(() => import('./pages/SessionsPage'));
+const TerminalPage = lazy(() => import('./pages/TerminalPage'));
+const TerminalFullPage = lazy(() => import('./pages/TerminalFullPage'));
 
 // Test login page (development only)
 const TestLoginPage = import.meta.env.PROD
@@ -48,8 +51,13 @@ function AppRoutes() {
               {/* Device activation page - without layout for full-screen experience */}
               <Route path="/activate" element={<ActivateDevicePage />} />
 
+              {/* Full-screen terminal - without layout */}
+              <Route path="/terminal/:id" element={<TerminalFullPage />} />
+
               <Route element={<Layout />}>
                 <Route path="/" element={<HomePage />} />
+                <Route path="/sessions" element={<SessionsPage />} />
+                <Route path="/sessions/:id/terminal" element={<TerminalPage />} />
                 <Route path="/servers" element={<ServerProfilesPage />} />
                 <Route path="/settings" element={<UserSettingsPage />} />
                 <Route path="/admin/users" element={<UserManagementPage />} />
