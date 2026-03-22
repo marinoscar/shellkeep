@@ -43,11 +43,10 @@ export class ServerProfilesService {
     ]);
 
     return {
-      items: items.map((item) => this.toResponse(item)),
+      data: items.map((item) => this.toResponse(item)),
       total,
       page,
       pageSize,
-      totalPages: Math.ceil(total / pageSize),
     };
   }
 
