@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../../utils/test-utils';
 import { ServerProfileList } from '../../../components/server-profiles/ServerProfileList';
@@ -383,8 +383,9 @@ describe('ServerProfileList', () => {
 
       render(<ServerProfileList />);
 
-      const testButtons = screen.getAllByLabelText(/test connection/i);
-      await user.click(testButtons[0]);
+      // The TestIcon (NetworkCheck) SVG has data-testid="NetworkCheckIcon"
+      const testIcons = screen.getAllByTestId('NetworkCheckIcon');
+      await user.click(testIcons[0].closest('button')!);
 
       await waitFor(() => {
         expect(testConnection).toHaveBeenCalledWith(mockProfile1.id);
@@ -399,8 +400,8 @@ describe('ServerProfileList', () => {
 
       render(<ServerProfileList onTestResult={onTestResult} />);
 
-      const testButtons = screen.getAllByLabelText(/test connection/i);
-      await user.click(testButtons[0]);
+      const testIcons = screen.getAllByTestId('NetworkCheckIcon');
+      await user.click(testIcons[0].closest('button')!);
 
       await waitFor(() => {
         expect(onTestResult).toHaveBeenCalledWith({ success: true });
@@ -418,8 +419,8 @@ describe('ServerProfileList', () => {
 
       render(<ServerProfileList onTestResult={onTestResult} />);
 
-      const testButtons = screen.getAllByLabelText(/test connection/i);
-      await user.click(testButtons[0]);
+      const testIcons = screen.getAllByTestId('NetworkCheckIcon');
+      await user.click(testIcons[0].closest('button')!);
 
       await waitFor(() => {
         expect(onTestResult).toHaveBeenCalledWith({
@@ -441,18 +442,17 @@ describe('ServerProfileList', () => {
 
       render(<ServerProfileList />);
 
-      const testButtons = screen.getAllByLabelText(/test connection/i);
-      await user.click(testButtons[0]);
+      const testIcons = screen.getAllByTestId('NetworkCheckIcon');
+      await user.click(testIcons[0].closest('button')!);
 
       await waitFor(() => {
-        // The button wrapping span is used; the icon button inside should be disabled
-        const updatedButtons = screen.getAllByRole('button');
-        // Find the one that had the test icon for profile-1 — it should now be disabled
-        // The button is wrapped in a span, so we check for the CircularProgress indicator
+        // While testing, a CircularProgress replaces the icon (disabled state)
         expect(screen.getByRole('progressbar')).toBeInTheDocument();
       });
 
-      resolveTest({ success: true });
+      await act(async () => {
+        resolveTest({ success: true });
+      });
     });
   });
 

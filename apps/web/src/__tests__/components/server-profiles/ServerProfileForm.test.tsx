@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../../utils/test-utils';
 import { ServerProfileForm } from '../../../components/server-profiles/ServerProfileForm';
@@ -213,8 +213,8 @@ describe('ServerProfileForm', () => {
         />
       );
 
-      // Open the auth method select
-      const authSelect = screen.getByLabelText(/auth method/i);
+      // Open the auth method select (MUI Select renders as combobox role)
+      const authSelect = screen.getByRole('combobox');
       await user.click(authSelect);
 
       // Select SSH Key option
@@ -241,7 +241,7 @@ describe('ServerProfileForm', () => {
       // Password field visible initially
       expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
 
-      const authSelect = screen.getByLabelText(/auth method/i);
+      const authSelect = screen.getByRole('combobox');
       await user.click(authSelect);
 
       const sshKeyOption = await screen.findByRole('option', { name: /ssh key/i });
@@ -263,7 +263,7 @@ describe('ServerProfileForm', () => {
         />
       );
 
-      const authSelect = screen.getByLabelText(/auth method/i);
+      const authSelect = screen.getByRole('combobox');
       await user.click(authSelect);
 
       const agentOption = await screen.findByRole('option', { name: /ssh agent/i });
@@ -304,9 +304,7 @@ describe('ServerProfileForm', () => {
 
   describe('Validation', () => {
     it('should show error when name is empty on submit', async () => {
-      const user = userEvent.setup();
-
-      render(
+      const { container } = render(
         <ServerProfileForm
           open={true}
           onClose={mockOnClose}
@@ -314,7 +312,8 @@ describe('ServerProfileForm', () => {
         />
       );
 
-      await user.click(screen.getByRole('button', { name: /^create$/i }));
+      // Use fireEvent.submit to bypass HTML5 required-field validation
+      fireEvent.submit(document.querySelector('form')!);
 
       await waitFor(() => {
         expect(screen.getByText('Name is required')).toBeInTheDocument();
@@ -326,7 +325,7 @@ describe('ServerProfileForm', () => {
     it('should show error when hostname is empty on submit', async () => {
       const user = userEvent.setup();
 
-      render(
+      const { container } = render(
         <ServerProfileForm
           open={true}
           onClose={mockOnClose}
@@ -335,7 +334,7 @@ describe('ServerProfileForm', () => {
       );
 
       await user.type(screen.getByLabelText(/^name/i), 'My Server');
-      await user.click(screen.getByRole('button', { name: /^create$/i }));
+      fireEvent.submit(document.querySelector('form')!);
 
       await waitFor(() => {
         expect(screen.getByText('Hostname is required')).toBeInTheDocument();
@@ -347,7 +346,7 @@ describe('ServerProfileForm', () => {
     it('should show error when username is empty on submit', async () => {
       const user = userEvent.setup();
 
-      render(
+      const { container } = render(
         <ServerProfileForm
           open={true}
           onClose={mockOnClose}
@@ -357,7 +356,7 @@ describe('ServerProfileForm', () => {
 
       await user.type(screen.getByLabelText(/^name/i), 'My Server');
       await user.type(screen.getByLabelText(/^hostname/i), 'example.com');
-      await user.click(screen.getByRole('button', { name: /^create$/i }));
+      fireEvent.submit(document.querySelector('form')!);
 
       await waitFor(() => {
         expect(screen.getByText('Username is required')).toBeInTheDocument();
@@ -369,7 +368,7 @@ describe('ServerProfileForm', () => {
     it('should clear error message when form is valid on next submit', async () => {
       const user = userEvent.setup();
 
-      render(
+      const { container } = render(
         <ServerProfileForm
           open={true}
           onClose={mockOnClose}
@@ -377,8 +376,8 @@ describe('ServerProfileForm', () => {
         />
       );
 
-      // Trigger validation error
-      await user.click(screen.getByRole('button', { name: /^create$/i }));
+      // Trigger validation error by submitting empty form
+      fireEvent.submit(document.querySelector('form')!);
 
       await waitFor(() => {
         expect(screen.getByText('Name is required')).toBeInTheDocument();
@@ -388,7 +387,7 @@ describe('ServerProfileForm', () => {
       await user.type(screen.getByLabelText(/^name/i), 'My Server');
       await user.type(screen.getByLabelText(/^hostname/i), 'example.com');
       await user.type(screen.getByLabelText(/^username/i), 'root');
-      await user.click(screen.getByRole('button', { name: /^create$/i }));
+      fireEvent.submit(document.querySelector('form')!);
 
       await waitFor(() => {
         expect(screen.queryByText('Name is required')).not.toBeInTheDocument();
@@ -583,14 +582,19 @@ describe('ServerProfileForm', () => {
         expect(screen.getByRole('button', { name: /saving/i })).toBeInTheDocument();
       });
 
-      // Attempt to cancel while submitting
+      // Attempt to cancel while submitting - button is disabled
       const cancelButton = screen.getByRole('button', { name: /cancel/i });
-      await user.click(cancelButton);
+      expect(cancelButton).toBeDisabled();
+
+      // Use fireEvent to bypass pointer-events:none on disabled button
+      fireEvent.click(cancelButton);
 
       // onClose should not have been called (isSubmitting guard)
       expect(mockOnClose).not.toHaveBeenCalled();
 
-      resolveSave();
+      await act(async () => {
+        resolveSave();
+      });
     });
 
     it('should not include password in onSave payload when editing without changing password', async () => {

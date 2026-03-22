@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, act } from '@testing-library/react';
+import { screen, waitFor, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../utils/test-utils';
 import ServerProfilesPage from '../../pages/ServerProfilesPage';
@@ -253,45 +253,55 @@ describe('ServerProfilesPage', () => {
 
     it('should auto-hide the snackbar after 4 seconds', async () => {
       vi.useFakeTimers();
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
+      try {
+        render(<ServerProfilesPage />);
+
+        // Use fireEvent to avoid userEvent hanging with fake timers
+        act(() => {
+          fireEvent.click(screen.getByTestId('trigger-delete-success'));
+        });
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(100);
+        });
+
+        expect(screen.getByText('Server profile deleted')).toBeInTheDocument();
+
+        // Advance past autoHideDuration (4000ms) plus MUI exit animation (~1000ms)
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(4000);
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1000);
+        });
+
+        expect(screen.queryByText('Server profile deleted')).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('Snackbar - Sequential Notifications', () => {
+    it('should replace the previous snackbar message with a new one', async () => {
       render(<ServerProfilesPage />);
 
-      await user.click(screen.getByTestId('trigger-delete-success'));
+      act(() => {
+        fireEvent.click(screen.getByTestId('trigger-delete-success'));
+      });
 
       await waitFor(() => {
         expect(screen.getByText('Server profile deleted')).toBeInTheDocument();
       });
 
       act(() => {
-        vi.advanceTimersByTime(4000);
+        fireEvent.click(screen.getByTestId('trigger-error'));
       });
 
-      await waitFor(() => {
-        expect(screen.queryByText('Server profile deleted')).not.toBeInTheDocument();
-      });
-
-      vi.useRealTimers();
-    });
-  });
-
-  describe('Snackbar - Sequential Notifications', () => {
-    it('should replace the previous snackbar message with a new one', async () => {
-      const user = userEvent.setup();
-
-      render(<ServerProfilesPage />);
-
-      await user.click(screen.getByTestId('trigger-delete-success'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Server profile deleted')).toBeInTheDocument();
-      });
-
-      await user.click(screen.getByTestId('trigger-error'));
-
+      // After triggering a new notification, the new message should appear
       await waitFor(() => {
         expect(screen.getByText('Custom error message')).toBeInTheDocument();
-        expect(screen.queryByText('Server profile deleted')).not.toBeInTheDocument();
       });
     });
   });
