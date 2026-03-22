@@ -187,6 +187,7 @@ describe('ServerProfilesService', () => {
         authMethod: 'password',
         password: 'my-pass',
         tags: [],
+        color: 'default',
       });
 
       expect(mockedEncrypt).toHaveBeenCalledWith('my-pass', mockKey);
@@ -216,6 +217,7 @@ describe('ServerProfilesService', () => {
         privateKey: 'my-key',
         passphrase: 'my-phrase',
         tags: [],
+        color: 'default',
       });
 
       expect(mockedEncrypt).toHaveBeenCalledWith('my-key', mockKey);
@@ -236,6 +238,7 @@ describe('ServerProfilesService', () => {
         username: 'admin',
         authMethod: 'agent',
         tags: [],
+        color: 'default',
       });
 
       expect(mockedEncrypt).not.toHaveBeenCalled();
