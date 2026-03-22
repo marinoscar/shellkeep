@@ -158,7 +158,7 @@ describe('TerminalPage', () => {
       });
 
       // Trigger inline rename via toolbar
-      await userEvent.click(screen.getByTitle('Rename session'));
+      await userEvent.click(screen.getByTestId('EditIcon').closest('button')!);
       const input = screen.getByRole('textbox');
       await userEvent.clear(input);
       await userEvent.type(input, 'Renamed Session');
@@ -181,10 +181,10 @@ describe('TerminalPage', () => {
       renderTerminalPage();
 
       await waitFor(() => {
-        expect(screen.getByTitle('Open in new tab')).toBeInTheDocument();
+        expect(screen.getByTestId('OpenInNewIcon').closest('button')!).toBeInTheDocument();
       });
 
-      await userEvent.click(screen.getByTitle('Open in new tab'));
+      await userEvent.click(screen.getByTestId('OpenInNewIcon').closest('button')!);
 
       expect(openSpy).toHaveBeenCalledWith('/terminal/session-1', '_blank');
       openSpy.mockRestore();
@@ -203,10 +203,10 @@ describe('TerminalPage', () => {
       renderTerminalPage();
 
       await waitFor(() => {
-        expect(screen.getByTitle('Copy terminal output')).toBeInTheDocument();
+        expect(screen.getByTestId('ContentCopyIcon').closest('button')!).toBeInTheDocument();
       });
 
-      await userEvent.click(screen.getByTitle('Copy terminal output'));
+      await userEvent.click(screen.getByTestId('ContentCopyIcon').closest('button')!);
 
       // getTerminalText returns '' because the mock terminal has no buffer
       // clipboard.writeText is not called for empty text — verify it doesn't throw
@@ -217,11 +217,11 @@ describe('TerminalPage', () => {
       renderTerminalPage();
 
       await waitFor(() => {
-        expect(screen.getByTitle('Download as text file')).toBeInTheDocument();
+        expect(screen.getByTestId('DownloadIcon').closest('button')!).toBeInTheDocument();
       });
 
       await expect(
-        userEvent.click(screen.getByTitle('Download as text file')),
+        userEvent.click(screen.getByTestId('DownloadIcon').closest('button')!),
       ).resolves.not.toThrow();
     });
   });

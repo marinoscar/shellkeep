@@ -129,7 +129,7 @@ describe('TerminalFullPage', () => {
       render(<TerminalFullPage />);
 
       await waitFor(() => {
-        expect(screen.getByTitle('Copy terminal output')).toBeInTheDocument();
+        expect(screen.getByTestId('ContentCopyIcon').closest('button')!).toBeInTheDocument();
       });
     });
 
@@ -137,7 +137,7 @@ describe('TerminalFullPage', () => {
       render(<TerminalFullPage />);
 
       await waitFor(() => {
-        expect(screen.getByTitle('Download as text file')).toBeInTheDocument();
+        expect(screen.getByTestId('DownloadIcon').closest('button')!).toBeInTheDocument();
       });
     });
   });
@@ -176,11 +176,11 @@ describe('TerminalFullPage', () => {
       render(<TerminalFullPage />);
 
       await waitFor(() => {
-        expect(screen.getByTitle('Copy terminal output')).toBeInTheDocument();
+        expect(screen.getByTestId('ContentCopyIcon').closest('button')!).toBeInTheDocument();
       });
 
       await expect(
-        userEvent.click(screen.getByTitle('Copy terminal output')),
+        userEvent.click(screen.getByTestId('ContentCopyIcon').closest('button')!),
       ).resolves.not.toThrow();
     });
 
@@ -188,11 +188,11 @@ describe('TerminalFullPage', () => {
       render(<TerminalFullPage />);
 
       await waitFor(() => {
-        expect(screen.getByTitle('Download as text file')).toBeInTheDocument();
+        expect(screen.getByTestId('DownloadIcon').closest('button')!).toBeInTheDocument();
       });
 
       await expect(
-        userEvent.click(screen.getByTitle('Download as text file')),
+        userEvent.click(screen.getByTestId('DownloadIcon').closest('button')!),
       ).resolves.not.toThrow();
     });
 
@@ -204,10 +204,10 @@ describe('TerminalFullPage', () => {
       render(<TerminalFullPage />);
 
       await waitFor(() => {
-        expect(screen.getByTitle('Download as text file')).toBeInTheDocument();
+        expect(screen.getByTestId('DownloadIcon').closest('button')!).toBeInTheDocument();
       });
 
-      await userEvent.click(screen.getByTitle('Download as text file'));
+      await userEvent.click(screen.getByTestId('DownloadIcon').closest('button')!);
 
       // URL.createObjectURL should NOT be called because text is empty
       expect(createObjectURLSpy).not.toHaveBeenCalled();

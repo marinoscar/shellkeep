@@ -18,6 +18,30 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
+/**
+ * Creates a status-aware MSW handler: returns `sessions` for the matching
+ * `status` query param, and an empty list for all other status values.
+ * This prevents duplicate items when ActiveSessionsPanel fetches active + detached.
+ */
+function sessionHandlerForStatus(
+  status: string,
+  sessions: TerminalSession[],
+) {
+  return http.get(`${API_BASE}/sessions`, ({ request }) => {
+    const url = new URL(request.url);
+    const reqStatus = url.searchParams.get('status');
+    if (reqStatus === status) {
+      return HttpResponse.json({
+        items: sessions,
+        total: sessions.length,
+        page: 1,
+        pageSize: 6,
+      });
+    }
+    return HttpResponse.json({ items: [], total: 0, page: 1, pageSize: 6 });
+  });
+}
+
 function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession {
   return {
     id: 'session-1',
@@ -126,11 +150,7 @@ describe('ActiveSessionsPanel', () => {
     it('should render session names', async () => {
       const session = makeSession({ name: 'Prod Server', status: 'active' });
 
-      server.use(
-        http.get(`${API_BASE}/sessions`, () =>
-          HttpResponse.json({ items: [session], total: 1, page: 1, pageSize: 6 }),
-        ),
-      );
+      server.use(sessionHandlerForStatus('active', [session]));
 
       render(<ActiveSessionsPanel />);
 
@@ -142,11 +162,7 @@ describe('ActiveSessionsPanel', () => {
     it('should render username@hostname for each session', async () => {
       const session = makeSession();
 
-      server.use(
-        http.get(`${API_BASE}/sessions`, () =>
-          HttpResponse.json({ items: [session], total: 1, page: 1, pageSize: 6 }),
-        ),
-      );
+      server.use(sessionHandlerForStatus('active', [session]));
 
       render(<ActiveSessionsPanel />);
 
@@ -160,11 +176,7 @@ describe('ActiveSessionsPanel', () => {
     it('should render status chip for active sessions', async () => {
       const session = makeSession({ status: 'active' });
 
-      server.use(
-        http.get(`${API_BASE}/sessions`, () =>
-          HttpResponse.json({ items: [session], total: 1, page: 1, pageSize: 6 }),
-        ),
-      );
+      server.use(sessionHandlerForStatus('active', [session]));
 
       render(<ActiveSessionsPanel />);
 
@@ -176,11 +188,7 @@ describe('ActiveSessionsPanel', () => {
     it('should render status chip for detached sessions', async () => {
       const session = makeSession({ id: 'session-2', status: 'detached' });
 
-      server.use(
-        http.get(`${API_BASE}/sessions`, () =>
-          HttpResponse.json({ items: [session], total: 1, page: 1, pageSize: 6 }),
-        ),
-      );
+      server.use(sessionHandlerForStatus('detached', [session]));
 
       render(<ActiveSessionsPanel />);
 
@@ -192,11 +200,7 @@ describe('ActiveSessionsPanel', () => {
     it('should render Open button for each session', async () => {
       const session = makeSession();
 
-      server.use(
-        http.get(`${API_BASE}/sessions`, () =>
-          HttpResponse.json({ items: [session], total: 1, page: 1, pageSize: 6 }),
-        ),
-      );
+      server.use(sessionHandlerForStatus('active', [session]));
 
       render(<ActiveSessionsPanel />);
 
@@ -270,11 +274,7 @@ describe('ActiveSessionsPanel', () => {
       const user = userEvent.setup({ delay: null });
       const session = makeSession({ id: 'session-abc', name: 'Click Me' });
 
-      server.use(
-        http.get(`${API_BASE}/sessions`, () =>
-          HttpResponse.json({ items: [session], total: 1, page: 1, pageSize: 6 }),
-        ),
-      );
+      server.use(sessionHandlerForStatus('active', [session]));
 
       render(<ActiveSessionsPanel />);
 
@@ -282,8 +282,8 @@ describe('ActiveSessionsPanel', () => {
         expect(screen.getByText('Click Me')).toBeInTheDocument();
       });
 
-      const listItem = screen.getByText('Click Me').closest('li') as HTMLElement;
-      await user.click(listItem);
+      // Click the text element - event should bubble to the ListItem onClick handler
+      await user.click(screen.getByText('Click Me'));
 
       expect(mockNavigate).toHaveBeenCalledWith('/sessions/session-abc/terminal');
     });
@@ -292,11 +292,7 @@ describe('ActiveSessionsPanel', () => {
       const user = userEvent.setup({ delay: null });
       const session = makeSession({ id: 'session-xyz' });
 
-      server.use(
-        http.get(`${API_BASE}/sessions`, () =>
-          HttpResponse.json({ items: [session], total: 1, page: 1, pageSize: 6 }),
-        ),
-      );
+      server.use(sessionHandlerForStatus('active', [session]));
 
       render(<ActiveSessionsPanel />);
 
@@ -316,11 +312,7 @@ describe('ActiveSessionsPanel', () => {
         lastActivityAt: new Date().toISOString(),
       });
 
-      server.use(
-        http.get(`${API_BASE}/sessions`, () =>
-          HttpResponse.json({ items: [session], total: 1, page: 1, pageSize: 6 }),
-        ),
-      );
+      server.use(sessionHandlerForStatus('active', [session]));
 
       render(<ActiveSessionsPanel />);
 
@@ -334,11 +326,7 @@ describe('ActiveSessionsPanel', () => {
         lastActivityAt: new Date(Date.now() - 5 * 60000).toISOString(),
       });
 
-      server.use(
-        http.get(`${API_BASE}/sessions`, () =>
-          HttpResponse.json({ items: [session], total: 1, page: 1, pageSize: 6 }),
-        ),
-      );
+      server.use(sessionHandlerForStatus('active', [session]));
 
       render(<ActiveSessionsPanel />);
 

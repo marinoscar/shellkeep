@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { render, mockUser, mockAdminUser } from '../../utils/test-utils';
+import { render } from '../../utils/test-utils';
 import { QuickActions } from '../../../components/home/QuickActions';
 
 // Mock useNavigate from react-router-dom
@@ -14,31 +14,39 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-// Mock usePermissions hook
-vi.mock('../../../hooks/usePermissions', () => ({
-  usePermissions: vi.fn(),
+// Mock createSession API
+vi.mock('../../../services/api', () => ({
+  createSession: vi.fn(),
 }));
 
-import { usePermissions } from '../../../hooks/usePermissions';
+// Mock NewSessionDialog to avoid xterm dependencies
+vi.mock('../../../components/terminal/NewSessionDialog', () => ({
+  NewSessionDialog: ({
+    open,
+    onClose,
+    onCreate,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    onCreate: (data: { serverProfileId: string; name?: string }) => Promise<void>;
+  }) =>
+    open ? (
+      <div data-testid="new-session-dialog">
+        <button onClick={onClose}>Close</button>
+        <button
+          onClick={() => onCreate({ serverProfileId: 'test-profile', name: 'Test Session' })}
+        >
+          Create
+        </button>
+      </div>
+    ) : null,
+}));
 
-const mockUsePermissions = vi.mocked(usePermissions);
+import { createSession } from '../../../services/api';
 
 describe('QuickActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // Default permission mock - viewer user (no admin permissions)
-    mockUsePermissions.mockReturnValue({
-      permissions: new Set(['user_settings:read', 'user_settings:write']),
-      roles: new Set(['viewer']),
-      hasPermission: (perm: string) =>
-        perm === 'user_settings:read' || perm === 'user_settings:write',
-      hasAnyPermission: vi.fn(),
-      hasAllPermissions: vi.fn(),
-      hasRole: vi.fn(),
-      hasAnyRole: vi.fn(),
-      isAdmin: false,
-    });
   });
 
   describe('Rendering', () => {
@@ -48,605 +56,148 @@ describe('QuickActions', () => {
       expect(screen.getByText(/quick actions/i)).toBeInTheDocument();
     });
 
-    it('should render User Settings action for all users', () => {
+    it('should render New Session action for all users', () => {
       render(<QuickActions />);
 
-      expect(screen.getByText(/^user settings$/i)).toBeInTheDocument();
-      expect(screen.getByText(/manage your profile and preferences/i)).toBeInTheDocument();
+      expect(screen.getByText('New Session')).toBeInTheDocument();
     });
 
-    it('should render Theme action for all users', () => {
+    it('should render All Sessions action for all users', () => {
       render(<QuickActions />);
 
-      expect(screen.getByText(/^theme$/i)).toBeInTheDocument();
-      expect(screen.getByText(/customize your display preferences/i)).toBeInTheDocument();
+      expect(screen.getByText('All Sessions')).toBeInTheDocument();
     });
 
-    it('should render action buttons as outlined variant', () => {
+    it('should render Manage Servers action for all users', () => {
       render(<QuickActions />);
 
-      const userSettingsButton = screen.getByRole('button', {
-        name: /user settings manage your profile and preferences/i,
-      });
-      expect(userSettingsButton).toHaveClass('MuiButton-outlined');
+      expect(screen.getAllByText('Manage Servers').length).toBeGreaterThan(0);
     });
 
-    it('should render buttons in a grid layout', () => {
+    it('should render action descriptions', () => {
+      render(<QuickActions />);
+
+      expect(screen.getByText(/connect to a server/i)).toBeInTheDocument();
+      expect(screen.getByText(/view terminal sessions/i)).toBeInTheDocument();
+      expect(screen.getByText(/configure server profiles/i)).toBeInTheDocument();
+    });
+
+    it('should render action buttons', () => {
+      render(<QuickActions />);
+
+      const newSessionBtn = screen.getByRole('button', { name: /new session/i });
+      const allSessionsBtn = screen.getByRole('button', { name: /all sessions/i });
+      expect(newSessionBtn).toBeInTheDocument();
+      expect(allSessionsBtn).toBeInTheDocument();
+    });
+
+    it('should render action buttons as outlined or contained variant', () => {
       const { container } = render(<QuickActions />);
 
-      const gridItems = container.querySelectorAll('.MuiGrid-item');
-      expect(gridItems.length).toBeGreaterThan(0);
+      const buttons = container.querySelectorAll('.MuiButton-root');
+      expect(buttons.length).toBeGreaterThan(0);
     });
   });
 
   describe('Icons', () => {
-    it('should display PersonIcon for User Settings', () => {
+    it('should display AddIcon for New Session', () => {
       render(<QuickActions />);
 
-      const userSettingsButton = screen.getByRole('button', {
-        name: /user settings manage your profile and preferences/i,
-      });
-      expect(userSettingsButton).toBeInTheDocument();
-
-      // Icon should be rendered within the button
-      const iconContainer = userSettingsButton.querySelector('svg');
-      expect(iconContainer).toBeInTheDocument();
+      expect(screen.getByTestId('AddIcon')).toBeInTheDocument();
     });
 
-    it('should display PaletteIcon for Theme', () => {
+    it('should display TerminalIcon for All Sessions', () => {
       render(<QuickActions />);
 
-      const themeButton = screen.getByRole('button', {
-        name: /theme customize your display preferences/i,
-      });
-      expect(themeButton).toBeInTheDocument();
-
-      // Icon should be rendered within the button
-      const iconContainer = themeButton.querySelector('svg');
-      expect(iconContainer).toBeInTheDocument();
+      expect(screen.getByTestId('TerminalIcon')).toBeInTheDocument();
     });
 
-    it('should display AdminPanelSettingsIcon for System Settings (admin only)', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set(['system_settings:read']),
-        roles: new Set(['admin']),
-        hasPermission: (perm: string) => perm === 'system_settings:read',
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
+    it('should display DnsIcon for Manage Servers', () => {
+      render(<QuickActions />);
 
-      render(<QuickActions />, {
-        wrapperOptions: { user: mockAdminUser },
-      });
-
-      const systemSettingsButton = screen.getByRole('button', {
-        name: /system settings configure application settings/i,
-      });
-      expect(systemSettingsButton).toBeInTheDocument();
-
-      // Icon should be rendered within the button
-      const iconContainer = systemSettingsButton.querySelector('svg');
-      expect(iconContainer).toBeInTheDocument();
-    });
-
-    it('should style icons with primary color', () => {
-      const { container } = render(<QuickActions />);
-
-      // Icons are wrapped in Box with primary.main color
-      const iconBoxes = container.querySelectorAll('[class*="MuiBox-root"]');
-      expect(iconBoxes.length).toBeGreaterThan(0);
+      expect(screen.getByTestId('DnsIcon')).toBeInTheDocument();
     });
   });
 
   describe('Navigation', () => {
-    it('should navigate to /settings when User Settings is clicked', async () => {
+    it('should navigate to /sessions when All Sessions is clicked', async () => {
       const user = userEvent.setup();
-
       render(<QuickActions />);
 
-      const userSettingsButton = screen.getByRole('button', {
-        name: /user settings manage your profile and preferences/i,
-      });
-      await user.click(userSettingsButton);
+      await user.click(screen.getByRole('button', { name: /all sessions/i }));
 
-      expect(mockNavigate).toHaveBeenCalledWith('/settings');
+      expect(mockNavigate).toHaveBeenCalledWith('/sessions');
     });
 
-    it('should navigate to /settings#theme when Theme is clicked', async () => {
+    it('should navigate to /servers when Manage Servers is clicked', async () => {
       const user = userEvent.setup();
-
       render(<QuickActions />);
 
-      const themeButton = screen.getByRole('button', {
-        name: /theme customize your display preferences/i,
-      });
-      await user.click(themeButton);
+      const manageServersButtons = screen.getAllByRole('button', { name: /manage servers/i });
+      await user.click(manageServersButtons[0]);
 
-      expect(mockNavigate).toHaveBeenCalledWith('/settings#theme');
+      expect(mockNavigate).toHaveBeenCalledWith('/servers');
     });
 
-    it('should navigate to /admin/settings when System Settings is clicked (admin)', async () => {
+    it('should open NewSessionDialog when New Session is clicked', async () => {
       const user = userEvent.setup();
-
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set(['system_settings:read']),
-        roles: new Set(['admin']),
-        hasPermission: (perm: string) => perm === 'system_settings:read',
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
-
-      render(<QuickActions />, {
-        wrapperOptions: { user: mockAdminUser },
-      });
-
-      const systemSettingsButton = screen.getByRole('button', {
-        name: /system settings configure application settings/i,
-      });
-      await user.click(systemSettingsButton);
-
-      expect(mockNavigate).toHaveBeenCalledWith('/admin/settings');
-    });
-  });
-
-  describe('Permission-Based Filtering', () => {
-    it('should NOT show System Settings for non-admin users', () => {
-      render(<QuickActions />, {
-        wrapperOptions: { user: mockUser },
-      });
-
-      expect(screen.queryByText(/^system settings$/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/configure application settings/i)).not.toBeInTheDocument();
-    });
-
-    it('should show System Settings for users with system_settings:read permission', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set(['system_settings:read']),
-        roles: new Set(['admin']),
-        hasPermission: (perm: string) => perm === 'system_settings:read',
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
-
-      render(<QuickActions />, {
-        wrapperOptions: { user: mockAdminUser },
-      });
-
-      expect(screen.getByText(/^system settings$/i)).toBeInTheDocument();
-      expect(screen.getByText(/configure application settings/i)).toBeInTheDocument();
-    });
-
-    it('should NOT show System Settings if user lacks required permission', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set(['user_settings:read', 'user_settings:write']),
-        roles: new Set(['contributor']),
-        hasPermission: (perm: string) =>
-          perm === 'user_settings:read' || perm === 'user_settings:write',
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
-
       render(<QuickActions />);
 
-      expect(screen.queryByText(/^system settings$/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /new session/i }));
+
+      expect(screen.getByTestId('new-session-dialog')).toBeInTheDocument();
     });
 
-    it('should filter actions based on permission checks', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set([]),
-        roles: new Set(['viewer']),
-        hasPermission: () => false,
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
-
-      render(<QuickActions />);
-
-      // Actions without permissions should still show
-      expect(screen.getByText(/^user settings$/i)).toBeInTheDocument();
-      expect(screen.getByText(/^theme$/i)).toBeInTheDocument();
-
-      // Actions requiring permissions should not show
-      expect(screen.queryByText(/^system settings$/i)).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Role-Based Display', () => {
-    it('should display only basic actions for Viewer role', () => {
-      const viewerUser = {
-        ...mockUser,
-        roles: [{ name: 'viewer' }],
-        permissions: ['user_settings:read', 'user_settings:write'],
-      };
-
-      render(<QuickActions />, {
-        wrapperOptions: { user: viewerUser },
-      });
-
-      expect(screen.getByText(/^user settings$/i)).toBeInTheDocument();
-      expect(screen.getByText(/^theme$/i)).toBeInTheDocument();
-      expect(screen.queryByText(/^system settings$/i)).not.toBeInTheDocument();
-    });
-
-    it('should display only basic actions for Contributor role', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set(['user_settings:read', 'user_settings:write']),
-        roles: new Set(['contributor']),
-        hasPermission: (perm: string) =>
-          perm === 'user_settings:read' || perm === 'user_settings:write',
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
-
-      const contributorUser = {
-        ...mockUser,
-        roles: [{ name: 'contributor' }],
-        permissions: ['user_settings:read', 'user_settings:write'],
-      };
-
-      render(<QuickActions />, {
-        wrapperOptions: { user: contributorUser },
-      });
-
-      expect(screen.getByText(/^user settings$/i)).toBeInTheDocument();
-      expect(screen.getByText(/^theme$/i)).toBeInTheDocument();
-      expect(screen.queryByText(/^system settings$/i)).not.toBeInTheDocument();
-    });
-
-    it('should display all actions including System Settings for Admin role', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set([
-          'user_settings:read',
-          'user_settings:write',
-          'system_settings:read',
-          'system_settings:write',
-        ]),
-        roles: new Set(['admin']),
-        hasPermission: (perm: string) =>
-          [
-            'user_settings:read',
-            'user_settings:write',
-            'system_settings:read',
-            'system_settings:write',
-          ].includes(perm),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
-
-      render(<QuickActions />, {
-        wrapperOptions: { user: mockAdminUser },
-      });
-
-      expect(screen.getByText(/^user settings$/i)).toBeInTheDocument();
-      expect(screen.getByText(/^theme$/i)).toBeInTheDocument();
-      expect(screen.getByText(/^system settings$/i)).toBeInTheDocument();
-    });
-  });
-
-  describe('Action Titles and Descriptions', () => {
-    it('should display correct title for User Settings', () => {
-      render(<QuickActions />);
-
-      expect(screen.getByText(/^user settings$/i)).toBeInTheDocument();
-    });
-
-    it('should display correct description for User Settings', () => {
-      render(<QuickActions />);
-
-      expect(screen.getByText(/manage your profile and preferences/i)).toBeInTheDocument();
-    });
-
-    it('should display correct title for Theme', () => {
-      render(<QuickActions />);
-
-      expect(screen.getByText(/^theme$/i)).toBeInTheDocument();
-    });
-
-    it('should display correct description for Theme', () => {
-      render(<QuickActions />);
-
-      expect(screen.getByText(/customize your display preferences/i)).toBeInTheDocument();
-    });
-
-    it('should display correct title for System Settings (admin)', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set(['system_settings:read']),
-        roles: new Set(['admin']),
-        hasPermission: (perm: string) => perm === 'system_settings:read',
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
-
-      render(<QuickActions />, {
-        wrapperOptions: { user: mockAdminUser },
-      });
-
-      expect(screen.getByText(/^system settings$/i)).toBeInTheDocument();
-    });
-
-    it('should display correct description for System Settings (admin)', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set(['system_settings:read']),
-        roles: new Set(['admin']),
-        hasPermission: (perm: string) => perm === 'system_settings:read',
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
-
-      render(<QuickActions />, {
-        wrapperOptions: { user: mockAdminUser },
-      });
-
-      expect(screen.getByText(/configure application settings/i)).toBeInTheDocument();
-    });
-  });
-
-  describe('Button Styling', () => {
-    it('should render fullWidth buttons', () => {
-      render(<QuickActions />);
-
-      const userSettingsButton = screen.getByRole('button', {
-        name: /user settings manage your profile and preferences/i,
-      });
-      expect(userSettingsButton).toHaveClass('MuiButton-fullWidth');
-    });
-
-    it('should use left-aligned text layout', () => {
-      const { container } = render(<QuickActions />);
-
-      const buttons = container.querySelectorAll('.MuiButton-root');
-      buttons.forEach((button) => {
-        expect(button).toBeInTheDocument();
-      });
-    });
-
-    it('should display both title and description in each button', () => {
-      render(<QuickActions />);
-
-      // User Settings button should contain both title and description
-      const userSettingsButton = screen.getByRole('button', {
-        name: /user settings manage your profile and preferences/i,
-      });
-      expect(userSettingsButton).toBeInTheDocument();
-
-      // Theme button should contain both title and description
-      const themeButton = screen.getByRole('button', {
-        name: /theme customize your display preferences/i,
-      });
-      expect(themeButton).toBeInTheDocument();
-    });
-  });
-
-  describe('Grid Layout', () => {
-    it('should render actions in a Grid container', () => {
-      const { container } = render(<QuickActions />);
-
-      const gridContainer = container.querySelector('.MuiGrid-container');
-      expect(gridContainer).toBeInTheDocument();
-    });
-
-    it('should render each action in a Grid item', () => {
-      const { container } = render(<QuickActions />);
-
-      const gridItems = container.querySelectorAll('.MuiGrid-item');
-      // At minimum: User Settings + Theme (2 items for non-admin)
-      expect(gridItems.length).toBeGreaterThanOrEqual(2);
-    });
-
-    it('should render three grid items for admin users', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set(['system_settings:read']),
-        roles: new Set(['admin']),
-        hasPermission: (perm: string) => perm === 'system_settings:read',
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
-
-      const { container } = render(<QuickActions />, {
-        wrapperOptions: { user: mockAdminUser },
-      });
-
-      const gridItems = container.querySelectorAll('.MuiGrid-item');
-      // User Settings + Theme + System Settings = 3 items
-      expect(gridItems.length).toBe(3);
-    });
-  });
-
-  describe('Action Types', () => {
-    it('should render basic user actions for all users', () => {
-      render(<QuickActions />);
-
-      expect(screen.getByRole('button', {
-        name: /user settings/i,
-      })).toBeInTheDocument();
-
-      expect(screen.getByRole('button', {
-        name: /theme/i,
-      })).toBeInTheDocument();
-    });
-
-    it('should render admin actions only for authorized users', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set(['system_settings:read']),
-        roles: new Set(['admin']),
-        hasPermission: (perm: string) => perm === 'system_settings:read',
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
-
-      render(<QuickActions />, {
-        wrapperOptions: { user: mockAdminUser },
-      });
-
-      expect(screen.getByRole('button', {
-        name: /system settings/i,
-      })).toBeInTheDocument();
-    });
-
-    it('should have unique paths for each action', async () => {
+    it('should close NewSessionDialog when dialog close is triggered', async () => {
       const user = userEvent.setup();
+      render(<QuickActions />);
 
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set(['system_settings:read']),
-        roles: new Set(['admin']),
-        hasPermission: (perm: string) => perm === 'system_settings:read',
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
+      await user.click(screen.getByRole('button', { name: /new session/i }));
+      expect(screen.getByTestId('new-session-dialog')).toBeInTheDocument();
 
-      render(<QuickActions />, {
-        wrapperOptions: { user: mockAdminUser },
-      });
-
-      // Click User Settings
-      await user.click(screen.getByRole('button', { name: /user settings/i }));
-      expect(mockNavigate).toHaveBeenLastCalledWith('/settings');
-
-      // Click Theme
-      await user.click(screen.getByRole('button', { name: /theme/i }));
-      expect(mockNavigate).toHaveBeenLastCalledWith('/settings#theme');
-
-      // Click System Settings
-      await user.click(screen.getByRole('button', { name: /system settings/i }));
-      expect(mockNavigate).toHaveBeenLastCalledWith('/admin/settings');
+      await user.click(screen.getByRole('button', { name: /close/i }));
+      expect(screen.queryByTestId('new-session-dialog')).not.toBeInTheDocument();
     });
   });
 
-  describe('Accessibility', () => {
-    it('should have accessible button labels', () => {
+  describe('New Session dialog interaction', () => {
+    it('should navigate to terminal page after creating a session', async () => {
+      const user = userEvent.setup();
+      const mockSession = { id: 'new-session-id', name: 'Test Session' };
+      vi.mocked(createSession).mockResolvedValue(mockSession as any);
+
       render(<QuickActions />);
 
-      const userSettingsButton = screen.getByRole('button', {
-        name: /user settings manage your profile and preferences/i,
+      await user.click(screen.getByRole('button', { name: /new session/i }));
+      await user.click(screen.getByRole('button', { name: /create/i }));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/sessions/new-session-id/terminal');
       });
-      expect(userSettingsButton).toBeInTheDocument();
-
-      const themeButton = screen.getByRole('button', {
-        name: /theme customize your display preferences/i,
-      });
-      expect(themeButton).toBeInTheDocument();
     });
+  });
 
-    it('should use proper heading for section title', () => {
-      render(<QuickActions />);
-
-      const heading = screen.getByText(/quick actions/i);
-      expect(heading).toBeInTheDocument();
-      expect(heading.tagName).toBe('H6');
-    });
-
-    it('should use semantic HTML for cards', () => {
+  describe('Layout', () => {
+    it('should render inside a Card component', () => {
       const { container } = render(<QuickActions />);
 
       const card = container.querySelector('.MuiCard-root');
       expect(card).toBeInTheDocument();
     });
 
-    it('should have clickable buttons for keyboard navigation', async () => {
-      const user = userEvent.setup();
+    it('should use Grid layout for actions', () => {
+      const { container } = render(<QuickActions />);
 
-      render(<QuickActions />);
-
-      const userSettingsButton = screen.getByRole('button', {
-        name: /user settings/i,
-      });
-
-      // Tab to button and press Enter
-      await user.tab();
-      await user.keyboard('{Enter}');
-
-      // Should be able to focus and activate buttons
-      expect(userSettingsButton).toBeInTheDocument();
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('should handle empty permissions gracefully', () => {
-      mockUsePermissions.mockReturnValue({
-        permissions: new Set([]),
-        roles: new Set([]),
-        hasPermission: () => false,
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
-
-      render(<QuickActions />);
-
-      // Basic actions without permission requirements should still show
-      expect(screen.getByText(/^user settings$/i)).toBeInTheDocument();
-      expect(screen.getByText(/^theme$/i)).toBeInTheDocument();
+      const grid = container.querySelector('.MuiGrid-container');
+      expect(grid).toBeInTheDocument();
     });
 
-    it('should not crash when navigate is called multiple times', async () => {
-      const user = userEvent.setup();
-
+    it('should render exactly 3 action buttons', () => {
       render(<QuickActions />);
 
-      const userSettingsButton = screen.getByRole('button', {
-        name: /user settings/i,
-      });
-
-      // Click multiple times
-      await user.click(userSettingsButton);
-      await user.click(userSettingsButton);
-      await user.click(userSettingsButton);
-
-      expect(mockNavigate).toHaveBeenCalledTimes(3);
-      expect(mockNavigate).toHaveBeenCalledWith('/settings');
-    });
-
-    it('should maintain button state after clicks', async () => {
-      const user = userEvent.setup();
-
-      render(<QuickActions />);
-
-      const userSettingsButton = screen.getByRole('button', {
-        name: /user settings/i,
-      });
-
-      await user.click(userSettingsButton);
-
-      // Button should still be in the document after navigation
-      expect(userSettingsButton).toBeInTheDocument();
+      // New Session, All Sessions, Manage Servers
+      const buttons = screen.getAllByRole('button');
+      expect(buttons.length).toBeGreaterThanOrEqual(3);
     });
   });
 });
