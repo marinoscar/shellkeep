@@ -52,14 +52,16 @@ export class SshService {
       client.on('ready', () => {
         this.logger.log(`SSH connected to ${profile.hostname}:${profile.port}`);
 
-        // Execute tmux with -A flag (attach if exists, create if not)
-        const tmuxCmd = `tmux new-session -As ${tmuxSessionId}`;
-
-        client.exec(tmuxCmd, { pty: { cols, rows, term: 'xterm-256color' } }, (err, stream) => {
+        // Open an interactive shell with PTY, then run tmux inside it
+        client.shell({ cols, rows, term: 'xterm-256color' }, (err, stream) => {
           if (err) {
             client.end();
             return reject(err);
           }
+
+          // Launch tmux inside the shell (-A flag: attach if exists, create if not)
+          const tmuxCmd = `tmux new-session -As ${tmuxSessionId}\n`;
+          stream.write(tmuxCmd);
 
           const connection: SshConnection = {
             client,

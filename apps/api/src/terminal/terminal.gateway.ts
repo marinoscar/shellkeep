@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ServerProfilesService } from '../server-profiles/server-profiles.service';
 import { SessionsService } from './sessions.service';
 import { SessionManagerService } from './session-manager.service';
-import WebSocket from 'ws';
+import * as WebSocket from 'ws';
 
 interface AuthenticatedClient {
   ws: WebSocket;

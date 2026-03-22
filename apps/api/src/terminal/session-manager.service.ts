@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SshService, SshConnection, DecryptedServerProfile } from './ssh.service';
 import { SessionsService } from './sessions.service';
-import WebSocket from 'ws';
+import * as WebSocket from 'ws';
 
 interface ManagedSession {
   ssh: SshConnection;
