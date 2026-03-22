@@ -18,6 +18,8 @@ import {
   Circle as CircleIcon,
   ContentCopy as CopyIcon,
   Download as DownloadIcon,
+  ContentPaste as PasteIcon,
+  AddCircleOutline as NewSessionIcon,
 } from '@mui/icons-material';
 
 interface TerminalToolbarProps {
@@ -28,6 +30,8 @@ interface TerminalToolbarProps {
   onRename: (newName: string) => void;
   onCopyAll?: () => void;
   onDownload?: () => void;
+  onPaste?: () => void;
+  onNewSession?: () => void;
   serverProfileName?: string;
   serverProfileColor?: ServerProfileColor;
 }
@@ -40,6 +44,8 @@ export function TerminalToolbar({
   onRename,
   onCopyAll,
   onDownload,
+  onPaste,
+  onNewSession,
   serverProfileName,
   serverProfileColor,
 }: TerminalToolbarProps) {
@@ -141,6 +147,13 @@ export function TerminalToolbar({
 
       {/* Right: Actions */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        {onPaste && (
+          <Tooltip title="Paste from clipboard">
+            <IconButton size="small" onClick={onPaste}>
+              <PasteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         {onCopyAll && (
           <Tooltip title="Copy terminal output">
             <IconButton size="small" onClick={onCopyAll}>
@@ -152,6 +165,13 @@ export function TerminalToolbar({
           <Tooltip title="Download as text file">
             <IconButton size="small" onClick={onDownload}>
               <DownloadIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        {onNewSession && (
+          <Tooltip title="New session">
+            <IconButton size="small" onClick={onNewSession}>
+              <NewSessionIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         )}
