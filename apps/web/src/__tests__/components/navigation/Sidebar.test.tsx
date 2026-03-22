@@ -88,9 +88,10 @@ describe('Sidebar', () => {
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
-      // Non-admin users should see Home and User Settings (use container to bypass aria-hidden)
-      expect(container.textContent).toContain('Home');
-      expect(container.textContent).toContain('User Settings');
+      // Non-admin users see Dashboard, Sessions, Servers
+      expect(container.textContent).toContain('Dashboard');
+      expect(container.textContent).toContain('Sessions');
+      expect(container.textContent).toContain('Servers');
     });
 
     it('should not render admin menu items for non-admin users', () => {
@@ -109,7 +110,6 @@ describe('Sidebar', () => {
 
       // Admin items should not be visible
       expect(container.textContent).not.toContain('User Management');
-      expect(container.textContent).not.toContain('System Settings');
     });
 
     it('should render admin menu items for admin users', () => {
@@ -129,10 +129,10 @@ describe('Sidebar', () => {
       });
 
       // All menu items should be visible
-      expect(container.textContent).toContain('Home');
-      expect(container.textContent).toContain('User Settings');
+      expect(container.textContent).toContain('Dashboard');
+      expect(container.textContent).toContain('Sessions');
+      expect(container.textContent).toContain('Servers');
       expect(container.textContent).toContain('User Management');
-      expect(container.textContent).toContain('System Settings');
     });
   });
 
@@ -191,9 +191,9 @@ describe('Sidebar', () => {
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
-      // Only items with visible: true should be rendered
+      // Non-admin users see Dashboard, Sessions, Servers (3 items)
       const menuButtons = container.querySelectorAll('.MuiListItemButton-root');
-      expect(menuButtons).toHaveLength(2); // Home and User Settings
+      expect(menuButtons).toHaveLength(3);
     });
 
     it('should show all menu items when user is admin', () => {
@@ -212,8 +212,9 @@ describe('Sidebar', () => {
         wrapperOptions: { user: mockAdminUser },
       });
 
+      // Admin sees Dashboard, Sessions, Servers, User Management (4 items)
       const menuButtons = container.querySelectorAll('.MuiListItemButton-root');
-      expect(menuButtons).toHaveLength(4); // All menu items visible
+      expect(menuButtons).toHaveLength(4);
     });
 
     it('should dynamically update menu items when isAdmin changes', () => {
@@ -277,8 +278,8 @@ describe('Sidebar', () => {
       const { container } = render(<Sidebar open={true} onClose={trackingOnClose} />);
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const settingsButton = buttons[1]; // User Settings is second button
-      await user.click(settingsButton);
+      const sessionsButton = buttons[1]; // Sessions is second button
+      await user.click(sessionsButton);
 
       // onClose should be called immediately (synchronously)
       expect(trackingOnClose).toHaveBeenCalledTimes(1);
@@ -292,7 +293,7 @@ describe('Sidebar', () => {
       expect(callOrder).toEqual(['onClose', 'navigate']);
     });
 
-    it('should navigate to home when Home menu item is clicked', async () => {
+    it('should navigate to home when Dashboard menu item is clicked', async () => {
       const user = userEvent.setup();
 
       vi.mocked(usePermissions).mockReturnValue({
@@ -309,15 +310,15 @@ describe('Sidebar', () => {
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const homeButton = buttons[0]; // Home is first button
-      await user.click(homeButton);
+      const dashboardButton = buttons[0]; // Dashboard is first button
+      await user.click(dashboardButton);
 
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('/');
       });
     });
 
-    it('should navigate to settings when User Settings menu item is clicked', async () => {
+    it('should navigate to /sessions when Sessions menu item is clicked', async () => {
       const user = userEvent.setup();
 
       vi.mocked(usePermissions).mockReturnValue({
@@ -334,11 +335,36 @@ describe('Sidebar', () => {
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const settingsButton = buttons[1]; // User Settings is second button
-      await user.click(settingsButton);
+      const sessionsButton = buttons[1]; // Sessions is second button
+      await user.click(sessionsButton);
 
       await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith('/settings');
+        expect(mockNavigate).toHaveBeenCalledWith('/sessions');
+      });
+    });
+
+    it('should navigate to /servers when Servers menu item is clicked', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(usePermissions).mockReturnValue({
+        permissions: new Set(),
+        roles: new Set(),
+        hasPermission: vi.fn(),
+        hasAnyPermission: vi.fn(),
+        hasAllPermissions: vi.fn(),
+        hasRole: vi.fn(),
+        hasAnyRole: vi.fn(),
+        isAdmin: false,
+      });
+
+      const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
+
+      const buttons = container.querySelectorAll('.MuiListItemButton-root');
+      const serversButton = buttons[2]; // Servers is third button
+      await user.click(serversButton);
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/servers');
       });
     });
 
@@ -361,45 +387,18 @@ describe('Sidebar', () => {
       });
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const userMgmtButton = buttons[2]; // User Management is third button
+      const userMgmtButton = buttons[3]; // User Management is fourth button
       await user.click(userMgmtButton);
 
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('/admin/users');
       });
     });
-
-    it('should navigate to admin/settings when System Settings is clicked', async () => {
-      const user = userEvent.setup();
-
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(['admin']),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
-
-      const { container } = render(<Sidebar open={true} onClose={mockOnClose} />, {
-        wrapperOptions: { user: mockAdminUser },
-      });
-
-      const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const systemSettingsButton = buttons[3]; // System Settings is fourth button
-      await user.click(systemSettingsButton);
-
-      await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith('/admin/settings');
-      });
-    });
   });
 
   describe('Active Menu Item Highlighting', () => {
     it('should highlight current route', () => {
-      mockLocation.pathname = '/settings';
+      mockLocation.pathname = '/sessions';
 
       vi.mocked(usePermissions).mockReturnValue({
         permissions: new Set(),
@@ -415,8 +414,8 @@ describe('Sidebar', () => {
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const settingsButton = buttons[1]; // User Settings
-      expect(settingsButton.classList.contains('Mui-selected')).toBe(true);
+      const sessionsButton = buttons[1]; // Sessions
+      expect(sessionsButton.classList.contains('Mui-selected')).toBe(true);
     });
 
     it('should not highlight non-current routes', () => {
@@ -436,8 +435,8 @@ describe('Sidebar', () => {
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const settingsButton = buttons[1]; // User Settings
-      expect(settingsButton.classList.contains('Mui-selected')).toBe(false);
+      const sessionsButton = buttons[1]; // Sessions
+      expect(sessionsButton.classList.contains('Mui-selected')).toBe(false);
     });
 
     it('should highlight admin routes when on admin page', () => {
@@ -459,7 +458,7 @@ describe('Sidebar', () => {
       });
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const userMgmtButton = buttons[2]; // User Management
+      const userMgmtButton = buttons[3]; // User Management
       expect(userMgmtButton.classList.contains('Mui-selected')).toBe(true);
     });
   });
@@ -502,13 +501,13 @@ describe('Sidebar', () => {
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const homeButton = buttons[0];
-      await user.click(homeButton);
+      const dashboardButton = buttons[0];
+      await user.click(dashboardButton);
 
       expect(mockOnClose).toHaveBeenCalledTimes(1);
 
-      const settingsButton = buttons[1];
-      await user.click(settingsButton);
+      const sessionsButton = buttons[1];
+      await user.click(sessionsButton);
 
       expect(mockOnClose).toHaveBeenCalledTimes(2);
     });
@@ -531,13 +530,13 @@ describe('Sidebar', () => {
         wrapperOptions: { user: mockAdminUser },
       });
 
-      // Each menu item should have an icon
+      // Each menu item should have an icon: Dashboard, Sessions, Servers, User Management
       const icons = container.querySelectorAll('.MuiListItemIcon-root');
-      expect(icons).toHaveLength(4); // Home, User Settings, User Management, System Settings
+      expect(icons).toHaveLength(4);
     });
 
     it('should highlight icon for selected menu item', () => {
-      mockLocation.pathname = '/settings';
+      mockLocation.pathname = '/sessions';
 
       vi.mocked(usePermissions).mockReturnValue({
         permissions: new Set(),
@@ -553,8 +552,8 @@ describe('Sidebar', () => {
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const settingsButton = buttons[1]; // User Settings
-      const icon = settingsButton?.querySelector('.MuiListItemIcon-root');
+      const sessionsButton = buttons[1]; // Sessions
+      const icon = sessionsButton?.querySelector('.MuiListItemIcon-root');
 
       expect(icon).not.toBeNull();
       expect(icon).toBeDefined();
@@ -597,8 +596,9 @@ describe('Sidebar', () => {
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
       // Verify text content for accessibility
-      expect(container.textContent).toContain('Home');
-      expect(container.textContent).toContain('User Settings');
+      expect(container.textContent).toContain('Dashboard');
+      expect(container.textContent).toContain('Sessions');
+      expect(container.textContent).toContain('Servers');
     });
 
     it('should be keyboard navigable', async () => {
@@ -618,11 +618,11 @@ describe('Sidebar', () => {
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const homeButton = buttons[0] as HTMLElement;
+      const dashboardButton = buttons[0] as HTMLElement;
 
       // Should be able to focus and activate with keyboard
-      homeButton.focus();
-      expect(homeButton).toHaveFocus();
+      dashboardButton.focus();
+      expect(dashboardButton).toHaveFocus();
 
       await user.keyboard('{Enter}');
       expect(mockNavigate).toHaveBeenCalledWith('/');
@@ -644,15 +644,10 @@ describe('Sidebar', () => {
 
       // CRITICAL REGRESSION TEST:
       // Previously, the component conditionally returned null when open was false:
-      // if (!open) return null; // ❌ WRONG - caused backdrop click issues
-      //
-      // This caused UI blocking issues because:
-      // 1. The component was completely removed from the React tree
-      // 2. When reopened, React had to remount everything
-      // 3. This caused backdrop click handlers to become stale/broken
+      // if (!open) return null; // Wrong - caused backdrop click issues
       //
       // The fix: Component always returns the Drawer JSX:
-      // return <Drawer open={open} ... /> // ✅ CORRECT - let MUI handle visibility
+      // return <Drawer open={open} ... /> // Correct - let MUI handle visibility
       //
       // This test verifies the component doesn't throw and renders successfully
       expect(() => {
@@ -696,8 +691,8 @@ describe('Sidebar', () => {
       const { container } = render(<Sidebar open={true} onClose={trackingOnClose} />);
 
       const buttons = container.querySelectorAll('.MuiListItemButton-root');
-      const homeButton = buttons[0];
-      await user.click(homeButton);
+      const dashboardButton = buttons[0];
+      await user.click(dashboardButton);
 
       // Drawer close should happen synchronously
       expect(drawerClosed).toBe(true);
