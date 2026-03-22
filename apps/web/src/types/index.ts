@@ -94,6 +94,8 @@ export interface DeviceAuthorizationResponse {
 }
 
 // Server Profiles
+export type ServerProfileColor = 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success';
+
 export interface ServerProfile {
   id: string;
   name: string;
@@ -106,6 +108,7 @@ export interface ServerProfile {
   hasPassphrase: boolean;
   fingerprint: string | null;
   tags: string[];
+  color: ServerProfileColor;
   createdAt: string;
   updatedAt: string;
 }
@@ -120,6 +123,7 @@ export interface ServerProfileFormData {
   privateKey?: string;
   passphrase?: string;
   tags?: string[];
+  color?: ServerProfileColor;
 }
 
 export interface ServerProfilesResponse {
@@ -154,6 +158,7 @@ export interface TerminalSession {
     hostname: string;
     port: number;
     username: string;
+    color: ServerProfileColor;
   };
 }
 

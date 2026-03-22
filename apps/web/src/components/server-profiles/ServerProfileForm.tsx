@@ -12,8 +12,10 @@ import {
   Select,
   FormControl,
   InputLabel,
+  Chip,
+  Typography,
 } from '@mui/material';
-import type { ServerProfile, ServerProfileFormData } from '../../types';
+import type { ServerProfile, ServerProfileFormData, ServerProfileColor } from '../../types';
 
 interface ServerProfileFormProps {
   open: boolean;
@@ -27,6 +29,16 @@ const AUTH_METHOD_OPTIONS = [
   { value: 'key', label: 'SSH Key' },
   { value: 'agent', label: 'SSH Agent' },
 ] as const;
+
+const COLOR_OPTIONS: { value: ServerProfileColor; label: string }[] = [
+  { value: 'default', label: 'Default' },
+  { value: 'primary', label: 'Primary' },
+  { value: 'secondary', label: 'Secondary' },
+  { value: 'error', label: 'Red' },
+  { value: 'warning', label: 'Orange' },
+  { value: 'info', label: 'Blue' },
+  { value: 'success', label: 'Green' },
+];
 
 export function ServerProfileForm({
   open,
@@ -45,6 +57,7 @@ export function ServerProfileForm({
   const [privateKey, setPrivateKey] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [tags, setTags] = useState('');
+  const [color, setColor] = useState<ServerProfileColor>('default');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -67,6 +80,7 @@ export function ServerProfileForm({
         setPrivateKey('');
         setPassphrase('');
         setTags(profile.tags.join(', '));
+        setColor(profile.color || 'default');
         setPasswordChanged(false);
         setPrivateKeyChanged(false);
         setPassphraseChanged(false);
@@ -80,6 +94,7 @@ export function ServerProfileForm({
         setPrivateKey('');
         setPassphrase('');
         setTags('');
+        setColor('default');
         setPasswordChanged(false);
         setPrivateKeyChanged(false);
         setPassphraseChanged(false);
@@ -115,6 +130,7 @@ export function ServerProfileForm({
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean),
+      color,
     };
 
     // Only include credential fields if they were changed (or if creating new)
@@ -301,6 +317,23 @@ export function ServerProfileForm({
               placeholder="e.g. production, web, database"
               helperText="Comma-separated list of tags"
             />
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                Color Label
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {COLOR_OPTIONS.map((opt) => (
+                  <Chip
+                    key={opt.value}
+                    label={opt.label}
+                    color={opt.value === 'default' ? 'default' : opt.value}
+                    variant={color === opt.value ? 'filled' : 'outlined'}
+                    onClick={() => setColor(opt.value)}
+                    disabled={isSubmitting}
+                  />
+                ))}
+              </Box>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>
