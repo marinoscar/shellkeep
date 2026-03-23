@@ -251,14 +251,16 @@ cd apps/api && npm run prisma:migrate
 
 ## Service URLs
 
-**VPS (production):**
-- **Application**: https://shellkeep.dev.marin.cr
+**VPS (development/testing):**
+- **Application**: https://shellkeep.dev.marin.cr (VPS HTTPS proxy → Docker nginx:8323)
 - **Swagger UI**: https://shellkeep.dev.marin.cr/api/docs
 
 **Local Docker (development):**
 - **Application**: http://localhost:8323 (via Nginx)
 - **Swagger UI**: http://localhost:8323/api/docs
 - **Uptrace**: http://localhost:14318 (when otel stack running)
+
+**Request chain:** Browser → HTTPS (VPS reverse proxy) → localhost:8323 → Docker nginx:80 → web (port 5173 dev / port 80 prod) or api (port 3000)
 
 ## API Endpoints (MVP)
 
