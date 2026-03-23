@@ -82,6 +82,7 @@ export default function TerminalFullPage() {
           const text = await blob.text();
           if (text) {
             terminalViewRef.current?.sendInput(text);
+            terminalViewRef.current?.focus();
             return;
           }
         }
@@ -94,6 +95,7 @@ export default function TerminalFullPage() {
           const { id: objId } = await uploadFile(blob, `clipboard-${Date.now()}.${ext}`);
           const url = await getDownloadUrl(objId, 3600);
           terminalViewRef.current?.sendInput(url);
+          terminalViewRef.current?.focus();
           setSnackbar({ open: true, message: 'Image uploaded and URL pasted', severity: 'success' });
           return;
         }
