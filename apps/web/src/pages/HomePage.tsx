@@ -1,13 +1,24 @@
+import { useState } from 'react';
 import { Box, Container, Typography, Grid } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { SessionStatsBar } from '../components/home/SessionStatsBar';
 import { ActiveSessionsPanel } from '../components/home/ActiveSessionsPanel';
 import { QuickConnectPanel } from '../components/home/QuickConnectPanel';
 import { RecentActivityPanel } from '../components/home/RecentActivityPanel';
-import { QuickActions } from '../components/home/QuickActions';
+import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
+import { createSession } from '../services/api';
+import { CreateSessionData } from '../types';
 
 export default function HomePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
+
+  const handleCreateSession = async (data: CreateSessionData) => {
+    const session = await createSession(data);
+    navigate(`/sessions/${session.id}/terminal`);
+  };
 
   return (
     <Container maxWidth="lg">
@@ -21,7 +32,7 @@ export default function HomePage() {
         </Typography>
 
         {/* Stats Bar */}
-        <SessionStatsBar />
+        <SessionStatsBar onNewSession={() => setNewSessionOpen(true)} />
 
         {/* Main Grid */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -36,13 +47,14 @@ export default function HomePage() {
           </Grid>
         </Grid>
 
-        {/* Quick Actions */}
-        <Box sx={{ mb: 3 }}>
-          <QuickActions />
-        </Box>
-
         {/* Recent Activity */}
         <RecentActivityPanel />
+
+        <NewSessionDialog
+          open={newSessionOpen}
+          onClose={() => setNewSessionOpen(false)}
+          onCreate={handleCreateSession}
+        />
       </Box>
     </Container>
   );

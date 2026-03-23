@@ -1,12 +1,34 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { render, mockUser, mockAdminUser } from '../utils/test-utils';
 import HomePage from '../../pages/HomePage';
 
+// Mock NewSessionDialog to avoid xterm dependencies
+vi.mock('../../components/terminal/NewSessionDialog', () => ({
+  NewSessionDialog: ({
+    open,
+    onClose,
+    onCreate,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    onCreate: (data: { serverProfileId: string; name?: string }) => Promise<void>;
+  }) =>
+    open ? (
+      <div data-testid="new-session-dialog">
+        <button onClick={onClose}>Close</button>
+        <button
+          onClick={() => onCreate({ serverProfileId: 'test-profile', name: 'Test Session' })}
+        >
+          Create
+        </button>
+      </div>
+    ) : null,
+}));
+
 describe('HomePage', () => {
   beforeEach(() => {
-    // Reset any state before each test
+    vi.clearAllMocks();
   });
 
   describe('Rendering', () => {
@@ -47,74 +69,10 @@ describe('HomePage', () => {
       expect(screen.getByText(/shellkeep control center/i)).toBeInTheDocument();
     });
 
-    it('should render QuickActions component', () => {
+    it('should render New Session button', () => {
       render(<HomePage />);
 
-      // QuickActions has a title
-      expect(screen.getByText(/quick actions/i)).toBeInTheDocument();
-    });
-
-    it('should render New Session quick action', () => {
-      render(<HomePage />);
-
-      expect(screen.getByText(/new session/i)).toBeInTheDocument();
-    });
-  });
-
-  describe('Quick Actions Section', () => {
-    it('should display New Session quick action', () => {
-      render(<HomePage />);
-
-      expect(screen.getByText('New Session')).toBeInTheDocument();
-      expect(screen.getByText(/connect to a server/i)).toBeInTheDocument();
-    });
-
-    it('should display All Sessions quick action', () => {
-      render(<HomePage />);
-
-      expect(screen.getByText('All Sessions')).toBeInTheDocument();
-      expect(screen.getByText(/view terminal sessions/i)).toBeInTheDocument();
-    });
-
-    it('should display Manage Servers quick action', () => {
-      render(<HomePage />);
-
-      expect(screen.getAllByText('Manage Servers').length).toBeGreaterThan(0);
-      expect(screen.getByText(/configure server profiles/i)).toBeInTheDocument();
-    });
-
-    it('should not display User Settings quick action', () => {
-      render(<HomePage />, {
-        wrapperOptions: {
-          authenticated: true,
-          user: mockUser,
-        },
-      });
-
-      expect(screen.queryByText(/^user settings$/i)).not.toBeInTheDocument();
-    });
-
-    it('should not display System Settings for non-admin users', () => {
-      render(<HomePage />, {
-        wrapperOptions: {
-          authenticated: true,
-          user: mockUser, // viewer role
-        },
-      });
-
-      expect(screen.queryByText(/^system settings$/i)).not.toBeInTheDocument();
-    });
-
-    it('should not display System Settings for admin users (not in QuickActions)', () => {
-      render(<HomePage />, {
-        wrapperOptions: {
-          authenticated: true,
-          user: mockAdminUser,
-        },
-      });
-
-      // The actual QuickActions component does not include System Settings
-      expect(screen.queryByText(/^system settings$/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
     });
   });
 
@@ -133,10 +91,7 @@ describe('HomePage', () => {
         },
       });
 
-      // Should see Quick Actions
-      expect(screen.getByText(/quick actions/i)).toBeInTheDocument();
-      // Should see New Session action
-      expect(screen.getByText('New Session')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
     });
 
     it('should render correctly for Contributor role', () => {
@@ -154,8 +109,7 @@ describe('HomePage', () => {
         },
       });
 
-      expect(screen.getByText(/quick actions/i)).toBeInTheDocument();
-      expect(screen.getByText('New Session')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
     });
 
     it('should render correctly for Admin role', () => {
@@ -166,9 +120,7 @@ describe('HomePage', () => {
         },
       });
 
-      // Should see Quick Actions section
-      expect(screen.getByText(/quick actions/i)).toBeInTheDocument();
-      expect(screen.getByText('New Session')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
     });
 
     it('should show welcome with admin user display name', () => {
@@ -180,41 +132,6 @@ describe('HomePage', () => {
       });
 
       expect(screen.getByRole('heading', { name: /welcome back, admin user/i })).toBeInTheDocument();
-    });
-  });
-
-  describe('Navigation', () => {
-    it('should show New Session button', async () => {
-      render(<HomePage />);
-
-      const newSessionButton = screen.getByRole('button', { name: /new session/i });
-      expect(newSessionButton).toBeInTheDocument();
-    });
-
-    it('should show All Sessions button', async () => {
-      render(<HomePage />);
-
-      const allSessionsButton = screen.getByRole('button', { name: /all sessions/i });
-      expect(allSessionsButton).toBeInTheDocument();
-    });
-
-    it('should show Manage Servers button', async () => {
-      render(<HomePage />);
-
-      const manageServersButtons = screen.getAllByRole('button', { name: /manage servers/i });
-      expect(manageServersButtons.length).toBeGreaterThan(0);
-    });
-
-    it('should navigate to sessions when clicking All Sessions', async () => {
-      const user = userEvent.setup();
-
-      render(<HomePage />);
-
-      const allSessionsButton = screen.getByRole('button', { name: /all sessions/i });
-      await user.click(allSessionsButton);
-
-      // Navigation is handled by MemoryRouter in tests
-      expect(allSessionsButton).toBeInTheDocument();
     });
   });
 
@@ -234,7 +151,7 @@ describe('HomePage', () => {
       expect(paddedBox).toBeInTheDocument();
     });
 
-    it('should use Grid layout for profile and actions', () => {
+    it('should use Grid layout for panels', () => {
       const { container } = render(<HomePage />);
 
       const gridContainers = container.querySelectorAll('.MuiGrid-container');
@@ -244,8 +161,6 @@ describe('HomePage', () => {
     it('should have responsive grid items', () => {
       const { container } = render(<HomePage />);
 
-      // Profile card should be xs=12, md=4
-      // Quick actions should be xs=12, md=8
       const gridItems = container.querySelectorAll('.MuiGrid-item');
       expect(gridItems.length).toBeGreaterThanOrEqual(2);
     });
@@ -298,7 +213,6 @@ describe('HomePage', () => {
         },
       });
 
-      // HomePage renders "Welcome back" without name when displayName is null
       expect(screen.getByRole('heading', { name: /^welcome back$/i })).toBeInTheDocument();
     });
 
@@ -316,7 +230,6 @@ describe('HomePage', () => {
         },
       });
 
-      // Should still render welcome
       expect(screen.getByRole('heading', { name: /welcome back/i })).toBeInTheDocument();
     });
   });
@@ -336,7 +249,6 @@ describe('HomePage', () => {
         },
       });
 
-      // The page should still render
       expect(screen.getByRole('heading', { name: /welcome back/i })).toBeInTheDocument();
     });
   });
@@ -361,7 +273,6 @@ describe('HomePage', () => {
         },
       });
 
-      // Should still render welcome header without name
       expect(screen.getByRole('heading', { name: /^welcome back$/i })).toBeInTheDocument();
     });
   });
@@ -375,15 +286,11 @@ describe('HomePage', () => {
       expect(mainHeading.tagName).toBe('H1');
     });
 
-    it('should have descriptive button labels', () => {
+    it('should have descriptive New Session button label', () => {
       render(<HomePage />);
 
-      // All buttons in QuickActions should have accessible names
       const newSessionBtn = screen.getByRole('button', { name: /new session/i });
       expect(newSessionBtn).toBeInTheDocument();
-
-      const allSessionsBtn = screen.getByRole('button', { name: /all sessions/i });
-      expect(allSessionsBtn).toBeInTheDocument();
     });
 
     it('should render page without avatar alt text (no image displayed)', () => {
@@ -419,11 +326,8 @@ describe('HomePage', () => {
       // Control center description
       expect(screen.getByText(/shellkeep control center/i)).toBeInTheDocument();
 
-      // Quick actions
-      expect(screen.getByText(/quick actions/i)).toBeInTheDocument();
-      expect(screen.getByText('New Session')).toBeInTheDocument();
-      expect(screen.getByText('All Sessions')).toBeInTheDocument();
-      expect(screen.getAllByText('Manage Servers').length).toBeGreaterThan(0);
+      // New Session button in stats bar
+      expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
     });
 
     it('should maintain consistent layout across different user types', () => {
@@ -434,12 +338,12 @@ describe('HomePage', () => {
         },
       });
 
-      expect(screen.getByText(/quick actions/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
 
       // Re-render with admin user
       rerender(<HomePage />);
 
-      expect(screen.getByText(/quick actions/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
     });
   });
 });
