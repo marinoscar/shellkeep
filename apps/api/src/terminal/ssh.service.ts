@@ -64,7 +64,7 @@ export class SshService {
           }
 
           // Launch tmux inside the shell (-A flag: attach if exists, create if not)
-          const tmuxCmd = `tmux new-session -As ${tmuxSessionId} \\; set-option history-limit 50000\n`;
+          const tmuxCmd = `tmux new-session -As ${tmuxSessionId} \\; set-option history-limit 50000 \\; set-option mouse on\n`;
           stream.write(tmuxCmd);
 
           const connection: SshConnection = {
