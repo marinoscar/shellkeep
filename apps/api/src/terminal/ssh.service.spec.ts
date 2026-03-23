@@ -77,7 +77,7 @@ describe('SshService', () => {
 
   describe('connect with password auth', () => {
     it('should connect with password credentials', async () => {
-      const { clientInstance } = setupMockClient({ emitReady: true });
+      const { clientInstance, mockStream } = setupMockClient({ emitReady: true });
 
       const connection = await service.connect(
         mockProfile,
@@ -98,6 +98,9 @@ describe('SshService', () => {
       expect(connection).toHaveProperty('stream');
       expect(connection).toHaveProperty('close');
       expect(connection).toHaveProperty('resize');
+      expect(mockStream.write).toHaveBeenCalledWith(
+        expect.stringContaining('set-option history-limit 50000')
+      );
     });
   });
 
