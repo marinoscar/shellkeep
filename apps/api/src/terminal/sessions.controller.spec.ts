@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
+import { SshService } from './ssh.service';
+import { ServerProfilesService } from '../server-profiles/server-profiles.service';
 
 describe('SessionsController', () => {
   let controller: SessionsController;
@@ -32,6 +34,8 @@ describe('SessionsController', () => {
       controllers: [SessionsController],
       providers: [
         { provide: SessionsService, useValue: mockSessionsService },
+        { provide: SshService, useValue: {} },
+        { provide: ServerProfilesService, useValue: {} },
       ],
     }).compile();
 
