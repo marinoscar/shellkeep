@@ -61,7 +61,7 @@ Powered by xterm.js. Handles color output, cursor movement, wide characters, and
 
 #### Session Lifecycle
 
-Sessions are tracked as `active`, `detached`, or `terminated`. An idle session is automatically detached after 1 hour; a detached session is terminated after 12 hours. From the sessions page, you can select multiple sessions and terminate them in a single action. Clipboard images and other storage objects uploaded through the terminal are automatically deleted after 24 hours by a daily cleanup job (runs at 9:00 AM UTC).
+Sessions are tracked as `active`, `detached`, or `terminated`. An idle session is automatically detached after 1 hour; a detached session is terminated after 12 hours; terminated sessions are permanently removed after 3 days. From the sessions page, you can select multiple sessions and terminate them in a single action. Clipboard images and other storage objects uploaded through the terminal are automatically deleted after 24 hours by a daily cleanup job (runs at 9:00 AM UTC).
 
 ### Device Authorization (RFC 8628)
 
