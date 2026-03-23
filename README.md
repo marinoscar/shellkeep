@@ -46,6 +46,8 @@ See all your active and recent sessions at a glance. One click to reconnect. No 
 
 Powered by xterm.js. Handles color output, cursor movement, wide characters, and everything else your shell throws at it. A toolbar above each session gives you quick access to clipboard, session management, and output controls without leaving the terminal.
 
+![Screenshot of shellkeepterminal](https://raw.githubusercontent.com/marinoscar/shellkeep/refs/heads/main/media/terminal.png)
+
 #### Terminal Toolbar
 
 | Control | What it does |
