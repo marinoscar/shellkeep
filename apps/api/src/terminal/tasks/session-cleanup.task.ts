@@ -55,12 +55,12 @@ export class SessionCleanupTask {
   }
 
   private async purgeOldTerminatedSessions(): Promise<void> {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
 
     const result = await this.prisma.terminalSession.deleteMany({
       where: {
         status: 'terminated',
-        terminatedAt: { lt: thirtyDaysAgo },
+        terminatedAt: { lt: threeDaysAgo },
       },
     });
 

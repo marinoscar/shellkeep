@@ -104,7 +104,7 @@ describe('SessionCleanupTask', () => {
   });
 
   describe('purgeOldTerminatedSessions', () => {
-    it('should delete terminated sessions older than 30 days', async () => {
+    it('should delete terminated sessions older than 3 days', async () => {
       (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({
         count: 0,
       });
@@ -121,13 +121,13 @@ describe('SessionCleanupTask', () => {
 
       expect(deleteCall.where.status).toBe('terminated');
 
-      // Verify the cutoff is approximately 30 days ago
+      // Verify the cutoff is approximately 3 days ago
       const cutoffTime = deleteCall.where.terminatedAt.lt.getTime();
-      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
       expect(cutoffTime).toBeGreaterThanOrEqual(
-        beforeTime - thirtyDaysMs - 100,
+        beforeTime - threeDaysMs - 100,
       );
-      expect(cutoffTime).toBeLessThanOrEqual(afterTime - thirtyDaysMs + 100);
+      expect(cutoffTime).toBeLessThanOrEqual(afterTime - threeDaysMs + 100);
     });
   });
 });
