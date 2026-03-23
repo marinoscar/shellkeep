@@ -34,7 +34,7 @@ export function Layout() {
           sx={{
             flexGrow: 1,
             p: 3,
-            overflow: 'hidden',
+            overflow: 'auto',
           }}
         >
           <Outlet />

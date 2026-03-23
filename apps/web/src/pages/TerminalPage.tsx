@@ -186,7 +186,7 @@ export default function TerminalPage() {
       </Box>
 
       {/* Terminal */}
-      <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+      <Box sx={{ flexGrow: 1, minHeight: 0 }}>
         <TerminalView
           ref={terminalViewRef}
           sessionId={id}
