@@ -6,7 +6,7 @@ import { TerminalView } from '../components/terminal/TerminalView';
 import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { TerminalToolbar } from '../components/terminal/TerminalToolbar';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
-import { getSession, updateSession, uploadFile, getDownloadUrl, createSession } from '../services/api';
+import { getSession, updateSession, uploadFile, getDownloadUrl, createSession, downloadSessionHistory } from '../services/api';
 import type { TerminalSession, CreateSessionData } from '../types';
 
 export default function TerminalPage() {
@@ -17,6 +17,7 @@ export default function TerminalPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'info' });
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -78,17 +79,34 @@ export default function TerminalPage() {
     }
   }, [getTerminalText]);
 
-  const handleDownload = useCallback(() => {
-    const text = getTerminalText();
-    if (!text) return;
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${session?.name || 'terminal'}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [getTerminalText, session?.name]);
+  const handleDownload = useCallback(async () => {
+    if (!id) return;
+    setIsDownloading(true);
+    try {
+      const blob = await downloadSessionHistory(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${session?.name || 'terminal'}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fallback to local xterm.js buffer
+      const text = getTerminalText();
+      if (text) {
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${session?.name || 'terminal'}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      setSnackbar({ open: true, message: 'Full history unavailable, downloaded local buffer', severity: 'warning' });
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [id, session?.name, getTerminalText]);
 
   const handlePaste = useCallback(async () => {
     try {
@@ -158,6 +176,7 @@ export default function TerminalPage() {
             onRename={handleRename}
             onCopyAll={handleCopyAll}
             onDownload={handleDownload}
+            isDownloading={isDownloading}
             onPaste={handlePaste}
             onNewSession={() => setNewSessionDialogOpen(true)}
             serverProfileName={session.serverProfile.name}

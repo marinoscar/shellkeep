@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Box, Chip, IconButton, Tooltip, Typography, Snackbar, Alert } from '@mui/material';
+import { Box, Chip, CircularProgress, IconButton, Tooltip, Typography, Snackbar, Alert } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   Circle as CircleIcon,
@@ -12,7 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { TerminalView } from '../components/terminal/TerminalView';
 import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
-import { getSession, uploadFile, getDownloadUrl, createSession } from '../services/api';
+import { getSession, uploadFile, getDownloadUrl, createSession, downloadSessionHistory } from '../services/api';
 import type { TerminalSession, CreateSessionData } from '../types';
 
 export default function TerminalFullPage() {
@@ -23,6 +23,7 @@ export default function TerminalFullPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'info' });
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -60,17 +61,34 @@ export default function TerminalFullPage() {
     }
   }, [getTerminalText]);
 
-  const handleDownload = useCallback(() => {
-    const text = getTerminalText();
-    if (!text) return;
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${session?.name || 'terminal'}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [getTerminalText, session?.name]);
+  const handleDownload = useCallback(async () => {
+    if (!id) return;
+    setIsDownloading(true);
+    try {
+      const blob = await downloadSessionHistory(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${session?.name || 'terminal'}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fallback to local xterm.js buffer
+      const text = getTerminalText();
+      if (text) {
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${session?.name || 'terminal'}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      setSnackbar({ open: true, message: 'Full history unavailable, downloaded local buffer', severity: 'warning' });
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [id, session?.name, getTerminalText]);
 
   const handlePaste = useCallback(async () => {
     try {
@@ -184,13 +202,16 @@ export default function TerminalFullPage() {
           </IconButton>
         </Tooltip>
         <Tooltip title="Download as text file">
-          <IconButton
-            size="small"
-            onClick={handleDownload}
-            sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
-          >
-            <DownloadIcon fontSize="small" />
-          </IconButton>
+          <span>
+            <IconButton
+              size="small"
+              onClick={handleDownload}
+              disabled={isDownloading}
+              sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
+            >
+              {isDownloading ? <CircularProgress size={16} sx={{ color: 'rgba(255, 255, 255, 0.7)' }} /> : <DownloadIcon fontSize="small" />}
+            </IconButton>
+          </span>
         </Tooltip>
         <Tooltip title="New session">
           <IconButton

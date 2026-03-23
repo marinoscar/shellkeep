@@ -399,3 +399,42 @@ export async function getDownloadUrl(objectId: string, expiresIn = 3600): Promis
   const result = await api.get<{ url: string; expiresIn: number }>(`/storage/objects/${objectId}/download?expiresIn=${expiresIn}`);
   return result.url;
 }
+
+export async function downloadSessionHistory(sessionId: string): Promise<Blob> {
+  const token = api.getAccessToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}/history`, {
+    method: 'GET',
+    headers,
+    credentials: 'include',
+  });
+
+  if (response.status === 401) {
+    const refreshed = await api.refreshToken();
+    if (refreshed) {
+      headers['Authorization'] = `Bearer ${api.getAccessToken()}`;
+      const retryResponse = await fetch(`${API_BASE_URL}/sessions/${sessionId}/history`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
+      if (!retryResponse.ok) {
+        const error = await retryResponse.json().catch(() => ({}));
+        throw new ApiError(error.message || 'Failed to download history', retryResponse.status, error.code, error.details);
+      }
+      return retryResponse.blob();
+    }
+    throw new ApiError('Unauthorized', 401);
+  }
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new ApiError(error.message || 'Failed to download history', response.status, error.code, error.details);
+  }
+
+  return response.blob();
+}

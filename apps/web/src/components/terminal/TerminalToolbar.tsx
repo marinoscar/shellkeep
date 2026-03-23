@@ -7,6 +7,7 @@ import {
   TextField,
   useTheme,
   Chip,
+  CircularProgress,
 } from '@mui/material';
 import type { ServerProfileColor } from '../../types';
 import {
@@ -30,6 +31,7 @@ interface TerminalToolbarProps {
   onRename: (newName: string) => void;
   onCopyAll?: () => void;
   onDownload?: () => void;
+  isDownloading?: boolean;
   onPaste?: () => void;
   onNewSession?: () => void;
   serverProfileName?: string;
@@ -44,6 +46,7 @@ export function TerminalToolbar({
   onRename,
   onCopyAll,
   onDownload,
+  isDownloading,
   onPaste,
   onNewSession,
   serverProfileName,
@@ -163,9 +166,11 @@ export function TerminalToolbar({
         )}
         {onDownload && (
           <Tooltip title="Download as text file">
-            <IconButton size="small" onClick={onDownload}>
-              <DownloadIcon fontSize="small" />
-            </IconButton>
+            <span>
+              <IconButton size="small" onClick={onDownload} disabled={isDownloading}>
+                {isDownloading ? <CircularProgress size={16} /> : <DownloadIcon fontSize="small" />}
+              </IconButton>
+            </span>
           </Tooltip>
         )}
         {onNewSession && (
