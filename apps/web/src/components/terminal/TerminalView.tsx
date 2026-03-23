@@ -49,12 +49,6 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
           height: '100%',
           padding: '4px',
         },
-        '& .xterm-viewport': {
-          overflow: 'hidden !important',
-        },
-        '& .xterm-screen': {
-          height: '100% !important',
-        },
       }}
     />
   );
