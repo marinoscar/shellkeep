@@ -180,7 +180,7 @@ export default function SessionsPage() {
         </Tabs>
 
         <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-          Sessions inactive for 1 hour are automatically marked as detached. Detached sessions inactive for 12 hours are terminated. Terminated sessions are permanently removed after 30 days.
+          Sessions inactive for 1 hour are automatically marked as detached. Detached sessions inactive for 12 hours are terminated. Terminated sessions are permanently removed after 3 days.
         </Alert>
 
         {selectedIds.size > 0 && (

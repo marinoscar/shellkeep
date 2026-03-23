@@ -541,11 +541,11 @@ describe('SessionsPage', () => {
       ).toBeInTheDocument();
     });
 
-    it('should mention 30 day removal policy for terminated sessions', () => {
+    it('should mention 3 day removal policy for terminated sessions', () => {
       render(<SessionsPage />);
 
       expect(
-        screen.getByText(/terminated sessions are permanently removed after 30 days/i),
+        screen.getByText(/terminated sessions are permanently removed after 3 days/i),
       ).toBeInTheDocument();
     });
   });
