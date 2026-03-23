@@ -7,6 +7,7 @@ import '@xterm/xterm/css/xterm.css';
 export interface TerminalViewHandle {
   getTerminal: () => Terminal | null;
   sendInput: (data: string) => void;
+  focus: () => void;
 }
 
 interface TerminalViewProps {
@@ -23,6 +24,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
   useImperativeHandle(ref, () => ({
     getTerminal: () => terminal.current,
     sendInput,
+    focus: () => terminal.current?.focus(),
   }), [terminal, sendInput]);
 
   // Notify parent of connection changes
