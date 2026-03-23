@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../mocks/server';
 import { render } from '../../utils/test-utils';
@@ -199,6 +200,41 @@ describe('SessionStatsBar', () => {
         expect(screen.getByText(/0 detached/i)).toBeInTheDocument();
         expect(screen.getByText(/0 servers/i)).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('New Session Button', () => {
+    it('should render New Session button when onNewSession is provided', async () => {
+      setupHandlers();
+
+      render(<SessionStatsBar onNewSession={vi.fn()} />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
+      });
+    });
+
+    it('should not render New Session button when onNewSession is not provided', async () => {
+      setupHandlers();
+
+      render(<SessionStatsBar />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /new session/i })).not.toBeInTheDocument();
+      });
+    });
+
+    it('should call onNewSession when New Session button is clicked', async () => {
+      setupHandlers();
+      const onNewSession = vi.fn();
+      const user = userEvent.setup();
+
+      render(<SessionStatsBar onNewSession={onNewSession} />);
+
+      const button = await screen.findByRole('button', { name: /new session/i });
+      await user.click(button);
+
+      expect(onNewSession).toHaveBeenCalledTimes(1);
     });
   });
 });
