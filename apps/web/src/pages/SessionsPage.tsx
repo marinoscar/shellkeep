@@ -17,7 +17,7 @@ import {
   DialogActions,
   TextField,
 } from '@mui/material';
-import { Add as AddIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { Add as AddIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useSessions } from '../hooks/useSessions';
 import { SessionCard } from '../components/terminal/SessionCard';
@@ -42,10 +42,13 @@ export default function SessionsPage() {
     createNewSession,
     renameSession,
     terminateSession,
+    batchTerminate,
   } = useSessions();
 
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<TerminalSession | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [snackbar, setSnackbar] = useState<SnackbarState>({
@@ -62,8 +65,25 @@ export default function SessionsPage() {
     setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
+  const handleSelectToggle = useCallback((session: TerminalSession) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(session.id)) {
+        next.delete(session.id);
+      } else {
+        next.add(session.id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setStatusFilter(STATUS_TABS[newValue]);
+    setSelectedIds(new Set());
   };
 
   const handleOpenSession = useCallback(
@@ -102,6 +122,17 @@ export default function SessionsPage() {
     },
     [terminateSession],
   );
+
+  const handleBatchTerminate = async () => {
+    setConfirmDialogOpen(false);
+    try {
+      const result = await batchTerminate(Array.from(selectedIds));
+      showSnackbar(`${result.terminated} session${result.terminated !== 1 ? 's' : ''} terminated`, 'success');
+      setSelectedIds(new Set());
+    } catch {
+      showSnackbar('Failed to terminate sessions', 'error');
+    }
+  };
 
   const handleCreateSession = async (data: CreateSessionData) => {
     const session = await createNewSession(data);
@@ -148,6 +179,30 @@ export default function SessionsPage() {
           <Tab label="Terminated" />
         </Tabs>
 
+        <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+          Sessions inactive for 1 hour are automatically marked as detached. Detached sessions inactive for 12 hours are terminated. Terminated sessions are permanently removed after 30 days.
+        </Alert>
+
+        {selectedIds.size > 0 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, p: 1.5, bgcolor: 'action.selected', borderRadius: 1 }}>
+            <Typography variant="body2" sx={{ flexGrow: 1 }}>
+              {selectedIds.size} session{selectedIds.size > 1 ? 's' : ''} selected
+            </Typography>
+            <Button size="small" onClick={handleClearSelection}>
+              Clear
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              size="small"
+              startIcon={<DeleteIcon />}
+              onClick={() => setConfirmDialogOpen(true)}
+            >
+              Terminate Selected
+            </Button>
+          </Box>
+        )}
+
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress />
@@ -181,6 +236,8 @@ export default function SessionsPage() {
                   onOpen={handleOpenSession}
                   onRename={handleRenameClick}
                   onTerminate={handleTerminate}
+                  selected={selectedIds.has(session.id)}
+                  onSelectToggle={handleSelectToggle}
                 />
               </Grid>
             ))}
@@ -224,6 +281,27 @@ export default function SessionsPage() {
             disabled={!renameValue.trim()}
           >
             Rename
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Batch Terminate Confirmation Dialog */}
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={() => setConfirmDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Terminate Sessions</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to terminate {selectedIds.size} session{selectedIds.size !== 1 ? 's' : ''}? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleBatchTerminate} variant="contained" color="error">
+            Terminate
           </Button>
         </DialogActions>
       </Dialog>

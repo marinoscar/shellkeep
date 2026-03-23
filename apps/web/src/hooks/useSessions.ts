@@ -5,6 +5,7 @@ import {
   createSession as createSessionApi,
   updateSession as updateSessionApi,
   deleteSession as deleteSessionApi,
+  batchTerminateSessions as batchTerminateSessionsApi,
 } from '../services/api';
 
 interface UseSessionsResult {
@@ -23,6 +24,7 @@ interface UseSessionsResult {
   createNewSession: (data: CreateSessionData) => Promise<TerminalSession>;
   renameSession: (id: string, name: string) => Promise<void>;
   terminateSession: (id: string) => Promise<void>;
+  batchTerminate: (ids: string[]) => Promise<{ terminated: number }>;
   setStatusFilter: (status: string) => void;
 }
 
@@ -113,6 +115,22 @@ export function useSessions(): UseSessionsResult {
     [fetchSessions, page, pageSize],
   );
 
+  const batchTerminate = useCallback(
+    async (ids: string[]): Promise<{ terminated: number }> => {
+      setError(null);
+      try {
+        const result = await batchTerminateSessionsApi(ids);
+        await fetchSessions({ page, pageSize });
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to terminate sessions';
+        setError(message);
+        throw err;
+      }
+    },
+    [fetchSessions, page, pageSize],
+  );
+
   const setStatusFilter = useCallback((status: string) => {
     setStatusFilterState(status);
   }, []);
@@ -134,6 +152,7 @@ export function useSessions(): UseSessionsResult {
     createNewSession,
     renameSession,
     terminateSession,
+    batchTerminate,
     setStatusFilter,
   };
 }

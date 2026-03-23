@@ -359,6 +359,10 @@ export async function deleteSession(id: string): Promise<void> {
   await api.delete<void>(`/sessions/${id}`);
 }
 
+export async function batchTerminateSessions(ids: string[]): Promise<{ terminated: number }> {
+  return api.post<{ terminated: number }>('/sessions/batch-terminate', { ids });
+}
+
 // Storage API
 export async function uploadFile(file: Blob, filename: string): Promise<{ id: string; status: string }> {
   const formData = new FormData();

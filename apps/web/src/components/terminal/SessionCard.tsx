@@ -5,6 +5,7 @@ import {
   Typography,
   Chip,
   Box,
+  Checkbox,
   IconButton,
   Tooltip,
 } from '@mui/material';
@@ -20,6 +21,8 @@ interface SessionCardProps {
   onOpen: (session: TerminalSession) => void;
   onRename: (session: TerminalSession) => void;
   onTerminate: (session: TerminalSession) => void;
+  selected?: boolean;
+  onSelectToggle?: (session: TerminalSession) => void;
 }
 
 function getStatusColor(status: string): 'success' | 'warning' | 'default' {
@@ -49,7 +52,7 @@ function getRelativeTime(dateString: string): string {
   return date.toLocaleDateString();
 }
 
-export function SessionCard({ session, onOpen, onRename, onTerminate }: SessionCardProps) {
+export function SessionCard({ session, onOpen, onRename, onTerminate, selected, onSelectToggle }: SessionCardProps) {
   const serverInfo = `${session.serverProfile.username}@${session.serverProfile.hostname}:${session.serverProfile.port}`;
   const isTerminated = session.status === 'terminated';
 
@@ -60,10 +63,21 @@ export function SessionCard({ session, onOpen, onRename, onTerminate }: SessionC
         display: 'flex',
         flexDirection: 'column',
         opacity: isTerminated ? 0.7 : 1,
+        border: selected ? 2 : 0,
+        borderColor: selected ? 'primary.main' : 'transparent',
       }}
     >
       <CardContent sx={{ flexGrow: 1, pb: 1 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+          {!isTerminated && onSelectToggle && (
+            <Checkbox
+              size="small"
+              checked={selected || false}
+              onChange={() => onSelectToggle(session)}
+              onClick={(e) => e.stopPropagation()}
+              sx={{ p: 0, mr: 0.5 }}
+            />
+          )}
           <Typography variant="h6" component="div" noWrap sx={{ flexGrow: 1, mr: 1 }}>
             {session.name}
           </Typography>
