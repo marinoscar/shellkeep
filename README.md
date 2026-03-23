@@ -4,6 +4,8 @@
 
 Your terminal sessions, alive and waiting, on every server, from any device.
 
+![Screenshot of shellkeep control panel](https://raw.githubusercontent.com/marinoscar/shellkeep/refs/heads/main/media/control-panel.png)
+
 ---
 
 ## The Era of Parallel Infrastructure
