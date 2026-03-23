@@ -26,6 +26,7 @@ import { PERMISSIONS } from '../common/constants/roles.constants';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { SessionQueryDto } from './dto/session-query.dto';
+import { BatchTerminateSessionsDto } from './dto/batch-terminate-sessions.dto';
 
 @ApiTags('Terminal Sessions')
 @Controller('sessions')
@@ -44,6 +45,18 @@ export class SessionsController {
     @Query() query: SessionQueryDto,
   ) {
     return this.sessionsService.findAll(userId, query);
+  }
+
+  @Post('batch-terminate')
+  @Auth({ permissions: [PERMISSIONS.SESSIONS_DELETE] })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Batch terminate multiple sessions' })
+  @ApiResponse({ status: 200, description: 'Sessions terminated' })
+  async batchTerminate(
+    @CurrentUser('id') userId: string,
+    @Body() dto: BatchTerminateSessionsDto,
+  ) {
+    return this.sessionsService.batchTerminate(dto.ids, userId);
   }
 
   @Get(':id')

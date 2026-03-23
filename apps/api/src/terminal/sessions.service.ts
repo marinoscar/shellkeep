@@ -186,6 +186,27 @@ export class SessionsService {
   }
 
   /**
+   * Batch terminate multiple sessions by ID for a user
+   */
+  async batchTerminate(ids: string[], userId: string): Promise<{ terminated: number }> {
+    const result = await this.prisma.terminalSession.updateMany({
+      where: {
+        id: { in: ids },
+        userId,
+        status: { not: 'terminated' },
+      },
+      data: {
+        status: 'terminated',
+        terminatedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`Batch terminated ${result.count} sessions for user ${userId}`);
+
+    return { terminated: result.count };
+  }
+
+  /**
    * Update last activity timestamp
    */
   async updateActivity(id: string): Promise<void> {
