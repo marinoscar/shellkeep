@@ -21,7 +21,8 @@ export function Layout() {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100vh',
+        height: '100vh',
+        overflow: 'hidden',
         backgroundColor: theme.palette.background.default,
       }}
     >
@@ -33,6 +34,7 @@ export function Layout() {
           sx={{
             flexGrow: 1,
             p: 3,
+            overflow: 'hidden',
           }}
         >
           <Outlet />

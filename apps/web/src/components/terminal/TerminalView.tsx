@@ -46,10 +46,10 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
         width: '100%',
         height: '100%',
         bgcolor: '#1e1e1e',
-        overflow: 'hidden',
         '& .xterm': {
           height: '100%',
           padding: '4px',
+          boxSizing: 'border-box',
         },
       }}
     />

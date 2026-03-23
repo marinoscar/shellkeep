@@ -135,7 +135,7 @@ export default function TerminalFullPage() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', bgcolor: '#1e1e1e' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', overflow: 'hidden', bgcolor: '#1e1e1e' }}>
       {/* Top bar */}
       <Box
         sx={{
