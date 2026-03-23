@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../utils/test-utils';
+import { forwardRef, useImperativeHandle } from 'react';
 import type { TerminalSession } from '../../types';
 
 // Mock react-router-dom so useParams returns a known session id
@@ -18,26 +19,40 @@ vi.mock('react-router-dom', async (importOriginal) => {
 vi.mock('../../services/api', () => ({
   getSession: vi.fn(),
   updateSession: vi.fn(),
+  uploadFile: vi.fn(),
+  getDownloadUrl: vi.fn(),
+  createSession: vi.fn(),
   api: { getAccessToken: vi.fn(() => 'mock-token') },
 }));
 
-// Mock TerminalView so no xterm/WebSocket wiring is needed
+// Shared mocks for the TerminalView imperative handle
+const mockSendInput = vi.fn();
+const mockFocus = vi.fn();
+
+// Mock TerminalView so no xterm/WebSocket wiring is needed.
+// Uses forwardRef + useImperativeHandle to expose sendInput and focus
+// so that TerminalPage's paste handler can call them via the ref.
 vi.mock('../../components/terminal/TerminalView', () => ({
-  TerminalView: vi.fn(
-    ({
-      sessionId,
-      onConnectionChange,
-    }: {
+  TerminalView: forwardRef<
+    { sendInput: (data: string) => void; focus: () => void; getTerminal: () => null },
+    {
       sessionId: string;
       onConnectionChange?: (c: boolean) => void;
-    }) => (
+    }
+  >(function MockTerminalView({ sessionId, onConnectionChange }, ref) {
+    useImperativeHandle(ref, () => ({
+      sendInput: mockSendInput,
+      focus: mockFocus,
+      getTerminal: () => null,
+    }));
+    return (
       <div
         data-testid="terminal-view"
         data-session-id={sessionId}
         onClick={() => onConnectionChange?.(true)}
       />
-    ),
-  ),
+    );
+  }),
 }));
 
 import TerminalPage from '../../pages/TerminalPage';
@@ -223,6 +238,40 @@ describe('TerminalPage', () => {
       await expect(
         userEvent.click(screen.getByTestId('DownloadIcon').closest('button')!),
       ).resolves.not.toThrow();
+    });
+  });
+
+  describe('Paste', () => {
+    it('should send clipboard text to the terminal and focus it when paste button is clicked', async () => {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: {
+          read: vi.fn().mockResolvedValue([
+            {
+              types: ['text/plain'],
+              getType: vi.fn().mockResolvedValue(
+                new Blob(['hello world'], { type: 'text/plain' }),
+              ),
+            },
+          ]),
+          writeText: vi.fn(),
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      renderTerminalPage();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('ContentPasteIcon').closest('button')!).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByTestId('ContentPasteIcon').closest('button')!);
+
+      await waitFor(() => {
+        expect(mockSendInput).toHaveBeenCalledWith('hello world');
+      });
+
+      expect(mockFocus).toHaveBeenCalled();
     });
   });
 });

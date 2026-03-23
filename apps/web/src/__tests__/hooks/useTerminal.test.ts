@@ -234,6 +234,24 @@ describe('useTerminal', () => {
       expect(wsResizeFn).toHaveBeenCalledWith(term.cols, term.rows);
     });
 
+    it('should send cols-1 resize first then real dimensions to force tmux repaint', () => {
+      renderUseTerminal();
+
+      act(() => { emitWs('connect'); });
+      expect(wsResizeFn).not.toHaveBeenCalled();
+
+      // Outer 200 ms timeout fires: sends cols-1 to force tmux size change
+      act(() => { vi.advanceTimersByTime(200); });
+      const term = getTerminalInstance();
+      expect(wsResizeFn).toHaveBeenCalledWith(term.cols - 1, term.rows);
+
+      // Inner 50 ms timeout fires: sends real dims to trigger full repaint
+      act(() => { vi.advanceTimersByTime(50); });
+      expect(wsResizeFn).toHaveBeenCalledWith(term.cols, term.rows);
+
+      expect(wsResizeFn).toHaveBeenCalledTimes(2);
+    });
+
     it('should set isConnected false when ws emits disconnect', () => {
       const { result } = renderUseTerminal();
 

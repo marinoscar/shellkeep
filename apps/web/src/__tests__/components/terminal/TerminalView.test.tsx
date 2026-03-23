@@ -4,9 +4,10 @@ import { render } from '../../utils/test-utils';
 import { createRef } from 'react';
 
 // Hoist shared mocks so vi.mock factory closures can reference them
-const { mockReconnect, mockSearch, mockTerminalRef } = vi.hoisted(() => ({
+const { mockReconnect, mockSearch, mockSendInput, mockTerminalRef } = vi.hoisted(() => ({
   mockReconnect: vi.fn(),
   mockSearch: vi.fn(),
+  mockSendInput: vi.fn(),
   mockTerminalRef: { current: null as unknown },
 }));
 
@@ -16,6 +17,7 @@ vi.mock('../../../hooks/useTerminal', () => ({
     error: null,
     reconnect: mockReconnect,
     search: mockSearch,
+    sendInput: mockSendInput,
     terminal: mockTerminalRef,
   })),
 }));
@@ -34,6 +36,7 @@ describe('TerminalView', () => {
       error: null,
       reconnect: mockReconnect,
       search: mockSearch,
+      sendInput: mockSendInput,
       terminal: mockTerminalRef as ReturnType<typeof useTerminal>['terminal'],
     });
   });
@@ -68,6 +71,7 @@ describe('TerminalView', () => {
         error: null,
         reconnect: mockReconnect,
         search: mockSearch,
+        sendInput: mockSendInput,
         terminal: mockTerminalRef as ReturnType<typeof useTerminal>['terminal'],
       });
 
@@ -89,6 +93,7 @@ describe('TerminalView', () => {
         error: null,
         reconnect: mockReconnect,
         search: mockSearch,
+        sendInput: mockSendInput,
         terminal: mockTerminalRef as ReturnType<typeof useTerminal>['terminal'],
       });
 
@@ -108,6 +113,7 @@ describe('TerminalView', () => {
         error: null,
         reconnect: mockReconnect,
         search: mockSearch,
+        sendInput: mockSendInput,
         terminal: mockTerminalRef as ReturnType<typeof useTerminal>['terminal'],
       });
 
@@ -126,6 +132,7 @@ describe('TerminalView', () => {
         error: 'Not authenticated',
         reconnect: mockReconnect,
         search: mockSearch,
+        sendInput: mockSendInput,
         terminal: mockTerminalRef as ReturnType<typeof useTerminal>['terminal'],
       });
 
@@ -162,6 +169,7 @@ describe('TerminalView', () => {
         error: null,
         reconnect: mockReconnect,
         search: mockSearch,
+        sendInput: mockSendInput,
         terminal: terminalRef as ReturnType<typeof useTerminal>['terminal'],
       });
 
@@ -179,6 +187,7 @@ describe('TerminalView', () => {
         error: null,
         reconnect: mockReconnect,
         search: mockSearch,
+        sendInput: mockSendInput,
         terminal: nullRef as ReturnType<typeof useTerminal>['terminal'],
       });
 
@@ -186,6 +195,30 @@ describe('TerminalView', () => {
       render(<TerminalView ref={ref} sessionId="session-1" />);
 
       expect(ref.current!.getTerminal()).toBeNull();
+    });
+
+    it('should expose focus() which delegates to terminal.focus()', () => {
+      const fakeTerminal = {
+        focus: vi.fn(),
+        buffer: { active: { getLine: vi.fn() } },
+      } as unknown;
+      const terminalRef = { current: fakeTerminal };
+      vi.mocked(useTerminal).mockReturnValue({
+        isConnected: false,
+        error: null,
+        reconnect: mockReconnect,
+        search: mockSearch,
+        sendInput: mockSendInput,
+        terminal: terminalRef as ReturnType<typeof useTerminal>['terminal'],
+      });
+
+      const ref = createRef<TerminalViewHandle>();
+      render(<TerminalView ref={ref} sessionId="test-session" />);
+
+      expect(ref.current).not.toBeNull();
+      ref.current!.focus();
+
+      expect((fakeTerminal as { focus: ReturnType<typeof vi.fn> }).focus).toHaveBeenCalled();
     });
   });
 });
