@@ -30,11 +30,11 @@ Sessions are backed by tmux. Close your browser, shut your laptop, come back tom
 
 ### Encrypted Server Profiles
 
-Save your SSH connection details once. Credentials are encrypted at rest with AES-256-GCM. No more copying keys between machines or keeping a notes file with hostnames and ports.
+Save your SSH connection details once. Credentials are encrypted at rest with AES-256-GCM. No more copying keys between machines or keeping a notes file with hostnames and ports. Profiles can be color-coded for quick visual identification — the chosen color appears as a chip in the toolbar, session cards, and profile list.
 
 ### Multi-Device Access
 
-ShellKeep runs in the browser. Open it on your workstation, your laptop, your phone. Every session, every server profile, every piece of terminal output — always in sync, always accessible.
+ShellKeep runs in the browser. Open it on your workstation, your laptop, your phone. Every session, every server profile, every piece of terminal output — always in sync, always accessible. ShellKeep is also a Progressive Web App — install it on desktop or mobile for native-like access without opening a browser tab.
 
 ### Dashboard with Quick Connect
 
@@ -59,7 +59,7 @@ Powered by xterm.js. Handles color output, cursor movement, wide characters, and
 
 #### Session Lifecycle
 
-Sessions are tracked as `active`, `detached`, or `terminated`. An idle session is automatically detached after 1 hour; a detached session is terminated after 12 hours. Clipboard images and other storage objects uploaded through the terminal are automatically deleted after 24 hours by a daily cleanup job (runs at 9:00 AM UTC).
+Sessions are tracked as `active`, `detached`, or `terminated`. An idle session is automatically detached after 1 hour; a detached session is terminated after 12 hours. From the sessions page, you can select multiple sessions and terminate them in a single action. Clipboard images and other storage objects uploaded through the terminal are automatically deleted after 24 hours by a daily cleanup job (runs at 9:00 AM UTC).
 
 ### Device Authorization (RFC 8628)
 
