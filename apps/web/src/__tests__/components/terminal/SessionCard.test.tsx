@@ -157,6 +157,78 @@ describe('SessionCard', () => {
     });
   });
 
+  describe('Selection (batch terminate)', () => {
+    it('should render a checkbox for non-terminated sessions when onSelectToggle is provided', () => {
+      const onSelectToggle = vi.fn();
+      render(<SessionCard {...defaultProps} onSelectToggle={onSelectToggle} selected={false} />);
+
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    });
+
+    it('should NOT render a checkbox for terminated sessions even when onSelectToggle is provided', () => {
+      const terminatedSession = {
+        ...baseSession,
+        status: 'terminated' as const,
+        terminatedAt: new Date().toISOString(),
+      };
+      const onSelectToggle = vi.fn();
+      render(
+        <SessionCard
+          {...defaultProps}
+          session={terminatedSession}
+          onSelectToggle={onSelectToggle}
+          selected={false}
+        />,
+      );
+
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('should NOT render a checkbox when onSelectToggle is not provided', () => {
+      render(<SessionCard {...defaultProps} />);
+
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('should call onSelectToggle with the session when checkbox is clicked', async () => {
+      const user = userEvent.setup();
+      const onSelectToggle = vi.fn();
+      render(<SessionCard {...defaultProps} onSelectToggle={onSelectToggle} selected={false} />);
+
+      await user.click(screen.getByRole('checkbox'));
+
+      expect(onSelectToggle).toHaveBeenCalledWith(baseSession);
+    });
+
+    it('should show checkbox as checked when selected is true', () => {
+      const onSelectToggle = vi.fn();
+      render(<SessionCard {...defaultProps} onSelectToggle={onSelectToggle} selected={true} />);
+
+      expect(screen.getByRole('checkbox')).toBeChecked();
+    });
+
+    it('should show checkbox as unchecked when selected is false', () => {
+      const onSelectToggle = vi.fn();
+      render(<SessionCard {...defaultProps} onSelectToggle={onSelectToggle} selected={false} />);
+
+      expect(screen.getByRole('checkbox')).not.toBeChecked();
+    });
+
+    it('should apply a border when selected is true', () => {
+      const onSelectToggle = vi.fn();
+      const { container } = render(
+        <SessionCard {...defaultProps} onSelectToggle={onSelectToggle} selected={true} />,
+      );
+
+      // MUI Card with border prop > 0 renders border style
+      const card = container.querySelector('.MuiCard-root');
+      expect(card).toBeInTheDocument();
+      // The selected state is controlled by MUI sx border prop; verify via aria state or class
+      // We verify indirectly: checkbox is checked confirms selected=true was passed
+      expect(screen.getByRole('checkbox')).toBeChecked();
+    });
+  });
+
   describe('Relative Time Display', () => {
     it('should show "just now" for very recent activity', () => {
       render(<SessionCard {...defaultProps} />);

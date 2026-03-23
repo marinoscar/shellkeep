@@ -25,6 +25,7 @@ describe('SessionsController', () => {
       create: jest.fn(),
       update: jest.fn(),
       terminate: jest.fn(),
+      batchTerminate: jest.fn(),
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -146,6 +147,37 @@ describe('SessionsController', () => {
       );
 
       await expect(controller.terminate('missing-uuid', userId)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('batchTerminate', () => {
+    it('should call service with ids from dto and userId, and return result', async () => {
+      const ids = [sessionId, 'session-other-uuid'];
+      const dto = { ids } as any;
+      const serviceResult = { terminated: 2 };
+      mockSessionsService.batchTerminate.mockResolvedValue(serviceResult);
+
+      const result = await controller.batchTerminate(userId, dto);
+
+      expect(result).toEqual(serviceResult);
+      expect(mockSessionsService.batchTerminate).toHaveBeenCalledWith(ids, userId);
+    });
+
+    it('should return zero terminated when all sessions are already terminated', async () => {
+      const dto = { ids: [sessionId] } as any;
+      mockSessionsService.batchTerminate.mockResolvedValue({ terminated: 0 });
+
+      const result = await controller.batchTerminate(userId, dto);
+
+      expect(result).toEqual({ terminated: 0 });
+    });
+
+    it('should propagate service errors', async () => {
+      mockSessionsService.batchTerminate.mockRejectedValue(new Error('DB error'));
+
+      await expect(
+        controller.batchTerminate(userId, { ids: [sessionId] } as any),
+      ).rejects.toThrow('DB error');
     });
   });
 });

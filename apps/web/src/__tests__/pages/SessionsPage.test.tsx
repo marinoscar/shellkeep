@@ -9,6 +9,7 @@ const mockFetchSessions = vi.fn();
 const mockCreateNewSession = vi.fn();
 const mockRenameSession = vi.fn();
 const mockTerminateSession = vi.fn();
+const mockBatchTerminate = vi.fn();
 const mockSetStatusFilter = vi.fn();
 
 const defaultUseSessions = {
@@ -23,6 +24,7 @@ const defaultUseSessions = {
   createNewSession: mockCreateNewSession,
   renameSession: mockRenameSession,
   terminateSession: mockTerminateSession,
+  batchTerminate: mockBatchTerminate,
   setStatusFilter: mockSetStatusFilter,
 };
 
@@ -519,6 +521,281 @@ describe('SessionsPage', () => {
 
       // Navigation happens inside MemoryRouter - verify open button was actionable
       expect(screen.getByTestId('OpenInNewIcon').closest('button')!).toBeInTheDocument();
+    });
+  });
+
+  describe('Policy Alert', () => {
+    it('should show the session lifecycle policy Alert', () => {
+      render(<SessionsPage />);
+
+      expect(
+        screen.getByText(/sessions inactive for 1 hour are automatically marked as detached/i),
+      ).toBeInTheDocument();
+    });
+
+    it('should include detach and termination policy details in the Alert', () => {
+      render(<SessionsPage />);
+
+      expect(
+        screen.getByText(/detached sessions inactive for 12 hours are terminated/i),
+      ).toBeInTheDocument();
+    });
+
+    it('should mention 30 day removal policy for terminated sessions', () => {
+      render(<SessionsPage />);
+
+      expect(
+        screen.getByText(/terminated sessions are permanently removed after 30 days/i),
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe('Batch terminate – selection toolbar', () => {
+    it('should not show the action toolbar when no sessions are selected', () => {
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [makeSession()],
+      });
+
+      render(<SessionsPage />);
+
+      expect(
+        screen.queryByRole('button', { name: /terminate selected/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('should show the action toolbar with correct count after selecting a session', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [makeSession({ id: 'session-1', name: 'Session One' })],
+      });
+
+      render(<SessionsPage />);
+
+      await user.click(screen.getByRole('checkbox'));
+
+      expect(screen.getByText(/1 session selected/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /terminate selected/i })).toBeInTheDocument();
+    });
+
+    it('should show plural count in toolbar when multiple sessions are selected', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [
+          makeSession({ id: 'session-1', name: 'Session One' }),
+          makeSession({ id: 'session-2', name: 'Session Two' }),
+        ],
+      });
+
+      render(<SessionsPage />);
+
+      const checkboxes = screen.getAllByRole('checkbox');
+      await user.click(checkboxes[0]);
+      await user.click(checkboxes[1]);
+
+      expect(screen.getByText(/2 sessions selected/i)).toBeInTheDocument();
+    });
+
+    it('should clear selection when the Clear button is clicked', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [makeSession()],
+      });
+
+      render(<SessionsPage />);
+
+      await user.click(screen.getByRole('checkbox'));
+      expect(screen.getByText(/1 session selected/i)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /^clear$/i }));
+
+      expect(screen.queryByText(/session selected/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /terminate selected/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Batch terminate – confirmation dialog', () => {
+    it('should open the confirmation dialog when "Terminate Selected" is clicked', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [makeSession()],
+      });
+
+      render(<SessionsPage />);
+
+      await user.click(screen.getByRole('checkbox'));
+      await user.click(screen.getByRole('button', { name: /terminate selected/i }));
+
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByText(/terminate sessions/i)).toBeInTheDocument();
+    });
+
+    it('should show the correct session count in the confirmation dialog', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [
+          makeSession({ id: 'session-1' }),
+          makeSession({ id: 'session-2', name: 'Session Two' }),
+        ],
+      });
+
+      render(<SessionsPage />);
+
+      const checkboxes = screen.getAllByRole('checkbox');
+      await user.click(checkboxes[0]);
+      await user.click(checkboxes[1]);
+      await user.click(screen.getByRole('button', { name: /terminate selected/i }));
+
+      expect(
+        screen.getByText(/are you sure you want to terminate 2 sessions/i),
+      ).toBeInTheDocument();
+    });
+
+    it('should show singular "session" in dialog when only 1 is selected', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [makeSession()],
+      });
+
+      render(<SessionsPage />);
+
+      await user.click(screen.getByRole('checkbox'));
+      await user.click(screen.getByRole('button', { name: /terminate selected/i }));
+
+      // "1 session" not "1 sessions"
+      expect(
+        screen.getByText(/are you sure you want to terminate 1 session\b/i),
+      ).toBeInTheDocument();
+    });
+
+    it('should call batchTerminate and clear selection when confirmed', async () => {
+      const user = userEvent.setup();
+      mockBatchTerminate.mockResolvedValueOnce({ terminated: 1 });
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [makeSession({ id: 'session-1' })],
+        batchTerminate: mockBatchTerminate,
+      });
+
+      render(<SessionsPage />);
+
+      await user.click(screen.getByRole('checkbox'));
+      await user.click(screen.getByRole('button', { name: /terminate selected/i }));
+      await user.click(screen.getByRole('button', { name: /^terminate$/i }));
+
+      await waitFor(() => {
+        expect(mockBatchTerminate).toHaveBeenCalledWith(['session-1']);
+      });
+
+      // Toolbar must be gone because selection was cleared
+      await waitFor(() => {
+        expect(screen.queryByText(/session selected/i)).not.toBeInTheDocument();
+      });
+    });
+
+    it('should show success snackbar with terminated count after confirming', async () => {
+      const user = userEvent.setup();
+      mockBatchTerminate.mockResolvedValueOnce({ terminated: 2 });
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [
+          makeSession({ id: 'session-1' }),
+          makeSession({ id: 'session-2', name: 'Session Two' }),
+        ],
+        batchTerminate: mockBatchTerminate,
+      });
+
+      render(<SessionsPage />);
+
+      const checkboxes = screen.getAllByRole('checkbox');
+      await user.click(checkboxes[0]);
+      await user.click(checkboxes[1]);
+      await user.click(screen.getByRole('button', { name: /terminate selected/i }));
+      await user.click(screen.getByRole('button', { name: /^terminate$/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/2 sessions terminated/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should close the dialog without calling batchTerminate when Cancel is clicked', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [makeSession()],
+        batchTerminate: mockBatchTerminate,
+      });
+
+      render(<SessionsPage />);
+
+      await user.click(screen.getByRole('checkbox'));
+      await user.click(screen.getByRole('button', { name: /terminate selected/i }));
+      await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
+      expect(mockBatchTerminate).not.toHaveBeenCalled();
+    });
+
+    it('should show error snackbar when batchTerminate fails', async () => {
+      const user = userEvent.setup();
+      mockBatchTerminate.mockRejectedValueOnce(new Error('Network error'));
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [makeSession()],
+        batchTerminate: mockBatchTerminate,
+      });
+
+      render(<SessionsPage />);
+
+      await user.click(screen.getByRole('checkbox'));
+      await user.click(screen.getByRole('button', { name: /terminate selected/i }));
+      await user.click(screen.getByRole('button', { name: /^terminate$/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/failed to terminate sessions/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Batch terminate – tab change clears selection', () => {
+    it('should clear selection when the tab is changed', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(useSessions).mockReturnValue({
+        ...defaultUseSessions,
+        sessions: [makeSession()],
+      });
+
+      render(<SessionsPage />);
+
+      await user.click(screen.getByRole('checkbox'));
+      expect(screen.getByText(/1 session selected/i)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('tab', { name: /^active$/i }));
+
+      await waitFor(() => {
+        expect(screen.queryByText(/session selected/i)).not.toBeInTheDocument();
+      });
     });
   });
 });
