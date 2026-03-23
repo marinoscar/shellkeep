@@ -1,3 +1,5 @@
+[![CI](https://github.com/marinoscar/shellkeep/actions/workflows/ci.yml/badge.svg)](https://github.com/marinoscar/shellkeep/actions/workflows/ci.yml)
+
 # ShellKeep
 
 Your terminal sessions, alive and waiting, on every server, from any device.
