@@ -59,11 +59,15 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     ws.on('connect', () => {
       setIsConnected(true);
       setError(null);
-      // Send resize so tmux redraws the screen with the correct dimensions.
-      // This triggers tmux to repaint, showing the prompt without executing
-      // an extra command (sending \n would cause a double prompt).
+      // Force tmux to repaint by toggling dimensions.
+      // If the size matches what tmux already has, it won't redraw.
+      // Sending cols-1 first forces a size change, then the real
+      // size triggers a full repaint with correct dimensions.
       setTimeout(() => {
-        ws.resize(terminal.cols, terminal.rows);
+        ws.resize(terminal.cols - 1, terminal.rows);
+        setTimeout(() => {
+          ws.resize(terminal.cols, terminal.rows);
+        }, 50);
       }, 200);
     });
 
