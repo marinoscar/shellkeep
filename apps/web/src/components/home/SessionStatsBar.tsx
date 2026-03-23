@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Box, Chip } from '@mui/material';
+import { Box, Button, Chip } from '@mui/material';
 import {
   Terminal as TerminalIcon,
   PauseCircle as PauseIcon,
   Dns as DnsIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
 import { getSessions } from '../../services/api';
 import { getServerProfiles } from '../../services/api';
 
-export function SessionStatsBar() {
+interface SessionStatsBarProps {
+  onNewSession?: () => void;
+}
+
+export function SessionStatsBar({ onNewSession }: SessionStatsBarProps) {
   const [activeSessions, setActiveSessions] = useState(0);
   const [detachedSessions, setDetachedSessions] = useState(0);
   const [totalServers, setTotalServers] = useState(0);
@@ -31,7 +36,7 @@ export function SessionStatsBar() {
   }, []);
 
   return (
-    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3 }}>
+    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 3, alignItems: 'center' }}>
       <Chip
         icon={<TerminalIcon />}
         label={`${activeSessions} active session${activeSessions !== 1 ? 's' : ''}`}
@@ -49,6 +54,11 @@ export function SessionStatsBar() {
         label={`${totalServers} server${totalServers !== 1 ? 's' : ''}`}
         variant="outlined"
       />
+      {onNewSession && (
+        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={onNewSession}>
+          New Session
+        </Button>
+      )}
     </Box>
   );
 }
