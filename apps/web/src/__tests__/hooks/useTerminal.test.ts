@@ -231,7 +231,7 @@ describe('useTerminal', () => {
       act(() => { vi.advanceTimersByTime(200); });
 
       const term = getTerminalInstance();
-      expect(wsResizeFn).toHaveBeenCalledWith(term.cols, term.rows);
+      expect(wsResizeFn).toHaveBeenCalledWith(term.cols - 1, term.rows);
     });
 
     it('should send cols-1 resize first then real dimensions to force tmux repaint', () => {

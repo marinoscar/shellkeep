@@ -248,9 +248,9 @@ describe('TerminalPage', () => {
           read: vi.fn().mockResolvedValue([
             {
               types: ['text/plain'],
-              getType: vi.fn().mockResolvedValue(
-                new Blob(['hello world'], { type: 'text/plain' }),
-              ),
+              getType: vi.fn().mockResolvedValue({
+                text: vi.fn().mockResolvedValue('hello world'),
+              }),
             },
           ]),
           writeText: vi.fn(),
