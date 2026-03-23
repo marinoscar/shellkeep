@@ -54,7 +54,7 @@ export class SessionsService {
     ]);
 
     return {
-      items: items.map((item) => this.toResponse(item)),
+      items: items.map((item: any) => this.toResponse(item)),
       total,
       page,
       pageSize,
@@ -244,7 +244,7 @@ export class SessionsService {
       },
     });
 
-    return sessions.map((session) => this.toResponse(session));
+    return sessions.map((session: any) => this.toResponse(session));
   }
 
   /**

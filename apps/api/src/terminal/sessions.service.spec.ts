@@ -302,4 +302,64 @@ describe('SessionsService', () => {
       });
     });
   });
+
+  describe('batchTerminate', () => {
+    it('should call updateMany with correct where clause including userId, id in list, and status not terminated', async () => {
+      const ids = [mockSessionId, 'session-999'];
+      (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({
+        count: 2,
+      });
+
+      await service.batchTerminate(ids, mockUserId);
+
+      expect(prisma.terminalSession.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ids },
+          userId: mockUserId,
+          status: { not: 'terminated' },
+        },
+        data: {
+          status: 'terminated',
+          terminatedAt: expect.any(Date),
+        },
+      });
+    });
+
+    it('should return the count of terminated sessions', async () => {
+      const ids = [mockSessionId, 'session-999'];
+      (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({
+        count: 2,
+      });
+
+      const result = await service.batchTerminate(ids, mockUserId);
+
+      expect(result).toEqual({ terminated: 2 });
+    });
+
+    it('should return zero when all requested sessions are already terminated', async () => {
+      const ids = [mockSessionId];
+      (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({
+        count: 0,
+      });
+
+      const result = await service.batchTerminate(ids, mockUserId);
+
+      expect(result).toEqual({ terminated: 0 });
+    });
+
+    it('should only terminate sessions owned by the requesting user', async () => {
+      const ids = [mockSessionId];
+      (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({
+        count: 1,
+      });
+
+      await service.batchTerminate(ids, mockUserId);
+
+      expect(prisma.terminalSession.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: mockUserId }),
+        }),
+      );
+    });
+  });
 });
