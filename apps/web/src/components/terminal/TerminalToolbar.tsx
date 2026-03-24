@@ -93,6 +93,9 @@ export function TerminalToolbar({
         bgcolor: theme.palette.background.paper,
         borderBottom: `1px solid ${theme.palette.divider}`,
         minHeight: 48,
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
       }}
     >
       {/* Left: Session name + connection status */}

@@ -148,6 +148,9 @@ export default function TerminalFullPage() {
           bgcolor: '#252525',
           borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
           minHeight: 40,
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
         }}
       >
         <Tooltip title="Back to sessions">

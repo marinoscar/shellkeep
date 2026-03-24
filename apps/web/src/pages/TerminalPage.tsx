@@ -161,7 +161,7 @@ export default function TerminalPage() {
       overflow: 'hidden',
     }}>
       {/* Back button + Toolbar */}
-      <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10, bgcolor: 'background.default' }}>
         <Tooltip title="Back to sessions">
           <IconButton onClick={() => navigate('/sessions')} sx={{ ml: 1 }}>
             <ArrowBackIcon />
