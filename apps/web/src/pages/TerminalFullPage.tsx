@@ -228,7 +228,7 @@ export default function TerminalFullPage() {
       </Box>
 
       {/* Terminal fills remaining space */}
-      <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+      <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden', pb: '30px' }}>
         <TerminalView
           ref={terminalViewRef}
           sessionId={id}
