@@ -72,6 +72,30 @@ Key implementation details:
 
 The synthetic `WheelEvent` dispatched by the hook follows the same path as a real wheel event, so tmux mouse mode (`set-option mouse on`) remains the mechanism that performs the actual scrollback. Touch scrolling does not introduce a separate scroll path; it only provides the missing event translation layer between the touch API and the wheel API that xterm.js already handles.
 
+## Tablet Hardening
+
+The following changes landed together to improve reliability on tablet (primarily iPad/WebKit) where layout and input assumptions differ from desktop browsers.
+
+### Floating scroll buttons
+
+A floating up/down button pair renders in the bottom-right corner of the terminal when the per-user setting `terminal.showScrollButtons` is `true` (the default). Tapping a button sends one synthetic `WheelEvent`; holding the button begins continuous scroll after a 300 ms initial delay, repeating at ~70 ms intervals. The toolbar exposes an unfold-more/unfold-less icon to toggle the buttons; the choice persists in user settings across sessions.
+
+Implemented in `apps/web/src/components/terminal/TerminalScrollButtons.tsx`. The component calls the same `dispatchXtermScroll` helper at `apps/web/src/utils/dispatchXtermScroll.ts` that `useTouchScroll` uses, so both paths share the same synthetic-WheelEvent dispatch and go through xterm.js's existing `handleWheel` method.
+
+### xterm metrics pinned
+
+`apps/web/src/hooks/useTerminal.ts` now sets `letterSpacing: 0` and `lineHeight: 1` explicitly on initialization. WebKit's default font metrics differ subtly from what xterm.js's row-height math assumes; leaving these at browser defaults caused per-cell positioning to drift on tablet, with the caret visibly offset from the rendered glyph. Pinning both values makes the measurements deterministic across engines.
+
+### Debounced ResizeObserver fit
+
+The ResizeObserver callback in `useTerminal.ts` now debounces `fitAddon.fit()` calls by ~100 ms. On tablet, showing or hiding the virtual keyboard produces a rapid burst of resize events as the viewport height animates. Calling `fit()` mid-burst recalculated row count against an intermediate height, producing pixel-level row desync. Debouncing absorbs the burst and calls `fit()` once after layout settles.
+
+### Bottom gutter moved outside the FitAddon host
+
+`TerminalPage.tsx` and `TerminalFullPage.tsx` previously applied `pb: '30px'` to the terminal wrapper Box. Because FitAddon measures `clientHeight` of its host element, that padding was included in the height used to compute row count, leaving 30 px of space that xterm.js allocated rows into but the visible glyph area never reached. The result was sub-pixel row drift visible as a cursor-glyph mismatch.
+
+The gutter is now a sibling `<Box sx={{ height: '30px', flexShrink: 0 }} />` rendered below the terminal container, so the FitAddon-measured host height equals the actual glyph area.
+
 ## Common Pitfalls
 
 **Never add `overflow: hidden` to the xterm container or its immediate parent.**
