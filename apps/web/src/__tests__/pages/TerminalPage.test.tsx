@@ -22,7 +22,22 @@ vi.mock('../../services/api', () => ({
   uploadFile: vi.fn(),
   getDownloadUrl: vi.fn(),
   createSession: vi.fn(),
+  downloadSessionHistory: vi.fn(),
   api: { getAccessToken: vi.fn(() => 'mock-token') },
+}));
+
+// Mock useUserSettings to avoid API calls in page tests
+vi.mock('../../hooks/useUserSettings', () => ({
+  useUserSettings: vi.fn(() => ({
+    settings: { terminal: { showScrollButtons: true } },
+    isLoading: false,
+    error: null,
+    isSaving: false,
+    updateSettings: vi.fn().mockResolvedValue(undefined),
+    updateTheme: vi.fn().mockResolvedValue(undefined),
+    updateProfile: vi.fn().mockResolvedValue(undefined),
+    refresh: vi.fn().mockResolvedValue(undefined),
+  })),
 }));
 
 // Shared mocks for the TerminalView imperative handle

@@ -7,6 +7,8 @@ import {
   Download as DownloadIcon,
   ContentPaste as PasteIcon,
   AddCircleOutline as NewSessionIcon,
+  UnfoldMore as UnfoldMoreIcon,
+  UnfoldLess as UnfoldLessIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { TerminalView } from '../components/terminal/TerminalView';
@@ -14,6 +16,7 @@ import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
 import { getSession, uploadFile, getDownloadUrl, createSession, downloadSessionHistory } from '../services/api';
 import type { TerminalSession, CreateSessionData } from '../types';
+import { useUserSettings } from '../hooks/useUserSettings';
 
 export default function TerminalFullPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +27,12 @@ export default function TerminalFullPage() {
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'info' });
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const { settings, updateSettings } = useUserSettings();
+  const showScrollButtons = settings?.terminal?.showScrollButtons ?? true;
+
+  const handleToggleScrollButtons = useCallback(() => {
+    updateSettings({ terminal: { showScrollButtons: !showScrollButtons } });
+  }, [showScrollButtons, updateSettings]);
 
   useEffect(() => {
     if (id) {
@@ -186,6 +195,16 @@ export default function TerminalFullPage() {
           {session.name} - {session.serverProfile.username}@{session.serverProfile.hostname}
         </Typography>
 
+        <Tooltip title={showScrollButtons ? 'Hide scroll buttons' : 'Show scroll buttons'}>
+          <IconButton
+            size="small"
+            onClick={handleToggleScrollButtons}
+            aria-label="Toggle scroll buttons"
+            sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
+          >
+            {showScrollButtons ? <UnfoldLessIcon fontSize="small" /> : <UnfoldMoreIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Paste from clipboard">
           <IconButton
             size="small"
@@ -233,6 +252,7 @@ export default function TerminalFullPage() {
           ref={terminalViewRef}
           sessionId={id}
           onConnectionChange={handleConnectionChange}
+          showScrollButtons={showScrollButtons}
         />
       </Box>
 

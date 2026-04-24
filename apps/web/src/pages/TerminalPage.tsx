@@ -8,6 +8,7 @@ import { TerminalToolbar } from '../components/terminal/TerminalToolbar';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
 import { getSession, updateSession, uploadFile, getDownloadUrl, createSession, downloadSessionHistory } from '../services/api';
 import type { TerminalSession, CreateSessionData } from '../types';
+import { useUserSettings } from '../hooks/useUserSettings';
 
 export default function TerminalPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +19,12 @@ export default function TerminalPage() {
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'info' });
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const { settings, updateSettings } = useUserSettings();
+  const showScrollButtons = settings?.terminal?.showScrollButtons ?? true;
+
+  const handleToggleScrollButtons = useCallback(() => {
+    updateSettings({ terminal: { showScrollButtons: !showScrollButtons } });
+  }, [showScrollButtons, updateSettings]);
 
   useEffect(() => {
     if (id) {
@@ -174,6 +181,8 @@ export default function TerminalPage() {
             onOpenNewTab={handleOpenNewTab}
             onDisconnect={handleDisconnect}
             onRename={handleRename}
+            showScrollButtons={showScrollButtons}
+            onToggleScrollButtons={handleToggleScrollButtons}
             onCopyAll={handleCopyAll}
             onDownload={handleDownload}
             isDownloading={isDownloading}
@@ -191,6 +200,7 @@ export default function TerminalPage() {
           ref={terminalViewRef}
           sessionId={id}
           onConnectionChange={handleConnectionChange}
+          showScrollButtons={showScrollButtons}
         />
       </Box>
 

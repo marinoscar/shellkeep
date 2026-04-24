@@ -21,6 +21,8 @@ import {
   Download as DownloadIcon,
   ContentPaste as PasteIcon,
   AddCircleOutline as NewSessionIcon,
+  UnfoldMore as UnfoldMoreIcon,
+  UnfoldLess as UnfoldLessIcon,
 } from '@mui/icons-material';
 
 interface TerminalToolbarProps {
@@ -29,6 +31,8 @@ interface TerminalToolbarProps {
   onOpenNewTab: () => void;
   onDisconnect: () => void;
   onRename: (newName: string) => void;
+  showScrollButtons: boolean;
+  onToggleScrollButtons: () => void;
   onCopyAll?: () => void;
   onDownload?: () => void;
   isDownloading?: boolean;
@@ -44,6 +48,8 @@ export function TerminalToolbar({
   onOpenNewTab,
   onDisconnect,
   onRename,
+  showScrollButtons,
+  onToggleScrollButtons,
   onCopyAll,
   onDownload,
   isDownloading,
@@ -153,6 +159,11 @@ export function TerminalToolbar({
 
       {/* Right: Actions */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Tooltip title={showScrollButtons ? 'Hide scroll buttons' : 'Show scroll buttons'}>
+          <IconButton size="small" onClick={onToggleScrollButtons} aria-label="Toggle scroll buttons">
+            {showScrollButtons ? <UnfoldLessIcon fontSize="small" /> : <UnfoldMoreIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
         {onPaste && (
           <Tooltip title="Paste from clipboard">
             <IconButton size="small" onClick={onPaste}>

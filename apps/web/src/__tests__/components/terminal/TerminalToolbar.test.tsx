@@ -10,6 +10,8 @@ const defaultProps = {
   onOpenNewTab: vi.fn(),
   onDisconnect: vi.fn(),
   onRename: vi.fn(),
+  showScrollButtons: false,
+  onToggleScrollButtons: vi.fn(),
 };
 
 describe('TerminalToolbar', () => {
