@@ -134,6 +134,57 @@ describe('TerminalToolbar', () => {
     });
   });
 
+  describe('Scroll-buttons toggle', () => {
+    it('should render a toggle button with aria-label "Toggle scroll buttons"', () => {
+      render(<TerminalToolbar {...defaultProps} showScrollButtons={false} />);
+
+      expect(
+        screen.getByRole('button', { name: /toggle scroll buttons/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('when showScrollButtons is false, tooltip says "Show scroll buttons" and click invokes onToggleScrollButtons once', async () => {
+      const onToggleScrollButtons = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <TerminalToolbar
+          {...defaultProps}
+          showScrollButtons={false}
+          onToggleScrollButtons={onToggleScrollButtons}
+        />,
+      );
+
+      const toggleBtn = screen.getByRole('button', { name: /toggle scroll buttons/i });
+
+      // Hover to reveal tooltip
+      await user.hover(toggleBtn);
+      expect(await screen.findByText('Show scroll buttons')).toBeInTheDocument();
+
+      await user.click(toggleBtn);
+      expect(onToggleScrollButtons).toHaveBeenCalledTimes(1);
+    });
+
+    it('when showScrollButtons is true, tooltip says "Hide scroll buttons" and click invokes onToggleScrollButtons once', async () => {
+      const onToggleScrollButtons = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <TerminalToolbar
+          {...defaultProps}
+          showScrollButtons={true}
+          onToggleScrollButtons={onToggleScrollButtons}
+        />,
+      );
+
+      const toggleBtn = screen.getByRole('button', { name: /toggle scroll buttons/i });
+
+      await user.hover(toggleBtn);
+      expect(await screen.findByText('Hide scroll buttons')).toBeInTheDocument();
+
+      await user.click(toggleBtn);
+      expect(onToggleScrollButtons).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Rename editing', () => {
     it('should switch to editing mode when rename button is clicked', async () => {
       const user = userEvent.setup();
