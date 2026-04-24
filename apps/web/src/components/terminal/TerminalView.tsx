@@ -2,6 +2,7 @@ import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Box } from '@mui/material';
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTouchScroll } from '../../hooks/useTouchScroll';
+import { TerminalScrollButtons } from './TerminalScrollButtons';
 import type { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 
@@ -15,10 +16,11 @@ interface TerminalViewProps {
   sessionId: string;
   onConnectionChange?: (connected: boolean) => void;
   onError?: (error: string) => void;
+  showScrollButtons?: boolean;
 }
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
-  function TerminalView({ sessionId, onConnectionChange, onError }, ref) {
+  function TerminalView({ sessionId, onConnectionChange, onError, showScrollButtons = false }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { isConnected, error, terminal, sendInput } = useTerminal(sessionId, containerRef);
   useTouchScroll(containerRef);
@@ -43,18 +45,27 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
 
   return (
     <Box
-      ref={containerRef}
       sx={{
+        position: 'relative',
         width: '100%',
         height: '100%',
-        bgcolor: '#1e1e1e',
-        touchAction: 'none',
-        '& .xterm': {
-          height: '100%',
-          padding: '4px',
-          boxSizing: 'border-box',
-        },
       }}
-    />
+    >
+      <Box
+        ref={containerRef}
+        sx={{
+          width: '100%',
+          height: '100%',
+          bgcolor: '#1e1e1e',
+          touchAction: 'none',
+          '& .xterm': {
+            height: '100%',
+            padding: '4px',
+            boxSizing: 'border-box',
+          },
+        }}
+      />
+      <TerminalScrollButtons containerRef={containerRef} visible={showScrollButtons} />
+    </Box>
   );
 });
