@@ -28,6 +28,8 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
       cursorBlink: true,
       fontSize: 14,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      letterSpacing: 0,
+      lineHeight: 1,
       theme: {
         background: '#1e1e1e',
         foreground: '#d4d4d4',
@@ -102,15 +104,21 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
 
     // ResizeObserver for terminal fitting
     const container = containerRef.current;
+    let fitTimer: ReturnType<typeof setTimeout> | null = null;
     const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit();
-      if (ws.connected) {
-        ws.resize(terminal.cols, terminal.rows);
-      }
+      if (fitTimer !== null) clearTimeout(fitTimer);
+      fitTimer = setTimeout(() => {
+        fitAddon.fit();
+        if (ws.connected) {
+          ws.resize(terminal.cols, terminal.rows);
+        }
+        fitTimer = null;
+      }, 100);
     });
     resizeObserver.observe(container);
 
     return () => {
+      if (fitTimer !== null) clearTimeout(fitTimer);
       resizeObserver.disconnect();
       ws.disconnect();
       terminal.dispose();

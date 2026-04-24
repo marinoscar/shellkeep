@@ -195,13 +195,16 @@ export default function TerminalPage() {
       </Box>
 
       {/* Terminal */}
-      <Box sx={{ flexGrow: 1, minHeight: 0, pb: '30px' }}>
-        <TerminalView
-          ref={terminalViewRef}
-          sessionId={id}
-          onConnectionChange={handleConnectionChange}
-          showScrollButtons={showScrollButtons}
-        />
+      <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ flex: 1, minHeight: 0 }}>
+          <TerminalView
+            ref={terminalViewRef}
+            sessionId={id}
+            onConnectionChange={handleConnectionChange}
+            showScrollButtons={showScrollButtons}
+          />
+        </Box>
+        <Box sx={{ height: '30px', flexShrink: 0 }} aria-hidden />
       </Box>
 
       <NewSessionDialog

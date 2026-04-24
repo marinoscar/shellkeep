@@ -247,13 +247,16 @@ export default function TerminalFullPage() {
       </Box>
 
       {/* Terminal fills remaining space */}
-      <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden', pb: '30px' }}>
-        <TerminalView
-          ref={terminalViewRef}
-          sessionId={id}
-          onConnectionChange={handleConnectionChange}
-          showScrollButtons={showScrollButtons}
-        />
+      <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ flex: 1, minHeight: 0 }}>
+          <TerminalView
+            ref={terminalViewRef}
+            sessionId={id}
+            onConnectionChange={handleConnectionChange}
+            showScrollButtons={showScrollButtons}
+          />
+        </Box>
+        <Box sx={{ height: '30px', flexShrink: 0 }} aria-hidden />
       </Box>
 
       <NewSessionDialog
