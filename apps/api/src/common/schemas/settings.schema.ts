@@ -11,6 +11,7 @@ export const userSettingsSchema = z.object({
     useProviderImage: z.boolean(),
     customImageUrl: z.string().url().nullable().optional(),
   }),
+  terminal: z.object({ showScrollButtons: z.boolean() }).optional(),
 });
 
 export type UserSettingsDto = z.infer<typeof userSettingsSchema>;

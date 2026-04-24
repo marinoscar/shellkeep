@@ -12,6 +12,9 @@ export interface UserSettingsValue {
     useProviderImage: boolean;
     customImageUrl?: string | null;
   };
+  terminal?: {
+    showScrollButtons: boolean;
+  };
 }
 
 /**
@@ -33,6 +36,9 @@ export const DEFAULT_USER_SETTINGS: UserSettingsValue = {
   theme: 'system',
   profile: {
     useProviderImage: true,
+  },
+  terminal: {
+    showScrollButtons: true,
   },
 };
 

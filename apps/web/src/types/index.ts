@@ -20,6 +20,9 @@ export interface UserSettings {
     useProviderImage: boolean;
     customImageUrl?: string | null;
   };
+  terminal?: {
+    showScrollButtons: boolean;
+  };
   updatedAt: string;
   version: number;
 }
