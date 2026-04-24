@@ -1,4 +1,5 @@
 import { type RefObject, useEffect } from 'react';
+import { dispatchXtermScroll } from '../utils/dispatchXtermScroll';
 
 /**
  * Converts touch swipe gestures into synthetic WheelEvents for xterm.js terminal
@@ -26,18 +27,7 @@ export function useTouchScroll(containerRef: RefObject<HTMLDivElement | null>): 
       if (Math.abs(deltaY) < 2) return;
 
       const touch = e.touches[0];
-      const viewport = container.querySelector('.xterm-viewport');
-      if (viewport) {
-        const wheelEvent = new WheelEvent('wheel', {
-          deltaY: deltaY * 2.0,
-          deltaMode: WheelEvent.DOM_DELTA_PIXEL,
-          clientX: touch.clientX,
-          clientY: touch.clientY,
-          bubbles: true,
-          cancelable: true,
-        });
-        viewport.dispatchEvent(wheelEvent);
-      }
+      dispatchXtermScroll(container, deltaY * 2.0, { clientX: touch.clientX, clientY: touch.clientY });
 
       e.preventDefault();
       previousY = currentY;
