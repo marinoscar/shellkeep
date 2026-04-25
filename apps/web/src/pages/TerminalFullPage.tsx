@@ -64,7 +64,9 @@ export default function TerminalFullPage() {
   }, []);
 
   const handleCopyAll = useCallback(() => {
-    const text = getTerminalText();
+    const terminal = terminalViewRef.current?.getTerminal();
+    const selection = terminal?.hasSelection() ? terminal.getSelection() : '';
+    const text = selection || getTerminalText();
     if (text) {
       navigator.clipboard.writeText(text);
     }
@@ -214,7 +216,7 @@ export default function TerminalFullPage() {
             <PasteIcon fontSize="small" />
           </IconButton>
         </Tooltip>
-        <Tooltip title="Copy terminal output">
+        <Tooltip title="Copy selection (or all if none selected)">
           <IconButton
             size="small"
             onClick={handleCopyAll}

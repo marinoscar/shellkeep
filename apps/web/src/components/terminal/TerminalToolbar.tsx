@@ -172,7 +172,7 @@ export function TerminalToolbar({
           </Tooltip>
         )}
         {onCopyAll && (
-          <Tooltip title="Copy terminal output">
+          <Tooltip title="Copy selection (or all if none selected)">
             <IconButton size="small" onClick={onCopyAll}>
               <CopyIcon fontSize="small" />
             </IconButton>
