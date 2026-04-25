@@ -45,6 +45,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
 
   return (
     <Box
+      onContextMenu={(e) => e.preventDefault()}
       sx={{
         position: 'relative',
         width: '100%',
