@@ -86,14 +86,13 @@ export function TerminalScrollButtons({ containerRef, visible }: TerminalScrollB
     >
       <Fab
         size="small"
-        color="default"
+        color="primary"
         aria-label="Scroll up"
         sx={{
           width: 44,
           height: 44,
-          bgcolor: 'background.paper',
-          opacity: 0.75,
-          '&:hover': { opacity: 1 },
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(255, 255, 255, 0.08)',
+          '&:hover': { filter: 'brightness(1.15)' },
         }}
         onPointerDown={onUpPointerDown}
         onPointerUp={onUpPointerEnd}
@@ -104,14 +103,13 @@ export function TerminalScrollButtons({ containerRef, visible }: TerminalScrollB
       </Fab>
       <Fab
         size="small"
-        color="default"
+        color="primary"
         aria-label="Scroll down"
         sx={{
           width: 44,
           height: 44,
-          bgcolor: 'background.paper',
-          opacity: 0.75,
-          '&:hover': { opacity: 1 },
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(255, 255, 255, 0.08)',
+          '&:hover': { filter: 'brightness(1.15)' },
         }}
         onPointerDown={onDownPointerDown}
         onPointerUp={onDownPointerEnd}
