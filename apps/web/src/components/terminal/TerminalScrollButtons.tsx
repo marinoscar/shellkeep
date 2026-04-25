@@ -75,12 +75,12 @@ export function TerminalScrollButtons({ containerRef, visible }: TerminalScrollB
       sx={{
         position: 'absolute',
         right: 12,
-        bottom: 12,
+        top: '50%',
+        transform: 'translateY(-50%)',
         zIndex: 5,
         display: 'flex',
         flexDirection: 'column',
         gap: 1,
-        paddingBottom: 'env(safe-area-inset-bottom)',
         paddingRight: 'env(safe-area-inset-right)',
       }}
     >
