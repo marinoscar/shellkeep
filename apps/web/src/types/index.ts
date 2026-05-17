@@ -2,6 +2,38 @@ export interface Role {
   name: string;
 }
 
+// =============================================================================
+// Key Shortcuts
+// =============================================================================
+
+/**
+ * Canonical base-key identifiers. Mirrors KEY_SHORTCUT_BASE_KEYS in
+ * apps/api/src/common/schemas/settings.schema.ts — keep in sync.
+ */
+export const KEY_SHORTCUT_BASE_KEYS = [
+  'Escape', 'Tab', 'Enter', 'Backspace', 'Space',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'Home', 'End', 'PageUp', 'PageDown', 'Insert', 'Delete',
+  'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
+  'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+  'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+  '`', '-', '=', '[', ']', '\\', ';', "'", ',', '.', '/',
+] as const;
+
+export type KeyShortcutModifier = 'ctrl' | 'shift' | 'alt' | 'meta';
+
+export interface Keystroke {
+  modifiers: KeyShortcutModifier[];
+  key: (typeof KEY_SHORTCUT_BASE_KEYS)[number];
+}
+
+export interface KeyShortcut {
+  id: string;
+  label: string;
+  keystrokes: Keystroke[];
+}
+
 export interface User {
   id: string;
   email: string;
@@ -22,6 +54,7 @@ export interface UserSettings {
   };
   terminal?: {
     showScrollButtons: boolean;
+    keyShortcuts?: KeyShortcut[];
   };
   updatedAt: string;
   version: number;
