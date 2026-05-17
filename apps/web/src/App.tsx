@@ -21,6 +21,7 @@ const ServerProfilesPage = lazy(() => import('./pages/ServerProfilesPage'));
 const SessionsPage = lazy(() => import('./pages/SessionsPage'));
 const TerminalPage = lazy(() => import('./pages/TerminalPage'));
 const TerminalFullPage = lazy(() => import('./pages/TerminalFullPage'));
+const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
 
 // Test login page (development only)
 const TestLoginPage = import.meta.env.PROD
@@ -58,6 +59,7 @@ function AppRoutes() {
                 <Route path="/sessions" element={<SessionsPage />} />
                 <Route path="/sessions/:id/terminal" element={<TerminalPage />} />
                 <Route path="/servers" element={<ServerProfilesPage />} />
+                <Route path="/settings" element={<UserSettingsPage />} />
                 <Route path="/admin/users" element={<UserManagementPage />} />
               </Route>
             </Route>
