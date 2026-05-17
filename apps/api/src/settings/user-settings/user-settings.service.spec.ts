@@ -8,6 +8,7 @@ import {
 } from '../../../test/mocks/prisma.mock';
 import {
   DEFAULT_USER_SETTINGS,
+  DEFAULT_KEY_SHORTCUTS,
   UserSettingsValue,
 } from '../../common/types/settings.types';
 
@@ -79,9 +80,105 @@ describe('UserSettingsService', () => {
         },
       });
     });
+
+    // -----------------------------------------------------------------------
+    // keyShortcuts defaults-merging behaviour
+    // -----------------------------------------------------------------------
+
+    it('should return DEFAULT_KEY_SHORTCUTS when stored settings have no terminal field', async () => {
+      const storedWithoutTerminal: UserSettingsValue = {
+        theme: 'system',
+        profile: { useProviderImage: true },
+        // terminal is intentionally absent
+      };
+
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        ...mockUserSettings,
+        value: storedWithoutTerminal as any,
+      });
+
+      const result = await service.getSettings(mockUserId);
+
+      expect(result.terminal?.keyShortcuts).toEqual(DEFAULT_KEY_SHORTCUTS);
+    });
+
+    it('should preserve showScrollButtons and fill keyShortcuts when terminal exists but keyShortcuts is absent', async () => {
+      const storedWithScrollOnly: UserSettingsValue = {
+        theme: 'dark',
+        profile: { useProviderImage: false },
+        terminal: { showScrollButtons: false },
+        // keyShortcuts absent
+      };
+
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        ...mockUserSettings,
+        value: storedWithScrollOnly as any,
+      });
+
+      const result = await service.getSettings(mockUserId);
+
+      expect(result.terminal?.showScrollButtons).toBe(false);
+      expect(result.terminal?.keyShortcuts).toEqual(DEFAULT_KEY_SHORTCUTS);
+    });
+
+    it('should return custom keyShortcuts unchanged when stored settings include them', async () => {
+      const customShortcut = {
+        id: '22222222-2222-4222-8222-222222222201',
+        label: 'Custom',
+        keystrokes: [{ modifiers: ['ctrl' as const], key: 'z' as const }],
+      };
+
+      const storedWithCustom: UserSettingsValue = {
+        theme: 'light',
+        profile: { useProviderImage: true },
+        terminal: {
+          showScrollButtons: true,
+          keyShortcuts: [customShortcut],
+        },
+      };
+
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        ...mockUserSettings,
+        value: storedWithCustom as any,
+      });
+
+      const result = await service.getSettings(mockUserId);
+
+      expect(result.terminal?.keyShortcuts).toEqual([customShortcut]);
+    });
   });
 
   describe('replaceSettings (PUT)', () => {
+    it('should replace user settings including keyShortcuts', async () => {
+      const customShortcut = {
+        id: '33333333-3333-4333-8333-333333333301',
+        label: 'My Key',
+        keystrokes: [{ modifiers: ['ctrl' as const], key: 'k' as const }],
+      };
+
+      const newSettings: UserSettingsValue = {
+        theme: 'dark',
+        profile: { useProviderImage: true },
+        terminal: {
+          showScrollButtons: true,
+          keyShortcuts: [customShortcut],
+        },
+      };
+
+      mockPrisma.userSettings.upsert.mockResolvedValue({
+        ...mockUserSettings,
+        value: newSettings as any,
+        version: 2,
+      } as any);
+
+      mockPrisma.user.update.mockResolvedValue({} as any);
+
+      const result = await service.replaceSettings(mockUserId, newSettings);
+
+      expect(result.terminal?.keyShortcuts).toEqual([customShortcut]);
+      expect(result.version).toBe(2);
+    });
+
     it('should replace user settings', async () => {
       const newSettings: UserSettingsValue = {
         theme: 'dark',
@@ -320,6 +417,38 @@ describe('UserSettingsService', () => {
         where: { id: mockUserId },
         data: { displayName: 'Patched Name' },
       });
+    });
+
+    it('should patch terminal.keyShortcuts and persist the new list', async () => {
+      const newShortcut: import('../../common/types/settings.types').KeyShortcut = {
+        id: '44444444-4444-4444-8444-444444444401',
+        label: 'New',
+        keystrokes: [{ modifiers: [], key: 'F1' }],
+      };
+
+      const updatedValue: UserSettingsValue = {
+        theme: DEFAULT_USER_SETTINGS.theme,
+        profile: DEFAULT_USER_SETTINGS.profile,
+        terminal: {
+          showScrollButtons: true,
+          keyShortcuts: [newShortcut],
+        },
+      };
+
+      mockPrisma.userSettings.update.mockResolvedValue({
+        ...mockUserSettings,
+        value: updatedValue as any,
+        version: 2,
+      } as any);
+
+      mockPrisma.user.update.mockResolvedValue({} as any);
+
+      const result = await service.patchSettings(mockUserId, {
+        terminal: { keyShortcuts: [newShortcut] },
+      });
+
+      expect(result.terminal?.keyShortcuts).toEqual([newShortcut]);
+      expect(result.version).toBe(2);
     });
 
     it('should throw ConflictException on version mismatch', async () => {
