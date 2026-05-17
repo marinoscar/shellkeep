@@ -8,6 +8,7 @@ import {
 import { useState } from 'react';
 import { ThemeSettings } from '../components/settings/ThemeSettings';
 import { ProfileSettings } from '../components/settings/ProfileSettings';
+import { KeyShortcutsSettings } from '../components/settings/KeyShortcutsSettings';
 import { useUserSettings } from '../hooks/useUserSettings';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 
@@ -79,6 +80,9 @@ export default function UserSettingsPage() {
               onSave={handleProfileSave}
               disabled={isSaving}
             />
+
+            {/* Key Shortcuts Settings */}
+            <KeyShortcutsSettings disabled={isSaving} />
           </Box>
         )}
 
