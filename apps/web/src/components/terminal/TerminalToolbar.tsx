@@ -23,6 +23,7 @@ import {
   AddCircleOutline as NewSessionIcon,
   UnfoldMore as UnfoldMoreIcon,
   UnfoldLess as UnfoldLessIcon,
+  Keyboard as KeyboardIcon,
 } from '@mui/icons-material';
 
 interface TerminalToolbarProps {
@@ -40,6 +41,8 @@ interface TerminalToolbarProps {
   onNewSession?: () => void;
   serverProfileName?: string;
   serverProfileColor?: ServerProfileColor;
+  keyShortcutsOpen?: boolean;
+  onToggleKeyShortcuts?: () => void;
 }
 
 export function TerminalToolbar({
@@ -57,6 +60,8 @@ export function TerminalToolbar({
   onNewSession,
   serverProfileName,
   serverProfileColor,
+  keyShortcutsOpen,
+  onToggleKeyShortcuts,
 }: TerminalToolbarProps) {
   const theme = useTheme();
   const [isEditing, setIsEditing] = useState(false);
@@ -164,6 +169,18 @@ export function TerminalToolbar({
             {showScrollButtons ? <UnfoldLessIcon fontSize="small" /> : <UnfoldMoreIcon fontSize="small" />}
           </IconButton>
         </Tooltip>
+        {onToggleKeyShortcuts && (
+          <Tooltip title={keyShortcutsOpen ? 'Hide shortcuts' : 'Show shortcuts'}>
+            <IconButton
+              size="small"
+              onClick={onToggleKeyShortcuts}
+              color={keyShortcutsOpen ? 'primary' : 'default'}
+              aria-label="Toggle key shortcuts"
+            >
+              <KeyboardIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         {onPaste && (
           <Tooltip title="Paste from clipboard">
             <IconButton size="small" onClick={onPaste}>
