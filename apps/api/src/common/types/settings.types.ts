@@ -2,11 +2,15 @@
 // Settings Type Definitions
 // =============================================================================
 
+import { KEY_SHORTCUT_BASE_KEYS } from '../schemas/settings.schema';
+
 export type KeyShortcutModifier = 'ctrl' | 'shift' | 'alt' | 'meta';
+
+export type KeyShortcutBaseKey = (typeof KEY_SHORTCUT_BASE_KEYS)[number];
 
 export interface Keystroke {
   modifiers: KeyShortcutModifier[];
-  key: string;
+  key: KeyShortcutBaseKey;
 }
 
 export interface KeyShortcut {

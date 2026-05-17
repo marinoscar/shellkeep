@@ -41,9 +41,20 @@ export class UserSettingsService {
 
     const value = settings.value as unknown as UserSettingsValue;
 
+    // Deep-merge terminal defaults so existing users get new fields (e.g.
+    // keyShortcuts) without requiring a DB write on every read.
+    const defaultTerminal = DEFAULT_USER_SETTINGS.terminal!;
+    const terminal: UserSettingsValue['terminal'] = {
+      showScrollButtons:
+        value.terminal?.showScrollButtons ?? defaultTerminal.showScrollButtons,
+      keyShortcuts:
+        value.terminal?.keyShortcuts ?? defaultTerminal.keyShortcuts,
+    };
+
     return {
       theme: value.theme,
       profile: value.profile,
+      terminal,
       updatedAt: settings.updatedAt,
       version: settings.version,
     };
@@ -80,6 +91,7 @@ export class UserSettingsService {
     return {
       theme: value.theme,
       profile: value.profile,
+      terminal: value.terminal,
       updatedAt: settings.updatedAt,
       version: settings.version,
     };
@@ -121,6 +133,18 @@ export class UserSettingsService {
             ? dto.profile.customImageUrl
             : current.profile.customImageUrl,
       },
+      terminal: {
+        showScrollButtons:
+          dto.terminal?.showScrollButtons !== undefined
+            ? dto.terminal.showScrollButtons
+            : (current.terminal?.showScrollButtons ??
+              (DEFAULT_USER_SETTINGS.terminal?.showScrollButtons ?? true)),
+        keyShortcuts:
+          dto.terminal?.keyShortcuts !== undefined
+            ? dto.terminal.keyShortcuts
+            : (current.terminal?.keyShortcuts ??
+              DEFAULT_USER_SETTINGS.terminal?.keyShortcuts),
+      },
     };
 
     // Validate merged result
@@ -146,6 +170,7 @@ export class UserSettingsService {
     return {
       theme: value.theme,
       profile: value.profile,
+      terminal: value.terminal,
       updatedAt: settings.updatedAt,
       version: settings.version,
     };
