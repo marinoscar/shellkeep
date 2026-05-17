@@ -9,13 +9,16 @@ import {
   AddCircleOutline as NewSessionIcon,
   UnfoldMore as UnfoldMoreIcon,
   UnfoldLess as UnfoldLessIcon,
+  Keyboard as KeyboardIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { TerminalView } from '../components/terminal/TerminalView';
 import type { TerminalViewHandle } from '../components/terminal/TerminalView';
+import { TerminalKeyShortcutsBar } from '../components/terminal/TerminalKeyShortcutsBar';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
 import { getSession, uploadFile, getDownloadUrl, createSession, downloadSessionHistory } from '../services/api';
-import type { TerminalSession, CreateSessionData } from '../types';
+import type { KeyShortcut, TerminalSession, CreateSessionData } from '../types';
+import { encodeShortcut } from '../lib/terminal/encodeKeystroke';
 import { useUserSettings } from '../hooks/useUserSettings';
 
 export default function TerminalFullPage() {
@@ -29,10 +32,19 @@ export default function TerminalFullPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   const { settings, updateSettings } = useUserSettings();
   const showScrollButtons = settings?.terminal?.showScrollButtons ?? true;
+  const keyShortcuts = settings?.terminal?.keyShortcuts ?? [];
+  const [keyShortcutsOpen, setKeyShortcutsOpen] = useState(false);
 
   const handleToggleScrollButtons = useCallback(() => {
     updateSettings({ terminal: { showScrollButtons: !showScrollButtons } });
   }, [showScrollButtons, updateSettings]);
+
+  const handleSendShortcut = useCallback((shortcut: KeyShortcut) => {
+    const data = encodeShortcut(shortcut);
+    if (!data) return;
+    terminalViewRef.current?.sendInput(data);
+    terminalViewRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -147,21 +159,18 @@ export default function TerminalFullPage() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', overflow: 'hidden', bgcolor: '#1e1e1e' }}>
+      {/* Sticky header: top bar + key shortcuts strip */}
+      <Box sx={{ position: 'sticky', top: 0, zIndex: 10, flexShrink: 0, bgcolor: '#252525' }}>
       {/* Top bar */}
       <Box
         sx={{
           display: 'flex',
           alignItems: 'center',
-          flexShrink: 0,
           gap: 1,
           px: 1,
           py: 0.5,
-          bgcolor: '#252525',
           borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
           minHeight: 40,
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
         }}
       >
         <Tooltip title="Back to sessions">
@@ -207,6 +216,16 @@ export default function TerminalFullPage() {
             {showScrollButtons ? <UnfoldLessIcon fontSize="small" /> : <UnfoldMoreIcon fontSize="small" />}
           </IconButton>
         </Tooltip>
+        <Tooltip title={keyShortcutsOpen ? 'Hide shortcuts' : 'Show shortcuts'}>
+          <IconButton
+            size="small"
+            onClick={() => setKeyShortcutsOpen((o) => !o)}
+            aria-label="Toggle key shortcuts"
+            sx={{ color: keyShortcutsOpen ? 'primary.main' : 'rgba(255, 255, 255, 0.7)' }}
+          >
+            <KeyboardIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Paste from clipboard">
           <IconButton
             size="small"
@@ -246,6 +265,12 @@ export default function TerminalFullPage() {
             <NewSessionIcon fontSize="small" />
           </IconButton>
         </Tooltip>
+      </Box>
+      <TerminalKeyShortcutsBar
+        open={keyShortcutsOpen}
+        shortcuts={keyShortcuts}
+        onSend={handleSendShortcut}
+      />
       </Box>
 
       {/* Terminal fills remaining space */}

@@ -5,9 +5,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { TerminalView } from '../components/terminal/TerminalView';
 import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { TerminalToolbar } from '../components/terminal/TerminalToolbar';
+import { TerminalKeyShortcutsBar } from '../components/terminal/TerminalKeyShortcutsBar';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
 import { getSession, updateSession, uploadFile, getDownloadUrl, createSession, downloadSessionHistory } from '../services/api';
-import type { TerminalSession, CreateSessionData } from '../types';
+import type { KeyShortcut, TerminalSession, CreateSessionData } from '../types';
+import { encodeShortcut } from '../lib/terminal/encodeKeystroke';
 import { useUserSettings } from '../hooks/useUserSettings';
 
 export default function TerminalPage() {
@@ -21,10 +23,19 @@ export default function TerminalPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   const { settings, updateSettings } = useUserSettings();
   const showScrollButtons = settings?.terminal?.showScrollButtons ?? true;
+  const keyShortcuts = settings?.terminal?.keyShortcuts ?? [];
+  const [keyShortcutsOpen, setKeyShortcutsOpen] = useState(false);
 
   const handleToggleScrollButtons = useCallback(() => {
     updateSettings({ terminal: { showScrollButtons: !showScrollButtons } });
   }, [showScrollButtons, updateSettings]);
+
+  const handleSendShortcut = useCallback((shortcut: KeyShortcut) => {
+    const data = encodeShortcut(shortcut);
+    if (!data) return;
+    terminalViewRef.current?.sendInput(data);
+    terminalViewRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -192,6 +203,13 @@ export default function TerminalPage() {
             onNewSession={() => setNewSessionDialogOpen(true)}
             serverProfileName={session.serverProfile.name}
             serverProfileColor={session.serverProfile.color}
+            keyShortcutsOpen={keyShortcutsOpen}
+            onToggleKeyShortcuts={() => setKeyShortcutsOpen((o) => !o)}
+          />
+          <TerminalKeyShortcutsBar
+            open={keyShortcutsOpen}
+            shortcuts={keyShortcuts}
+            onSend={handleSendShortcut}
           />
         </Box>
       </Box>
