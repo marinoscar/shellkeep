@@ -48,6 +48,18 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     terminal.loadAddon(webLinksAddon);
 
     terminal.open(containerRef.current);
+
+    // Prevent mobile (esp. Android) keyboards from applying autocomplete,
+    // autocorrect, capitalization and spellcheck to the terminal input.
+    const helperTextarea =
+      containerRef.current.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+    if (helperTextarea) {
+      helperTextarea.setAttribute('autocomplete', 'off');
+      helperTextarea.setAttribute('autocorrect', 'off');
+      helperTextarea.setAttribute('autocapitalize', 'none');
+      helperTextarea.setAttribute('spellcheck', 'false');
+    }
+
     fitAddon.fit();
 
     terminalRef.current = terminal;
