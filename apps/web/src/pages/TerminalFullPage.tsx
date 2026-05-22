@@ -20,6 +20,7 @@ import { getSession, uploadFile, getDownloadUrl, createSession, downloadSessionH
 import type { KeyShortcut, TerminalSession, CreateSessionData } from '../types';
 import { encodeShortcut } from '../lib/terminal/encodeKeystroke';
 import { useUserSettings } from '../hooks/useUserSettings';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
 
 export default function TerminalFullPage() {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +35,7 @@ export default function TerminalFullPage() {
   const showScrollButtons = settings?.terminal?.showScrollButtons ?? true;
   const keyShortcuts = settings?.terminal?.keyShortcuts ?? [];
   const [keyShortcutsOpen, setKeyShortcutsOpen] = useState(false);
+  const keyboardInset = useKeyboardInset();
 
   const handleToggleScrollButtons = useCallback(() => {
     updateSettings({ terminal: { showScrollButtons: !showScrollButtons } });
@@ -158,7 +160,7 @@ export default function TerminalFullPage() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', overflow: 'hidden', bgcolor: '#1e1e1e' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', overflow: 'hidden', bgcolor: '#1e1e1e', boxSizing: 'border-box', paddingBottom: `${keyboardInset}px` }}>
       {/* Sticky header: top bar + key shortcuts strip */}
       <Box sx={{ position: 'sticky', top: 0, zIndex: 10, flexShrink: 0, bgcolor: '#252525' }}>
       {/* Top bar */}
