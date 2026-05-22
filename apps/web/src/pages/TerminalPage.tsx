@@ -11,6 +11,7 @@ import { getSession, updateSession, uploadFile, getDownloadUrl, createSession, d
 import type { KeyShortcut, TerminalSession, CreateSessionData } from '../types';
 import { encodeShortcut } from '../lib/terminal/encodeKeystroke';
 import { useUserSettings } from '../hooks/useUserSettings';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
 
 export default function TerminalPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +26,7 @@ export default function TerminalPage() {
   const showScrollButtons = settings?.terminal?.showScrollButtons ?? true;
   const keyShortcuts = settings?.terminal?.keyShortcuts ?? [];
   const [keyShortcutsOpen, setKeyShortcutsOpen] = useState(false);
+  const keyboardInset = useKeyboardInset();
 
   const handleToggleScrollButtons = useCallback(() => {
     updateSettings({ terminal: { showScrollButtons: !showScrollButtons } });
@@ -179,6 +181,8 @@ export default function TerminalPage() {
       height: 'calc(100vh - 64px)',
       m: -3, // counteract Layout's p:3
       overflow: 'hidden',
+      boxSizing: 'border-box',
+      paddingBottom: `${keyboardInset}px`,
     }}>
       {/* Back button + Toolbar */}
       <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10, bgcolor: 'background.default' }}>
