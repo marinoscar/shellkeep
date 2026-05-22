@@ -13,9 +13,12 @@ import { api } from '../services/api';
  * Why each attribute matters:
  *  - autocomplete / autocorrect / autocapitalize / spellcheck: standard
  *    HTML hints that well-behaved keyboards respect.
- *  - inputmode="none": the single most effective lever — tells the browser
- *    that the field manages its own input method and the OS keyboard should
- *    not apply word suggestions or autocorrect transforms.
+ *  - inputmode="text": explicitly requests the standard alphanumeric keyboard
+ *    so the soft keyboard is raised on focus. NOTE: there is no fully reliable
+ *    web attribute that force-disables Gboard's predictive suggestion strip
+ *    while keeping the keyboard visible; these attributes minimize
+ *    autocorrect/capitalization but the suggestion strip may still appear on
+ *    some Gboard versions.
  *  - enterkeyhint: nudges Gboard to show "enter" key rather than "next/done",
  *    reinforcing the terminal-input nature of the field.
  *  - aria-autocomplete: additional hint so assistive technologies don't
@@ -28,7 +31,7 @@ function applyMobileInputAttributes(textarea: HTMLTextAreaElement): void {
   textarea.setAttribute('autocorrect', 'off');
   textarea.setAttribute('autocapitalize', 'none');
   textarea.setAttribute('spellcheck', 'false');
-  textarea.setAttribute('inputmode', 'none');
+  textarea.setAttribute('inputmode', 'text');
   textarea.setAttribute('enterkeyhint', 'enter');
   textarea.setAttribute('aria-autocomplete', 'none');
   textarea.setAttribute('data-gramm', 'false');
