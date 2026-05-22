@@ -35,7 +35,13 @@ vi.mock('@xterm/xterm', () => {
     this.cols = 80;
     this.rows = 24;
     this.dispose = vi.fn();
-    this.open = vi.fn();
+    // open() simulates xterm creating the helper textarea inside the container,
+    // which is required for the mobile-input-attribute fix under test.
+    this.open = vi.fn((container: HTMLElement) => {
+      const ta = document.createElement('textarea');
+      ta.className = 'xterm-helper-textarea';
+      container.appendChild(ta);
+    });
     this.write = vi.fn();
     this.onData = vi.fn();
     this.onBinary = vi.fn();
@@ -208,6 +214,52 @@ describe('useTerminal', () => {
 
       expect(result.current.error).toBe('Not authenticated');
       expect(wsConnectFn).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('Mobile input attributes on xterm-helper-textarea', () => {
+    it('should set autocomplete=off on the helper textarea after open', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      expect(ta!.getAttribute('autocomplete')).toBe('off');
+    });
+
+    it('should set autocorrect=off on the helper textarea after open', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      expect(ta!.getAttribute('autocorrect')).toBe('off');
+    });
+
+    it('should set autocapitalize=none on the helper textarea after open', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      expect(ta!.getAttribute('autocapitalize')).toBe('none');
+    });
+
+    it('should set spellcheck=false on the helper textarea after open', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      expect(ta!.getAttribute('spellcheck')).toBe('false');
+    });
+
+    it('should set all four mobile input attributes in a single mount', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      expect(ta!.getAttribute('autocomplete')).toBe('off');
+      expect(ta!.getAttribute('autocorrect')).toBe('off');
+      expect(ta!.getAttribute('autocapitalize')).toBe('none');
+      expect(ta!.getAttribute('spellcheck')).toBe('false');
     });
   });
 
