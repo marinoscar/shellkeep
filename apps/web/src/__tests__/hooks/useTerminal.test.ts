@@ -251,7 +251,57 @@ describe('useTerminal', () => {
       expect(ta!.getAttribute('spellcheck')).toBe('false');
     });
 
-    it('should set all four mobile input attributes in a single mount', () => {
+    it('should set inputmode=text (not "none") so the soft keyboard is raised on focus', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      // "none" would suppress the soft keyboard entirely — that was a regression we fixed.
+      expect(ta!.getAttribute('inputmode')).toBe('text');
+      expect(ta!.getAttribute('inputmode')).not.toBe('none');
+    });
+
+    it('should set enterkeyhint=enter on the helper textarea after open', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      expect(ta!.getAttribute('enterkeyhint')).toBe('enter');
+    });
+
+    it('should set aria-autocomplete=none on the helper textarea after open', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      expect(ta!.getAttribute('aria-autocomplete')).toBe('none');
+    });
+
+    it('should set data-gramm=false to disable Grammarly extension', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      expect(ta!.getAttribute('data-gramm')).toBe('false');
+    });
+
+    it('should set data-gramm_editor=false to disable Grammarly editor mode', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      expect(ta!.getAttribute('data-gramm_editor')).toBe('false');
+    });
+
+    it('should set data-enable-grammarly=false to disable Grammarly activation', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+      expect(ta!.getAttribute('data-enable-grammarly')).toBe('false');
+    });
+
+    it('should set the full set of ten mobile input attributes in a single mount', () => {
       renderUseTerminal();
 
       const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
@@ -260,6 +310,78 @@ describe('useTerminal', () => {
       expect(ta!.getAttribute('autocorrect')).toBe('off');
       expect(ta!.getAttribute('autocapitalize')).toBe('none');
       expect(ta!.getAttribute('spellcheck')).toBe('false');
+      expect(ta!.getAttribute('inputmode')).toBe('text');
+      expect(ta!.getAttribute('inputmode')).not.toBe('none');
+      expect(ta!.getAttribute('enterkeyhint')).toBe('enter');
+      expect(ta!.getAttribute('aria-autocomplete')).toBe('none');
+      expect(ta!.getAttribute('data-gramm')).toBe('false');
+      expect(ta!.getAttribute('data-gramm_editor')).toBe('false');
+      expect(ta!.getAttribute('data-enable-grammarly')).toBe('false');
+    });
+
+    it('should re-apply all mobile input attributes when the textarea gains focus', () => {
+      renderUseTerminal();
+
+      const ta = containerDiv.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      expect(ta).not.toBeNull();
+
+      // Simulate a keyboard (e.g. Gboard) stripping attributes on focus by clearing them.
+      ta!.removeAttribute('autocomplete');
+      ta!.removeAttribute('inputmode');
+      ta!.removeAttribute('data-gramm');
+
+      // Dispatch a capturing focus event on the container (the listener is registered
+      // with useCapture=true on the container element, so it fires before the textarea's
+      // own focus handlers and covers the Gboard strip-on-focus scenario).
+      const focusEvent = new FocusEvent('focus', { bubbles: false });
+      act(() => { containerDiv.dispatchEvent(focusEvent); });
+
+      // All attributes must be restored by the re-apply handler.
+      expect(ta!.getAttribute('autocomplete')).toBe('off');
+      expect(ta!.getAttribute('inputmode')).toBe('text');
+      expect(ta!.getAttribute('inputmode')).not.toBe('none');
+      expect(ta!.getAttribute('data-gramm')).toBe('false');
+      // Spot-check the rest to confirm applyMobileInputAttributes ran in full.
+      expect(ta!.getAttribute('autocorrect')).toBe('off');
+      expect(ta!.getAttribute('autocapitalize')).toBe('none');
+      expect(ta!.getAttribute('spellcheck')).toBe('false');
+      expect(ta!.getAttribute('enterkeyhint')).toBe('enter');
+      expect(ta!.getAttribute('aria-autocomplete')).toBe('none');
+      expect(ta!.getAttribute('data-gramm_editor')).toBe('false');
+      expect(ta!.getAttribute('data-enable-grammarly')).toBe('false');
+    });
+
+    it('should apply mobile input attributes to a newly inserted .xterm-helper-textarea via MutationObserver', async () => {
+      // jsdom provides a real MutationObserver so this test exercises the
+      // observer path that handles xterm.js internally recreating the textarea.
+      renderUseTerminal();
+
+      // Remove the textarea that open() created so we start clean.
+      const existing = containerDiv.querySelector('.xterm-helper-textarea');
+      if (existing) existing.remove();
+
+      // Insert a fresh textarea (simulating xterm.js recreating it).
+      const newTa = document.createElement('textarea');
+      newTa.className = 'xterm-helper-textarea';
+      // MutationObserver callbacks fire asynchronously in a microtask; wrap in
+      // act() and flush microtasks with a zero-duration timer advance.
+      await act(async () => {
+        containerDiv.appendChild(newTa);
+        // Flush pending microtasks so the MutationObserver callback runs.
+        await Promise.resolve();
+      });
+
+      expect(newTa.getAttribute('autocomplete')).toBe('off');
+      expect(newTa.getAttribute('inputmode')).toBe('text');
+      expect(newTa.getAttribute('inputmode')).not.toBe('none');
+      expect(newTa.getAttribute('data-gramm')).toBe('false');
+      expect(newTa.getAttribute('autocorrect')).toBe('off');
+      expect(newTa.getAttribute('autocapitalize')).toBe('none');
+      expect(newTa.getAttribute('spellcheck')).toBe('false');
+      expect(newTa.getAttribute('enterkeyhint')).toBe('enter');
+      expect(newTa.getAttribute('aria-autocomplete')).toBe('none');
+      expect(newTa.getAttribute('data-gramm_editor')).toBe('false');
+      expect(newTa.getAttribute('data-enable-grammarly')).toBe('false');
     });
   });
 

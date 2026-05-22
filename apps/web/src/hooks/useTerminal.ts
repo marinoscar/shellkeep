@@ -6,6 +6,39 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { TerminalWebSocket } from '../services/terminal-ws';
 import { api } from '../services/api';
 
+/**
+ * Apply attributes to the xterm.js helper textarea that suppress the
+ * Android (Gboard) predictive-text / autocorrect suggestion strip.
+ *
+ * Why each attribute matters:
+ *  - autocomplete / autocorrect / autocapitalize / spellcheck: standard
+ *    HTML hints that well-behaved keyboards respect.
+ *  - inputmode="text": explicitly requests the standard alphanumeric keyboard
+ *    so the soft keyboard is raised on focus. NOTE: there is no fully reliable
+ *    web attribute that force-disables Gboard's predictive suggestion strip
+ *    while keeping the keyboard visible; these attributes minimize
+ *    autocorrect/capitalization but the suggestion strip may still appear on
+ *    some Gboard versions.
+ *  - enterkeyhint: nudges Gboard to show "enter" key rather than "next/done",
+ *    reinforcing the terminal-input nature of the field.
+ *  - aria-autocomplete: additional hint so assistive technologies don't
+ *    offer completions either.
+ *  - data-gramm / data-gramm_editor / data-enable-grammarly: disables the
+ *    Grammarly browser extension, which ignores autocorrect="off" entirely.
+ */
+function applyMobileInputAttributes(textarea: HTMLTextAreaElement): void {
+  textarea.setAttribute('autocomplete', 'off');
+  textarea.setAttribute('autocorrect', 'off');
+  textarea.setAttribute('autocapitalize', 'none');
+  textarea.setAttribute('spellcheck', 'false');
+  textarea.setAttribute('inputmode', 'text');
+  textarea.setAttribute('enterkeyhint', 'enter');
+  textarea.setAttribute('aria-autocomplete', 'none');
+  textarea.setAttribute('data-gramm', 'false');
+  textarea.setAttribute('data-gramm_editor', 'false');
+  textarea.setAttribute('data-enable-grammarly', 'false');
+}
+
 export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivElement | null>) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,16 +82,42 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
 
     terminal.open(containerRef.current);
 
-    // Prevent mobile (esp. Android) keyboards from applying autocomplete,
-    // autocorrect, capitalization and spellcheck to the terminal input.
-    const helperTextarea =
-      containerRef.current.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
-    if (helperTextarea) {
-      helperTextarea.setAttribute('autocomplete', 'off');
-      helperTextarea.setAttribute('autocorrect', 'off');
-      helperTextarea.setAttribute('autocapitalize', 'none');
-      helperTextarea.setAttribute('spellcheck', 'false');
-    }
+    // Apply mobile-keyboard suppression attributes to the helper textarea.
+    // We apply them immediately after open() and then keep them in sync via:
+    //  1. A MutationObserver — xterm.js may recreate the textarea on refit or
+    //     internal re-render; the observer catches any newly inserted textarea.
+    //  2. A focus listener — some keyboards (Gboard) strip unknown attributes
+    //     when the field gains focus; re-applying on focus prevents that.
+    const container = containerRef.current;
+
+    const applyToCurrentTextarea = () => {
+      const ta = container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+      if (ta) applyMobileInputAttributes(ta);
+    };
+
+    // Apply immediately — the textarea exists right after terminal.open().
+    applyToCurrentTextarea();
+
+    // MutationObserver: watch for the textarea being replaced / re-inserted.
+    const mutationObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node instanceof HTMLTextAreaElement && node.classList.contains('xterm-helper-textarea')) {
+            applyMobileInputAttributes(node);
+          } else if (node instanceof HTMLElement) {
+            // Check descendants in case xterm wraps the textarea in a div.
+            const nested = node.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+            if (nested) applyMobileInputAttributes(nested);
+          }
+        }
+      }
+    });
+    mutationObserver.observe(container, { childList: true, subtree: true });
+
+    // Focus listener: re-apply attributes every time the textarea is focused,
+    // because Gboard is known to strip or reset them when the field activates.
+    const handleFocus = () => { applyToCurrentTextarea(); };
+    container.addEventListener('focus', handleFocus, true /* capture */);
 
     fitAddon.fit();
 
@@ -115,7 +174,6 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     ws.connect();
 
     // ResizeObserver for terminal fitting
-    const container = containerRef.current;
     let fitTimer: ReturnType<typeof setTimeout> | null = null;
     const resizeObserver = new ResizeObserver(() => {
       if (fitTimer !== null) clearTimeout(fitTimer);
@@ -132,6 +190,8 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     return () => {
       if (fitTimer !== null) clearTimeout(fitTimer);
       resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      container.removeEventListener('focus', handleFocus, true);
       ws.disconnect();
       terminal.dispose();
       terminalRef.current = null;
