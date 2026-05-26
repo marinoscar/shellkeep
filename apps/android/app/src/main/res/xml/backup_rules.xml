@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup is disabled at the manifest level (android:allowBackup="false"); this file
+     exists only because the manifest references it. -->
+<full-backup-content>
+</full-backup-content>
