@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="terminal_service_notification_count">
+        <item quantity="one">%d active session</item>
+        <item quantity="other">%d active sessions</item>
+    </plurals>
+</resources>

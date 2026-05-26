@@ -32,6 +32,11 @@
             </intent-filter>
         </activity>
 
+        <service
+            android:name=".terminal.TerminalService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
     </application>
 
 </manifest>

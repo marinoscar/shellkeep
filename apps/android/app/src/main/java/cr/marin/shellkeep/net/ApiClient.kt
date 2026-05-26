@@ -4,6 +4,7 @@ import android.content.Context
 import cr.marin.shellkeep.BuildConfig
 import cr.marin.shellkeep.auth.AuthManager
 import cr.marin.shellkeep.auth.TokenStore
+import cr.marin.shellkeep.terminal.SessionsManager
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -68,6 +69,12 @@ class ApiClient private constructor(
     }
 
     val authManager: AuthManager = AuthManager(service, tokenStore)
+
+    val sessionsManager: SessionsManager = SessionsManager(
+        okHttp = okHttp,
+        baseUrl = baseUrl,
+        tokenStore = tokenStore,
+    )
 
     companion object {
         @Volatile
