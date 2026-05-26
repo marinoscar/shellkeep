@@ -2,6 +2,7 @@ package cr.marin.shellkeep.net
 
 import android.content.Context
 import cr.marin.shellkeep.BuildConfig
+import cr.marin.shellkeep.auth.AuthManager
 import cr.marin.shellkeep.auth.TokenStore
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
@@ -66,19 +67,28 @@ class ApiClient private constructor(
         serviceRef = it
     }
 
+    val authManager: AuthManager = AuthManager(service, tokenStore)
+
     companion object {
         @Volatile
         private var instance: ApiClient? = null
 
-        fun get(context: Context, onAuthFailed: () -> Unit = {}): ApiClient {
+        fun get(context: Context): ApiClient {
             val existing = instance
             if (existing != null) return existing
             return synchronized(this) {
-                instance ?: ApiClient(
-                    baseUrl = BuildConfig.DEFAULT_API_BASE_URL,
-                    tokenStore = TokenStore(context.applicationContext),
-                    onAuthFailed = onAuthFailed,
-                ).also { instance = it }
+                instance ?: run {
+                    lateinit var built: ApiClient
+                    built = ApiClient(
+                        baseUrl = BuildConfig.DEFAULT_API_BASE_URL,
+                        tokenStore = TokenStore(context.applicationContext),
+                        // Forward auth failures (refresh permanently broken) to the AuthManager
+                        // so the UI bounces back to the pairing screen.
+                        onAuthFailed = { built.authManager.forceUnauthenticate() },
+                    )
+                    instance = built
+                    built
+                }
             }
         }
     }
