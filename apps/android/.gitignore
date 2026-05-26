@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+build/
+gradle-app.setting
+local.properties
+
+# IDE
+.idea/
+*.iml
+.cxx/
+captures/
+
+# Keystores (never commit signing material)
+*.jks
+*.keystore
+release.keystore.properties
+
+# Generated
+gen/
+out/
+release/
+
+# OS
+.DS_Store
