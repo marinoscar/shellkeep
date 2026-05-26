@@ -16,6 +16,7 @@ import cr.marin.shellkeep.auth.AuthManager
 import cr.marin.shellkeep.net.ApiClient
 import cr.marin.shellkeep.ui.pairing.PairingScreen
 import cr.marin.shellkeep.ui.sessions.SessionsScreen
+import cr.marin.shellkeep.ui.settings.SettingsScreen
 import cr.marin.shellkeep.ui.terminal.TerminalScreen
 
 object Routes {
@@ -71,8 +72,10 @@ fun ShellKeepNavGraph(modifier: Modifier = Modifier) {
             )
         }
         composable(Routes.SETTINGS) {
-            // Settings UI lands in a follow-up commit (Task #12).
-            Text(text = "Settings (coming soon)")
+            SettingsScreen(
+                onBack = { nav.popBackStack() },
+                onLoggedOut = { nav.navigateTopLevel(Routes.PAIRING) },
+            )
         }
     }
 }
