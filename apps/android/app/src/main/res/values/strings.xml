@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ShellKeep</string>
+
+    <!-- Pairing -->
+    <string name="pairing_title">Pair this device</string>
+    <string name="pairing_open_browser">Open in browser</string>
+    <string name="pairing_user_code_label">Enter this code on the website</string>
+    <string name="pairing_waiting">Waiting for approval…</string>
+
+    <!-- Sessions -->
+    <string name="sessions_title">Sessions</string>
+    <string name="sessions_new">New session</string>
+    <string name="sessions_empty">No sessions yet</string>
+
+    <!-- Terminal -->
+    <string name="terminal_copy">Copy</string>
+    <string name="terminal_copy_all">Copy all</string>
+    <string name="terminal_paste">Paste</string>
+    <string name="terminal_paste_image">Paste image</string>
+    <string name="terminal_disconnect">Disconnect</string>
+    <string name="terminal_rename">Rename</string>
+
+    <!-- Notification -->
+    <string name="terminal_service_channel">Terminal sessions</string>
+    <string name="terminal_service_notification">ShellKeep sessions are running</string>
+    <string name="terminal_service_disconnect_all">Disconnect all</string>
+</resources>

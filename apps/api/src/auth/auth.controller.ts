@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Post,
@@ -16,6 +17,7 @@ import {
   ApiTags,
   ApiOperation,
   ApiResponse,
+  ApiBody,
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { FastifyRequest, FastifyReply } from 'fastify';
@@ -31,6 +33,7 @@ import {
   AuthProviderDto,
 } from './dto/auth-provider.dto';
 import { CurrentUserDto } from './dto/auth-user.dto';
+import { RefreshTokenBodyDto } from './dto/refresh-token.dto';
 
 const REFRESH_TOKEN_COOKIE = 'refresh_token';
 const COOKIE_OPTIONS = {
@@ -203,11 +206,19 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Refresh access token',
-    description: 'Exchanges a refresh token for a new access token',
+    description:
+      'Exchanges a refresh token for a new access token. ' +
+      'Two call shapes are supported: ' +
+      '(A) Cookie-based (browser): send the HttpOnly refresh-token cookie — ' +
+      'the response sets a rotated cookie and returns { accessToken, expiresIn }. ' +
+      '(B) Body-based (mobile/non-browser): send { refreshToken } in the JSON body ' +
+      'and no cookie — the response returns { accessToken, refreshToken, expiresIn } ' +
+      'and sets no cookie. Cookie takes precedence when both are present.',
   })
+  @ApiBody({ type: RefreshTokenBodyDto, required: false })
   @ApiResponse({
     status: 200,
-    description: 'New access token',
+    description: 'New access token (and refreshToken when using body-based flow)',
   })
   @ApiResponse({
     status: 401,
@@ -216,8 +227,12 @@ export class AuthController {
   async refresh(
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) res: FastifyReply,
+    @Body() body: RefreshTokenBodyDto,
   ) {
-    const refreshToken = req.cookies[REFRESH_TOKEN_COOKIE];
+    const cookieToken: string | undefined =
+      req.cookies?.[REFRESH_TOKEN_COOKIE];
+    const refreshToken = cookieToken ?? body?.refreshToken;
+    const fromCookie = Boolean(cookieToken);
 
     if (!refreshToken) {
       throw new UnauthorizedException('No refresh token provided');
@@ -225,12 +240,19 @@ export class AuthController {
 
     const tokens = await this.authService.refreshAccessToken(refreshToken);
 
-    // Set new refresh token in cookie (rotation)
-    res.setCookie(REFRESH_TOKEN_COOKIE, tokens.refreshToken!, COOKIE_OPTIONS);
+    if (fromCookie) {
+      // Cookie path: rotate cookie, return only accessToken (browser security posture)
+      res.setCookie(REFRESH_TOKEN_COOKIE, tokens.refreshToken!, COOKIE_OPTIONS);
+      return {
+        accessToken: tokens.accessToken,
+        expiresIn: tokens.expiresIn,
+      };
+    }
 
-    // Return new access token
+    // Body path: mobile client — return refreshToken in body, no cookie
     return {
       accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       expiresIn: tokens.expiresIn,
     };
   }

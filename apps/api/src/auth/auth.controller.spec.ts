@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 
@@ -14,6 +15,7 @@ describe('AuthController', () => {
       handleGoogleLogin: jest.fn(),
       getCurrentUser: jest.fn(),
       logout: jest.fn(),
+      refreshAccessToken: jest.fn(),
     } as any;
 
     mockConfigService = {
@@ -66,6 +68,82 @@ describe('AuthController', () => {
         data: userDetails,
       });
       expect(mockAuthService.getCurrentUser).toHaveBeenCalledWith('user-1');
+    });
+  });
+
+  describe('refresh', () => {
+    const ROTATED_REFRESH = 'rotated-refresh-token';
+    const NEW_ACCESS = 'new-access-token';
+    const EXPIRES_IN = 900;
+
+    const mockTokens = {
+      accessToken: NEW_ACCESS,
+      refreshToken: ROTATED_REFRESH,
+      expiresIn: EXPIRES_IN,
+    };
+
+    function createMockRes() {
+      return { setCookie: jest.fn(), clearCookie: jest.fn() } as any;
+    }
+
+    it('cookie present: calls refreshAccessToken with cookie value, sets rotated cookie, returns { accessToken, expiresIn } only', async () => {
+      mockAuthService.refreshAccessToken.mockResolvedValue(mockTokens);
+      const mockReq = { cookies: { refresh_token: 'cookie-token' } } as any;
+      const mockRes = createMockRes();
+
+      const result = await controller.refresh(mockReq, mockRes, {} as any);
+
+      expect(mockAuthService.refreshAccessToken).toHaveBeenCalledWith('cookie-token');
+      expect(mockRes.setCookie).toHaveBeenCalledTimes(1);
+      expect(mockRes.setCookie).toHaveBeenCalledWith(
+        'refresh_token',
+        ROTATED_REFRESH,
+        expect.objectContaining({ httpOnly: true, path: '/api/auth' }),
+      );
+      expect(result).toEqual({ accessToken: NEW_ACCESS, expiresIn: EXPIRES_IN });
+      expect(result).not.toHaveProperty('refreshToken');
+    });
+
+    it('body present, no cookie: calls refreshAccessToken with body value, does NOT set cookie, returns { accessToken, refreshToken, expiresIn }', async () => {
+      mockAuthService.refreshAccessToken.mockResolvedValue(mockTokens);
+      const mockReq = { cookies: {} } as any;
+      const mockRes = createMockRes();
+      const body = { refreshToken: 'body-token' } as any;
+
+      const result = await controller.refresh(mockReq, mockRes, body);
+
+      expect(mockAuthService.refreshAccessToken).toHaveBeenCalledWith('body-token');
+      expect(mockRes.setCookie).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        accessToken: NEW_ACCESS,
+        refreshToken: ROTATED_REFRESH,
+        expiresIn: EXPIRES_IN,
+      });
+    });
+
+    it('both cookie and body present: cookie wins, behaves like cookie path', async () => {
+      mockAuthService.refreshAccessToken.mockResolvedValue(mockTokens);
+      const mockReq = { cookies: { refresh_token: 'cookie-token' } } as any;
+      const mockRes = createMockRes();
+      const body = { refreshToken: 'body-token' } as any;
+
+      const result = await controller.refresh(mockReq, mockRes, body);
+
+      // cookie value must be used, not body value
+      expect(mockAuthService.refreshAccessToken).toHaveBeenCalledWith('cookie-token');
+      expect(mockRes.setCookie).toHaveBeenCalledTimes(1);
+      expect(result).not.toHaveProperty('refreshToken');
+    });
+
+    it('neither cookie nor body present: throws UnauthorizedException', async () => {
+      const mockReq = { cookies: {} } as any;
+      const mockRes = createMockRes();
+
+      await expect(
+        controller.refresh(mockReq, mockRes, {} as any),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(mockAuthService.refreshAccessToken).not.toHaveBeenCalled();
     });
   });
 
