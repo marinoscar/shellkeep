@@ -7,7 +7,7 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 - Domain (ShellKeep's own, stays after the retrofit): `src/server-profiles/` (profiles, test connection), `src/terminal/` (`sessions.*` REST, `session-manager.service.ts` tmux lifecycle, `ssh.service.ts`, `terminal.gateway.ts` WebSocket at `/api/terminal/ws`, `tasks/session-cleanup.task.ts`).
 - Base modules adopted slice by slice (#46 to #55): `src/auth`, `src/users`, `src/allowlist`, `src/device-auth`, `src/settings`, `src/storage`, `src/health`, `src/common`, `src/prisma`. Do not extend one that a later issue replaces; check the program (#30) first.
 - Target layout *(from #44)*: `src/platform/<slice>/` binds each packaged slice (`forRoot` config, host ports); `src/app-registrations/` holds permissions, job labels and other registrations; base modules never import the domain modules.
-- `prisma/schema.prisma` today; from #45 `prisma/fragments/` is hand-edited, `prisma/schema/` is GENERATED, `prisma/migrations/` holds installed copies.
+- `prisma/fragments/` is hand-edited, `prisma/schema/` is GENERATED (`npm run db:compose`), `prisma/migrations/` holds installed platform copies plus the app's own migrations, `prisma/platform.lock` proves them, `prisma/sql/` holds operator scripts (`create-app-role.sql`).
 - Tests in `test/` and beside sources (`*.spec.ts`); config `test/jest.config.js`.
 
 ## Rules
