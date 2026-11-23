@@ -222,8 +222,13 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     };
   }, [sessionId, containerRef]);
 
+  /**
+   * Replace the socket with a fresh one (the maintenance alert's Retry, #46).
+   * The error is cleared first so a repeat refusal reports again.
+   */
   const reconnect = useCallback(() => {
     wsRef.current?.disconnect();
+    setError(null);
     const terminal = terminalRef.current;
     if (api.getAccessToken() && terminal) {
       // Only the socket is replaced: the terminal's single input subscription

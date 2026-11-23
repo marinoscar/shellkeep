@@ -5,8 +5,8 @@
 // `runPlatformConformance` runs the platform's executable rules over ShellKeep's
 // own source and registrations. Suites adopted with their slice are added here:
 // `cron-enqueue-only`, `user-owned-data` and `identity` from #47, `settings` and
-// `credentials` from #48; the jobs, storage, notifications, AI and the rest follow with
-// #46 and #49-#55.
+// `credentials` from #48, `host` and `doctor-read-only` from #46; the jobs, storage,
+// notifications, AI and the rest follow with #49-#55.
 //
 // The registries are filled by the first two imports, as `main.ts` fills them.
 // =============================================================================
@@ -26,12 +26,16 @@ import {
 } from '@marinoscar/platform-api/core';
 // Register the `credentials`, `identity` and `settings` suites with the conformance harness.
 import '@marinoscar/platform-api/credentials/testing';
+// Register the `doctor-read-only` and `host` suites.
+import '@marinoscar/platform-api/doctor/testing';
+import '@marinoscar/platform-api/host/testing';
 import { STORAGE_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/storage';
 import { discoverControllers } from '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/settings/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
 import { AppModule } from '../src/app.module';
+import { doctorConformanceFixture } from './conformance/doctor-fixture';
 import {
   SETTINGS_CATALOG_STALE_MESSAGE,
   SYSTEM_SETTINGS_CATALOG_RELATIVE_PATH,
@@ -85,10 +89,6 @@ runPlatformConformance({
           file: 'prisma/prisma.service.ts',
           why: 'Test-only cleanDatabase() truncates every table (refuses to run outside NODE_ENV=test)',
         },
-        {
-          file: 'health/indicators/database.indicator.ts',
-          why: 'Liveness probe: SELECT 1, touches no table',
-        },
       ],
       registerIn: 'src/app-registrations/user-owned-models.ts',
     },
@@ -119,5 +119,16 @@ runPlatformConformance({
     // the owner check runs over the platform's storage definition, the first one #50
     // registers. The user purposes are the registry's own (`ssh`).
     credentials: { appOwners: ['app'], purposes: [STORAGE_CREDENTIAL_PURPOSE_DEF] },
+    // The host core is mounted exactly once, `MaintenanceGuard` is the only `APP_GUARD` and runs
+    // first (no global JWT guard), and the `{ data }` envelope and the exception filter are global.
+    host: { rootModule: AppModule },
+    // Every Doctor check the booted app registers runs against a recording Prisma client and a
+    // storage provider that refuses writes: none may write, throw, time out or return an invalid
+    // outcome. The platform registers 13 (the host's `core.*`, `db.*`, `secrets.*`,
+    // `maintenance.mode` and `network.egress`, and the identity slice's `auth.*` and
+    // `tenancy.mode`); the terminal adds four (`terminal.ssh.client`, `terminal.tmux.probe`,
+    // `terminal.sessions.reaper`, `terminal.ssh.legacy-secrets`). The fifth terminal item,
+    // `terminal.ssh.egress`, is an egress contributor graded by `network.egress`.
+    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 17 },
   },
 });

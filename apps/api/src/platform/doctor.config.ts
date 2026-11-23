@@ -3,10 +3,10 @@
 // =============================================================================
 //
 // `GET /api/admin/doctor` (`system_settings:read`) runs every registered
-// read-only health check. Mounted here because the identity slice registers its
-// `auth.*` and `tenancy.*` checks with the registry this module provides, so it
-// cannot boot without it. The rest of the host core (event bus, maintenance,
-// the response envelope) is #46.
+// read-only health check: the host core's, the identity slice's (`auth.*`,
+// `tenancy.*`) and the app's own domain checks. Each
+// registers itself with the registry this module provides from its own
+// `onModuleInit`.
 // =============================================================================
 
 import { DoctorModule } from '@marinoscar/platform-api/doctor';

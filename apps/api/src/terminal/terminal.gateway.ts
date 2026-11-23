@@ -6,6 +6,7 @@ import type { OwnerScope } from '../common/types/owner-scope';
 import { SessionsService } from './sessions.service';
 import { SessionManagerService } from './session-manager.service';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
+import { TERMINAL_MAINTENANCE_REASON, TerminalMaintenancePolicy } from './ws/terminal-maintenance.policy';
 import * as WebSocket from 'ws';
 
 /** setTimeout cannot hold a delay above 2^31 - 1 ms (about 24.8 days). */
@@ -17,6 +18,7 @@ interface AuthenticatedClient {
   userId: string;
   orgId: string;
   permissions: readonly string[];
+  roles: readonly string[];
   sessionId?: string;
   authenticated: boolean;
   authTimeout?: NodeJS.Timeout;
@@ -36,6 +38,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     private readonly serverProfilesService: ServerProfilesService,
     private readonly sessionsService: SessionsService,
     private readonly sessionManager: SessionManagerService,
+    private readonly maintenance: TerminalMaintenancePolicy,
   ) {}
 
   handleConnection(client: WebSocket): void {
@@ -46,6 +49,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
       userId: '',
       orgId: '',
       permissions: [],
+      roles: [],
       expiresAtMs: 0,
       authenticated: false,
     };
@@ -107,6 +111,13 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
           client.send(JSON.stringify({ type: 'auth_fail', reason: 'Not authenticated' }));
           return;
         }
+        if (await this.maintenance.refuses({ userId: clientState.userId, roles: clientState.roles })) {
+          // A window is open: no NEW session starts or attaches. The socket itself is left
+          // alone (it may be streaming another session), and the client shows a banner.
+          this.logger.warn(`ws.connect.refused userId=${clientState.userId} reason=${TERMINAL_MAINTENANCE_REASON}`);
+          client.send(JSON.stringify({ type: 'auth_fail', reason: TERMINAL_MAINTENANCE_REASON }));
+          return;
+        }
         await this.handleConnect(client, clientState, message.sessionId);
         break;
 
@@ -161,6 +172,16 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
 
     const reauth = clientState.authenticated;
+
+    // Maintenance mode (#46): a NEW authentication is refused while a window is open, with
+    // the platform's exemptions (an administrator when `allowAdmins`, a registered bypass).
+    // A token refresh on an already authenticated socket is never refused, so a window does
+    // not cut off a terminal that is already open.
+    if (!reauth && (await this.maintenance.refuses({ userId: principal.userId, roles: principal.roles }))) {
+      this.denyAuth(client, clientState, TERMINAL_MAINTENANCE_REASON, TERMINAL_MAINTENANCE_REASON, principal.userId);
+      return;
+    }
+
     if (reauth && (principal.userId !== clientState.userId || principal.orgId !== clientState.orgId)) {
       this.denyAuth(client, clientState, 'forbidden', 'identity_changed', principal.userId);
       return;
@@ -169,6 +190,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     clientState.userId = principal.userId;
     clientState.orgId = principal.orgId;
     clientState.permissions = principal.permissions;
+    clientState.roles = principal.roles;
     clientState.expiresAtMs = principal.expiresAtMs;
     clientState.authenticated = true;
     this.scheduleExpiry(client, clientState);

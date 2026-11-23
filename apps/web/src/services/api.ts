@@ -4,6 +4,7 @@ import {
   createPlatformApiClient,
   type PlatformHttpRequestOptions,
 } from '@marinoscar/platform-web/core';
+import { readMaintenanceBlock, reportMaintenanceBlock } from '@marinoscar/platform-web/host/headless';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -76,10 +77,23 @@ export class AppHttpClient extends PlatformHttpClient {
   }
 }
 
+/**
+ * Every error response passes through `onErrorResponse` before it is thrown
+ * (issue #46). A maintenance `503` (`details.reason: 'MAINTENANCE_MODE'`) is
+ * recorded in the host slice's block store, which the packaged
+ * `MaintenanceGate` renders; any other error, an ordinary `503` included, is
+ * untouched. The error is still thrown either way.
+ */
+export function noticeMaintenance(status: number, body: unknown): void {
+  const block = readMaintenanceBlock(status, body);
+  if (block) reportMaintenanceBlock(block);
+}
+
 export const api = new AppHttpClient({
   baseUrl: API_BASE_URL,
   // Named after the app so two apps on one origin never contend for a lock.
   refreshLockName: 'shellkeep-auth-refresh',
+  onErrorResponse: noticeMaintenance,
 });
 
 /**

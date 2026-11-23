@@ -12,7 +12,8 @@ import { createMockAdminUser, authHeader } from '../helpers/auth-mock.helper';
  * Characterization of Zod validation failures across controllers: each case
  * sends an invalid body or query to a real endpoint and records the status and
  * the error body. Written to prove the zod 3 to zod 4
- * and nestjs-zod 3 to 5 upgrade did not change the 400 contract.
+ * and nestjs-zod 3 to 5 upgrade did not change the 400 contract. The host core (#46)
+ * then replaced the app's exception filter with the platform's, which adds `details.issues`.
  */
 describe('DTO validation errors (Integration)', () => {
   let context: TestContext;
@@ -62,12 +63,18 @@ describe('DTO validation errors (Integration)', () => {
     const res = await req;
     const { timestamp, path, ...rest } = res.body;
     expect(res.status).toBe(400);
-    // The contract as shipped: a generic body with no `details` field. Zod issue
-    // paths are deliberately not exposed.
+    // The contract since the host core (#46) owns the exception filter: the platform's
+    // `details.issues` names each offending field and the validator's message, never a
+    // submitted value. (Before #46 the body was generic, with no `details`.)
     expect(rest).toEqual({
       statusCode: 400,
       code: 'BAD_REQUEST',
       message: 'Validation failed',
+      details: {
+        issues: expect.arrayContaining([
+          { path: expect.any(String), message: expect.any(String) },
+        ]),
+      },
     });
     expect(typeof timestamp).toBe('string');
     expect(path).toBe(c.url);

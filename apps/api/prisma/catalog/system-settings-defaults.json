@@ -8,5 +8,12 @@
     "terminateDetachedAfterHours": 12,
     "purgeTerminatedAfterDays": 3,
     "doctorProbeProfileId": null
+  },
+  "maintenance": {
+    "enabled": false,
+    "message": "This service is temporarily unavailable for scheduled maintenance. Please try again shortly.",
+    "allowAdmins": true,
+    "startedAt": null,
+    "startedById": null
   }
 }

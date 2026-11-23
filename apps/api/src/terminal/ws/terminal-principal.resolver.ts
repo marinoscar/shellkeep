@@ -15,6 +15,8 @@ export interface TerminalPrincipal {
   readonly orgId: string;
   /** Effective permissions in that organization (system roles plus the membership role). */
   readonly permissions: readonly string[];
+  /** The principal's role names: the system roles it holds plus its role in the organization. */
+  readonly roles: readonly string[];
   /** When the access token expires, in epoch milliseconds (its `exp` claim). */
   readonly expiresAtMs: number;
 }
@@ -93,6 +95,7 @@ export class TerminalPrincipalResolver {
         userId: principal.userId,
         orgId: principal.activeOrgId,
         permissions: principal.permissions,
+        roles: principal.roles,
         expiresAtMs: payload.exp * 1000,
       },
     };

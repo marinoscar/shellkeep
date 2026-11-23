@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter } from 'events';
 import { TerminalGateway } from './terminal.gateway';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
+import { TerminalMaintenancePolicy } from './ws/terminal-maintenance.policy';
 import { ServerProfilesService } from '../server-profiles/server-profiles.service';
 import { SessionsService } from './sessions.service';
 import { SessionManagerService } from './session-manager.service';
@@ -60,6 +61,7 @@ describe('TerminalGateway', () => {
       userId: VALID_USER_ID,
       orgId: ORG_ID,
       permissions: ['sessions:read', 'sessions:write', 'sessions:delete'],
+      roles: ['contributor'],
       expiresAtMs: Date.now() + 15 * 60 * 1000,
       ...overrides,
     },
@@ -113,6 +115,9 @@ describe('TerminalGateway', () => {
         { provide: ServerProfilesService, useValue: serverProfilesService },
         { provide: SessionsService, useValue: sessionsService },
         { provide: SessionManagerService, useValue: sessionManager },
+        // No maintenance window here; the policy and the gateway's use of it are specified in
+        // test/terminal/terminal-gateway.maintenance.spec.ts.
+        { provide: TerminalMaintenancePolicy, useValue: { refuses: jest.fn().mockResolvedValue(false) } },
       ],
     }).compile();
 
@@ -446,8 +451,9 @@ describe('TerminalGateway', () => {
       sessionManager.attachWebSocket.mockReturnValue(true);
 
       emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
-      // Flush all async awaits in handleConnect:
-      // findOne + getDecryptedProfile + startSession + updateStatus = 4 ticks
+      // Flush all async awaits in the connect path:
+      // maintenance check + findOne + getDecryptedProfile + startSession + updateStatus = 5 ticks
+      await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -500,6 +506,7 @@ describe('TerminalGateway', () => {
       sessionManager.startSession.mockRejectedValue(new Error('SSH refused'));
 
       emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
+      await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();

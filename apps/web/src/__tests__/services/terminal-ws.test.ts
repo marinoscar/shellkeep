@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TerminalWebSocket } from '../../services/terminal-ws';
+import { MAINTENANCE_MESSAGE, TerminalWebSocket } from '../../services/terminal-ws';
 
 // Mock WebSocket
 class MockWebSocket {
@@ -118,6 +118,60 @@ describe('TerminalWebSocket', () => {
 
       expect(errorHandler).toHaveBeenCalledWith(expect.any(Error));
       expect(errorHandler.mock.calls[0][0].message).toBe('Invalid token');
+    });
+
+    it('stops without reconnecting when a new auth is refused for maintenance (#46)', () => {
+      const tws = new TerminalWebSocket('session-123', 'my-token');
+      const errorHandler = vi.fn();
+      const maintenanceHandler = vi.fn();
+      tws.on('error', errorHandler);
+      tws.on('maintenance', maintenanceHandler);
+      tws.connect();
+
+      const ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+      ws.simulateMessage(JSON.stringify({ type: 'auth_fail', reason: 'maintenance' }));
+      // The server closes the socket after refusing a new auth.
+      ws.simulateClose();
+      vi.advanceTimersByTime(120_000);
+
+      expect(maintenanceHandler).toHaveBeenCalledTimes(1);
+      expect(errorHandler).toHaveBeenCalledTimes(1);
+      expect(errorHandler.mock.calls[0][0].message).toBe(MAINTENANCE_MESSAGE);
+      expect(ws.close).toHaveBeenCalled();
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    it('stops without reconnecting when a new connect is refused for maintenance (#46)', () => {
+      const tws = new TerminalWebSocket('session-123', 'my-token');
+      const maintenanceHandler = vi.fn();
+      tws.on('maintenance', maintenanceHandler);
+      tws.connect();
+
+      const ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+      ws.simulateMessage(JSON.stringify({ type: 'auth_ok' }));
+      // On a refused `connect` the server keeps the socket open; the client closes it.
+      ws.simulateMessage(JSON.stringify({ type: 'auth_fail', reason: 'maintenance' }));
+      vi.advanceTimersByTime(120_000);
+
+      expect(maintenanceHandler).toHaveBeenCalledTimes(1);
+      expect(ws.close).toHaveBeenCalled();
+      expect(tws.connected).toBe(false);
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    it('opens a fresh socket when connect() is called again after a maintenance refusal', () => {
+      const tws = new TerminalWebSocket('session-123', 'my-token');
+      tws.connect();
+      const first = MockWebSocket.instances[0];
+      first.simulateOpen();
+      first.simulateMessage(JSON.stringify({ type: 'auth_fail', reason: 'maintenance' }));
+
+      tws.connect();
+      const second = MockWebSocket.instances[1];
+      second.simulateOpen();
+      expect(second.send).toHaveBeenCalledWith(JSON.stringify({ type: 'auth', token: 'my-token' }));
     });
 
     it('should set connected=true and emit connect on session_ready', () => {

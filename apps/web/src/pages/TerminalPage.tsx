@@ -67,6 +67,12 @@ export default function TerminalPage() {
     setTerminalError(null);
   }, []);
 
+  // The maintenance alert's Retry (#46): a fresh socket for this session.
+  const handleRetryTerminal = useCallback(() => {
+    setTerminalError(null);
+    terminalViewRef.current?.reconnect();
+  }, []);
+
   const handleRename = useCallback(
     async (newName: string) => {
       if (!id) return;
@@ -242,7 +248,11 @@ export default function TerminalPage() {
             onError={handleTerminalError}
             showScrollButtons={showScrollButtons}
           />
-          <TerminalConnectionAlert error={terminalError} onDismiss={handleDismissTerminalError} />
+          <TerminalConnectionAlert
+            error={terminalError}
+            onDismiss={handleDismissTerminalError}
+            onRetry={handleRetryTerminal}
+          />
         </Box>
         <Box sx={{ height: '30px', flexShrink: 0 }} aria-hidden />
       </Box>

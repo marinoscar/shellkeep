@@ -8,12 +8,19 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from '@nestjs/common';
 import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { verifyEncryptionKeyAtStartup } from '@marinoscar/platform-api/core';
+import {
+  buildCorsOptions,
+  isSameOriginOnly,
+  registerPlatformDocs,
+  verifyDeploymentModeAtStartup,
+  verifyDeploymentNetworkAtStartup,
+} from '@marinoscar/platform-api/host';
+import { APP_OPENAPI } from './openapi/document';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 
@@ -24,6 +31,14 @@ async function bootstrap() {
   if (process.env.NODE_ENV === 'production' && process.env.TEST_AUTH_ENABLED === 'true') {
     throw new Error('TEST_AUTH_ENABLED must not be true in production');
   }
+
+  // CORS policy, DEPLOYMENT_MODE and DEPLOYMENT_NETWORK (#46). Parsed HERE, before the
+  // application or its database connection exists, so a wildcard or malformed
+  // CORS_ORIGIN, or an invalid mode, fails the boot immediately with a message naming
+  // the variable and its allowed values.
+  const corsOptions = buildCorsOptions(process.env.CORS_ORIGIN);
+  verifyDeploymentModeAtStartup(process.env, logger);
+  verifyDeploymentNetworkAtStartup(process.env, logger);
 
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
@@ -61,32 +76,21 @@ async function bootstrap() {
   // Global prefix for all routes
   app.setGlobalPrefix('api');
 
-  // Enable CORS (same-origin by default, configurable)
-  app.enableCors({
-    origin: process.env.CORS_ORIGIN || true,
-    credentials: true,
-  });
+  // CORS: same-origin only unless CORS_ORIGIN lists trusted origins. nginx (and the
+  // Vite dev proxy) serve the web app and /api from one origin, so the default emits
+  // no CORS headers at all.
+  app.enableCors(corsOptions);
+  logger.log(
+    isSameOriginOnly(corsOptions)
+      ? 'CORS: same-origin only (CORS_ORIGIN unset; no cross-origin access)'
+      : `CORS: allowlist of ${corsOptions.origin.length} origin(s) with credentials: ${corsOptions.origin.join(', ')}`,
+  );
 
-  // Swagger/OpenAPI setup
-  const config = new DocumentBuilder()
-    .setTitle('ShellKeep API')
-    .setDescription('API documentation for ShellKeep')
-    .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'Enter JWT token',
-      },
-      'JWT-auth',
-    )
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
-    jsonDocumentUrl: 'api/openapi.json',
-  });
+  // OpenAPI: the document and the two routes that serve it (`/api/openapi.json` and
+  // `/api/docs`), from the host slice. Registered AFTER `setGlobalPrefix('api')`
+  // because the introspection reads the prefix off the application. A generation
+  // failure degrades both routes to a 503 instead of stopping the boot.
+  const docsReady = registerPlatformDocs(app, APP_OPENAPI, logger);
 
   // WebSocket adapter for terminal gateway
   app.useWebSocketAdapter(new WsAdapter(app));
@@ -95,7 +99,11 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
 
   logger.log(`Application running on port ${port}`);
-  logger.log(`Swagger UI available at /api/docs`);
+  logger.log(
+    docsReady
+      ? 'API reference available at /api/docs'
+      : 'API reference DEGRADED: /api/docs and /api/openapi.json return 503 (see error above)',
+  );
 }
 
 bootstrap();

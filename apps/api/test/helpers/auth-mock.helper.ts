@@ -30,11 +30,17 @@ export async function createMockTestUser(
   const mockUser = setupMockUser(options);
 
   // Generate JWT
-  const accessToken = jwtService.sign({
-    sub: mockUser.id,
-    email: mockUser.email,
-    roles: mockUser.roles,
-  });
+  // `expiresIn` explicit: the app now holds more than one `JwtService` (the identity
+  // slice's and the host core's maintenance guard's), `module.get` may return either, and
+  // the terminal WebSocket refuses a token with no `exp`.
+  const accessToken = jwtService.sign(
+    {
+      sub: mockUser.id,
+      email: mockUser.email,
+      roles: mockUser.roles,
+    },
+    { expiresIn: '15m' },
+  );
 
   return {
     id: mockUser.id,

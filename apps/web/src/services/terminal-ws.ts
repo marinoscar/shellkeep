@@ -8,7 +8,9 @@ export type TerminalWsEventType =
   /** The server refused the principal: it lacks `sessions:write` (no reconnect). */
   | 'forbidden'
   /** The access token expired and could not be refreshed: sign in again (no reconnect). */
-  | 'expired';
+  | 'expired'
+  /** A maintenance window is open: no new terminal session may start (no reconnect, #46). */
+  | 'maintenance';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- listeners receive differently shaped payloads per event
 type Listener = (...args: any[]) => void;
@@ -90,6 +92,16 @@ export function refreshDelayMs(
 export const FORBIDDEN_MESSAGE =
   'Your role can view sessions but not open a terminal. Ask an administrator for terminal access.';
 export const EXPIRED_MESSAGE = 'Your session has expired. Sign in again to reconnect.';
+/**
+ * Shown when the gateway refuses a new `auth` or `connect` with
+ * `{ type: 'auth_fail', reason: 'maintenance' }` (#46). The window is planned and
+ * reconnecting would only be refused again, so the socket stops; the alert
+ * offers a manual retry.
+ */
+export const MAINTENANCE_MESSAGE =
+  'ShellKeep is in maintenance. New terminal sessions are paused; try again later.';
+/** The `reason` of the gateway's maintenance refusal (`TERMINAL_MAINTENANCE_REASON`). */
+export const MAINTENANCE_REASON = 'maintenance';
 
 /** The numeric claims of a JWT payload, or `null` when the token is not a readable JWT. */
 function readClaims(token: string): Record<string, unknown> | null {
@@ -235,6 +247,12 @@ export class TerminalWebSocket {
         if (message.reason === 'forbidden') {
           this.emit('forbidden', null);
           this.emit('error', new Error(FORBIDDEN_MESSAGE));
+        } else if (message.reason === MAINTENANCE_REASON) {
+          // A planned window, not a broken connection: stop here (no reconnect
+          // loop). On a refused `connect` the server keeps the socket open; it
+          // is closed here all the same, so a retry starts from a fresh one.
+          this.emit('maintenance', null);
+          this.emit('error', new Error(MAINTENANCE_MESSAGE));
         } else {
           this.emit('error', new Error(message.reason || 'Authentication failed'));
         }
