@@ -81,9 +81,9 @@ Create clean, frequent commits, then land the work through a pull request. Assum
 - **Sequence**: `git status`, `git diff`, stage intentionally, `git commit`, `git status`.
 - **Tests not run**: still commit, and say so in the body (`Notes: tests not run (DB env not available).`).
 
-## MANDATORY: Settings UI Pattern (applies from #76)
+## MANDATORY: Settings UI Pattern
 
-Every settings surface, admin or per-user, is a **registry-driven hub**, not a tab strip and not an ungoverned route. Today's pages (`apps/web/src/pages/*SettingsPage.tsx`) migrate in #76; new settings work waits for it or follows the pattern.
+**Applies from #76.** Every settings surface, admin or per-user, is a **registry-driven hub**, not a tab strip and not an ungoverned route. Today's pages (`apps/web/src/pages/*SettingsPage.tsx`) migrate in #76; new settings work waits for it or follows the pattern.
 
 1. **Every settings page is declared in a section registry**: admin cards in `apps/web/src/config/adminSections.tsx` *(target)* (`ADMIN_SECTIONS`), per-user cards in `apps/web/src/config/userSettingsSections.tsx` *(target)* (`USER_SETTINGS_SECTIONS`). A route without a registry entry is unacceptable. Append new cards; never insert between existing ones.
 2. **A settings page is never a new tab on an existing settings page.** Tabs only inside one destination, for genuinely **parallel** content (Users and Allowlist).
@@ -91,9 +91,9 @@ Every settings surface, admin or per-user, is a **registry-driven hub**, not a t
 4. **Reuse `SettingsHub` from `@marinoscar/platform-web/settings/ui`**; never fork it.
 5. **The five coupled breakpoint gates move together or not at all**, all in `packages/platform-web/src/` of the platform: `ShellLayout` `showRail` (`up('sm')`), `ShellBottomNav` `down('sm')`, `<main>` `pb: { xs: 10, sm: 3 }`, `SettingsHub` `isCompactWindow`, `ShellAppBar` `isCompactWindow`. The boundary is `sm` (600px), never `md`. The terminal workspace must keep working at phone width under them.
 
-## MANDATORY: Every Long-Running Activity Is a Queue Job (applies from #49)
+## MANDATORY: Every Long-Running Activity Is a Queue Job
 
-Until #49 the existing cleanup task (`apps/api/src/terminal/tasks/session-cleanup.task.ts`) is the only cron; it moves to enqueue-only in #49.
+**Applies from #49.** Until #49 the existing cleanup task (`apps/api/src/terminal/tasks/session-cleanup.task.ts`) is the only cron; it moves to enqueue-only in #49.
 
 1. **No long-running work outside the queue.** Anything that outlives the HTTP request, WebSocket message or cron tick that started it is a registered `JobHandler` with a declared `type`, enqueued through `JobsService` (`@marinoscar/platform-api/jobs`). A detached `void this.doX()`, an `@OnEvent` body that connects, downloads or spawns, and a `@Cron` body that works inline are violations. A `@Cron` only decides whether work is due and enqueues it (`enqueueHousekeepingJob`). Interactive terminal I/O is not a job; runbook runs, summaries and exports are.
    - Exactly three permanent exemptions, all the platform's: the lease reaper (`JobStuckResetTask`), `TempFileJanitorTask` and `NodeSecretSweepTask`. Executable form: conformance suites `cron-enqueue-only` and `on-event-no-io`. A fourth needs a platform change.
@@ -102,9 +102,9 @@ Until #49 the existing cleanup task (`apps/api/src/terminal/tasks/session-cleanu
 4. **A job type declares its execution profile or takes the default.** `JobHandler.profile` is exactly `{ maxRuntimeMs, maxAttempts }`. Never add `leaseMs` or `heartbeatMs`.
 5. **Jobs carry their organization.** `EnqueueJobInput.orgId` is stored on `jobs.org_id` (`null` for system jobs and housekeeping). A handler touching org tables runs under `JobScope.run(job, fn)`.
 
-## MANDATORY: AI Platform Rules (applies from #55)
+## MANDATORY: AI Platform Rules
 
-The AI slice is the platform's (`@marinoscar/platform-api/ai`). ShellKeep has no AI code yet; these bind every AI change.
+**Applies from #55.** The AI slice is the platform's (`@marinoscar/platform-api/ai`). ShellKeep has no AI code yet; these bind every AI change.
 
 1. **Never import a provider SDK outside `@marinoscar/platform-ai-providers`** (`packages/platform-ai-providers/src/<provider>/`) or a provider folder the app declares to the `ai-no-sdk-leak` suite. A feature imports `AiModule`, injects `AiService` and calls `AiService.forUser(userId, { orgId, feature })`, never an SDK client.
 2. **Never call AI from the browser; keys never leave the server.** No route, log line, span, error or usage row carries key material. Only a realtime session's ephemeral secret may be returned.
