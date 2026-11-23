@@ -1,47 +1,46 @@
 /**
- * Generate prisma/catalog/system-settings-defaults.json (issue #47).
+ * Generate (or check) prisma/catalog/system-settings-defaults.json (issues #47, #48).
  *
  * The seed reads the system settings defaults from this committed snapshot (the
- * production image carries `prisma/` but not `src/`). Until the settings slice is
- * adopted (#48) the source is ShellKeep's own `DEFAULT_SYSTEM_SETTINGS`.
+ * production image carries `prisma/` but not `src/`). The source is the system
+ * settings namespace registry (`renderSystemSettingsCatalog`).
  *
  *   npm run catalog:settings            write the file
  *   npm run catalog:settings -- --check exit 1 when the file is stale
+ *
+ * Imports the registry only (no Nest, no Prisma), so it runs on a bare checkout.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
-import { DEFAULT_SYSTEM_SETTINGS } from '../src/common/types/settings.types';
-
-const CATALOG_PATH = join(__dirname, '..', 'prisma', 'catalog', 'system-settings-defaults.json');
-
-export function renderSettingsCatalog(): string {
-  return `${JSON.stringify(DEFAULT_SYSTEM_SETTINGS, null, 2)}\n`;
-}
+import {
+  SYSTEM_SETTINGS_CATALOG_RELATIVE_PATH,
+  checkSystemSettingsCatalog,
+  renderSystemSettingsCatalog,
+} from '../src/platform/settings/settings-catalog';
 
 function main(): void {
-  const rendered = renderSettingsCatalog();
+  const target = resolve(__dirname, '..', SYSTEM_SETTINGS_CATALOG_RELATIVE_PATH);
 
   if (process.argv.includes('--check')) {
     let current: string | undefined;
     try {
-      current = readFileSync(CATALOG_PATH, 'utf8');
+      current = readFileSync(target, 'utf8');
     } catch {
       current = undefined;
     }
-    if (current !== rendered) {
-      console.error(
-        'prisma/catalog/system-settings-defaults.json is stale. Run `npm run catalog:settings` and commit the result.',
-      );
+    const stale = checkSystemSettingsCatalog(current);
+    if (stale) {
+      console.error(stale);
       process.exit(1);
     }
-    console.log('prisma/catalog/system-settings-defaults.json is up to date');
+    console.log(`${SYSTEM_SETTINGS_CATALOG_RELATIVE_PATH} is up to date`);
     return;
   }
 
-  mkdirSync(dirname(CATALOG_PATH), { recursive: true });
-  writeFileSync(CATALOG_PATH, rendered);
-  console.log(`wrote ${CATALOG_PATH}`);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, renderSystemSettingsCatalog());
+  console.log(`wrote ${target}`);
 }
 
 if (require.main === module) {

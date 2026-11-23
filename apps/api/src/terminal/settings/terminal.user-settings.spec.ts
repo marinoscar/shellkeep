@@ -3,14 +3,17 @@ import {
   keyShortcutSchema,
   DEFAULT_KEY_SHORTCUTS,
 } from './terminal.user-settings';
-import { DEFAULT_USER_SETTINGS } from '../../common/types/settings.types';
+import {
+  DEFAULT_TERMINAL_SETTINGS,
+  TERMINAL_USER_SETTINGS,
+} from './terminal.user-settings';
 import {
   composeUserSettingsPatchSchema,
   composeUserSettingsSchema,
-} from '../../settings/registry/user-settings-namespaces';
+} from '@marinoscar/platform-api/settings';
 
 // The terminal namespace is registered by shellkeep.manifest (test/setup.ts),
-// so the composed schemas carry it.
+// so the platform's composed schemas carry it.
 const userSettingsSchema = composeUserSettingsSchema() as any;
 const userSettingsPatchSchema = composeUserSettingsPatchSchema() as any;
 
@@ -18,7 +21,8 @@ const userSettingsPatchSchema = composeUserSettingsPatchSchema() as any;
 const baseSettings = {
   theme: 'system' as const,
   profile: {
-    useProviderImage: true,
+    imageSource: 'provider' as const,
+    imageObjectId: null,
   },
 };
 
@@ -41,9 +45,8 @@ describe('keystrokeSchema', () => {
       expect(result).toEqual({ modifiers: [], key: 'Escape' });
     });
 
-    it('uses default empty array when modifiers is omitted', () => {
-      const result = keystrokeSchema.parse({ key: 'Enter' });
-      expect(result.modifiers).toEqual([]);
+    it('requires modifiers (the platform refuses a .default() in a user namespace)', () => {
+      expect(() => keystrokeSchema.parse({ key: 'Enter' })).toThrow();
     });
   });
 
@@ -272,20 +275,52 @@ describe('userSettingsPatchSchema', () => {
   });
 });
 
-describe('DEFAULT_USER_SETTINGS', () => {
-  it('contains terminal.showScrollButtons: true', () => {
-    expect(DEFAULT_USER_SETTINGS.terminal?.showScrollButtons).toBe(true);
+describe('DEFAULT_TERMINAL_SETTINGS', () => {
+  it('contains showScrollButtons: true', () => {
+    expect(DEFAULT_TERMINAL_SETTINGS.showScrollButtons).toBe(true);
   });
 
-  it('contains terminal.keyShortcuts with the default shortcuts', () => {
-    expect(DEFAULT_USER_SETTINGS.terminal?.keyShortcuts).toEqual(
-      DEFAULT_KEY_SHORTCUTS,
-    );
+  it('contains keyShortcuts with the default shortcuts', () => {
+    expect(DEFAULT_TERMINAL_SETTINGS.keyShortcuts).toEqual(DEFAULT_KEY_SHORTCUTS);
   });
 
-  it('satisfies userSettingsSchema', () => {
-    // The defaults must be valid according to the schema so they can be safely
-    // stored and returned without triggering a validation error.
-    expect(() => userSettingsSchema.parse(DEFAULT_USER_SETTINGS)).not.toThrow();
+  it('satisfies the user settings schema so it can be stored without a validation error', () => {
+    expect(() =>
+      userSettingsSchema.parse({ ...baseSettings, terminal: DEFAULT_TERMINAL_SETTINGS }),
+    ).not.toThrow();
+  });
+});
+
+describe('TERMINAL_USER_SETTINGS.merge', () => {
+  const merge = TERMINAL_USER_SETTINGS.merge;
+  const custom = [
+    {
+      id: '22222222-2222-4222-8222-222222222201',
+      label: 'Ctrl+B',
+      keystrokes: [{ modifiers: ['ctrl' as const], key: 'b' as const }],
+    },
+  ];
+
+  it('keeps the current value when the patch does not name the namespace', () => {
+    const current = { showScrollButtons: false, keyShortcuts: custom };
+    expect(merge(current, undefined)).toBe(current);
+    expect(merge(undefined, undefined)).toBeUndefined();
+  });
+
+  it('removes the namespace on null (JSON Merge Patch)', () => {
+    expect(merge({ showScrollButtons: false }, null)).toBeUndefined();
+  });
+
+  it('merges a partial patch over the defaults for a user without the namespace', () => {
+    expect(merge(undefined, { showScrollButtons: false })).toEqual({
+      showScrollButtons: false,
+      keyShortcuts: DEFAULT_KEY_SHORTCUTS,
+    });
+  });
+
+  it('replaces the whole shortcut list and keeps showScrollButtons', () => {
+    expect(
+      merge({ showScrollButtons: false, keyShortcuts: DEFAULT_KEY_SHORTCUTS }, { keyShortcuts: custom }),
+    ).toEqual({ showScrollButtons: false, keyShortcuts: custom });
   });
 });

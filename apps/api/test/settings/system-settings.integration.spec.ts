@@ -12,10 +12,15 @@ import {
   createMockViewerUser,
   authHeader,
 } from '../helpers/auth-mock.helper';
-import {
-  DEFAULT_SYSTEM_SETTINGS,
-  SystemSettingsValue,
-} from '../../src/common/types/settings.types';
+// The `ui` and `features` keys ShellKeep has always stored in the `global` row.
+interface SystemSettingsValue {
+  ui: { allowUserThemeOverride: boolean };
+  features: Record<string, boolean>;
+}
+const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
+  ui: { allowUserThemeOverride: true },
+  features: {},
+};
 
 describe('System Settings Integration', () => {
   let context: TestContext;
@@ -65,6 +70,81 @@ describe('System Settings Integration', () => {
       expect(response.body.data.updatedAt).toBeDefined();
     });
 
+
+    // Characterization (#48): the `ui` and `features` bodies ShellKeep has always returned,
+    // with the platform's documented additions (`terminal` namespace, `security`).
+    it('returns the recorded ui/features body, then the platform additions, for an existing row', async () => {
+      const admin = await createMockAdminUser(context);
+      const updatedAt = new Date('2026-01-02T03:04:05.000Z');
+      context.prismaMock.systemSettings.findUnique.mockResolvedValue({
+        id: 'settings-1',
+        key: 'global',
+        value: { ui: { allowUserThemeOverride: false }, features: { beta: true } },
+        version: 7,
+        updatedAt,
+        updatedByUserId: null,
+        updatedByUser: null,
+      });
+
+      const response = await request(context.app.getHttpServer())
+        .get('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      const data = JSON.parse(response.text).data;
+      // The keys of the old response, unchanged and in their old order.
+      expect(JSON.stringify(data.ui)).toBe(JSON.stringify({ allowUserThemeOverride: false }));
+      expect(data.features).toEqual({ beta: true });
+      expect(data.version).toBe(7);
+      expect(data.updatedAt).toBe(updatedAt.toISOString());
+      expect(data.updatedBy).toBeNull();
+      // Platform additions: the terminal namespace (defaults for a row without it) and the
+      // session policy the slice derives.
+      expect(data.terminal).toEqual({
+        detachAfterMinutes: 60,
+        terminateDetachedAfterHours: 12,
+        purgeTerminatedAfterDays: 3,
+        doctorProbeProfileId: null,
+      });
+      expect(data.security).toEqual({
+        jwtAccessTtlMinutes: expect.any(Number),
+        refreshTtlDays: expect.any(Number),
+      });
+      expect(Object.keys(data).slice(0, 3)).toEqual(['ui', 'features', 'terminal']);
+    });
+
+    it('returns a stored terminal namespace as stored', async () => {
+      const admin = await createMockAdminUser(context);
+      context.prismaMock.systemSettings.findUnique.mockResolvedValue({
+        id: 'settings-1',
+        key: 'global',
+        value: {
+          ...DEFAULT_SYSTEM_SETTINGS,
+          terminal: {
+            detachAfterMinutes: 30,
+            terminateDetachedAfterHours: 24,
+            purgeTerminatedAfterDays: 7,
+            doctorProbeProfileId: '3f2b8d4e-7a1c-4e5d-9b6a-1c2d3e4f5a6b',
+          },
+        },
+        version: 2,
+        updatedAt: new Date(),
+        updatedByUserId: null,
+        updatedByUser: null,
+      });
+
+      const response = await request(context.app.getHttpServer())
+        .get('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      expect(response.body.data.terminal).toEqual({
+        detachAfterMinutes: 30,
+        terminateDetachedAfterHours: 24,
+        purgeTerminatedAfterDays: 7,
+        doctorProbeProfileId: '3f2b8d4e-7a1c-4e5d-9b6a-1c2d3e4f5a6b',
+      });
+    });
     // Note: ETag header not currently implemented in controller
   });
 
@@ -316,6 +396,52 @@ describe('System Settings Integration', () => {
         .expect(200);
 
       expect(response.body.data.features).toEqual({ betaFeature: true });
+    });
+
+    it.each([
+      { detachAfterMinutes: 4 },
+      { detachAfterMinutes: 1441 },
+      { terminateDetachedAfterHours: 0 },
+      { terminateDetachedAfterHours: 721 },
+      { purgeTerminatedAfterDays: 0 },
+      { purgeTerminatedAfterDays: 366 },
+      { doctorProbeProfileId: 'not-a-uuid' },
+    ])('should return 400 when the terminal thresholds are out of bounds: %j', async (terminal) => {
+      const admin = await createMockAdminUser(context);
+
+      await request(context.app.getHttpServer())
+        .patch('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .send({ terminal })
+        .expect(400);
+    });
+
+    it('should merge a terminal patch over the stored thresholds', async () => {
+      const admin = await createMockAdminUser(context);
+
+      context.prismaMock.systemSettings.update.mockImplementation(async ({ data }: any) => ({
+        id: 'settings-1',
+        key: 'global',
+        value: data.value,
+        version: 2,
+        updatedAt: new Date(),
+        updatedByUserId: admin.id,
+        updatedByUser: { id: admin.id, email: admin.email },
+      }));
+      context.prismaMock.auditEvent.create.mockResolvedValue({} as any);
+
+      const response = await request(context.app.getHttpServer())
+        .patch('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .send({ terminal: { detachAfterMinutes: 90 } })
+        .expect(200);
+
+      expect(response.body.data.terminal).toEqual({
+        detachAfterMinutes: 90,
+        terminateDetachedAfterHours: 12,
+        purgeTerminatedAfterDays: 3,
+        doctorProbeProfileId: null,
+      });
     });
 
     it('should return 400 with invalid partial update', async () => {

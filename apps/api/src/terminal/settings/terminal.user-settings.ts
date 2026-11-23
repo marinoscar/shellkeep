@@ -4,12 +4,18 @@
 //
 // The `terminal` key of `user_settings.value`: scroll-button visibility and the
 // on-screen key shortcuts bar. Declared here, in the terminal domain, and
-// registered by `src/shellkeep.manifest.ts`; the base settings module only sees
-// it through the namespace registry. Stored key names are unchanged.
+// registered with the platform settings slice's user namespace registry by
+// `platform/settings/registry.ts`. Stored key names are unchanged (#48).
+//
+// The platform returns a namespace only when it is stored: a user who never
+// saved terminal preferences reads a body WITHOUT `terminal`, and the client
+// applies `DEFAULT_TERMINAL_SETTINGS` (mirrored in the web app). A PATCH that
+// names the namespace stores the defaults merged with the patch, exactly as
+// before, so the stored shape is unchanged.
 // =============================================================================
 
 import { z } from 'zod';
-import type { UserSettingsNamespace } from '../../settings/registry/user-settings-namespaces';
+import type { UserSettingsNamespace } from '@marinoscar/platform-api/settings';
 
 // -----------------------------------------------------------------------------
 // Key shortcut schemas
@@ -29,7 +35,9 @@ export const KEY_SHORTCUT_BASE_KEYS = [
 ] as const;
 
 export const keystrokeSchema = z.object({
-  modifiers: z.array(z.enum(['ctrl', 'shift', 'alt', 'meta'])).max(4).default([]),
+  // Required: the platform refuses `.default()` in a user namespace (an absent value is
+  // never materialised). Stored keystrokes have always carried the array.
+  modifiers: z.array(z.enum(['ctrl', 'shift', 'alt', 'meta'])).max(4),
   key: z.enum(KEY_SHORTCUT_BASE_KEYS),
 });
 
@@ -120,7 +128,7 @@ export const DEFAULT_KEY_SHORTCUTS: KeyShortcut[] = [
 // Namespace declaration
 // -----------------------------------------------------------------------------
 
-declare module '../../settings/registry/user-settings-namespaces' {
+declare module '@marinoscar/platform-api/settings' {
   interface UserSettingsNamespaces {
     terminal: TerminalUserSettings;
   }
@@ -142,6 +150,7 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalUserSettings = {
 };
 
 export const TERMINAL_USER_SETTINGS: UserSettingsNamespace<
+  'terminal',
   TerminalUserSettings,
   TerminalUserSettingsPatch
 > = {
@@ -150,16 +159,18 @@ export const TERMINAL_USER_SETTINGS: UserSettingsNamespace<
     'Terminal preferences: scroll-button visibility and the on-screen key shortcuts bar.',
   schema: terminalSettingsSchema,
   patchSchema: terminalSettingsPatchSchema,
-  defaults: DEFAULT_TERMINAL_SETTINGS,
   merge(current, patch) {
+    if (patch === undefined) return current;
+    // JSON Merge Patch: `null` removes the namespace (the client falls back to defaults).
+    if (patch === null) return undefined;
     const base = current ?? DEFAULT_TERMINAL_SETTINGS;
     return {
       showScrollButtons:
-        patch?.showScrollButtons !== undefined
+        patch.showScrollButtons !== undefined
           ? patch.showScrollButtons
           : base.showScrollButtons,
       keyShortcuts:
-        patch?.keyShortcuts !== undefined ? patch.keyShortcuts : base.keyShortcuts,
+        patch.keyShortcuts !== undefined ? patch.keyShortcuts : base.keyShortcuts,
     };
   },
 };

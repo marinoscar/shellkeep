@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '@marinoscar/platform-api/identity';
 import { PrismaModule } from '../prisma/prisma.module';
-import { CommonModule } from '../common/common.module';
 import { ServerProfilesModule } from '../server-profiles/server-profiles.module';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
@@ -14,7 +13,6 @@ import { SessionCleanupTask } from './tasks/session-cleanup.task';
 @Module({
   imports: [
     PrismaModule,
-    CommonModule,
     ServerProfilesModule,
     // The identity slice's own module: `AuthService` (its principal resolution)
     // and `JwtService` for `TerminalPrincipalResolver`. Nest modules are

@@ -11,10 +11,14 @@ import {
   createMockViewerUser,
   authHeader,
 } from '../helpers/auth-mock.helper';
-import {
-  DEFAULT_USER_SETTINGS,
-  UserSettingsValue,
-} from '../../src/common/types/settings.types';
+import { DEFAULT_USER_SETTINGS } from '@marinoscar/platform-api/settings';
+
+// The platform's profile shape (#48): `imageSource` and `imageObjectId` replace the
+// legacy `useProviderImage` / `customImageUrl`.
+interface UserSettingsValue {
+  theme: 'light' | 'dark' | 'system';
+  profile: { displayName?: string; imageSource: 'none' | 'provider' | 'upload'; imageObjectId: string | null };
+}
 
 describe('User Settings Integration', () => {
   let context: TestContext;
@@ -112,8 +116,8 @@ describe('User Settings Integration', () => {
       theme: 'dark',
       profile: {
         displayName: 'John Doe',
-        useProviderImage: false,
-        customImageUrl: 'https://example.com/avatar.jpg',
+        imageSource: 'none',
+        imageObjectId: null,
       },
     };
 
@@ -207,7 +211,7 @@ describe('User Settings Integration', () => {
       const invalidSettings = {
         theme: 'invalid-theme',
         profile: {
-          useProviderImage: true,
+          imageSource: 'provider',
         },
       };
 
@@ -233,14 +237,13 @@ describe('User Settings Integration', () => {
         .expect(400);
     });
 
-    it('should return 400 with invalid URL in customImageUrl', async () => {
+    it('should return 400 with an unknown imageSource', async () => {
       const user = await createMockTestUser(context);
 
       const invalidUrlSettings = {
         theme: 'dark',
         profile: {
-          useProviderImage: false,
-          customImageUrl: 'not-a-valid-url',
+          imageSource: 'gravatar',
         },
       };
 
@@ -260,7 +263,7 @@ describe('User Settings Integration', () => {
         theme: 'dark',
         profile: {
           displayName: tooLongName,
-          useProviderImage: true,
+          imageSource: 'provider',
         },
       };
 
@@ -364,7 +367,7 @@ describe('User Settings Integration', () => {
           theme: DEFAULT_USER_SETTINGS.theme,
           profile: {
             displayName: 'Jane Doe',
-            useProviderImage: DEFAULT_USER_SETTINGS.profile.useProviderImage,
+            imageSource: DEFAULT_USER_SETTINGS.profile.imageSource,
           },
         } as any,
         version: 2,
@@ -477,8 +480,7 @@ describe('User Settings Integration', () => {
 
       const partialUpdate = {
         profile: {
-          useProviderImage: false,
-          customImageUrl: 'https://example.com/custom.jpg',
+          imageSource: 'none',
         },
       };
 
@@ -488,8 +490,8 @@ describe('User Settings Integration', () => {
         value: {
           theme: DEFAULT_USER_SETTINGS.theme,
           profile: {
-            useProviderImage: false,
-            customImageUrl: 'https://example.com/custom.jpg',
+            imageSource: 'none',
+            imageObjectId: null,
           },
         } as any,
         version: 2,
@@ -504,10 +506,8 @@ describe('User Settings Integration', () => {
         .send(partialUpdate)
         .expect(200);
 
-      expect(response.body.data.profile.useProviderImage).toBe(false);
-      expect(response.body.data.profile.customImageUrl).toBe(
-        'https://example.com/custom.jpg',
-      );
+      expect(response.body.data.profile.imageSource).toBe('none');
+      expect(response.body.data.profile.imageObjectId).toBeNull();
     });
   });
 
@@ -530,7 +530,7 @@ describe('User Settings Integration', () => {
               userId: user2.id,
               value: {
                 theme: 'dark',
-                profile: { useProviderImage: true },
+                profile: { imageSource: 'provider', imageObjectId: null },
               } as any,
               version: 1,
               updatedAt: new Date(),
@@ -560,7 +560,7 @@ describe('User Settings Integration', () => {
 
       const newSettings: UserSettingsValue = {
         theme: 'dark',
-        profile: { useProviderImage: true },
+        profile: { imageSource: 'provider', imageObjectId: null },
       };
 
       context.prismaMock.userSettings.upsert.mockResolvedValue({
