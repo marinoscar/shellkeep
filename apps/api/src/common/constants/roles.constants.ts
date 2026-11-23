@@ -48,6 +48,8 @@ export const DEFAULT_ROLE = ROLES.VIEWER;
 // Type the platform's `@Auth({ roles, permissions })` with these ids, so a typo
 // in a permission string fails the typecheck instead of failing closed at run time.
 declare module '@marinoscar/platform-api/identity' {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- module augmentation: widens the platform's id interface
   interface IdentityPermissionIds extends Record<PermissionName, true> {}
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- module augmentation: widens the platform's id interface
   interface IdentityRoleIds extends Record<RoleName, true> {}
 }
