@@ -9,6 +9,12 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { InstallPrompt, MaintenanceGate, UpdatePrompt } from '@marinoscar/platform-web/host/ui';
 import { APP_NAME } from './config/app';
+import {
+  ABOUT_PATH,
+  ADMIN_HUB_PATH,
+  ADMIN_HUB_PERMISSIONS,
+  MAINTENANCE_PATH,
+} from './config/adminSections';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
 import { AppPlatformHostProvider } from './platform/platformHost';
 
@@ -44,6 +50,20 @@ const UserAppearancePage = lazy(() =>
 );
 const TerminalSettingsPage = lazy(
   () => import('./components/terminal/settings/TerminalSettingsPage'),
+);
+// Admin settings (issue #46): the packaged hub over `config/adminSections.tsx`,
+// the host slice's About and Maintenance pages and the packaged Doctor.
+const AdminSettingsHubPage = lazy(() => import('./pages/AdminSettingsHubPage'));
+const AboutPage = lazy(() =>
+  import('@marinoscar/platform-web/host/ui').then((m) => ({ default: m.AboutPage })),
+);
+const MaintenancePage = lazy(() =>
+  import('@marinoscar/platform-web/host/ui').then((m) => ({ default: m.MaintenancePage })),
+);
+const DoctorPage = lazy(() =>
+  import('@marinoscar/platform-web/doctor/ui').then((m) => ({
+    default: m.doctorSettingsPage.Page,
+  })),
 );
 
 // Test login page (development only). The platform's test login endpoint
@@ -130,6 +150,49 @@ function AppRoutes() {
                   <Route path="/settings/profile" element={<UserProfilePage />} />
                   <Route path="/settings/appearance" element={<UserAppearancePage />} />
                   <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
+                  {/* Admin settings (#46): every card of ADMIN_SECTIONS has a route
+                      here, gated on the card's permission (the string its API
+                      controller enforces). The hub admits any card's permission. */}
+                  <Route
+                    path={ADMIN_HUB_PATH}
+                    element={
+                      <RequirePermission permissions={ADMIN_HUB_PERMISSIONS} fallback={HOME}>
+                        <AdminSettingsHubPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path={ABOUT_PATH}
+                    element={
+                      <RequirePermission permission="system_settings:read" fallback={HOME}>
+                        <AboutPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path={MAINTENANCE_PATH}
+                    element={
+                      <RequirePermission permission="system_settings:read" fallback={HOME}>
+                        <MaintenancePage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/users"
+                    element={
+                      <RequirePermission permission="users:read" fallback={HOME}>
+                        <UsersPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/doctor"
+                    element={
+                      <RequirePermission permission="system_settings:read" fallback={HOME}>
+                        <DoctorPage />
+                      </RequirePermission>
+                    }
+                  />
                   {/* `users:read` is what `GET /api/users` enforces; the packaged page
                       gates its Allowlist tab on `allowlist:read` itself. */}
                   <Route
