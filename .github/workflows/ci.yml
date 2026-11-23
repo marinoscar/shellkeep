@@ -27,6 +27,10 @@ jobs:
       - name: Check module classification
         run: node scripts/platform-adoption/check-classification.mjs
       - run: npm run prisma:generate --workspace=api
+      - name: Composed schema is current (prisma/schema/ equals a fresh compose)
+        run: npm run db:compose:check --workspace=api
+      - name: Installed migrations equal the package (platform.lock)
+        run: npm run db:check --workspace=api
       - run: npm run typecheck --workspace=api
       - run: npm run typecheck --workspace=web
       - run: npm run lint --workspace=api --if-present
@@ -58,6 +62,64 @@ jobs:
           NODE_ENV: test
       - name: Web tests
         run: npm run test:run --workspace=web
+        env:
+          NODE_ENV: test
+
+  database:
+    name: Database (fresh migrate, seed, drift, db tests)
+    runs-on: ubuntu-24.04
+    needs: [check]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: shellkeep
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # The Prisma and platform CLIs build DATABASE_URL from these
+      # (apps/api/scripts/prisma-env.js).
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shellkeep
+      POSTGRES_SSL: 'false'
+      INITIAL_ADMIN_EMAIL: ci-admin@example.test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate --workspace=api
+      - name: Migrate an empty database
+        run: npm run prisma:migrate --workspace=api
+      - name: Seed
+        run: npm run prisma:seed --workspace=api
+      - name: Ledger agrees with the files
+        run: npm run db:check:database --workspace=api
+      - name: Migrations equal the composed schema
+        run: npm run db:drift --workspace=api
+      - name: Create the application role (idempotent ownership transfer)
+        run: psql -v ON_ERROR_STOP=1 -v app=shellkeep_app -v app_password=ci-only-password -f prisma/sql/create-app-role.sql
+        working-directory: apps/api
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: shellkeep
+      - name: Real-database tests
+        run: npm run test:db --workspace=api
         env:
           NODE_ENV: test
 
