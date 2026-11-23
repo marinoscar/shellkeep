@@ -46,7 +46,7 @@ function constructDatabaseUrl() {
   // Build SSL parameter
   const sslParam = ssl ? '?sslmode=require' : '';
 
-  return `postgresql://${user}:${encodedPassword}@${host}:${port}/${dbName}${sslParam}`;
+  return `postgresql://${encodeURIComponent(user)}:${encodedPassword}@${host}:${port}/${dbName}${sslParam}`;
 }
 
 /**
@@ -89,4 +89,10 @@ function main() {
   });
 }
 
-main();
+// Only run when invoked directly: platform-env.js requires this file for
+// constructDatabaseUrl and must not spawn Prisma.
+if (require.main === module) {
+  main();
+}
+
+module.exports = { constructDatabaseUrl };
