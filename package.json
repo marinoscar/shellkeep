@@ -1,7 +1,13 @@
 {
   "name": "enterprise-app",
   "private": true,
-  "workspaces": ["apps/*", "tools/*"],
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "apps/*",
+    "tools/*"
+  ],
   "scripts": {
     "api": "npm -w apps/api",
     "web": "npm -w apps/web",
