@@ -7,7 +7,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'No linter configured'",
+    "lint": "cd ../.. && eslint \"apps/web/src/**/*.{ts,tsx}\"",
     "test": "vitest",
     "test:run": "vitest run",
     "test:watch": "vitest watch",
