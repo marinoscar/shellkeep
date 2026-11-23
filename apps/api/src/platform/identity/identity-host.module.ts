@@ -7,8 +7,8 @@
 // whose controllers use `@Auth()`, so the ports it injects have to resolve there.
 //
 //   IDENTITY_NOTIFIER         -> log only               PLATFORM-ADOPTION-SHIM(#51)
-//   IDENTITY_JOBS             -> in-process handlers    PLATFORM-ADOPTION-SHIM(#49)
-//   IDENTITY_NODE_CREDENTIALS -> resolves nothing       PLATFORM-ADOPTION-SHIM(#49)
+//   IDENTITY_JOBS             -> the platform queue (#49)
+//   IDENTITY_NODE_CREDENTIALS -> the nodes slice's NodeCredentialService (#49)
 //   IDENTITY_PROFILE_IMAGES   -> the stored `profile` user setting
 //   USER_DEFAULTS             -> the platform's core defaults plus the app's initial namespaces
 //   IDENTITY_AUTH_CREDENTIALS -> the deployment credential store (#48)
@@ -25,6 +25,7 @@
 import { Global, Module } from '@nestjs/common';
 import { CredentialsModule, CredentialsService } from '@marinoscar/platform-api/credentials';
 import { AppMetricsService, EVENT_BUS } from '@marinoscar/platform-api/host';
+import { NodeCredentialService } from '@marinoscar/platform-api/nodes';
 import {
   IDENTITY_AUTH_CREDENTIALS,
   IDENTITY_EVENT_BUS,
@@ -37,14 +38,13 @@ import {
 } from '@marinoscar/platform-api/identity';
 
 import { IdentityJobsAdapter } from './identity-jobs.adapter';
-import { IdentityNodeCredentialsAdapter } from './identity-node-credentials.adapter';
 import { IdentityNotifierAdapter } from './identity-notifier.adapter';
 import { ShellkeepProfileImages, ShellkeepUserDefaults } from './identity-user.adapters';
 
 const PORTS = [
   { provide: IDENTITY_NOTIFIER, useClass: IdentityNotifierAdapter },
   { provide: IDENTITY_JOBS, useClass: IdentityJobsAdapter },
-  { provide: IDENTITY_NODE_CREDENTIALS, useClass: IdentityNodeCredentialsAdapter },
+  { provide: IDENTITY_NODE_CREDENTIALS, useExisting: NodeCredentialService },
   { provide: USER_DEFAULTS, useClass: ShellkeepUserDefaults },
   { provide: IDENTITY_PROFILE_IMAGES, useClass: ShellkeepProfileImages },
   { provide: IDENTITY_AUTH_CREDENTIALS, useExisting: CredentialsService },
