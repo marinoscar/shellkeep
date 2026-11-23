@@ -8,6 +8,7 @@ import { SshService } from './ssh.service';
 import { SessionManagerService } from './session-manager.service';
 import { TerminalGateway } from './terminal.gateway';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
+import { TerminalMaintenancePolicy } from './ws/terminal-maintenance.policy';
 import { SessionCleanupTask } from './tasks/session-cleanup.task';
 
 @Module({
@@ -25,6 +26,7 @@ import { SessionCleanupTask } from './tasks/session-cleanup.task';
     SshService,
     SessionManagerService,
     TerminalPrincipalResolver,
+    TerminalMaintenancePolicy,
     TerminalGateway,
     SessionCleanupTask,
   ],
