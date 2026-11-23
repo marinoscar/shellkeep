@@ -36,7 +36,7 @@ export interface ReapedSessionLine {
 
 /** Everything the message renders, and the payload the bell and push read. Plain JSON. */
 export interface TerminalSessionReapedData {
-  /** At most  sessions, longest idle first. */
+  /** At most ten sessions (`MAX_LISTED_SESSIONS`), longest idle first. */
   sessions: ReapedSessionLine[];
   /** How many more were closed than are listed (0 when all are). */
   moreCount: number;
