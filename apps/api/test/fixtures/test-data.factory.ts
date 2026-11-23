@@ -59,6 +59,10 @@ export const mockPermissions = {
     name: 'allowlist:write',
     description: 'Modify allowlist',
   },
+  serversRead: { id: randomUUID(), name: 'servers:read', description: 'Read server profiles' },
+  serversWrite: { id: randomUUID(), name: 'servers:write', description: 'Modify server profiles' },
+  sessionsRead: { id: randomUUID(), name: 'sessions:read', description: 'Read terminal sessions' },
+  sessionsWrite: { id: randomUUID(), name: 'sessions:write', description: 'Modify terminal sessions' },
 };
 
 export const mockRoles = {
@@ -350,6 +354,10 @@ export const rolePermissionsMap = {
     mockPermissions.rbacManage,
     mockPermissions.allowlistRead,
     mockPermissions.allowlistWrite,
+    mockPermissions.serversRead,
+    mockPermissions.serversWrite,
+    mockPermissions.sessionsRead,
+    mockPermissions.sessionsWrite,
   ],
   contributor: [
     mockPermissions.userSettingsRead,
