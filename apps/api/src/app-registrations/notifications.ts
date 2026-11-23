@@ -19,6 +19,7 @@
 
 import {
   configureEmailRendering,
+  registerEmailTemplates,
   registerPlatformEmailTemplates,
 } from '@marinoscar/platform-api/email';
 import {
@@ -29,7 +30,9 @@ import {
   registerPlatformNotificationChannels,
 } from '@marinoscar/platform-api/notifications';
 
+import { SHELLKEEP_EMAIL_TEMPLATES } from '../email-templates';
 import { IDENTITY_NOTIFICATIONS } from '../notifications-registry/identity.notifications';
+import { TERMINAL_NOTIFICATIONS } from '../notifications-registry/terminal.notifications';
 import { EMAIL_MODULE_OPTIONS } from '../platform/email/email.options';
 
 let registered = false;
@@ -46,6 +49,7 @@ export function registerShellkeepNotifications(): void {
   //    receives, so a template rendered before Nest composes anything names the product.
   configureEmailRendering(EMAIL_MODULE_OPTIONS);
   registerPlatformEmailTemplates();
+  registerEmailTemplates(SHELLKEEP_EMAIL_TEMPLATES);
 
   // 3. Notifications, in the order the preferences matrix shows them.
   registerNotifications([
@@ -53,6 +57,7 @@ export function registerShellkeepNotifications(): void {
     ...BROADCASTS_NOTIFICATIONS,
     ...OPS_NOTIFICATIONS,
     ...NODES_NOTIFICATIONS,
+    ...TERMINAL_NOTIFICATIONS,
   ]);
   // The runbook events are NOT here: `registerRunbookNotifications()` (#61).
 }
