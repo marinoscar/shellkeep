@@ -5,8 +5,8 @@ import type { AuditEventInput, AuditSink } from '@marinoscar/platform-api/core';
  * Records an audit event through the platform's `AUDIT_SINK`, after the
  * triggering write committed. An audit failure is logged and swallowed: a
  * missing audit row must never fail (or roll back) the action it describes.
- * `meta` is scalars only and never carries a credential, token or terminal
- * payload; callers pass a hostname, an id or a flag.
+ * `meta` is scalars only and never carries a credential, token or payload;
+ * callers pass a hostname, an id or a flag.
  */
 export async function recordAudit(
   sink: AuditSink,

@@ -6,7 +6,7 @@ import { DEFAULT_USER_SETTINGS } from '../../common/types/settings.types';
 /**
  * Identity's `USER_DEFAULTS`: what a new user's `user_settings.value` holds at
  * creation, the composed defaults of ShellKeep's own settings module (the core
- * fields plus the `terminal` namespace registered by #44).
+ * fields plus every user-settings namespace the domain registers, #44).
  */
 @Injectable()
 export class ShellkeepUserDefaults implements UserDefaults {
