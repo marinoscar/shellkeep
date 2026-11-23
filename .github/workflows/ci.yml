@@ -74,7 +74,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
           POSTGRES_DB: shellkeep
         ports:
           - 5432:5432
@@ -89,7 +89,7 @@ jobs:
       POSTGRES_HOST: 127.0.0.1
       POSTGRES_PORT: '5432'
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
       POSTGRES_DB: shellkeep
       POSTGRES_SSL: 'false'
       INITIAL_ADMIN_EMAIL: ci-admin@example.test
@@ -110,13 +110,13 @@ jobs:
       - name: Migrations equal the composed schema
         run: npm run db:drift --workspace=api
       - name: Create the application role (idempotent ownership transfer)
-        run: psql -v ON_ERROR_STOP=1 -v app=shellkeep_app -v app_password=ci-only-password -f prisma/sql/create-app-role.sql
+        run: psql -v ON_ERROR_STOP=1 -v app=shellkeep_app -v app_password="app-${{ github.run_id }}" -f prisma/sql/create-app-role.sql
         working-directory: apps/api
         env:
           PGHOST: 127.0.0.1
           PGPORT: '5432'
           PGUSER: postgres
-          PGPASSWORD: postgres
+          PGPASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
           PGDATABASE: shellkeep
       - name: Real-database tests
         run: npm run test:db --workspace=api
