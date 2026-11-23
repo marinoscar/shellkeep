@@ -22,7 +22,7 @@ import {
   type RenderedEmail,
 } from '@marinoscar/platform-api/email';
 
-import { MAX_LISTED_SESSIONS, formatIdleDuration } from './idle-duration';
+import { formatIdleDuration } from './idle-duration';
 
 /** One terminated session, as the notification lists it. */
 export interface ReapedSessionLine {
@@ -36,7 +36,7 @@ export interface ReapedSessionLine {
 
 /** Everything the message renders, and the payload the bell and push read. Plain JSON. */
 export interface TerminalSessionReapedData {
-  /** At most {@link MAX_LISTED_SESSIONS} sessions, longest idle first. */
+  /** At most  sessions, longest idle first. */
   sessions: ReapedSessionLine[];
   /** How many more were closed than are listed (0 when all are). */
   moreCount: number;
