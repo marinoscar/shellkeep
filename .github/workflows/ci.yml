@@ -122,6 +122,27 @@ jobs:
         env:
           NODE_ENV: test
 
+  openapi:
+    name: OpenAPI
+    runs-on: ubuntu-latest
+    # Reads decorator metadata only and shares nothing with the build job, so it
+    # needs no database and runs concurrently.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # The dump imports AppModule, which imports @prisma/client; preview mode never
+      # instantiates PrismaService, but the generated client has to exist.
+      - run: npm run prisma:generate --workspace=api
+      - run: npm run openapi:typecheck --workspace=api
+      - name: Dump the OpenAPI document (Nest preview mode: no database, no credentials)
+        run: npm run openapi:dump
+      - name: Lint the document (Spectral)
+        run: npm run openapi:lint
+
   build:
     name: Build
     runs-on: ubuntu-latest

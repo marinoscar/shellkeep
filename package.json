@@ -16,6 +16,8 @@
     "api:test": "npm -w apps/api test",
     "web:test": "npm -w apps/web test",
     "check:classification": "node scripts/platform-adoption/check-classification.mjs",
+    "openapi:dump": "npm run openapi:dump --workspace=api -- ../../openapi.json",
+    "openapi:lint": "spectral lint openapi.json --ruleset .spectral.yaml --fail-severity=error",
     "typecheck": "npm run typecheck --workspace=api && npm run typecheck --workspace=web",
     "lint": "eslint \"apps/{api,web}/src/**/*.{ts,tsx}\"",
     "check:platform-imports": "eslint --max-warnings=0 --config eslint.platform-imports.config.mjs \"apps/{api,web}/src/**/*.{ts,tsx}\"",
@@ -34,6 +36,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@marinoscar/platform-contract": "0.1.0-next.39",
+    "@stoplight/spectral-cli": "^6.17.1",
     "eslint": "^10.15.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "typescript-eslint": "^8.74.0"

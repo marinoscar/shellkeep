@@ -23,3 +23,5 @@
 import './platform/settings/registry';
 // Fills core's role, permission, user-owned-model and model-ownership registries.
 import './app-registrations/registrations';
+// The OpenAPI tags of the app's controllers.
+import './app-registrations/openapi-tags';
