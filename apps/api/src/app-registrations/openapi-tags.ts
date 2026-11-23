@@ -28,7 +28,7 @@ interface AppOpenApiTagGroup {
  * Sidebar sections, in render order. Every `@ApiTags(...)` name a controller of
  * the composed app uses appears here, the packaged slices' included: a slice
  * does not register its own tags, the app that mounts it does. A slice adopted
- * later (jobs, storage, notifications, AI) adds its tags in its own issue.
+ * later (storage, notifications, AI) adds its tags in its own issue.
  */
 const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
   {
@@ -135,6 +135,24 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
         description:
           'File objects: simple upload, resumable multipart upload, signed download URLs, metadata, ' +
           'and deletion. A caller sees only the objects they uploaded.',
+      },
+    ],
+  },
+  {
+    name: 'Jobs & Nodes',
+    tags: [
+      {
+        name: 'Jobs',
+        description:
+          'The background job queue: what is queued, running, finished or failed (session reaping, ' +
+          'credential cleanup), and the controls to retry or cancel a job. Gated on `jobs:read`/`jobs:write`.',
+      },
+      {
+        name: 'Worker Nodes',
+        description:
+          'The worker fleet that executes node-eligible jobs: registration, heartbeats, health, and ' +
+          'draining a node before it is retired. Gated on `nodes:read`/`nodes:write`, separately ' +
+          'from the queue itself.',
       },
     ],
   },

@@ -10,6 +10,7 @@ import { SessionManagerService } from './session-manager.service';
 import { TerminalGateway } from './terminal.gateway';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
 import { TerminalMaintenancePolicy } from './ws/terminal-maintenance.policy';
+import { SessionReapHandler } from './jobs/session-reap.handler';
 import { SessionCleanupTask } from './tasks/session-cleanup.task';
 import { TerminalAboutSource } from './about/terminal.about-contributor';
 import { SshClientDoctorCheck } from './doctor/ssh-client.doctor-check';
@@ -37,7 +38,9 @@ import { LegacySecretsDoctorCheck } from './doctor/legacy-secrets.doctor-check';
     TerminalPrincipalResolver,
     TerminalMaintenancePolicy,
     TerminalGateway,
+    // The reaper: an enqueue-only cron and the `terminal.session.reap` job it queues (#49).
     SessionCleanupTask,
+    SessionReapHandler,
     // The terminal's About section and Doctor checks (#46). Each check registers
     // itself with the platform's `DoctorCheckRegistry` in `onModuleInit`.
     TerminalAboutSource,

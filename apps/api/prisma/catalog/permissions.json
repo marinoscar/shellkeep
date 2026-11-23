@@ -83,6 +83,26 @@
       "scope": "system"
     },
     {
+      "name": "jobs:read",
+      "description": "View queued, running and completed jobs",
+      "scope": "system"
+    },
+    {
+      "name": "jobs:write",
+      "description": "Enqueue, retry and cancel jobs",
+      "scope": "system"
+    },
+    {
+      "name": "nodes:read",
+      "description": "View worker nodes and their health",
+      "scope": "system"
+    },
+    {
+      "name": "nodes:write",
+      "description": "Register, drain and remove worker nodes",
+      "scope": "system"
+    },
+    {
       "name": "storage_config:read",
       "description": "View the object-storage configuration and the masked status of its stored secret key",
       "scope": "system"
@@ -183,6 +203,10 @@
       "allowlist:read",
       "allowlist:write",
       "storage:delete_any",
+      "jobs:read",
+      "jobs:write",
+      "nodes:read",
+      "nodes:write",
       "storage_config:read",
       "storage_config:write",
       "organizations:read",

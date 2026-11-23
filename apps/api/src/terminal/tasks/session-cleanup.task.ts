@@ -1,71 +1,33 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { PrismaService } from '../../prisma/prisma.service';
+import { JobsService, enqueueHousekeepingJob } from '@marinoscar/platform-api/jobs';
 
+import { PrismaService } from '../../prisma/prisma.service';
+import { TERMINAL_SESSION_REAP_TYPE } from '../jobs/session-reap.handler';
+
+/**
+ * Every five minutes, queues the session reaper. It only decides that work is
+ * due and enqueues it (a system job, skipped while one is pending or running);
+ * `SessionReapHandler` does the work. `PrismaService` is the helper's read-only
+ * "already in flight?" port, not a data access of this task.
+ */
 @Injectable()
 export class SessionCleanupTask {
   private readonly logger = new Logger(SessionCleanupTask.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly jobs: JobsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Cron('0 */5 * * * *')
   async handleCleanup(): Promise<void> {
-    await this.markStaleSessions();
-    await this.terminateStaleDetachedSessions();
-    await this.purgeOldTerminatedSessions();
-  }
-
-  private async markStaleSessions(): Promise<void> {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-
-    const result = await this.prisma.terminalSession.updateMany({
-      where: {
-        status: 'active',
-        lastActivityAt: { lt: oneHourAgo },
-      },
-      data: {
-        status: 'detached',
-      },
+    await enqueueHousekeepingJob({
+      jobs: this.jobs,
+      prisma: this.prisma,
+      logger: this.logger,
+      type: TERMINAL_SESSION_REAP_TYPE,
+      what: 'terminal session reap',
     });
-
-    if (result.count > 0) {
-      this.logger.log(`Marked ${result.count} stale sessions as detached`);
-    }
-  }
-
-  private async terminateStaleDetachedSessions(): Promise<void> {
-    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
-
-    const result = await this.prisma.terminalSession.updateMany({
-      where: {
-        status: 'detached',
-        lastActivityAt: { lt: twelveHoursAgo },
-      },
-      data: {
-        status: 'terminated',
-        terminatedAt: new Date(),
-      },
-    });
-
-    if (result.count > 0) {
-      this.logger.log(
-        `Terminated ${result.count} stale detached sessions`,
-      );
-    }
-  }
-
-  private async purgeOldTerminatedSessions(): Promise<void> {
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-
-    const result = await this.prisma.terminalSession.deleteMany({
-      where: {
-        status: 'terminated',
-        terminatedAt: { lt: threeDaysAgo },
-      },
-    });
-
-    if (result.count > 0) {
-      this.logger.log(`Purged ${result.count} old terminated sessions`);
-    }
   }
 }

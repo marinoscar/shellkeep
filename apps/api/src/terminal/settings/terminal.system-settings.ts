@@ -12,8 +12,8 @@
 //   purgeTerminatedAfterDays     a `terminated` session row is purged after this long
 //   doctorProbeProfileId         the server profile the Doctor probes (#46), or null
 //
-// #49 reads the three thresholds; until then `terminal/tasks/session-cleanup.task.ts`
-// keeps its hard-coded values (1 h, 12 h, 3 days: the defaults below).
+// `terminal/jobs/session-reap.handler.ts` (#49) reads the three thresholds on every run, so
+// a change applies without a deploy.
 //
 // No secret lives in this namespace.
 // =============================================================================

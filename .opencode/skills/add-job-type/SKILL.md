@@ -5,9 +5,9 @@ description: Add a background job type to the job queue - implement a JobHandler
 
 # Add a job type
 
-**Applies from #49** (jobs and nodes adopted from the platform). Before that, the only background work is `apps/api/src/terminal/tasks/session-cleanup.task.ts`; do not add a second hand-rolled scheduler.
+**In force since #49** (jobs and nodes adopted from the platform). The reference is `apps/api/src/terminal/jobs/session-reap.handler.ts` with its enqueue-only cron `apps/api/src/terminal/tasks/session-cleanup.task.ts`; do not add a second hand-rolled scheduler.
 
-The queue and the worker-node fleet are the platform's: `@marinoscar/platform-api/jobs` and `@marinoscar/platform-api/nodes`. ShellKeep owns handlers and their host ports (`apps/api/src/platform/jobs/`, *target*). Read the contract in the installed package: the jobs section of `node_modules/@marinoscar/platform-api/README.md` and the TSDoc in `node_modules/@marinoscar/platform-api/dist/jobs/job-handler.interface.d.ts`. Rule: root `AGENTS.md`, "Every Long-Running Activity Is a Queue Job".
+The queue and the worker-node fleet are the platform's: `@marinoscar/platform-api/jobs` and `@marinoscar/platform-api/nodes`. ShellKeep owns handlers and their host ports (`apps/api/src/platform/jobs/`). Read the contract in the installed package: the jobs section of `node_modules/@marinoscar/platform-api/README.md` and the TSDoc in `node_modules/@marinoscar/platform-api/dist/jobs/job-handler.interface.d.ts`. Rule: root `AGENTS.md`, "Every Long-Running Activity Is a Queue Job".
 
 ## Imports
 
@@ -25,8 +25,8 @@ import {
 2. Self-register in `onModuleInit`: `this.registry.register(this)` with an injected `JobHandlerRegistry`; add the class to the feature module's `providers`.
 3. Enqueue through `JobsService.enqueue` (or `enqueueWithin(tx, ...)`) with identifiers in `payload`, never copies of data and never a credential. **Pass `orgId` explicitly on every enqueue**: `null` for housekeeping and system jobs, the organization id for a job whose handler touches org tables. Run such work under `JobScope.run(job, fn)`.
 4. A `@Cron` only decides whether work is due and enqueues, through `enqueueHousekeepingJob`. An `@OnEvent` body enqueues; it never connects, downloads or spawns.
-5. Labels: a live handler declares `label` itself. Only a retired type registers one with `registerJobTypeLabel` in `apps/api/src/app-registrations/jobs.ts` *(target)*.
-6. Add a handler spec. Append the type string to the snapshot in `apps/api/test/jobs/job-type-snapshot.spec.ts` *(target, created with the jobs adoption)*. The `cron-enqueue-only` and `on-event-no-io` conformance suites must still pass.
+5. Labels: a live handler declares `label` itself. Only a retired type registers one with `registerJobTypeLabel` in `apps/api/src/app-registrations/jobs.ts`.
+6. Add a handler spec. Append the type string to the snapshot in `apps/api/test/jobs/job-type-snapshot.spec.ts` . The `cron-enqueue-only` and `on-event-no-io` conformance suites must still pass.
 
 ## Rules
 

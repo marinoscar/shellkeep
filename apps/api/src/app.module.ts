@@ -15,6 +15,7 @@ import { hostCoreModule } from './platform/host-core.config';
 import { aboutModule } from './platform/about/about.config';
 import { identityModule } from './platform/identity/identity.config';
 import { credentialsModules } from './platform/credentials/credentials.config';
+import { jobsModule, nodeCredentialModule, nodesModule } from './platform/jobs/jobs.config';
 import { StorageModule } from './storage/storage.module';
 import { ServerProfilesModule } from './server-profiles/server-profiles.module';
 import { TerminalModule } from './terminal/terminal.module';
@@ -45,6 +46,15 @@ import configuration from './config/configuration';
     // The platform Doctor (#47, #46): the slices and the terminal domain register
     // their read-only health checks with it. `GET /api/admin/doctor`.
     doctorModule,
+
+    // The platform's job queue and worker-node fleet (#49): `/api/admin/jobs`,
+    // `/api/nodes`, `/api/admin/nodes`, the in-process worker, the lease reaper and the
+    // `jobs`, `retention` and `nodes` system namespaces. Global, and before identity,
+    // whose housekeeping handlers register into the queue's registry. The `nod_`
+    // credential family backs identity's `IDENTITY_NODE_CREDENTIALS` port.
+    jobsModule,
+    nodesModule,
+    nodeCredentialModule,
 
     // Logger
     LoggerModule,
