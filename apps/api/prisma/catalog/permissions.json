@@ -1,0 +1,231 @@
+{
+  "roles": [
+    {
+      "name": "admin",
+      "description": "System administrator - operate the deployment: users, roles and all system settings",
+      "scope": "system"
+    },
+    {
+      "name": "contributor",
+      "description": "Organization member - manage own settings and storage objects, use AI",
+      "scope": "org"
+    },
+    {
+      "name": "viewer",
+      "description": "Read-only organization member - view content and manage own settings",
+      "scope": "org"
+    },
+    {
+      "name": "org_admin",
+      "description": "Organization administrator - everything a contributor can do, plus manage the organization members and invites",
+      "scope": "org"
+    }
+  ],
+  "permissions": [
+    {
+      "name": "system_settings:read",
+      "description": "Read system settings",
+      "scope": "system"
+    },
+    {
+      "name": "system_settings:write",
+      "description": "Modify system settings",
+      "scope": "system"
+    },
+    {
+      "name": "user_settings:read",
+      "description": "Read own user settings",
+      "scope": "org"
+    },
+    {
+      "name": "user_settings:write",
+      "description": "Modify own user settings",
+      "scope": "org"
+    },
+    {
+      "name": "users:read",
+      "description": "View user list and details",
+      "scope": "system"
+    },
+    {
+      "name": "users:write",
+      "description": "Modify user accounts",
+      "scope": "system"
+    },
+    {
+      "name": "rbac:manage",
+      "description": "Manage roles and permissions",
+      "scope": "system"
+    },
+    {
+      "name": "allowlist:read",
+      "description": "View allowlisted emails",
+      "scope": "system"
+    },
+    {
+      "name": "allowlist:write",
+      "description": "Manage allowlisted emails",
+      "scope": "system"
+    },
+    {
+      "name": "storage:read",
+      "description": "Read object metadata, get download URLs",
+      "scope": "org"
+    },
+    {
+      "name": "storage:write",
+      "description": "Upload, update metadata",
+      "scope": "org"
+    },
+    {
+      "name": "storage:delete_any",
+      "description": "Admin: delete any object",
+      "scope": "system"
+    },
+    {
+      "name": "storage_config:read",
+      "description": "View the object-storage configuration and the masked status of its stored secret key",
+      "scope": "system"
+    },
+    {
+      "name": "storage_config:write",
+      "description": "Change the object-storage provider, bucket, endpoint and credential, test a configuration, and provision a bucket",
+      "scope": "system"
+    },
+    {
+      "name": "org_members:read",
+      "description": "View the members of the organization and their organization roles",
+      "scope": "org"
+    },
+    {
+      "name": "org_members:write",
+      "description": "Change organization members: their organization role, suspend or remove them",
+      "scope": "org"
+    },
+    {
+      "name": "org_invites:read",
+      "description": "View pending and past invitations to the organization",
+      "scope": "org"
+    },
+    {
+      "name": "org_invites:write",
+      "description": "Invite people to the organization and revoke invitations",
+      "scope": "org"
+    },
+    {
+      "name": "organizations:read",
+      "description": "List the deployment's organizations and their member counts",
+      "scope": "system"
+    },
+    {
+      "name": "organizations:write",
+      "description": "Create organizations (with a first administrator invitation) and rename them",
+      "scope": "system"
+    },
+    {
+      "name": "org_settings:read",
+      "description": "Read the active organization's settings overrides",
+      "scope": "org"
+    },
+    {
+      "name": "org_settings:write",
+      "description": "Modify the active organization's settings overrides",
+      "scope": "org"
+    },
+    {
+      "name": "oauth_clients:read",
+      "description": "View OAuth clients",
+      "scope": "system"
+    },
+    {
+      "name": "oauth_clients:write",
+      "description": "Manage OAuth clients: pre-register, edit, disable, rotate secrets, delete",
+      "scope": "system"
+    },
+    {
+      "name": "servers:read",
+      "description": "View server profiles",
+      "scope": "org"
+    },
+    {
+      "name": "servers:write",
+      "description": "Create and update server profiles",
+      "scope": "org"
+    },
+    {
+      "name": "servers:delete",
+      "description": "Delete server profiles",
+      "scope": "org"
+    },
+    {
+      "name": "sessions:read",
+      "description": "View terminal sessions",
+      "scope": "org"
+    },
+    {
+      "name": "sessions:write",
+      "description": "Create and manage terminal sessions",
+      "scope": "org"
+    },
+    {
+      "name": "sessions:delete",
+      "description": "Terminate terminal sessions",
+      "scope": "org"
+    }
+  ],
+  "rolePermissions": {
+    "admin": [
+      "system_settings:read",
+      "system_settings:write",
+      "users:read",
+      "users:write",
+      "rbac:manage",
+      "allowlist:read",
+      "allowlist:write",
+      "storage:delete_any",
+      "storage_config:read",
+      "storage_config:write",
+      "organizations:read",
+      "organizations:write",
+      "oauth_clients:read",
+      "oauth_clients:write"
+    ],
+    "contributor": [
+      "user_settings:read",
+      "user_settings:write",
+      "storage:read",
+      "storage:write",
+      "servers:read",
+      "servers:write",
+      "servers:delete",
+      "sessions:read",
+      "sessions:write",
+      "sessions:delete"
+    ],
+    "viewer": [
+      "user_settings:read",
+      "user_settings:write",
+      "storage:read",
+      "servers:read",
+      "sessions:read"
+    ],
+    "org_admin": [
+      "user_settings:read",
+      "user_settings:write",
+      "storage:read",
+      "storage:write",
+      "org_members:read",
+      "org_members:write",
+      "org_invites:read",
+      "org_invites:write",
+      "org_settings:read",
+      "org_settings:write",
+      "servers:read",
+      "servers:write",
+      "servers:delete",
+      "sessions:read",
+      "sessions:write",
+      "sessions:delete"
+    ]
+  }
+}
