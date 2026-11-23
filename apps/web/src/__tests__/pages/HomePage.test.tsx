@@ -1,5 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import { http, HttpResponse } from 'msw';
+import { server } from '../mocks/server';
 import { render, mockUser, mockAdminUser } from '../utils/test-utils';
 import HomePage from '../../pages/HomePage';
 
@@ -26,9 +28,46 @@ vi.mock('../../components/terminal/NewSessionDialog', () => ({
     ) : null,
 }));
 
+// Distinct totals so the stats bar shows text that only appears once its
+// fetches have resolved (the initial state renders zeros).
+const ACTIVE_TOTAL = 2;
+const DETACHED_TOTAL = 3;
+const SERVER_TOTAL = 4;
+
+/**
+ * HomePage's panels (SessionStatsBar, ActiveSessionsPanel, QuickConnectPanel,
+ * RecentActivityPanel) each fetch on mount and set state when the fetch
+ * settles. If a test ends first, that setState lands after the jsdom
+ * environment is torn down and fails the run with "window is not defined".
+ * Wait for every panel to finish loading before each test ends.
+ */
+async function waitForPanelsToSettle() {
+  await waitFor(() => {
+    expect(screen.getByText(`${ACTIVE_TOTAL} active sessions`)).toBeInTheDocument();
+    expect(screen.getByText(`${DETACHED_TOTAL} detached`)).toBeInTheDocument();
+    expect(screen.getByText(`${SERVER_TOTAL} servers`)).toBeInTheDocument();
+    expect(screen.queryAllByRole('progressbar')).toHaveLength(0);
+  });
+}
+
 describe('HomePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    server.use(
+      http.get('*/api/sessions', ({ request }) => {
+        const status = new URL(request.url).searchParams.get('status');
+        const total =
+          status === 'active' ? ACTIVE_TOTAL : status === 'detached' ? DETACHED_TOTAL : 0;
+        return HttpResponse.json({ items: [], total, page: 1, pageSize: 20 });
+      }),
+      http.get('*/api/server-profiles', () =>
+        HttpResponse.json({ items: [], total: SERVER_TOTAL, page: 1, pageSize: 20 }),
+      ),
+    );
+  });
+
+  afterEach(async () => {
+    await waitForPanelsToSettle();
   });
 
   describe('Rendering', () => {
