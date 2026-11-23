@@ -14,13 +14,17 @@ const cards = ADMIN_SECTIONS.flatMap((s) => s.cards);
 const routes = parseAppRoutes(readFileSync(join(__dirname, '..', '..', 'App.tsx'), 'utf8'));
 
 describe('ADMIN_SECTIONS (#46)', () => {
-  it('declares About, Maintenance, Terminal, Users & Allowlist and Doctor', () => {
+  it('declares About, Maintenance, Terminal, Users & Allowlist, Doctor, then the Operations cards', () => {
     expect(cards.map((c) => [c.title, c.path])).toEqual([
       ['About', '/admin/settings/about'],
       ['Maintenance', '/admin/settings/maintenance'],
       ['Terminal', '/admin/settings/terminal'],
       ['Users & Allowlist', '/admin/settings/users'],
       ['Doctor', '/admin/settings/doctor'],
+      // #49: appended, in the jobs slice's order.
+      ['Jobs', '/admin/settings/jobs'],
+      ['Job Insights', '/admin/settings/jobs/insights'],
+      ['Worker Nodes', '/admin/settings/workers'],
     ]);
   });
 
@@ -36,6 +40,12 @@ describe('ADMIN_SECTIONS (#46)', () => {
       '/admin/settings/users': 'users:read',
       // GET /api/admin/doctor.
       '/admin/settings/doctor': 'system_settings:read',
+      // GET /api/admin/jobs (+ stats); retry, cancel and reset-stuck need jobs:write, gated in the page.
+      '/admin/settings/jobs': 'jobs:read',
+      // GET /api/admin/jobs/insights.
+      '/admin/settings/jobs/insights': 'jobs:read',
+      // GET /api/admin/nodes, deliberately not jobs:read; writes need nodes:write, gated in the page.
+      '/admin/settings/workers': 'nodes:read',
     });
   });
 
@@ -52,9 +62,24 @@ describe('ADMIN_SECTIONS (#46)', () => {
   });
 
   it('gates the hub on any card permission', () => {
-    expect(ADMIN_HUB_PERMISSIONS.sort()).toEqual(['system_settings:read', 'users:read']);
+    expect(ADMIN_HUB_PERMISSIONS.sort()).toEqual([
+      'jobs:read',
+      'nodes:read',
+      'system_settings:read',
+      'users:read',
+    ]);
     const hub = routes.find((r) => r.path === ADMIN_HUB_PATH);
     expect([...((hub?.permission as readonly string[]) ?? [])].sort()).toEqual(ADMIN_HUB_PERMISSIONS);
+  });
+
+  it('puts the Operations cards in their own section, last', () => {
+    const last = ADMIN_SECTIONS[ADMIN_SECTIONS.length - 1];
+    expect(last.label).toBe('Operations');
+    expect(last.cards.map((c) => c.path)).toEqual([
+      '/admin/settings/jobs',
+      '/admin/settings/jobs/insights',
+      '/admin/settings/workers',
+    ]);
   });
 
   it('has a card for every /admin/settings/* route', () => {

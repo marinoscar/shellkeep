@@ -21,7 +21,17 @@ const CONTRIBUTOR = [
   'sessions:write',
   'servers:write',
 ];
-const ADMIN = [...CONTRIBUTOR, 'users:read', 'allowlist:read', 'system_settings:read', 'system_settings:write'];
+const ADMIN = [
+  ...CONTRIBUTOR,
+  'users:read',
+  'allowlist:read',
+  'system_settings:read',
+  'system_settings:write',
+  'jobs:read',
+  'jobs:write',
+  'nodes:read',
+  'nodes:write',
+];
 
 function signIn(permissions: string[], roles: string[]) {
   server.use(
@@ -80,11 +90,55 @@ describe('admin settings routing (#46)', () => {
     expect(await screen.findByRole('heading', { name: 'System Settings' }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText('Doctor')).toBeInTheDocument();
     expect(screen.getByText('Maintenance')).toBeInTheDocument();
+    // #49: the Operations cards.
+    expect(screen.getByText('Jobs')).toBeInTheDocument();
+    expect(screen.getByText('Job Insights')).toBeInTheDocument();
+    expect(screen.getByText('Worker Nodes')).toBeInTheDocument();
+  });
+
+  it('opens the packaged Jobs page for an administrator (#49)', async () => {
+    signIn(ADMIN, ['admin']);
+    const listed: string[] = [];
+    server.use(
+      http.get('*/api/admin/jobs', ({ request }) => {
+        listed.push(new URL(request.url).pathname);
+        return HttpResponse.json({
+          data: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 },
+        });
+      }),
+    );
+    renderAt('/admin/settings/jobs');
+    expect(await screen.findByRole('heading', { name: 'Jobs' }, { timeout: 5000 })).toBeInTheDocument();
+    await vi.waitFor(() => expect(listed).toContain('/api/admin/jobs'), { timeout: 5000 });
+  });
+
+  it('opens the packaged Worker Nodes page for an administrator (#49)', async () => {
+    signIn(ADMIN, ['admin']);
+    const listed: string[] = [];
+    server.use(
+      http.get('*/api/admin/nodes', ({ request }) => {
+        listed.push(new URL(request.url).pathname);
+        return HttpResponse.json({ data: [] });
+      }),
+      http.get('*/api/admin/nodes/credentials', () => HttpResponse.json({ data: [] })),
+    );
+    renderAt('/admin/settings/workers');
+    expect(
+      await screen.findByRole('heading', { name: 'Worker Nodes' }, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    await vi.waitFor(() => expect(listed).toContain('/api/admin/nodes'), { timeout: 5000 });
   });
 
   it('sends a contributor away from the admin hub and its pages', async () => {
     signIn(CONTRIBUTOR, ['contributor']);
-    for (const path of ['/admin/settings', '/admin/settings/doctor', '/admin/settings/terminal']) {
+    for (const path of [
+      '/admin/settings',
+      '/admin/settings/doctor',
+      '/admin/settings/terminal',
+      '/admin/settings/jobs',
+      '/admin/settings/jobs/insights',
+      '/admin/settings/workers',
+    ]) {
       const { unmount } = renderAt(path);
       expect(await screen.findByText(/ShellKeep Control Center/i, {}, { timeout: 5000 })).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'System Settings' })).not.toBeInTheDocument();
