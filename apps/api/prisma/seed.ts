@@ -1,6 +1,19 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const prisma = new PrismaClient();
+// Prisma 7 requires a driver adapter. The seed runs as a standalone ts-node
+// process under the Prisma CLI, which scripts/prisma-env.js guarantees has
+// DATABASE_URL set.
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error(
+    'DATABASE_URL is not set. Run this script via `npm run prisma:seed`.',
+  );
+}
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: databaseUrl }),
+});
 
 // =============================================================================
 // Seed Data Definitions
