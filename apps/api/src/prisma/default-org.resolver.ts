@@ -7,8 +7,8 @@ import { PrismaService } from './prisma.service';
  * PLATFORM-ADOPTION-SHIM(#50): the storage module's `ObjectsService` (whose
  * platform model requires `org_id`) still stamps new storage objects with the
  * default organization, because its controller does not carry the request's
- * organization yet. The domain (server profiles, terminal sessions) takes the
- * organization from the request since #47 (`@CurrentOrg()`). #50 replaces the
+ * organization yet. The app's own tables take the organization from the
+ * request since #47 (`@CurrentOrg()`). #50 replaces the
  * storage module with the storage slice and deletes this class. See
  * docs/platform-adoption/local-exceptions.md.
  *
