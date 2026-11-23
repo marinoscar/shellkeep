@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { APP_PERMISSIONS } from '../src/app-registrations/permissions';
 
 // Prisma 7 requires a driver adapter. The seed runs as a standalone ts-node
 // process under the Prisma CLI, which scripts/prisma-env.js guarantees has
@@ -58,17 +59,14 @@ const PERMISSIONS = [
   { name: 'storage:read', description: 'Read object metadata, get download URLs' },
   { name: 'storage:write', description: 'Upload, update metadata' },
   { name: 'storage:delete_any', description: 'Admin: delete any object' },
-
-  // Server profiles
-  { name: 'servers:read', description: 'View server profiles' },
-  { name: 'servers:write', description: 'Create and update server profiles' },
-  { name: 'servers:delete', description: 'Delete server profiles' },
-
-  // Terminal sessions
-  { name: 'sessions:read', description: 'View terminal sessions' },
-  { name: 'sessions:write', description: 'Create and manage terminal sessions' },
-  { name: 'sessions:delete', description: 'Terminate terminal sessions' },
 ] as const;
+
+// Domain permissions (server profiles, terminal sessions) come from
+// src/app-registrations/permissions.ts, after the base ones.
+const ALL_PERMISSIONS: ReadonlyArray<{ name: string; description: string }> = [
+  ...PERMISSIONS,
+  ...APP_PERMISSIONS.map((p) => ({ name: p.id, description: p.description })),
+];
 
 // Role to permissions mapping
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -85,33 +83,25 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'storage:read',
     'storage:write',
     'storage:delete_any',
-    'servers:read',
-    'servers:write',
-    'servers:delete',
-    'sessions:read',
-    'sessions:write',
-    'sessions:delete',
   ],
   contributor: [
     'user_settings:read',
     'user_settings:write',
     'storage:read',
     'storage:write',
-    'servers:read',
-    'servers:write',
-    'servers:delete',
-    'sessions:read',
-    'sessions:write',
-    'sessions:delete',
   ],
   viewer: [
     'user_settings:read',
     'user_settings:write',
     'storage:read',
-    'servers:read',
-    'sessions:read',
   ],
 };
+
+for (const permission of APP_PERMISSIONS) {
+  for (const roleName of permission.defaultGrants) {
+    (ROLE_PERMISSIONS[roleName] ??= []).push(permission.id);
+  }
+}
 
 // Default system settings
 const DEFAULT_SYSTEM_SETTINGS = {
@@ -142,7 +132,7 @@ async function seedRoles() {
 async function seedPermissions() {
   console.log('Seeding permissions...');
 
-  for (const permission of PERMISSIONS) {
+  for (const permission of ALL_PERMISSIONS) {
     await prisma.permission.upsert({
       where: { name: permission.name },
       update: { description: permission.description },
@@ -150,7 +140,7 @@ async function seedPermissions() {
     });
   }
 
-  console.log(`✓ Seeded ${PERMISSIONS.length} permissions`);
+  console.log(`✓ Seeded ${ALL_PERMISSIONS.length} permissions`);
 }
 
 async function seedRolePermissions() {
