@@ -1,4 +1,6 @@
 import { randomUUID } from 'crypto';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 /**
  * Test data factories for creating mock entities
@@ -336,42 +338,44 @@ export function createMockAuditEvent(options: CreateMockAuditEventOptions): any 
 }
 
 // ============================================================================
-// Role Permissions Mapping
+// Role Permissions (the real seeded catalog)
 // ============================================================================
 
+interface PermissionCatalog {
+  rolePermissions: Record<string, string[]>;
+}
+
 /**
- * Maps role names to their permissions
- * This mirrors the actual RBAC configuration
+ * What the seed grants each role, straight from `prisma/catalog/permissions.json`
+ * (the committed snapshot of the registries). A hand-written mirror would drift
+ * from the seed and make an RBAC test pass for the wrong reason.
  */
-export const rolePermissionsMap = {
-  admin: [
-    mockPermissions.systemSettingsRead,
-    mockPermissions.systemSettingsWrite,
-    mockPermissions.userSettingsRead,
-    mockPermissions.userSettingsWrite,
-    mockPermissions.usersRead,
-    mockPermissions.usersWrite,
-    mockPermissions.rbacManage,
-    mockPermissions.allowlistRead,
-    mockPermissions.allowlistWrite,
-    mockPermissions.serversRead,
-    mockPermissions.serversWrite,
-    mockPermissions.sessionsRead,
-    mockPermissions.sessionsWrite,
-  ],
-  contributor: [
-    mockPermissions.userSettingsRead,
-    mockPermissions.userSettingsWrite,
-  ],
-  viewer: [
-    mockPermissions.userSettingsRead,
-    mockPermissions.userSettingsWrite,
-  ],
-};
+const CATALOG: PermissionCatalog = JSON.parse(
+  readFileSync(join(__dirname, '..', '..', 'prisma', 'catalog', 'permissions.json'), 'utf8'),
+);
+
+/** The permissions the seed grants `roleName` (system `admin`, or an org role). */
+export function catalogPermissionsOf(roleName: string): string[] {
+  const permissions = CATALOG.rolePermissions[roleName];
+  if (!permissions) throw new Error(`Role "${roleName}" is not in prisma/catalog/permissions.json`);
+  return permissions;
+}
 
 // ============================================================================
 // Complete User with Relations
 // ============================================================================
+
+export interface MockRoleRecord {
+  id: string;
+  name: string;
+  description: string | null;
+  scope: 'system' | 'org';
+  rolePermissions: Array<{
+    roleId: string;
+    permissionId: string;
+    permission: { id: string; name: string; description: string | null };
+  }>;
+}
 
 export interface MockUserWithRelations {
   id: string;
@@ -383,48 +387,56 @@ export interface MockUserWithRelations {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  userRoles?: Array<{
+  /** SYSTEM roles only (`user_roles`): `admin`. */
+  userRoles?: Array<{ userId: string; roleId: string; role: MockRoleRecord }>;
+  /** The default organization's membership, whose ORG role carries the domain permissions. */
+  memberships?: Array<{
+    orgId: string;
     userId: string;
-    roleId: string;
-    role: {
-      id: string;
-      name: string;
-      description: string | null;
-      rolePermissions: Array<{
-        roleId: string;
-        permissionId: string;
-        permission: { id: string; name: string; description: string | null };
-      }>;
-    };
+    status: 'active';
+    lastActiveAt: Date | null;
+    createdAt: Date;
+    org: { id: string; isDefault: boolean };
+    role: MockRoleRecord;
   }>;
   identities?: any[];
   userSettings?: any;
 }
 
+/** The default organization every mocked membership belongs to. */
+export const MOCK_DEFAULT_ORG_ID = 'org-default';
+
+function roleRecord(name: string, scope: 'system' | 'org'): MockRoleRecord {
+  const id = randomUUID();
+  return {
+    id,
+    name,
+    description: null,
+    scope,
+    rolePermissions: catalogPermissionsOf(name).map((permissionName) => ({
+      roleId: id,
+      permissionId: `perm-${permissionName}`,
+      permission: { id: `perm-${permissionName}`, name: permissionName, description: null },
+    })),
+  };
+}
+
+/**
+ * A user as the platform's principal graph loads it (`PRINCIPAL_USER_INCLUDE`):
+ * the shape production stores. `admin` is the one SYSTEM role (`user_roles`) and
+ * comes with an `org_admin` membership (platform migration 0024 gave every
+ * administrator one); `contributor` and `viewer` are ORG roles held ONLY on the
+ * default-organization membership. Permissions come from the seeded catalog.
+ */
 export function createMockUserWithRelations(
   options: CreateMockUserOptions = {},
 ): MockUserWithRelations {
   const user = createMockUser(options);
   const roleName = options.roleName || 'viewer';
-  const role = mockRoles[roleName];
 
-  // Get permissions for this role
-  const permissions = rolePermissionsMap[roleName] || [];
-
-  // Build the full nested structure matching AuthenticatedUser type
-  const roleWithPermissions = {
-    ...role,
-    rolePermissions: permissions.map((permission) => ({
-      roleId: role.id,
-      permissionId: permission.id,
-      permission,
-    })),
-  };
-
-  const userRole = createMockUserRole({
-    userId: user.id,
-    roleId: role.id,
-  });
+  const systemRoles =
+    roleName === 'admin' ? [roleRecord('admin', 'system')] : [];
+  const orgRole = roleRecord(roleName === 'admin' ? 'org_admin' : roleName, 'org');
 
   const identity = createMockUserIdentity({
     userId: user.id,
@@ -437,7 +449,18 @@ export function createMockUserWithRelations(
 
   return {
     ...user,
-    userRoles: [{ ...userRole, role: roleWithPermissions }],
+    userRoles: systemRoles.map((role) => ({ userId: user.id, roleId: role.id, role })),
+    memberships: [
+      {
+        orgId: MOCK_DEFAULT_ORG_ID,
+        userId: user.id,
+        status: 'active' as const,
+        lastActiveAt: null,
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        org: { id: MOCK_DEFAULT_ORG_ID, isDefault: true },
+        role: orgRole,
+      },
+    ],
     identities: [identity],
     userSettings: settings,
   };
