@@ -14,6 +14,9 @@ import { api } from '../../services/api';
  */
 
 const CONTRIBUTOR = [
+  // Object access (#50): every role holds it; it does not open the Storage page.
+  'storage:read',
+  'storage:write',
   'user_settings:read',
   'user_settings:write',
   'sessions:read',
@@ -31,7 +34,44 @@ const ADMIN = [
   'jobs:write',
   'nodes:read',
   'nodes:write',
+  'storage_config:read',
+  'storage_config:write',
 ];
+
+/** `GET /api/admin/storage-config` before anything is configured: S3 only, nothing stored. */
+const UNCONFIGURED_STORAGE = {
+  provider: 's3',
+  drivers: { s3: { bucket: '', region: '', endpoint: '', accessKeyId: '', forcePathStyle: null } },
+  descriptors: [
+    {
+      kind: 'storage-driver',
+      id: 's3',
+      label: 'Amazon S3',
+      description: 'AWS S3.',
+      fields: [
+        { kind: 'string', name: 'bucket', label: 'Bucket', maxLength: 255 },
+        { kind: 'string', name: 'region', label: 'Region', maxLength: 255 },
+        { kind: 'string', name: 'endpoint', label: 'Endpoint', maxLength: 512 },
+        { kind: 'string', name: 'accessKeyId', label: 'Access key ID', maxLength: 255 },
+        { kind: 'boolean', name: 'forcePathStyle', label: 'Force path style' },
+        { kind: 'secret', name: 'secretAccessKey', label: 'Secret access key', hasValue: false, required: true },
+      ],
+    },
+  ],
+  bucket: '',
+  region: '',
+  endpoint: '',
+  accountId: '',
+  accessKeyId: '',
+  forcePathStyle: null,
+  effectiveEndpoint: null,
+  configured: false,
+  missing: ['bucket', 'region', 'accessKeyId', 'secretAccessKey'],
+  secretStatus: { configured: false, hint: null, updatedAt: null, updatedByUserId: null },
+  version: 0,
+  updatedAt: null,
+  updatedBy: null,
+};
 
 function signIn(permissions: string[], roles: string[]) {
   server.use(
@@ -94,6 +134,27 @@ describe('admin settings routing (#46)', () => {
     expect(screen.getByText('Jobs')).toBeInTheDocument();
     expect(screen.getByText('Job Insights')).toBeInTheDocument();
     expect(screen.getByText('Worker Nodes')).toBeInTheDocument();
+    // #50: the Storage card.
+    expect(screen.getByText('Storage')).toBeInTheDocument();
+  });
+
+  it('opens the packaged Storage page for an administrator (#50)', async () => {
+    signIn(ADMIN, ['admin']);
+    const read: string[] = [];
+    server.use(
+      http.get('*/api/admin/storage-config', ({ request }) => {
+        read.push(new URL(request.url).pathname);
+        return HttpResponse.json({ data: UNCONFIGURED_STORAGE });
+      }),
+      http.get('*/api/admin/storage/migrations', () =>
+        HttpResponse.json({
+          data: { items: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } },
+        }),
+      ),
+    );
+    renderAt('/admin/settings/storage');
+    expect(await screen.findByRole('heading', { name: 'Storage' }, { timeout: 5000 })).toBeInTheDocument();
+    await vi.waitFor(() => expect(read).toContain('/api/admin/storage-config'), { timeout: 5000 });
   });
 
   it('opens the packaged Jobs page for an administrator (#49)', async () => {
@@ -135,6 +196,7 @@ describe('admin settings routing (#46)', () => {
       '/admin/settings',
       '/admin/settings/doctor',
       '/admin/settings/terminal',
+      '/admin/settings/storage',
       '/admin/settings/jobs',
       '/admin/settings/jobs/insights',
       '/admin/settings/workers',
