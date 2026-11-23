@@ -1,0 +1,38 @@
+// =============================================================================
+// The app's platform registrations (issue #47)
+// =============================================================================
+//
+// IMPORT THIS BEFORE ANYTHING THAT READS THE ROLE, PERMISSION OR OWNERSHIP
+// REGISTRIES: `shellkeep.manifest.ts` (so `main.ts`, `app.module.ts` and
+// `test/setup.ts`) and the seed catalog script import it first. It fills core's
+// static registries with the platform's roles and permissions plus ShellKeep's,
+// the user-owned model inventory and the model ownership classification. The
+// registries freeze when the application bootstraps, so a late registration
+// fails loudly.
+//
+// Registration is once per process: a second import is a no-op (the ES module
+// cache), and registering the same id twice is `DUPLICATE_ID`.
+//
+// SLICES: only the platform slices ShellKeep has adopted contribute
+// permissions. Append a slice here in the issue that adopts it (jobs #49,
+// storage #50, notifications #51, ai #55, ...) and regenerate the catalog
+// (`npm run catalog:permissions`).
+// =============================================================================
+
+import {
+  registerPlatformModelOwnership,
+  registerPlatformPermissions,
+  registerPlatformUserOwnedModels,
+} from '@marinoscar/platform-api/manifest';
+
+import { APP_MODEL_OWNERSHIP } from './model-ownership';
+import { ADOPTED_PLATFORM_SLICES } from './platform-slices';
+import { APP_PERMISSIONS } from './permissions';
+import { APP_USER_OWNED_MODELS } from './user-owned-models';
+
+registerPlatformPermissions({
+  slices: [...ADOPTED_PLATFORM_SLICES],
+  app: { permissions: [APP_PERMISSIONS] },
+});
+registerPlatformUserOwnedModels(APP_USER_OWNED_MODELS);
+registerPlatformModelOwnership(APP_MODEL_OWNERSHIP);
