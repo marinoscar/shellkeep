@@ -187,5 +187,5 @@ cd apps/web && npm run test:ui       # Visual test UI
 
 ## Related Documents
 
-- [System Specification Document](../System_Specification_Document.md) - Complete system requirements
+- System Specification Document (not in this repository) - Complete system requirements
 - [CLAUDE.md](../../CLAUDE.md) - Project overview and conventions

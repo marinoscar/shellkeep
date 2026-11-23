@@ -4,7 +4,7 @@
 
 ShellKeep is deployed behind a two-tier Nginx reverse proxy on the `dev.marin.cr` VPS, sharing the wildcard SSL certificate and subdomain routing infrastructure with other projects (Knecta, Clipboard, etc.).
 
-This document covers the ShellKeep-specific configuration. For the full infrastructure setup (SSL certificates, host Nginx, DNS), see the [Clipboard SSL/Nginx Setup Guide](../../clipboard/docs/ssl-nginx-setup.md).
+This document covers the ShellKeep-specific configuration. For the full infrastructure setup (SSL certificates, host Nginx, DNS), see the Clipboard project's SSL/Nginx setup guide (a separate repository).
 
 ## Architecture
 
