@@ -1,5 +1,7 @@
 // IMPORTANT: Load instrumentation before anything else
 import './instrumentation';
+// Then the registry manifest: DTOs are composed from it at import time
+import './shellkeep.manifest';
 
 import { NestFactory } from '@nestjs/core';
 import {

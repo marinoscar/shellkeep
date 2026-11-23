@@ -14,7 +14,7 @@ import {
   Alert,
 } from '@mui/material';
 import type { ServerProfile, CreateSessionData } from '../../types';
-import { getServerProfiles } from '../../services/api';
+import { getServerProfiles } from '../../services/terminal-api';
 
 interface NewSessionDialogProps {
   open: boolean;

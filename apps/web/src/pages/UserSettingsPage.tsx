@@ -8,9 +8,9 @@ import {
 import { useState } from 'react';
 import { ThemeSettings } from '../components/settings/ThemeSettings';
 import { ProfileSettings } from '../components/settings/ProfileSettings';
-import { KeyShortcutsSettings } from '../components/settings/KeyShortcutsSettings';
 import { useUserSettings } from '../hooks/useUserSettings';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { USER_SETTINGS_PANELS } from '../config/userSettingsPanels';
 
 export default function UserSettingsPage() {
   const {
@@ -85,8 +85,10 @@ export default function UserSettingsPage() {
               disabled={isSaving}
             />
 
-            {/* Key Shortcuts Settings */}
-            <KeyShortcutsSettings disabled={isSaving} />
+            {/* Domain panels (config/userSettingsPanels.tsx) */}
+            {USER_SETTINGS_PANELS.map(({ id, Component }) => (
+              <Component key={id} disabled={isSaving} />
+            ))}
           </Box>
         )}
 

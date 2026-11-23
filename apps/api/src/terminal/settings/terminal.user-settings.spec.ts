@@ -1,13 +1,18 @@
 import {
-  userSettingsSchema,
-  userSettingsPatchSchema,
   keystrokeSchema,
   keyShortcutSchema,
-} from './settings.schema';
-import {
-  DEFAULT_USER_SETTINGS,
   DEFAULT_KEY_SHORTCUTS,
-} from '../types/settings.types';
+} from './terminal.user-settings';
+import { DEFAULT_USER_SETTINGS } from '../../common/types/settings.types';
+import {
+  composeUserSettingsPatchSchema,
+  composeUserSettingsSchema,
+} from '../../settings/registry/user-settings-namespaces';
+
+// The terminal namespace is registered by shellkeep.manifest (test/setup.ts),
+// so the composed schemas carry it.
+const userSettingsSchema = composeUserSettingsSchema() as any;
+const userSettingsPatchSchema = composeUserSettingsPatchSchema() as any;
 
 // Base valid settings object reused across tests
 const baseSettings = {

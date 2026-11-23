@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { render } from '../../__tests__/utils/test-utils';
+import { render } from '../../../__tests__/utils/test-utils';
 import { KeyShortcutsSettings } from './KeyShortcutsSettings';
-import type { UserSettings } from '../../types';
+import type { UserSettings } from '../../../types';
 
 // ---------------------------------------------------------------------------
 // Mock useUserSettings
@@ -33,11 +33,11 @@ const makeSettings = (overrides: Partial<UserSettings> = {}): UserSettings => ({
   ...overrides,
 });
 
-vi.mock('../../hooks/useUserSettings', () => ({
+vi.mock('../../../hooks/useUserSettings', () => ({
   useUserSettings: vi.fn(),
 }));
 
-import { useUserSettings } from '../../hooks/useUserSettings';
+import { useUserSettings } from '../../../hooks/useUserSettings';
 
 const mockUseUserSettings = vi.mocked(useUserSettings);
 

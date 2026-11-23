@@ -17,7 +17,7 @@ import {
   Terminal as TerminalIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { getSessions } from '../../services/api';
+import { getSessions } from '../../services/terminal-api';
 import type { TerminalSession } from '../../types';
 
 function getRelativeTime(dateString: string): string {

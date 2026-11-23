@@ -6,8 +6,7 @@ import {
   Dns as DnsIcon,
   Add as AddIcon,
 } from '@mui/icons-material';
-import { getSessions } from '../../services/api';
-import { getServerProfiles } from '../../services/api';
+import { getSessions, getServerProfiles } from '../../services/terminal-api';
 
 interface SessionStatsBarProps {
   onNewSession?: () => void;

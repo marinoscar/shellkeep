@@ -11,54 +11,30 @@ import {
   Box,
   useTheme,
 } from '@mui/material';
-import {
-  Home as HomeIcon,
-  Terminal as TerminalIcon,
-  Dns as DnsIcon,
-  People as PeopleIcon,
-} from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../hooks/usePermissions';
+import {
+  DESTINATIONS,
+  isDestinationVisible,
+  type AppDestination,
+} from '../../config/destinations';
 
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
+  /** The destinations to draw; defaults to the app's `DESTINATIONS`. */
+  destinations?: readonly AppDestination[];
 }
 
 const DRAWER_WIDTH = 240;
 
-export function Sidebar({ open, onClose }: SidebarProps) {
+export function Sidebar({ open, onClose, destinations = DESTINATIONS }: SidebarProps) {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAdmin } = usePermissions();
+  const { permissions, roles } = usePermissions();
 
-  const menuItems = [
-    {
-      label: 'Dashboard',
-      icon: <HomeIcon />,
-      path: '/',
-      visible: true,
-    },
-    {
-      label: 'Sessions',
-      icon: <TerminalIcon />,
-      path: '/sessions',
-      visible: true,
-    },
-    {
-      label: 'Servers',
-      icon: <DnsIcon />,
-      path: '/servers',
-      visible: true,
-    },
-    {
-      label: 'User Management',
-      icon: <PeopleIcon />,
-      path: '/admin/users',
-      visible: isAdmin,
-    },
-  ];
+  const menuItems = destinations.filter((d) => isDestinationVisible(d, permissions, roles));
 
   const handleNavigate = useCallback(
     (path: string) => {
@@ -79,36 +55,34 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       <Toolbar />
       <Divider />
       <List>
-        {menuItems
-          .filter((item) => item.visible)
-          .map((item) => (
-            <ListItem key={item.path} disablePadding>
-              <ListItemButton
-                selected={location.pathname === item.path}
-                onClick={() => handleNavigate(item.path)}
-                sx={{
-                  '&.Mui-selected': {
-                    backgroundColor: theme.palette.action.selected,
-                    '&:hover': {
-                      backgroundColor: theme.palette.action.hover,
-                    },
+        {menuItems.map((item) => (
+          <ListItem key={item.id} disablePadding>
+            <ListItemButton
+              selected={location.pathname === item.path}
+              onClick={() => handleNavigate(item.path)}
+              sx={{
+                '&.Mui-selected': {
+                  backgroundColor: theme.palette.action.selected,
+                  '&:hover': {
+                    backgroundColor: theme.palette.action.hover,
                   },
+                },
+              }}
+            >
+              <ListItemIcon
+                sx={{
+                  color:
+                    location.pathname === item.path
+                      ? theme.palette.primary.main
+                      : theme.palette.text.secondary,
                 }}
               >
-                <ListItemIcon
-                  sx={{
-                    color:
-                      location.pathname === item.path
-                        ? theme.palette.primary.main
-                        : theme.palette.text.secondary,
-                  }}
-                >
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            </ListItem>
-          ))}
+                <item.icon />
+              </ListItemIcon>
+              <ListItemText primary={item.label} />
+            </ListItemButton>
+          </ListItem>
+        ))}
       </List>
     </Box>
   );

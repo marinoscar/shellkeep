@@ -3,7 +3,7 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { useSessions } from '../../hooks/useSessions';
 
 // Mock the API service
-vi.mock('../../services/api', () => ({
+vi.mock('../../services/terminal-api', () => ({
   getSessions: vi.fn(),
   createSession: vi.fn(),
   updateSession: vi.fn(),
@@ -15,7 +15,7 @@ import {
   createSession,
   updateSession,
   deleteSession,
-} from '../../services/api';
+} from '../../services/terminal-api';
 
 import type { TerminalSession, SessionsResponse, CreateSessionData } from '../../types';
 

@@ -5,8 +5,8 @@ import { PrismaService } from './prisma.service';
  * Resolves the id of the default organization.
  *
  * PLATFORM-ADOPTION-SHIM(#47): ShellKeep is single-organization until the
- * identity slice is adopted. Rows of the domain tables (server_profiles,
- * terminal_sessions) and of storage objects must carry an org_id, so every
+ * identity slice is adopted. Rows of the app's domain tables and of storage
+ * objects must carry an org_id, so every
  * create stamps the default organization that platform migration 0023 creates.
  * #47 deletes this class and takes the organization from the request
  * (`@CurrentOrg()` / `resolveOrgId`). See docs/platform-adoption/local-exceptions.md.

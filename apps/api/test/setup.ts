@@ -1,3 +1,5 @@
+// Register the static registries first (see src/shellkeep.manifest.ts)
+import '../src/shellkeep.manifest';
 import { config } from 'dotenv';
 import { resolve } from 'path';
 

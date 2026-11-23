@@ -726,4 +726,36 @@ describe('Sidebar', () => {
       // keepMounted: false ensures drawer content unmounts when closed
     });
   });
+
+  describe('Destinations', () => {
+    it('draws the destinations it is given, gated by permission', () => {
+      vi.mocked(usePermissions).mockReturnValue({
+        permissions: new Set(['reports:read']),
+        roles: new Set(),
+        hasPermission: vi.fn(),
+        hasAnyPermission: vi.fn(),
+        hasAllPermissions: vi.fn(),
+        hasRole: vi.fn(),
+        hasAnyRole: vi.fn(),
+        isAdmin: false,
+      });
+      const Icon = () => <span data-testid="dest-icon" />;
+
+      const { container } = render(
+        <Sidebar
+          open={true}
+          onClose={mockOnClose}
+          destinations={[
+            { id: 'reports', label: 'Reports', path: '/reports', icon: Icon, permission: 'reports:read' },
+            { id: 'audit', label: 'Audit', path: '/audit', icon: Icon, permission: 'audit:read' },
+          ]}
+        />,
+      );
+
+      expect(container.textContent).toContain('Reports');
+      expect(container.textContent).not.toContain('Audit');
+      expect(container.textContent).not.toContain('Dashboard');
+      expect(screen.getAllByTestId('dest-icon')).toHaveLength(1);
+    });
+  });
 });
