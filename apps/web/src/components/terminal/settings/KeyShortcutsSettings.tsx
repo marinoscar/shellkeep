@@ -18,7 +18,6 @@ import {
   DeleteOutlineOutlined as DeleteIcon,
 } from '@mui/icons-material';
 import { KeyShortcut, Keystroke } from '../../../types/terminal';
-import { useUserSettings } from '../../../hooks/useUserSettings';
 import { KeystrokeEditor } from './KeystrokeEditor';
 
 const MAX_SHORTCUTS = 50;
@@ -35,25 +34,39 @@ function defaultShortcut(): KeyShortcut {
   };
 }
 
-interface KeyShortcutsSettingsProps {
+export interface KeyShortcutsSettingsProps {
+  /**
+   * The saved shortcuts, resolved (the defaults when nothing is stored):
+   * `useTerminalSettings().terminal.keyShortcuts`.
+   */
+  shortcuts: readonly KeyShortcut[];
+  /** Saves the edited list; rejects with the reason on failure. */
+  onSave: (shortcuts: KeyShortcut[]) => Promise<void>;
+  /** True while a save is in flight. */
+  isSaving?: boolean;
   disabled?: boolean;
 }
 
-export function KeyShortcutsSettings({ disabled = false }: KeyShortcutsSettingsProps) {
-  const { settings, updateSettings, isSaving } = useUserSettings();
-
-  const [draft, setDraft] = useState<KeyShortcut[]>(
-    settings?.terminal?.keyShortcuts ?? [],
-  );
+/**
+ * The key shortcuts editor of the Terminal settings page
+ * (`TerminalSettingsPage`). Holds a draft of `shortcuts` and hands the edited
+ * list to `onSave`.
+ */
+export function KeyShortcutsSettings({
+  shortcuts: savedShortcuts,
+  onSave,
+  isSaving = false,
+  disabled = false,
+}: KeyShortcutsSettingsProps) {
+  const [draft, setDraft] = useState<KeyShortcut[]>(() => [...savedShortcuts]);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Sync draft when settings change from outside (e.g. after save, version conflict refresh)
+  // Sync draft when the saved list changes from outside (after a save, a version conflict refresh)
   useEffect(() => {
-    setDraft(settings?.terminal?.keyShortcuts ?? []);
-  }, [settings]);
+    setDraft([...savedShortcuts]);
+  }, [savedShortcuts]);
 
   // Dirty tracking: compare draft to current saved shortcuts
-  const savedShortcuts = settings?.terminal?.keyShortcuts ?? [];
   const isDirty = JSON.stringify(draft) !== JSON.stringify(savedShortcuts);
 
   const isDisabled = disabled || isSaving;
@@ -120,19 +133,14 @@ export function KeyShortcutsSettings({ disabled = false }: KeyShortcutsSettingsP
   const handleSave = async () => {
     setSaveError(null);
     try {
-      await updateSettings({
-        terminal: {
-          ...(settings?.terminal ?? { showScrollButtons: true }),
-          keyShortcuts: draft,
-        },
-      });
+      await onSave(draft);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save shortcuts');
     }
   };
 
   const handleReset = () => {
-    setDraft(settings?.terminal?.keyShortcuts ?? []);
+    setDraft([...savedShortcuts]);
     setSaveError(null);
   };
 

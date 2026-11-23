@@ -8,6 +8,7 @@ import { Layout } from './components/common/Layout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
+import { AppPlatformHostProvider } from './platform/platformHost';
 
 // Pages (lazy loaded)
 import { Suspense, lazy } from 'react';
@@ -30,7 +31,18 @@ const ServerProfilesPage = lazy(() => import('./pages/ServerProfilesPage'));
 const SessionsPage = lazy(() => import('./pages/SessionsPage'));
 const TerminalPage = lazy(() => import('./pages/TerminalPage'));
 const TerminalFullPage = lazy(() => import('./pages/TerminalFullPage'));
-const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
+// Settings (issue #48): the packaged hub over `config/userSettingsSections.tsx`,
+// the packaged Profile and Appearance pages, and the terminal domain's page.
+const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
+const UserProfilePage = lazy(() =>
+  import('@marinoscar/platform-web/settings/ui').then((m) => ({ default: m.UserProfilePage })),
+);
+const UserAppearancePage = lazy(() =>
+  import('@marinoscar/platform-web/settings/ui').then((m) => ({ default: m.UserAppearancePage })),
+);
+const TerminalSettingsPage = lazy(
+  () => import('./components/terminal/settings/TerminalSettingsPage'),
+);
 
 // Test login page (development only). The platform's test login endpoint
 // (`POST /api/auth/test/login`) has no packaged page; this form posts to it.
@@ -106,7 +118,12 @@ function AppRoutes() {
                     </RequirePermission>
                   }
                 />
-                <Route path="/settings" element={<UserSettingsPage />} />
+                {/* Settings (#48): every card of USER_SETTINGS_SECTIONS has a route
+                    here, and none is gated (user_settings:* is every role's). */}
+                <Route path="/settings" element={<UserSettingsHubPage />} />
+                <Route path="/settings/profile" element={<UserProfilePage />} />
+                <Route path="/settings/appearance" element={<UserAppearancePage />} />
+                <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
                 {/* `users:read` is what `GET /api/users` enforces; the packaged page
                     gates its Allowlist tab on `allowlist:read` itself. */}
                 <Route
@@ -133,8 +150,10 @@ export default function App() {
   return (
     <ThemeContextProvider>
       <IdentityProviders>
-        <AppRoutes />
-        <PWAUpdatePrompt />
+        <AppPlatformHostProvider>
+          <AppRoutes />
+          <PWAUpdatePrompt />
+        </AppPlatformHostProvider>
       </IdentityProviders>
     </ThemeContextProvider>
   );

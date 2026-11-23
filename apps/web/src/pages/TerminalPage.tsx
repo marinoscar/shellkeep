@@ -11,7 +11,7 @@ import { uploadFile, getDownloadUrl } from '../services/api';
 import { getSession, updateSession, createSession, downloadSessionHistory } from '../services/terminal-api';
 import type { KeyShortcut, TerminalSession, CreateSessionData } from '../types';
 import { encodeShortcut } from '../lib/terminal/encodeKeystroke';
-import { useUserSettings } from '../hooks/useUserSettings';
+import { useTerminalSettings } from '../hooks/useTerminalSettings';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
 
 export default function TerminalPage() {
@@ -23,7 +23,7 @@ export default function TerminalPage() {
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'info' });
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const { settings, updateSettings } = useUserSettings();
+  const { settings, updateSettings } = useTerminalSettings();
   const showScrollButtons = settings?.terminal?.showScrollButtons ?? true;
   const keyShortcuts = settings?.terminal?.keyShortcuts ?? [];
   const [keyShortcutsOpen, setKeyShortcutsOpen] = useState(false);

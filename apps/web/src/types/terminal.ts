@@ -1,6 +1,8 @@
 // Terminal domain types: key shortcuts, server profiles and terminal
 // sessions, plus the `terminal` user-settings namespace.
 
+import type { UserSettingsResponseBase } from '@marinoscar/platform-contract/settings';
+
 // Key Shortcuts
 
 /**
@@ -37,10 +39,19 @@ export interface TerminalUserSettings {
   keyShortcuts?: KeyShortcut[];
 }
 
-declare module './index' {
-  interface UserSettingsNamespaces {
-    terminal?: TerminalUserSettings;
-  }
+/**
+ * `GET /api/user-settings` as the terminal domain reads it: the platform's
+ * document plus the `terminal` namespace, present ONLY when stored (apply
+ * `resolveTerminalSettings` of `lib/terminal/settings.ts`).
+ */
+export interface TerminalUserSettingsDocument extends UserSettingsResponseBase {
+  terminal?: TerminalUserSettings;
+}
+
+/** The `PATCH /api/user-settings` body the terminal domain sends. */
+export interface TerminalUserSettingsUpdate {
+  /** The whole namespace (`null` removes it, so the defaults apply). */
+  terminal?: TerminalUserSettings | null;
 }
 
 // Server Profiles
