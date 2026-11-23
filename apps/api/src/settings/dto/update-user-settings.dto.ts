@@ -1,44 +1,29 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
-import { keyShortcutSchema } from '../../common/schemas/settings.schema';
+import {
+  composeUserSettingsPatchSchema,
+  composeUserSettingsSchema,
+} from '../registry/user-settings-namespaces';
+import type { UserSettingsValue } from '../../common/types/settings.types';
 
-// Full replacement (PUT)
-export const updateUserSettingsSchema = z.object({
-  theme: z.enum(['light', 'dark', 'system']),
-  profile: z.object({
-    displayName: z.string().max(100).optional(),
-    useProviderImage: z.boolean(),
-    customImageUrl: z.string().url().nullable().optional(),
-  }),
-  terminal: z
-    .object({
-      showScrollButtons: z.boolean(),
-      keyShortcuts: z.array(keyShortcutSchema).max(50).optional(),
-    })
-    .optional(),
-});
+// Both schemas are composed from the user-settings namespace registry when this
+// module is first evaluated, so `shellkeep.manifest` must be imported before it.
+
+/** PATCH body: every core field optional, namespaces as registered. */
+export type PatchUserSettingsValue = {
+  theme?: UserSettingsValue['theme'];
+  profile?: Partial<UserSettingsValue['profile']>;
+} & { [key: string]: unknown };
+
+// Full replacement (PUT); also the validation schema of the stored value
+export const updateUserSettingsSchema = composeUserSettingsSchema() as unknown as z.ZodType<UserSettingsValue>;
 
 export class UpdateUserSettingsDto extends createZodDto(
   updateUserSettingsSchema,
 ) {}
 
 // Partial update (PATCH) - JSON Merge Patch style
-export const patchUserSettingsSchema = z.object({
-  theme: z.enum(['light', 'dark', 'system']).optional(),
-  profile: z
-    .object({
-      displayName: z.string().max(100).optional(),
-      useProviderImage: z.boolean().optional(),
-      customImageUrl: z.string().url().nullable().optional(),
-    })
-    .optional(),
-  terminal: z
-    .object({
-      showScrollButtons: z.boolean().optional(),
-      keyShortcuts: z.array(keyShortcutSchema).max(50).optional(),
-    })
-    .optional(),
-});
+export const patchUserSettingsSchema = composeUserSettingsPatchSchema() as unknown as z.ZodType<PatchUserSettingsValue>;
 
 export class PatchUserSettingsDto extends createZodDto(
   patchUserSettingsSchema,

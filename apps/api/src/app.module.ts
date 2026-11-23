@@ -1,3 +1,6 @@
+// Must stay the first import: registers the static registries that the DTOs
+// below are composed from (see shellkeep.manifest.ts).
+import './shellkeep.manifest';
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';

@@ -4,13 +4,25 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UpdateUserSettingsDto } from '../dto/update-user-settings.dto';
-import { PatchUserSettingsDto } from '../dto/update-user-settings.dto';
+import {
+  UpdateUserSettingsDto,
+  PatchUserSettingsDto,
+  updateUserSettingsSchema,
+} from '../dto/update-user-settings.dto';
 import {
   DEFAULT_USER_SETTINGS,
   UserSettingsValue,
 } from '../../common/types/settings.types';
-import { userSettingsSchema } from '../../common/schemas/settings.schema';
+import {
+  listUserSettingsNamespaces,
+  mergeNamespaceDefaults,
+} from '../registry/user-settings-namespaces';
+
+/** A settings read or write response: the document plus its row metadata. */
+export type UserSettingsResult = UserSettingsValue & {
+  updatedAt: Date;
+  version: number;
+};
 
 @Injectable()
 export class UserSettingsService {
@@ -22,7 +34,7 @@ export class UserSettingsService {
    * Get user settings for current user
    * Creates default settings if none exist
    */
-  async getSettings(userId: string) {
+  async getSettings(userId: string): Promise<UserSettingsResult> {
     let settings = await this.prisma.userSettings.findUnique({
       where: { userId },
     });
@@ -40,31 +52,34 @@ export class UserSettingsService {
 
     const value = settings.value as unknown as UserSettingsValue;
 
-    // Deep-merge terminal defaults so existing users get new fields (e.g.
-    // keyShortcuts) without requiring a DB write on every read.
-    const defaultTerminal = DEFAULT_USER_SETTINGS.terminal!;
-    const terminal: UserSettingsValue['terminal'] = {
-      showScrollButtons:
-        value.terminal?.showScrollButtons ?? defaultTerminal.showScrollButtons,
-      keyShortcuts:
-        value.terminal?.keyShortcuts ?? defaultTerminal.keyShortcuts,
-    };
+    // Deep-merge each namespace's defaults so existing users get new fields
+    // without requiring a DB write on every read.
+    const namespaces: Record<string, unknown> = {};
+    for (const ns of listUserSettingsNamespaces()) {
+      namespaces[ns.key] = mergeNamespaceDefaults(
+        ns.defaults,
+        (value as Record<string, unknown>)[ns.key],
+      );
+    }
 
     return {
       theme: value.theme,
       profile: value.profile,
-      terminal,
+      ...namespaces,
       updatedAt: settings.updatedAt,
       version: settings.version,
-    };
+    } as UserSettingsResult;
   }
 
   /**
    * Replace user settings (PUT)
    */
-  async replaceSettings(userId: string, dto: UpdateUserSettingsDto) {
+  async replaceSettings(
+    userId: string,
+    dto: UpdateUserSettingsDto,
+  ): Promise<UserSettingsResult> {
     // Validate against schema
-    const validated = userSettingsSchema.parse(dto);
+    const validated = updateUserSettingsSchema.parse(dto);
 
     const settings = await this.prisma.userSettings.upsert({
       where: { userId },
@@ -87,13 +102,7 @@ export class UserSettingsService {
 
     const value = settings.value as unknown as UserSettingsValue;
 
-    return {
-      theme: value.theme,
-      profile: value.profile,
-      terminal: value.terminal,
-      updatedAt: settings.updatedAt,
-      version: settings.version,
-    };
+    return this.toResponse(value, settings);
   }
 
   /**
@@ -104,7 +113,7 @@ export class UserSettingsService {
     userId: string,
     dto: PatchUserSettingsDto,
     expectedVersion?: number,
-  ) {
+  ): Promise<UserSettingsResult> {
     // Get current settings
     const current = await this.getSettings(userId);
 
@@ -115,8 +124,8 @@ export class UserSettingsService {
       );
     }
 
-    // Merge with existing settings
-    const merged: UserSettingsValue = {
+    // Merge with existing settings: core fields here, namespaces by their own merge
+    const merged: Record<string, unknown> = {
       theme: dto.theme ?? current.theme,
       profile: {
         displayName:
@@ -132,22 +141,16 @@ export class UserSettingsService {
             ? dto.profile.customImageUrl
             : current.profile.customImageUrl,
       },
-      terminal: {
-        showScrollButtons:
-          dto.terminal?.showScrollButtons !== undefined
-            ? dto.terminal.showScrollButtons
-            : (current.terminal?.showScrollButtons ??
-              (DEFAULT_USER_SETTINGS.terminal?.showScrollButtons ?? true)),
-        keyShortcuts:
-          dto.terminal?.keyShortcuts !== undefined
-            ? dto.terminal.keyShortcuts
-            : (current.terminal?.keyShortcuts ??
-              DEFAULT_USER_SETTINGS.terminal?.keyShortcuts),
-      },
     };
+    for (const ns of listUserSettingsNamespaces()) {
+      merged[ns.key] = ns.merge(
+        (current as Record<string, unknown>)[ns.key],
+        dto[ns.key],
+      );
+    }
 
     // Validate merged result
-    const validated = userSettingsSchema.parse(merged);
+    const validated = updateUserSettingsSchema.parse(merged);
 
     const settings = await this.prisma.userSettings.update({
       where: { userId },
@@ -166,13 +169,28 @@ export class UserSettingsService {
 
     const value = settings.value as unknown as UserSettingsValue;
 
+    return this.toResponse(value, settings);
+  }
+
+  /**
+   * Response shape of a write: core fields, then each namespace as stored
+   * (absent stays absent).
+   */
+  private toResponse(
+    value: UserSettingsValue,
+    settings: { updatedAt: Date; version: number },
+  ): UserSettingsResult {
+    const namespaces: Record<string, unknown> = {};
+    for (const ns of listUserSettingsNamespaces()) {
+      namespaces[ns.key] = (value as Record<string, unknown>)[ns.key];
+    }
     return {
       theme: value.theme,
       profile: value.profile,
-      terminal: value.terminal,
+      ...namespaces,
       updatedAt: settings.updatedAt,
       version: settings.version,
-    };
+    } as UserSettingsResult;
   }
 
   /**
