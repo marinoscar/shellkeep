@@ -97,7 +97,6 @@ if [ ! -f "${SHELLKEEP_DIR}/.env" ]; then
     log "    - SECRETS_ENCRYPTION_KEY (generate with: openssl rand -base64 32)"
     log "    - GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET"
     log "    - GOOGLE_CALLBACK_URL=https://${DOMAIN}/api/auth/google/callback"
-    log "    - S3_BUCKET, S3_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY"
     log "    - INITIAL_ADMIN_EMAIL"
     log ""
     log "  Then run this script again."
