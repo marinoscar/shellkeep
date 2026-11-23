@@ -1,7 +1,13 @@
 {
   "name": "enterprise-app",
   "private": true,
-  "workspaces": ["apps/*", "tools/*"],
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "apps/*",
+    "tools/*"
+  ],
   "scripts": {
     "api": "npm -w apps/api",
     "web": "npm -w apps/web",
@@ -15,6 +21,9 @@
   },
   "overrides": {
     "@nestjs/common": "^11.1.12",
-    "@nestjs/core": "^11.1.12"
+    "@nestjs/core": "^11.1.12",
+    "@nestjs/platform-fastify": "^11.1.12",
+    "@nestjs/platform-ws": "^11.1.12",
+    "@nestjs/websockets": "^11.1.12"
   }
 }

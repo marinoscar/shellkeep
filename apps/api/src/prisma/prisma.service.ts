@@ -1,5 +1,8 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+
+import { buildDatabaseUrl } from '../common/database-url';
 
 @Injectable()
 export class PrismaService
@@ -9,7 +12,9 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
+    // Prisma 7 requires a driver adapter; the URL is built from POSTGRES_*.
     super({
+      adapter: new PrismaPg({ connectionString: buildDatabaseUrl() }),
       log: [
         { emit: 'event', level: 'query' },
         { emit: 'event', level: 'error' },
