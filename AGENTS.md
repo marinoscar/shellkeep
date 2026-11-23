@@ -15,7 +15,7 @@ Start at [README.md](README.md) and [docs/README.md](docs/README.md) (index with
 ## Repository structure
 
 ```
-apps/api/        NestJS API: src/server-profiles/, src/terminal/ (sessions, SSH, WS gateway), src/{auth,users,settings,storage,...}/, test/, prisma/
+apps/api/        NestJS API: src/server-profiles/, src/terminal/ (sessions, SSH, WS gateway), src/{settings,storage,...}/, src/platform/ (identity and host bindings), test/, prisma/
                  target: src/platform/<slice>/ binds each packaged slice, src/app-registrations/ holds registrations,
                  prisma/fragments/ hand-edited, prisma/schema/ GENERATED (never edit), prisma/migrations/ + platform.lock
 apps/web/        React app: src/components/terminal/, src/hooks/, src/pages/, src/__tests__/ (target: src/config/ registries)

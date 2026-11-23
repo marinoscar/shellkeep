@@ -50,7 +50,7 @@ Issue numbers are GitHub issues of `marinoscar/shellkeep`: #44 base to domain de
 | Terminal web extraction | `KeyShortcutsSettings`, `KeystrokeEditor` and the terminal API calls leave base web files (`components/settings`, `services/api.ts`, `types/index.ts`, `Sidebar`/`HomePage` destinations) for `components/terminal/settings/`, `services/terminal-api.ts` and `config/destinations.ts`. Resolved by #44 (web): terminal types are in `types/terminal.ts` (the `terminal` user-settings namespace augments `UserSettingsNamespaces`), the settings panel is mounted through `config/userSettingsPanels.tsx`, and `src/__tests__/architecture/base-domain-boundary.test.ts` guards the base files. | `components/settings`, `services`, `types` | #44, then #76, #80 |
 | ShellKeep storage key prefixes | The platform owns `uploads/`, where every existing object lives. ShellKeep adds `session-logs/` and `runbook-artifacts/` through `registerStorageKeyPrefixes`; the S3 environment variables are removed (storage is runtime-configured). | storage | #50 |
 | SSH credential re-encryption | `ServerProfile` secrets are encrypted with `ENCRYPTION_KEY` by `encryption.util.ts`; they are re-encrypted with the credentials slice's `SECRETS_ENCRYPTION_KEY` and the three `encrypted*` columns are retired. | `common/utils` | #48 |
-| Terminal WebSocket authorization | The gateway verifies the JWT and `isActive` but checks no permission. A `TerminalPrincipalResolver` over the identity slice enforces `sessions:*` and the token expiry. | `terminal` | #47 |
+| Terminal WebSocket authorization | The gateway verifies the JWT and `isActive` but checks no permission. A `TerminalPrincipalResolver` over the identity slice enforces `sessions:write` and the token expiry. Resolved by #47 (the resolver is a `PLATFORM-ADOPTION-SHIM`; a seam request to the platform is pending). | `terminal` | #47 |
 
 ## Classification
 
@@ -60,11 +60,11 @@ The **Drift** column uses the slice view where the module has a packaged slice a
 
 | Module | Drift | Files | Category | Target | Issue | Workaround |
 |---|---|---|---|---|---|---|
-| `apps/api/src/auth` | 5.6% / +322 −1345 | 29 | noise | identity slice | #47 | none |
-| `apps/api/src/users` | 12.5% / +43 −248 | 12 | noise | identity slice | #47 | none |
-| `apps/api/src/allowlist` | 28.6% / +12 −84 | 9 | noise | identity slice | #47 | none |
-| `apps/api/src/device-auth` | 11.8% / +184 −869 | 18 | noise | identity slice | #47 | none |
-| `apps/api/src/test-auth` | 9.1% / +63 −152 | 7 | noise | identity slice (`identity/testing`) | #47 | none |
+| `apps/api/src/auth` | 5.6% / +322 −1345 | 29 | noise | identity slice | #47 | deleted by #47 |
+| `apps/api/src/users` | 12.5% / +43 −248 | 12 | noise | identity slice | #47 | deleted by #47 |
+| `apps/api/src/allowlist` | 28.6% / +12 −84 | 9 | noise | identity slice | #47 | deleted by #47 |
+| `apps/api/src/device-auth` | 11.8% / +184 −869 | 18 | noise | identity slice | #47 | deleted by #47 |
+| `apps/api/src/test-auth` | 9.1% / +63 −152 | 7 | noise | identity slice (`identity/testing`) | #47 | deleted by #47 |
 | `apps/api/src/health` | 0% / +23 −58 | 5 | noise | host slice (`host/health`) | #46 | none |
 | `apps/api/src/settings` | 0% / +250 −685 | 15 | backport | settings slice | #48 | `terminal` user-settings namespace (`showScrollButtons`, `keyShortcuts`) moved to `apps/api/src/terminal/settings/` and registered with `registerUserSettingsNamespaces`; stored shape unchanged (resolved by #44; #48 swaps the local registry for the package's) |
 | `apps/api/src/common` | 0% / +27 −164 | 23 | mixed (see sub-rows) | split across host, core, settings, credentials, identity and otel-core | #44, #46, #47, #48, #53 | see the `common/` rows |
@@ -73,7 +73,8 @@ The **Drift** column uses the slice view where the module has a packaged slice a
 | `apps/api/src/prisma` | 0% / +3 −37 | 2 | noise | platform-db and core data-access (`PrismaService`) | #45 | none |
 | `apps/api/src/server-profiles` | n/a / +0 −0 | 8 | domain | keep | — | none |
 | `apps/api/src/terminal` | n/a / +0 −0 | 17 | domain | keep (its `tasks/session-cleanup` `@Cron` becomes an enqueue-only cron and a `terminal.session.reap` job) | #49 (cron), #47 (WebSocket auth) | none |
-| `apps/api/src/app-registrations` | n/a / +0 −0 | 2 | domain | keep (composition root with `shellkeep.manifest.ts`: `APP_PERMISSIONS` now, the platform manifest registrations from #47 and #48) | #44, #47, #48 | none |
+| `apps/api/src/app-registrations` | n/a / +0 −0 | 6 | domain | keep (composition root with `shellkeep.manifest.ts`: `APP_PERMISSIONS`, the user-owned model and ownership classifications and `registrations.ts` with the platform manifest registrations (#47); the settings and credential registrations follow in #48) | #44, #47, #48 | none |
+| `apps/api/src/platform` | n/a / +0 −0 | 10 | domain | keep (bindings of the packaged slices: `platform-host.module.ts`, `doctor.config.ts` and `identity/` from #47; one folder per slice as each is adopted) | #47 | Interim host-port adapters are `PLATFORM-ADOPTION-SHIM`s listed in `local-exceptions.md` |
 | `apps/api/src/common/filters` | 0% / +17 −100 | 2 | noise | host/core (`http-exception.filter`) | #46 | none |
 | `apps/api/src/common/interceptors` | 0% / +7 −61 | 4 | noise | host (`logging.interceptor`, `transform.interceptor`) | #46 | A `304` shim (the platform transform wraps it) is a known risk; record it in `local-exceptions.md` if met |
 | `apps/api/src/common/middleware` | 0% / +3 −3 | 2 | noise | host (`request-id.middleware`) | #46 | none |
@@ -81,9 +82,9 @@ The **Drift** column uses the slice view where the module has a packaged slice a
 | `apps/api/src/common/schemas` | 0% / +39 −140 | 2 | backport | settings slice | #48 | Terminal part of the user-settings schema (`keyShortcutSchema`, `terminal`) moved to the terminal namespace (resolved by #44) |
 | `apps/api/src/common/types` | 0% / +95 −4 | 1 | backport | settings slice | #48 | `KeyShortcut`, `DEFAULT_KEY_SHORTCUTS` and `terminal?` moved to the terminal namespace (resolved by #44) |
 | `apps/api/src/common/utils` | n/a / +0 −0 | 2 | noise | credentials slice (`encryption.util.ts`, AES-256-GCM) | #48 | SSH credentials are re-encrypted from `ENCRYPTION_KEY` to `SECRETS_ENCRYPTION_KEY` in #48 |
-| `apps/api/src/common/services` | n/a / +0 −0 | 2 | noise | identity slice (`admin-bootstrap.service.ts`) | #47 | none |
+| `apps/api/src/common/services` | n/a / +0 −0 | 2 | noise | identity slice (`admin-bootstrap.service.ts`) | #47 | deleted by #47 |
 | `apps/api/src/common/decorators` | 0% / +0 −0 | 1 | noise | otel-core (`@Trace()`) | #53 | none |
-| `apps/api/src/common/constants` | 0% / +28 −16 | 1 | backport | identity slice (roles and permissions) | #44, #47 | `servers:*` and `sessions:*` permissions moved to `app-registrations/permissions.ts` (`APP_PERMISSIONS`, resolved by #44), then to platform `PermissionDeclaration` (#47); defaults keep admin and contributor with all six, viewer with the two read permissions |
+| `apps/api/src/common/constants` | 0% / +28 −16 | 1 | backport | identity slice (roles and permissions) | #44, #47 | `servers:*` and `sessions:*` permissions moved to `app-registrations/permissions.ts` (`APP_PERMISSIONS`, resolved by #44), then to platform `PermissionDeclaration` (resolved by #47: org scoped, org_admin and contributor write, viewer reads; `ROLES` and `PERMISSIONS` are derived from the platform declarations); defaults keep admin and contributor with all six, viewer with the two read permissions |
 | `apps/api/src/common/exceptions` | n/a / +0 −0 | 1 | noise | core errors (`database-seed.exception.ts`) | #46 | none |
 | `apps/api/src/common/common.module.ts` | 0% / +3 −3 | 1 | noise | host core | #46 | none |
 
@@ -96,8 +97,8 @@ The four tasks are covered by their module rows above; they are listed so the sl
 | `apps/api/src/instrumentation.ts` | 0% / +64 −7 | 1 | noise | otel-core and telemetry slice | #53 | none |
 | `apps/api/src/app.module.ts` | 0% / +45 −59 | 1 | shellkeep-divergence | app composition root, rebuilt on `forRoot` bindings by each slice issue | #46–#54 | none |
 | `apps/api/src/main.ts` | 0% / +27 −41 | 1 | shellkeep-divergence | app composition root (`shellkeep.manifest.ts` is imported first, #44) | #44, #46 | none |
-| `apps/api/src/auth/tasks/token-cleanup.task.ts` | 0% / +7 −12 | 1 | noise | identity slice (`@Cron`, owned by the slice) | #47 | none |
-| `apps/api/src/device-auth/tasks/device-code-cleanup.task.ts` | 0% / +11 −12 | 1 | noise | identity slice (`@Cron`, owned by the slice) | #47 | none |
+| `apps/api/src/auth/tasks/token-cleanup.task.ts` | 0% / +7 −12 | 1 | noise | identity slice (`@Cron`, owned by the slice) | #47 | deleted by #47 |
+| `apps/api/src/device-auth/tasks/device-code-cleanup.task.ts` | 0% / +11 −12 | 1 | noise | identity slice (`@Cron`, owned by the slice) | #47 | deleted by #47 |
 | `apps/api/src/storage/tasks/storage-cleanup.task.ts` | 0% / +57 −13 | 1 | noise | storage slice (`@Cron`, owned by the slice) | #50 | none |
 | `apps/api/src/storage/tasks/storage-expiry.task.ts` | n/a / +0 −0 | 1 | noise | storage slice (`@Cron`, owned by the slice) | #50 | none |
 
@@ -204,7 +205,7 @@ The 14 base models are the 14 of EAB `0001_initial`. `DeviceCode` and `StorageOb
 |---|---|---|---|---|---|
 | `20260124223146_initial` | identical (byte for byte) to platform `0001_initial` | noise | `@marinoscar/platform-db` migration `0001_initial` | #45 | Recorded in the `platform.lock` baseline; never edited |
 | `20260322203853_add_server_profile_color` | app-only (`ALTER TABLE "server_profiles" ADD COLUMN "color"`) | domain | domain migration set | #45 | No migration created `server_profiles` or `terminal_sessions` (they came from `prisma db push`). #45 added `20260124223147_add_terminal_domain`, which sorts before this migration; on an existing database it is only marked applied (`migrate resolve --applied`) |
-| `apps/api/prisma/seed.ts` | modified (+167 −15) | backport | platform seed plus an app seed | #45, #47 | The added content is the `servers:*`/`sessions:*` permissions and their role grants; they now come from `APP_PERMISSIONS` (resolved by #44, see the workaround table) |
+| `apps/api/prisma/seed.ts` | modified (+167 −15) | backport | platform seed plus an app seed | #45, #47 | The added content is the `servers:*`/`sessions:*` permissions and their role grants; they now come from `APP_PERMISSIONS` (resolved by #44, see the workaround table); #47 replaced the file with `seedPlatform` over the generated `prisma/catalog/` snapshots plus an empty `prisma/seed-app.ts` |
 | `apps/api/prisma/tsconfig.json` | modified (+5 −15) | noise | platform-db tooling | #45 | none |
 
 ## Not classified here

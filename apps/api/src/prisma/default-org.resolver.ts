@@ -4,12 +4,13 @@ import { PrismaService } from './prisma.service';
 /**
  * Resolves the id of the default organization.
  *
- * PLATFORM-ADOPTION-SHIM(#47): ShellKeep is single-organization until the
- * identity slice is adopted. Rows of the app's domain tables and of storage
- * objects must carry an org_id, so every
- * create stamps the default organization that platform migration 0023 creates.
- * #47 deletes this class and takes the organization from the request
- * (`@CurrentOrg()` / `resolveOrgId`). See docs/platform-adoption/local-exceptions.md.
+ * PLATFORM-ADOPTION-SHIM(#50): the storage module's `ObjectsService` (whose
+ * platform model requires `org_id`) still stamps new storage objects with the
+ * default organization, because its controller does not carry the request's
+ * organization yet. The domain (server profiles, terminal sessions) takes the
+ * organization from the request since #47 (`@CurrentOrg()`). #50 replaces the
+ * storage module with the storage slice and deletes this class. See
+ * docs/platform-adoption/local-exceptions.md.
  *
  * The id is read once and cached for the life of the process: the default
  * organization is never replaced. A failed lookup is not cached.
