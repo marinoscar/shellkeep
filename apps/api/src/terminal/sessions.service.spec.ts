@@ -2,13 +2,16 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { DefaultOrgResolver } from '../prisma/default-org.resolver';
+import { AUDIT_SINK } from '@marinoscar/platform-api/core';
 
 describe('SessionsService', () => {
   let service: SessionsService;
   let prisma: PrismaService;
 
   const mockUserId = 'user-123';
+  const mockOrgId = 'org-default';
+  const mockScope = { userId: mockUserId, orgId: mockOrgId };
+  const auditSink = { record: jest.fn().mockResolvedValue(undefined) };
   const mockSessionId = 'session-456';
   const mockProfileId = 'profile-789';
 
@@ -39,7 +42,7 @@ describe('SessionsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SessionsService,
-        { provide: DefaultOrgResolver, useValue: { resolve: jest.fn().mockResolvedValue('org-default') } },
+        { provide: AUDIT_SINK, useValue: auditSink },
         {
           provide: PrismaService,
           useValue: {
@@ -75,7 +78,7 @@ describe('SessionsService', () => {
       ]);
       (prisma.terminalSession.count as jest.Mock).mockResolvedValue(1);
 
-      const result = await service.findAll(mockUserId, {
+      const result = await service.findAll(mockScope, {
         page: 1,
         pageSize: 20,
         status: 'all',
@@ -92,7 +95,7 @@ describe('SessionsService', () => {
       (prisma.terminalSession.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.terminalSession.count as jest.Mock).mockResolvedValue(0);
 
-      await service.findAll(mockUserId, {
+      await service.findAll(mockScope, {
         page: 1,
         pageSize: 20,
         status: 'active',
@@ -100,7 +103,7 @@ describe('SessionsService', () => {
 
       expect(prisma.terminalSession.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId: mockUserId, status: 'active' },
+          where: { userId: mockUserId, orgId: mockOrgId, status: 'active' },
         }),
       );
     });
@@ -109,7 +112,7 @@ describe('SessionsService', () => {
       (prisma.terminalSession.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.terminalSession.count as jest.Mock).mockResolvedValue(0);
 
-      await service.findAll(mockUserId, {
+      await service.findAll(mockScope, {
         page: 1,
         pageSize: 20,
         status: 'all',
@@ -117,7 +120,7 @@ describe('SessionsService', () => {
 
       expect(prisma.terminalSession.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId: mockUserId },
+          where: { userId: mockUserId, orgId: mockOrgId },
         }),
       );
     });
@@ -126,7 +129,7 @@ describe('SessionsService', () => {
       (prisma.terminalSession.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.terminalSession.count as jest.Mock).mockResolvedValue(0);
 
-      await service.findAll(mockUserId, {});
+      await service.findAll(mockScope, {});
 
       expect(prisma.terminalSession.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -143,10 +146,10 @@ describe('SessionsService', () => {
         mockSession,
       );
 
-      const result = await service.findOne(mockSessionId, mockUserId);
+      const result = await service.findOne(mockSessionId, mockScope);
 
       expect(prisma.terminalSession.findFirst).toHaveBeenCalledWith({
-        where: { id: mockSessionId, userId: mockUserId },
+        where: { id: mockSessionId, userId: mockUserId, orgId: mockOrgId },
         include: expect.any(Object),
       });
       expect(result.id).toBe(mockSessionId);
@@ -157,7 +160,7 @@ describe('SessionsService', () => {
       (prisma.terminalSession.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.findOne('nonexistent', mockUserId),
+        service.findOne('nonexistent', mockScope),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -173,7 +176,7 @@ describe('SessionsService', () => {
         mockSession,
       );
 
-      const result = await service.create(mockUserId, {
+      const result = await service.create(mockScope, {
         serverProfileId: mockProfileId,
       });
 
@@ -203,7 +206,7 @@ describe('SessionsService', () => {
         name: 'Custom Name',
       });
 
-      await service.create(mockUserId, {
+      await service.create(mockScope, {
         serverProfileId: mockProfileId,
         name: 'Custom Name',
       });
@@ -220,7 +223,7 @@ describe('SessionsService', () => {
       (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.create(mockUserId, {
+        service.create(mockScope, {
           serverProfileId: 'nonexistent-profile',
         }),
       ).rejects.toThrow(NotFoundException);
@@ -238,7 +241,7 @@ describe('SessionsService', () => {
         terminatedAt: new Date(),
       });
 
-      const result = await service.terminate(mockSessionId, mockUserId);
+      const result = await service.terminate(mockSessionId, mockScope);
 
       expect(prisma.terminalSession.update).toHaveBeenCalledWith({
         where: { id: mockSessionId },
@@ -255,7 +258,7 @@ describe('SessionsService', () => {
       (prisma.terminalSession.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.terminate(mockSessionId, 'wrong-user'),
+        service.terminate(mockSessionId, { ...mockScope, userId: 'wrong-user' }),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -307,18 +310,41 @@ describe('SessionsService', () => {
   });
 
   describe('batchTerminate', () => {
+    beforeEach(() => {
+      (prisma.terminalSession.findMany as jest.Mock).mockResolvedValue([
+        { id: mockSessionId },
+        { id: 'session-999' },
+      ]);
+    });
+
+    it('should audit each terminated session', async () => {
+      (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({ count: 2 });
+
+      await service.batchTerminate([mockSessionId, 'session-999'], mockScope);
+
+      expect(auditSink.record).toHaveBeenCalledTimes(2);
+      expect(auditSink.record).toHaveBeenCalledWith({
+        action: 'terminal_session.terminate',
+        actorUserId: mockUserId,
+        targetType: 'terminal_session',
+        targetId: 'session-999',
+        meta: { batch: true },
+      });
+    });
+
     it('should call updateMany with correct where clause including userId, id in list, and status not terminated', async () => {
       const ids = [mockSessionId, 'session-999'];
       (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({
         count: 2,
       });
 
-      await service.batchTerminate(ids, mockUserId);
+      await service.batchTerminate(ids, mockScope);
 
       expect(prisma.terminalSession.updateMany).toHaveBeenCalledWith({
         where: {
           id: { in: ids },
           userId: mockUserId,
+          orgId: mockOrgId,
           status: { not: 'terminated' },
         },
         data: {
@@ -334,7 +360,7 @@ describe('SessionsService', () => {
         count: 2,
       });
 
-      const result = await service.batchTerminate(ids, mockUserId);
+      const result = await service.batchTerminate(ids, mockScope);
 
       expect(result).toEqual({ terminated: 2 });
     });
@@ -345,7 +371,7 @@ describe('SessionsService', () => {
         count: 0,
       });
 
-      const result = await service.batchTerminate(ids, mockUserId);
+      const result = await service.batchTerminate(ids, mockScope);
 
       expect(result).toEqual({ terminated: 0 });
     });
@@ -356,12 +382,61 @@ describe('SessionsService', () => {
         count: 1,
       });
 
-      await service.batchTerminate(ids, mockUserId);
+      await service.batchTerminate(ids, mockScope);
 
       expect(prisma.terminalSession.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ userId: mockUserId }),
+          where: expect.objectContaining({ userId: mockUserId, orgId: mockOrgId }),
         }),
+      );
+    });
+  });
+  describe('organization scope and audit', () => {
+    const otherOrg = { userId: mockUserId, orgId: 'org-other' };
+
+    it('names the organization next to the owner in every lookup (another organization is a 404)', async () => {
+      (prisma.terminalSession.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.findOne(mockSessionId, otherOrg)).rejects.toThrow(NotFoundException);
+
+      expect(prisma.terminalSession.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: mockSessionId, userId: mockUserId, orgId: 'org-other' },
+        }),
+      );
+    });
+
+    it('creates a session in the organization of the scope and audits it', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue({ id: mockProfileId, name: 'My Server' });
+      (prisma.terminalSession.create as jest.Mock).mockResolvedValue(mockSession);
+
+      await service.create(otherOrg, { serverProfileId: mockProfileId });
+
+      expect(prisma.serverProfile.findFirst).toHaveBeenCalledWith({
+        where: { id: mockProfileId, userId: mockUserId, orgId: 'org-other' },
+      });
+      expect(prisma.terminalSession.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ userId: mockUserId, orgId: 'org-other' }),
+        }),
+      );
+      expect(auditSink.record).toHaveBeenCalledWith({
+        action: 'terminal_session.create',
+        actorUserId: mockUserId,
+        targetType: 'terminal_session',
+        targetId: mockSessionId,
+        meta: { serverProfileId: mockProfileId },
+      });
+    });
+
+    it('audits a termination', async () => {
+      (prisma.terminalSession.findFirst as jest.Mock).mockResolvedValue(mockSession);
+      (prisma.terminalSession.update as jest.Mock).mockResolvedValue({ ...mockSession, status: 'terminated' });
+
+      await service.terminate(mockSessionId, mockScope);
+
+      expect(auditSink.record).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'terminal_session.terminate', targetId: mockSessionId }),
       );
     });
   });

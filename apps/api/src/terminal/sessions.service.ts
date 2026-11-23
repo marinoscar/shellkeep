@@ -1,10 +1,13 @@
 import {
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { AUDIT_SINK, type AuditSink } from '@marinoscar/platform-api/core';
 import { PrismaService } from '../prisma/prisma.service';
-import { DefaultOrgResolver } from '../prisma/default-org.resolver';
+import type { OwnerScope } from '../common/types/owner-scope';
+import { recordAudit } from '../common/audit/record-audit';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { SessionQueryDto } from './dto/session-query.dto';
@@ -24,19 +27,34 @@ export class SessionsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly defaultOrg: DefaultOrgResolver,
+    @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
   ) {}
+
+  private audit(
+    action: string,
+    scope: OwnerScope,
+    sessionId: string,
+    meta: Record<string, string | number | boolean | null> = {},
+  ): Promise<void> {
+    return recordAudit(this.auditSink, this.logger, {
+      action,
+      actorUserId: scope.userId,
+      targetType: 'terminal_session',
+      targetId: sessionId,
+      meta,
+    });
+  }
 
   /**
    * List terminal sessions for a user with pagination and status filter
    */
-  async findAll(userId: string, query: SessionQueryDto) {
+  async findAll(scope: OwnerScope, query: SessionQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const status = query.status ?? 'all';
     const skip = (page - 1) * pageSize;
 
-    const where: any = { userId };
+    const where: any = { userId: scope.userId, orgId: scope.orgId };
 
     if (status !== 'all') {
       where.status = status;
@@ -69,9 +87,9 @@ export class SessionsService {
   /**
    * Get a single terminal session by ID with owner check
    */
-  async findOne(id: string, userId: string) {
+  async findOne(id: string, scope: OwnerScope) {
     const session = await this.prisma.terminalSession.findFirst({
-      where: { id, userId },
+      where: { id, userId: scope.userId, orgId: scope.orgId },
       include: {
         serverProfile: {
           select: SERVER_PROFILE_SELECT,
@@ -89,10 +107,10 @@ export class SessionsService {
   /**
    * Create a new terminal session
    */
-  async create(userId: string, dto: CreateSessionDto) {
+  async create(scope: OwnerScope, dto: CreateSessionDto) {
     // Verify server profile ownership
     const serverProfile = await this.prisma.serverProfile.findFirst({
-      where: { id: dto.serverProfileId, userId },
+      where: { id: dto.serverProfileId, userId: scope.userId, orgId: scope.orgId },
     });
 
     if (!serverProfile) {
@@ -111,8 +129,8 @@ export class SessionsService {
 
     const session = await this.prisma.terminalSession.create({
       data: {
-        userId,
-        orgId: await this.defaultOrg.resolve(),
+        userId: scope.userId,
+        orgId: scope.orgId,
         serverProfileId: dto.serverProfileId,
         name,
         tmuxSessionId,
@@ -128,7 +146,10 @@ export class SessionsService {
       },
     });
 
-    this.logger.log(`Terminal session "${name}" created by user ${userId}`);
+    await this.audit('terminal_session.create', scope, session.id, {
+      serverProfileId: dto.serverProfileId,
+    });
+    this.logger.log(`Terminal session "${name}" created by user ${scope.userId}`);
 
     return this.toResponse(session);
   }
@@ -136,9 +157,9 @@ export class SessionsService {
   /**
    * Update session name
    */
-  async update(id: string, userId: string, dto: UpdateSessionDto) {
+  async update(id: string, scope: OwnerScope, dto: UpdateSessionDto) {
     const existing = await this.prisma.terminalSession.findFirst({
-      where: { id, userId },
+      where: { id, userId: scope.userId, orgId: scope.orgId },
     });
 
     if (!existing) {
@@ -155,7 +176,7 @@ export class SessionsService {
       },
     });
 
-    this.logger.log(`Terminal session "${session.name}" updated by user ${userId}`);
+    this.logger.log(`Terminal session "${session.name}" updated by user ${scope.userId}`);
 
     return this.toResponse(session);
   }
@@ -163,9 +184,9 @@ export class SessionsService {
   /**
    * Terminate a session
    */
-  async terminate(id: string, userId: string) {
+  async terminate(id: string, scope: OwnerScope) {
     const existing = await this.prisma.terminalSession.findFirst({
-      where: { id, userId },
+      where: { id, userId: scope.userId, orgId: scope.orgId },
     });
 
     if (!existing) {
@@ -185,7 +206,8 @@ export class SessionsService {
       },
     });
 
-    this.logger.log(`Terminal session "${session.name}" terminated by user ${userId}`);
+    await this.audit('terminal_session.terminate', scope, session.id);
+    this.logger.log(`Terminal session "${session.name}" terminated by user ${scope.userId}`);
 
     return this.toResponse(session);
   }
@@ -193,20 +215,32 @@ export class SessionsService {
   /**
    * Batch terminate multiple sessions by ID for a user
    */
-  async batchTerminate(ids: string[], userId: string): Promise<{ terminated: number }> {
+  async batchTerminate(ids: string[], scope: OwnerScope): Promise<{ terminated: number }> {
+    const where = {
+      id: { in: ids },
+      userId: scope.userId,
+      orgId: scope.orgId,
+      status: { not: 'terminated' as const },
+    };
+    // Read the ids first so each terminated session gets its own audit row.
+    const targets = (await this.prisma.terminalSession.findMany({
+      where,
+      select: { id: true },
+    })) as Array<{ id: string }>;
+
     const result = await this.prisma.terminalSession.updateMany({
-      where: {
-        id: { in: ids },
-        userId,
-        status: { not: 'terminated' },
-      },
+      where,
       data: {
         status: 'terminated',
         terminatedAt: new Date(),
       },
     });
 
-    this.logger.log(`Batch terminated ${result.count} sessions for user ${userId}`);
+    for (const target of targets) {
+      await this.audit('terminal_session.terminate', scope, target.id, { batch: true });
+    }
+
+    this.logger.log(`Batch terminated ${result.count} sessions for user ${scope.userId}`);
 
     return { terminated: result.count };
   }
@@ -235,10 +269,11 @@ export class SessionsService {
   /**
    * Get active or detached sessions for a user
    */
-  async getActiveSessions(userId: string) {
+  async getActiveSessions(scope: OwnerScope) {
     const sessions = await this.prisma.terminalSession.findMany({
       where: {
-        userId,
+        userId: scope.userId,
+        orgId: scope.orgId,
         status: { in: ['active', 'detached'] },
       },
       orderBy: { lastActivityAt: 'desc' },

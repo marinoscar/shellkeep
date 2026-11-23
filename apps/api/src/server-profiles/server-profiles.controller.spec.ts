@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { withoutAuthGuards } from '../../test/helpers/allow-guards';
 import { NotFoundException } from '@nestjs/common';
 import { ServerProfilesController } from './server-profiles.controller';
 import { ServerProfilesService } from './server-profiles.service';
@@ -8,6 +9,7 @@ describe('ServerProfilesController', () => {
   let mockServerProfilesService: jest.Mocked<ServerProfilesService>;
 
   const userId = 'user-uuid';
+  const orgId = 'org-uuid';
   const profileId = 'profile-uuid';
 
   beforeEach(async () => {
@@ -20,12 +22,12 @@ describe('ServerProfilesController', () => {
       testConnection: jest.fn(),
     } as any;
 
-    const module: TestingModule = await Test.createTestingModule({
+    const module: TestingModule = await withoutAuthGuards(Test.createTestingModule({
       controllers: [ServerProfilesController],
       providers: [
         { provide: ServerProfilesService, useValue: mockServerProfilesService },
       ],
-    }).compile();
+    })).compile();
 
     controller = module.get<ServerProfilesController>(ServerProfilesController);
   });
@@ -41,25 +43,25 @@ describe('ServerProfilesController', () => {
       };
       mockServerProfilesService.findAll.mockResolvedValue(serviceResult as any);
 
-      const result = await controller.findAll(userId, query);
+      const result = await controller.findAll(userId, orgId, query);
 
       expect(result).toEqual(serviceResult);
-      expect(mockServerProfilesService.findAll).toHaveBeenCalledWith(userId, query);
+      expect(mockServerProfilesService.findAll).toHaveBeenCalledWith({ userId, orgId }, query);
     });
 
     it('should pass search query to service', async () => {
       const query = { page: 1, pageSize: 20, search: 'prod' } as any;
       mockServerProfilesService.findAll.mockResolvedValue({ items: [], total: 0 } as any);
 
-      await controller.findAll(userId, query);
+      await controller.findAll(userId, orgId, query);
 
-      expect(mockServerProfilesService.findAll).toHaveBeenCalledWith(userId, query);
+      expect(mockServerProfilesService.findAll).toHaveBeenCalledWith({ userId, orgId }, query);
     });
 
     it('should propagate service errors', async () => {
       mockServerProfilesService.findAll.mockRejectedValue(new Error('DB error'));
 
-      await expect(controller.findAll(userId, {} as any)).rejects.toThrow('DB error');
+      await expect(controller.findAll(userId, orgId, {} as any)).rejects.toThrow('DB error');
     });
   });
 
@@ -68,10 +70,10 @@ describe('ServerProfilesController', () => {
       const serviceResult = { id: profileId, name: 'My Server', userId };
       mockServerProfilesService.findOne.mockResolvedValue(serviceResult as any);
 
-      const result = await controller.findOne(profileId, userId);
+      const result = await controller.findOne(profileId, userId, orgId);
 
       expect(result).toEqual(serviceResult);
-      expect(mockServerProfilesService.findOne).toHaveBeenCalledWith(profileId, userId);
+      expect(mockServerProfilesService.findOne).toHaveBeenCalledWith(profileId, { userId, orgId });
     });
 
     it('should propagate NotFoundException when profile not found', async () => {
@@ -79,7 +81,7 @@ describe('ServerProfilesController', () => {
         new NotFoundException('Server profile not found'),
       );
 
-      await expect(controller.findOne('missing-uuid', userId)).rejects.toThrow(NotFoundException);
+      await expect(controller.findOne('missing-uuid', userId, orgId)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -89,16 +91,16 @@ describe('ServerProfilesController', () => {
       const serviceResult = { id: profileId, ...dto, userId };
       mockServerProfilesService.create.mockResolvedValue(serviceResult as any);
 
-      const result = await controller.create(userId, dto);
+      const result = await controller.create(userId, orgId, dto);
 
       expect(result).toEqual(serviceResult);
-      expect(mockServerProfilesService.create).toHaveBeenCalledWith(userId, dto);
+      expect(mockServerProfilesService.create).toHaveBeenCalledWith({ userId, orgId }, dto);
     });
 
     it('should propagate service errors on create', async () => {
       mockServerProfilesService.create.mockRejectedValue(new Error('Encryption error'));
 
-      await expect(controller.create(userId, {} as any)).rejects.toThrow('Encryption error');
+      await expect(controller.create(userId, orgId, {} as any)).rejects.toThrow('Encryption error');
     });
   });
 
@@ -108,10 +110,10 @@ describe('ServerProfilesController', () => {
       const serviceResult = { id: profileId, name: 'Updated Server', userId };
       mockServerProfilesService.update.mockResolvedValue(serviceResult as any);
 
-      const result = await controller.update(profileId, userId, dto);
+      const result = await controller.update(profileId, userId, orgId, dto);
 
       expect(result).toEqual(serviceResult);
-      expect(mockServerProfilesService.update).toHaveBeenCalledWith(profileId, userId, dto);
+      expect(mockServerProfilesService.update).toHaveBeenCalledWith(profileId, { userId, orgId }, dto);
     });
 
     it('should propagate NotFoundException when profile not found', async () => {
@@ -119,7 +121,7 @@ describe('ServerProfilesController', () => {
         new NotFoundException('Server profile not found'),
       );
 
-      await expect(controller.update('missing-uuid', userId, {} as any)).rejects.toThrow(
+      await expect(controller.update('missing-uuid', userId, orgId, {} as any)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -129,10 +131,10 @@ describe('ServerProfilesController', () => {
     it('should delete a server profile and return undefined', async () => {
       mockServerProfilesService.remove.mockResolvedValue(undefined as any);
 
-      const result = await controller.remove(profileId, userId);
+      const result = await controller.remove(profileId, userId, orgId);
 
       expect(result).toBeUndefined();
-      expect(mockServerProfilesService.remove).toHaveBeenCalledWith(profileId, userId);
+      expect(mockServerProfilesService.remove).toHaveBeenCalledWith(profileId, { userId, orgId });
     });
 
     it('should propagate NotFoundException when profile not found', async () => {
@@ -140,7 +142,7 @@ describe('ServerProfilesController', () => {
         new NotFoundException('Server profile not found'),
       );
 
-      await expect(controller.remove('missing-uuid', userId)).rejects.toThrow(NotFoundException);
+      await expect(controller.remove('missing-uuid', userId, orgId)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -149,17 +151,17 @@ describe('ServerProfilesController', () => {
       const serviceResult = { success: true, latencyMs: 42 };
       mockServerProfilesService.testConnection.mockResolvedValue(serviceResult as any);
 
-      const result = await controller.testConnection(profileId, userId);
+      const result = await controller.testConnection(profileId, userId, orgId);
 
       expect(result).toEqual(serviceResult);
-      expect(mockServerProfilesService.testConnection).toHaveBeenCalledWith(profileId, userId);
+      expect(mockServerProfilesService.testConnection).toHaveBeenCalledWith(profileId, { userId, orgId });
     });
 
     it('should return failure result when connection fails', async () => {
       const serviceResult = { success: false, error: 'Connection refused' };
       mockServerProfilesService.testConnection.mockResolvedValue(serviceResult as any);
 
-      const result = await controller.testConnection(profileId, userId);
+      const result = await controller.testConnection(profileId, userId, orgId);
 
       expect(result).toEqual(serviceResult);
     });
@@ -169,7 +171,7 @@ describe('ServerProfilesController', () => {
         new NotFoundException('Server profile not found'),
       );
 
-      await expect(controller.testConnection('missing-uuid', userId)).rejects.toThrow(
+      await expect(controller.testConnection('missing-uuid', userId, orgId)).rejects.toThrow(
         NotFoundException,
       );
     });

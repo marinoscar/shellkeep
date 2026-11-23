@@ -20,8 +20,7 @@ import {
 } from '@nestjs/swagger';
 
 import { ServerProfilesService } from './server-profiles.service';
-import { Auth } from '../auth/decorators/auth.decorator';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Auth, CurrentOrg, CurrentUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
@@ -41,9 +40,10 @@ export class ServerProfilesController {
   @ApiResponse({ status: 200, description: 'Paginated server profiles' })
   async findAll(
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
     @Query() query: ServerProfilesQueryDto,
   ) {
-    return this.serverProfilesService.findAll(userId, query);
+    return this.serverProfilesService.findAll({ userId, orgId }, query);
   }
 
   @Get(':id')
@@ -55,8 +55,9 @@ export class ServerProfilesController {
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
   ) {
-    return this.serverProfilesService.findOne(id, userId);
+    return this.serverProfilesService.findOne(id, { userId, orgId });
   }
 
   @Post()
@@ -65,9 +66,10 @@ export class ServerProfilesController {
   @ApiResponse({ status: 201, description: 'Server profile created' })
   async create(
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
     @Body() dto: CreateServerProfileDto,
   ) {
-    return this.serverProfilesService.create(userId, dto);
+    return this.serverProfilesService.create({ userId, orgId }, dto);
   }
 
   @Patch(':id')
@@ -79,9 +81,10 @@ export class ServerProfilesController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
     @Body() dto: UpdateServerProfileDto,
   ) {
-    return this.serverProfilesService.update(id, userId, dto);
+    return this.serverProfilesService.update(id, { userId, orgId }, dto);
   }
 
   @Delete(':id')
@@ -94,8 +97,9 @@ export class ServerProfilesController {
   async remove(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
   ) {
-    await this.serverProfilesService.remove(id, userId);
+    await this.serverProfilesService.remove(id, { userId, orgId });
   }
 
   @Post(':id/test')
@@ -108,7 +112,8 @@ export class ServerProfilesController {
   async testConnection(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
   ) {
-    return this.serverProfilesService.testConnection(id, userId);
+    return this.serverProfilesService.testConnection(id, { userId, orgId });
   }
 }
