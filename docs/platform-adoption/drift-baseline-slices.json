@@ -1,0 +1,2433 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-23T18:05:44.770Z",
+  "base": {
+    "root": "<SCRATCH>/eab-slice-view",
+    "commit": null,
+    "identity": {
+      "productName": "My App",
+      "slug": "my-app",
+      "slugSnake": "my_app",
+      "serviceName": "my-app-api",
+      "repoSlug": "marinoscar/EnterpriseAppBase",
+      "repoName": "EnterpriseAppBase",
+      "cliName": "appctl",
+      "cliUpper": "APPCTL",
+      "cliTitle": "Appctl"
+    }
+  },
+  "app": {
+    "root": "shellkeep",
+    "commit": "95145d0d850a4a53757b65d289158d58e34fc33d",
+    "identity": {
+      "productName": "ShellKeep",
+      "slug": "shellkeep",
+      "slugSnake": "shellkeep",
+      "serviceName": "shellkeep-api",
+      "repoSlug": "marinoscar/shellkeep",
+      "repoName": "shellkeep",
+      "cliName": null,
+      "cliUpper": null,
+      "cliTitle": null
+    }
+  },
+  "replacements": [
+    {
+      "placeholder": "__PRODUCT__",
+      "base": "My App",
+      "app": "ShellKeep",
+      "applied": true,
+      "token": "__PRODUCT__"
+    },
+    {
+      "placeholder": "__SLUG__",
+      "base": "my-app",
+      "app": "shellkeep",
+      "applied": true,
+      "token": "__SLUG__"
+    },
+    {
+      "placeholder": "__SLUG_SNAKE__",
+      "base": "my_app",
+      "app": "shellkeep",
+      "applied": true,
+      "token": "__SLUG__"
+    },
+    {
+      "placeholder": "__SERVICE__",
+      "base": "my-app-api",
+      "app": "shellkeep-api",
+      "applied": true,
+      "token": "__SERVICE__"
+    },
+    {
+      "placeholder": "__REPO_SLUG__",
+      "base": "marinoscar/EnterpriseAppBase",
+      "app": "marinoscar/shellkeep",
+      "applied": true,
+      "token": "__REPO_SLUG__"
+    },
+    {
+      "placeholder": "__REPO_NAME__",
+      "base": "EnterpriseAppBase",
+      "app": "shellkeep",
+      "applied": true,
+      "token": "__SLUG__"
+    },
+    {
+      "placeholder": "__CLI__",
+      "base": "appctl",
+      "app": null,
+      "applied": false,
+      "token": null
+    },
+    {
+      "placeholder": "__CLI_UPPER__",
+      "base": "APPCTL",
+      "app": null,
+      "applied": false,
+      "token": null
+    },
+    {
+      "placeholder": "__CLI_TITLE__",
+      "base": "Appctl",
+      "app": null,
+      "applied": false,
+      "token": null
+    }
+  ],
+  "areas": {
+    "api": {
+      "files": 331,
+      "identical": 7,
+      "normalisedIdentical": 3,
+      "modified": 72,
+      "baseOnly": 153,
+      "appOnly": 96,
+      "linesAdded": 1291,
+      "linesRemoved": 4665,
+      "identicalPercent": 4.3,
+      "root": "apps/api/src",
+      "inBase": true,
+      "inApp": true
+    }
+  },
+  "modules": [
+    {
+      "area": "api",
+      "module": "(root)",
+      "files": 3,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 3,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "files": 11,
+      "identical": 2,
+      "normalisedIdentical": 0,
+      "modified": 3,
+      "baseOnly": 2,
+      "appOnly": 4,
+      "linesAdded": 12,
+      "linesRemoved": 84,
+      "identicalPercent": 28.6
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "files": 63,
+      "identical": 1,
+      "normalisedIdentical": 2,
+      "modified": 17,
+      "baseOnly": 34,
+      "appOnly": 9,
+      "linesAdded": 322,
+      "linesRemoved": 1345,
+      "identicalPercent": 5.6
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "files": 23,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 4,
+      "baseOnly": 0,
+      "appOnly": 19,
+      "linesAdded": 27,
+      "linesRemoved": 164,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "config",
+      "files": 1,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 1,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "files": 20,
+      "identical": 2,
+      "normalisedIdentical": 0,
+      "modified": 13,
+      "baseOnly": 2,
+      "appOnly": 3,
+      "linesAdded": 184,
+      "linesRemoved": 869,
+      "identicalPercent": 11.8
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "files": 9,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 1,
+      "baseOnly": 4,
+      "appOnly": 4,
+      "linesAdded": 23,
+      "linesRemoved": 58,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "prisma",
+      "files": 2,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 2,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "files": 8,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 8,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "files": 44,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 5,
+      "baseOnly": 29,
+      "appOnly": 10,
+      "linesAdded": 250,
+      "linesRemoved": 685,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "files": 104,
+      "identical": 1,
+      "normalisedIdentical": 0,
+      "modified": 19,
+      "baseOnly": 75,
+      "appOnly": 9,
+      "linesAdded": 367,
+      "linesRemoved": 1060,
+      "identicalPercent": 1.1
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "files": 17,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 17,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "files": 13,
+      "identical": 0,
+      "normalisedIdentical": 1,
+      "modified": 4,
+      "baseOnly": 6,
+      "appOnly": 2,
+      "linesAdded": 63,
+      "linesRemoved": 152,
+      "identicalPercent": 9.1
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "files": 13,
+      "identical": 1,
+      "normalisedIdentical": 0,
+      "modified": 6,
+      "baseOnly": 1,
+      "appOnly": 5,
+      "linesAdded": 43,
+      "linesRemoved": 248,
+      "identicalPercent": 12.5
+    }
+  ],
+  "files": [
+    {
+      "area": "api",
+      "module": "(root)",
+      "path": "apps/api/src/app.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "(root)",
+      "path": "apps/api/src/instrumentation.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "(root)",
+      "path": "apps/api/src/main.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/allowlist.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/allowlist.controller.ts",
+      "status": "modified",
+      "linesAdded": 3,
+      "linesRemoved": 11
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/allowlist.module.ts",
+      "status": "modified",
+      "linesAdded": 2,
+      "linesRemoved": 0
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/allowlist.permissions.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/allowlist.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/allowlist.service.ts",
+      "status": "modified",
+      "linesAdded": 7,
+      "linesRemoved": 73
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/dto/add-email.dto.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/dto/add-email.dto.ts",
+      "status": "identical"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/dto/allowlist-query.dto.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/dto/allowlist-query.dto.ts",
+      "status": "identical"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/dto/allowlist-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/admin-bootstrap.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth-error-codes.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth-provider.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth.controller.ts",
+      "status": "modified",
+      "linesAdded": 52,
+      "linesRemoved": 99
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth.module.ts",
+      "status": "modified",
+      "linesAdded": 7,
+      "linesRemoved": 26
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth.service.ts",
+      "status": "modified",
+      "linesAdded": 199,
+      "linesRemoved": 801
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/cookie-http.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/credential-binding.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/auth-credential.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/auth.decorator.ts",
+      "status": "modified",
+      "linesAdded": 11,
+      "linesRemoved": 45
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/current-org.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/current-principal.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/current-user.decorator.ts",
+      "status": "modified",
+      "linesAdded": 4,
+      "linesRemoved": 14
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/index.ts",
+      "status": "modified",
+      "linesAdded": 0,
+      "linesRemoved": 3
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/permissions.decorator.ts",
+      "status": "modified",
+      "linesAdded": 1,
+      "linesRemoved": 3
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/public.decorator.ts",
+      "status": "normalised-identical"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/rbac.decorator.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/roles.decorator.ts",
+      "status": "modified",
+      "linesAdded": 1,
+      "linesRemoved": 1
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/auth-providers.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/egress/auth-providers.egress.contributor.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/egress/google-auth.egress.contributor.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/initial-admin.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/jwt-secret.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/principal-cache.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/dto/auth-provider.dto.ts",
+      "status": "modified",
+      "linesAdded": 0,
+      "linesRemoved": 8
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/dto/auth-user.dto.ts",
+      "status": "modified",
+      "linesAdded": 5,
+      "linesRemoved": 80
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/dto/switch-org.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/external-profile.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/filters/auth-provider-exception.filter.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/filters/google-oauth-exception.filter.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/external-provider.guard.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/google-oauth.guard.ts",
+      "status": "modified",
+      "linesAdded": 8,
+      "linesRemoved": 26
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/index.ts",
+      "status": "identical"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/jwt-auth.guard.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/jwt-auth.guard.ts",
+      "status": "modified",
+      "linesAdded": 4,
+      "linesRemoved": 151
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/permissions.guard.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/permissions.guard.ts",
+      "status": "modified",
+      "linesAdded": 8,
+      "linesRemoved": 25
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/roles.guard.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/roles.guard.ts",
+      "status": "modified",
+      "linesAdded": 0,
+      "linesRemoved": 10
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/handlers/token-cleanup.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/interfaces/authenticated-user.interface.ts",
+      "status": "modified",
+      "linesAdded": 14,
+      "linesRemoved": 37
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal-cache/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal-cache/local-event-bus.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal-cache/principal-cache.config.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal-cache/principal-cache.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal-cache/principal-cache.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal.factory.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/providers/auth-provider.registry.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/providers/cookie-state-store.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/providers/google.provider.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/refuse-oauth.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/route-prefix.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/sign-in-policy.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/sign-in-response.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/strategies/google.strategy.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/strategies/google.strategy.ts",
+      "status": "normalised-identical"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/strategies/jwt.strategy.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/strategies/jwt.strategy.ts",
+      "status": "modified",
+      "linesAdded": 1,
+      "linesRemoved": 4
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/tasks/token-cleanup.task.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/tasks/token-cleanup.task.ts",
+      "status": "modified",
+      "linesAdded": 7,
+      "linesRemoved": 12
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/tenancy-mode.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/common.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/constants/roles.constants.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/decorators/trace.decorator.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/exceptions/database-seed.exception.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/filters/http-exception.filter.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/filters/http-exception.filter.ts",
+      "status": "modified",
+      "linesAdded": 17,
+      "linesRemoved": 100
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/interceptors/logging.interceptor.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/interceptors/logging.interceptor.ts",
+      "status": "modified",
+      "linesAdded": 1,
+      "linesRemoved": 6
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/interceptors/transform.interceptor.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/interceptors/transform.interceptor.ts",
+      "status": "modified",
+      "linesAdded": 6,
+      "linesRemoved": 55
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/logger/logger.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/logger/logger.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/logger/logger.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/logger/pino.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/middleware/request-id.middleware.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/middleware/request-id.middleware.ts",
+      "status": "modified",
+      "linesAdded": 3,
+      "linesRemoved": 3
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/schemas/settings.schema.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/schemas/settings.schema.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/services/admin-bootstrap.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/services/admin-bootstrap.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/types/settings.types.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/utils/encryption.util.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/utils/encryption.util.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "config",
+      "path": "apps/api/src/config/configuration.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/README.md",
+      "status": "modified",
+      "linesAdded": 30,
+      "linesRemoved": 296
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/__tests__/device-auth.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/device-auth.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/device-auth.controller.ts",
+      "status": "modified",
+      "linesAdded": 13,
+      "linesRemoved": 63
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/device-auth.module.ts",
+      "status": "modified",
+      "linesAdded": 2,
+      "linesRemoved": 3
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/device-auth.service.ts",
+      "status": "modified",
+      "linesAdded": 80,
+      "linesRemoved": 337
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-activate-response.dto.ts",
+      "status": "modified",
+      "linesAdded": 2,
+      "linesRemoved": 3
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-authorize-request.dto.ts",
+      "status": "modified",
+      "linesAdded": 8,
+      "linesRemoved": 2
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-authorize-response.dto.ts",
+      "status": "identical"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-code-request.dto.ts",
+      "status": "modified",
+      "linesAdded": 13,
+      "linesRemoved": 19
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-code-response.dto.ts",
+      "status": "modified",
+      "linesAdded": 5,
+      "linesRemoved": 13
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-session.dto.ts",
+      "status": "modified",
+      "linesAdded": 5,
+      "linesRemoved": 44
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-token-error.dto.ts",
+      "status": "modified",
+      "linesAdded": 4,
+      "linesRemoved": 13
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-token-request.dto.ts",
+      "status": "modified",
+      "linesAdded": 5,
+      "linesRemoved": 5
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-token-response.dto.ts",
+      "status": "modified",
+      "linesAdded": 6,
+      "linesRemoved": 59
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/index.ts",
+      "status": "identical"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/exceptions/device-token-error.exception.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/handlers/device-code-cleanup.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/tasks/device-code-cleanup.task.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/tasks/device-code-cleanup.task.ts",
+      "status": "modified",
+      "linesAdded": 11,
+      "linesRemoved": 12
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/builtin-health-indicators.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/database.indicator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/health-indicator.registry.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/health-indicator.runner.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/health.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/health.controller.ts",
+      "status": "modified",
+      "linesAdded": 23,
+      "linesRemoved": 58
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/health.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/indicators/database.indicator.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/indicators/database.indicator.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "prisma",
+      "path": "apps/api/src/prisma/prisma.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "prisma",
+      "path": "apps/api/src/prisma/prisma.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/dto/create-server-profile.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/dto/server-profiles-query.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/dto/update-server-profile.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/README.md",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/data/settings-db.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/data/settings-ownership.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/dto/system-settings-response.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/dto/update-system-settings.dto.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/dto/update-system-settings.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/dto/update-user-settings.dto.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/dto/update-user-settings.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/dto/user-settings-response.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/oauth-server.system-settings.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/org-settings/describe-fields.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/org-settings/org-layer.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/org-settings/org-settings.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/org-settings/org-settings.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/ports.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/assemble.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/catalog.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/compose.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/core-user-fields.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/core-user-namespaces.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/extend.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/merge-helpers.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/nested.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/schema-walk.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/secret-fields.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/system-settings-namespace.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/user-settings-namespace.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/row-store.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/settings-resolver.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/settings.module.ts",
+      "status": "modified",
+      "linesAdded": 10,
+      "linesRemoved": 51
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/settings.options.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/settings.permissions.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/system-settings/system-settings.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/system-settings/system-settings.controller.ts",
+      "status": "modified",
+      "linesAdded": 31,
+      "linesRemoved": 26
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/system-settings/system-settings.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/system-settings/system-settings.service.ts",
+      "status": "modified",
+      "linesAdded": 87,
+      "linesRemoved": 337
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/testing/conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/testing/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/user-settings/user-settings.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/user-settings/user-settings.controller.ts",
+      "status": "modified",
+      "linesAdded": 35,
+      "linesRemoved": 24
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/user-settings/user-settings.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/user-settings/user-settings.service.ts",
+      "status": "modified",
+      "linesAdded": 87,
+      "linesRemoved": 247
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/write-hooks.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/README.md",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/doctor/egress/storage.egress.contributor.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/doctor/storage-bucket.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/doctor/storage-config.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/dto/storage-bucket-provision.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/dto/storage-config-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/dto/storage-connection-test.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/dto/update-storage-config.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-bucket-provision.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config-admin.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config.permissions.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-connection-test.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-driver-context.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-not-configured.error.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-settings-compat.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-submission.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage.system-settings.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/data/storage-db.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/builtin-storage-drivers.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-config.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-connection-test.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-family.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-probe.support.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-provision.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-purge.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/storage-driver.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/handlers/storage-cleanup.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/handlers/storage-object-process.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/copy-and-verify.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/dto/storage-migration.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migrate-object.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migrate-plan.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migration-settled.listener.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migration.constants.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migration.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migration.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/mime-type-match.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/multipart.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/node-object-store.binding.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/complete-upload.dto.ts",
+      "status": "modified",
+      "linesAdded": 8,
+      "linesRemoved": 5
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/download-url-response.dto.ts",
+      "status": "modified",
+      "linesAdded": 4,
+      "linesRemoved": 4
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/get-part-urls.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/init-upload.dto.ts",
+      "status": "modified",
+      "linesAdded": 17,
+      "linesRemoved": 6
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/object-list-query.dto.ts",
+      "status": "modified",
+      "linesAdded": 20,
+      "linesRemoved": 4
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/object-response.dto.ts",
+      "status": "modified",
+      "linesAdded": 19,
+      "linesRemoved": 5
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/update-metadata.dto.ts",
+      "status": "modified",
+      "linesAdded": 5,
+      "linesRemoved": 5
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/objects.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/objects.controller.ts",
+      "status": "modified",
+      "linesAdded": 44,
+      "linesRemoved": 162
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/objects.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/objects.service.ts",
+      "status": "modified",
+      "linesAdded": 82,
+      "linesRemoved": 468
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/part-body-parser.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/part-body.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/ports.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/events/object-uploaded.event.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/index.ts",
+      "status": "modified",
+      "linesAdded": 9,
+      "linesRemoved": 4
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/object-processing.module.ts",
+      "status": "modified",
+      "linesAdded": 3,
+      "linesRemoved": 4
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/object-processing.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/object-processing.service.ts",
+      "status": "modified",
+      "linesAdded": 50,
+      "linesRemoved": 64
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/object-processor.interface.ts",
+      "status": "modified",
+      "linesAdded": 3,
+      "linesRemoved": 3
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/object-processor.registry.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/processing-metadata.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/processors/README.md",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/processors/example-metadata.processor.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/avatar.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/avatar.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/dto/profile-image-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/profile-image.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/profile-image.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/profile-image.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/profile-image.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/index.ts",
+      "status": "modified",
+      "linesAdded": 1,
+      "linesRemoved": 16
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/resolving-storage.provider.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/s3/s3-storage.provider.ts",
+      "status": "modified",
+      "linesAdded": 26,
+      "linesRemoved": 147
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/storage-provider-router.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/storage-provider.binding.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/storage-provider.interface.ts",
+      "status": "modified",
+      "linesAdded": 2,
+      "linesRemoved": 45
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/storage-provider.types.ts",
+      "status": "modified",
+      "linesAdded": 1,
+      "linesRemoved": 61
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/storage-providers.module.ts",
+      "status": "modified",
+      "linesAdded": 4,
+      "linesRemoved": 14
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/purge/run-storage-purge.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/status/dto/storage-status.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/status/storage-status.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage-credential.constants.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage-job-input.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage-key-prefix.registry.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage-key-prefixes.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage.constants.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage.module.ts",
+      "status": "modified",
+      "linesAdded": 12,
+      "linesRemoved": 30
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage.options.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage.permissions.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/tasks/index.ts",
+      "status": "identical"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/tasks/storage-cleanup.task.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/tasks/storage-cleanup.task.ts",
+      "status": "modified",
+      "linesAdded": 57,
+      "linesRemoved": 13
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/tasks/storage-expiry.task.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/tasks/storage-expiry.task.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/testing/conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/testing/driver-conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/testing/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/dto/batch-terminate-sessions.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/dto/create-session.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/dto/session-query.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/dto/update-session.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/session-manager.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/session-manager.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/sessions.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/sessions.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/sessions.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/sessions.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/ssh.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/ssh.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/tasks/session-cleanup.task.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/tasks/session-cleanup.task.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/terminal.gateway.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/terminal.gateway.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/terminal.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/auth-provider-conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/dto/test-login.dto.ts",
+      "status": "modified",
+      "linesAdded": 1,
+      "linesRemoved": 2
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/guards/test-environment.guard.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/guards/test-environment.guard.ts",
+      "status": "normalised-identical"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/oauth-server-conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/oauth.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/stub-host.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/test-auth.controller.ts",
+      "status": "modified",
+      "linesAdded": 3,
+      "linesRemoved": 21
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/test-auth.module.ts",
+      "status": "modified",
+      "linesAdded": 3,
+      "linesRemoved": 6
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/test-auth.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/test-auth.service.ts",
+      "status": "modified",
+      "linesAdded": 56,
+      "linesRemoved": 123
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/update-user-roles.dto.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/update-user-roles.dto.ts",
+      "status": "modified",
+      "linesAdded": 1,
+      "linesRemoved": 6
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/update-user.dto.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/update-user.dto.ts",
+      "status": "identical"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/user-list-query.dto.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/user-list-query.dto.ts",
+      "status": "modified",
+      "linesAdded": 1,
+      "linesRemoved": 1
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/user-response.dto.ts",
+      "status": "modified",
+      "linesAdded": 5,
+      "linesRemoved": 28
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/users.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/users.controller.ts",
+      "status": "modified",
+      "linesAdded": 9,
+      "linesRemoved": 22
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/users.module.ts",
+      "status": "modified",
+      "linesAdded": 0,
+      "linesRemoved": 2
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/users.permissions.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/users.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/users.service.ts",
+      "status": "modified",
+      "linesAdded": 27,
+      "linesRemoved": 189
+    }
+  ],
+  "migrations": null,
+  "prismaModels": null
+}
