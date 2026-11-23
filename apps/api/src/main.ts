@@ -13,7 +13,9 @@ import { Logger } from '@nestjs/common';
 import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { WsAdapter } from '@nestjs/platform-ws';
+import { verifyEncryptionKeyAtStartup } from '@marinoscar/platform-api/core';
 import { AppModule } from './app.module';
+import { PrismaService } from './prisma/prisma.service';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -26,6 +28,21 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({ logger: true }),
+  );
+
+  // Platform secrets key check (#48). Runs before the plugins and before `listen`, so
+  // a deployment that cannot read its own stored credentials never binds the port: the
+  // failure belongs in the deploy log, not in a 500 handed to the first user who opens
+  // a server profile. It asks the database whether any credential is stored (the
+  // deployment's, a user's or an organization's), so a fresh deployment without the
+  // key still boots. The key itself is read by the platform cipher, not by this app.
+  const prisma = app.get(PrismaService);
+  await verifyEncryptionKeyAtStartup(
+    async () =>
+      (await prisma.credential.count()) +
+      (await prisma.userCredential.count()) +
+      (await prisma.orgCredential.count()),
+    logger,
   );
 
   // Register cookie plugin

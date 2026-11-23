@@ -189,6 +189,21 @@ export function setupMockSystemSettings(): void {
 }
 
 // ============================================================================
+// Credential Store Mocks
+// ============================================================================
+
+/**
+ * The platform credential store reaches the database through `forUser(prisma, id)`,
+ * which `$extends` the client: the mock answers with itself, and an empty store.
+ */
+export function setupMockCredentialStore(): void {
+  (prismaMock.$extends as jest.Mock).mockReturnValue(prismaMock);
+  (prismaMock.userCredential.findMany as jest.Mock).mockResolvedValue([]);
+  (prismaMock.userCredential.findUnique as jest.Mock).mockResolvedValue(null);
+  (prismaMock.userCredential.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+}
+
+// ============================================================================
 // Audit Event Mocks
 // ============================================================================
 
@@ -327,6 +342,7 @@ export function setupBaseMocks(): void {
   setupUserSettingsMocks();
   setupMockSystemSettings();
   setupMockAuditEvents();
+  setupMockCredentialStore();
 
   // Mock transactions
   mockPrismaTransaction();

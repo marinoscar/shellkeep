@@ -7,7 +7,9 @@
 // Purge: Cascade on user delete (a deleted user takes their profiles with them).
 // No RLS: this table carries org_id but is not under row-level security; see
 //   docs/platform-adoption/local-exceptions.md (standing constraints).
-// SSH credential columns (`encrypted_*`) hold AES-256-GCM ciphertext only.
+// SSH credential columns (`encrypted_*`) are LEGACY since #48: they hold AES-256-GCM ciphertext under the
+//   legacy key, are never read, and stay until a later migration drops them (#84). The secrets live in
+//   the platform credential store (purpose `ssh`, names `profile.<profileId>.<field>`).
 
 enum AuthMethod {
   password
