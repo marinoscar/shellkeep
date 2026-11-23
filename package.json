@@ -1,12 +1,12 @@
 {
-  "name": "enterprise-app",
+  "name": "shellkeep",
   "private": true,
   "engines": {
     "node": ">=24"
   },
   "workspaces": [
     "apps/*",
-    "tools/*"
+    "packages/*"
   ],
   "scripts": {
     "api": "npm -w apps/api",
@@ -15,9 +15,8 @@
     "web:dev": "npm -w apps/web run dev",
     "api:test": "npm -w apps/api test",
     "web:test": "npm -w apps/web test",
-    "app": "node tools/app/bin/app.js",
-    "app:build": "npm -w tools/app run build",
-    "check:classification": "node scripts/platform-adoption/check-classification.mjs"
+    "check:classification": "node scripts/platform-adoption/check-classification.mjs",
+    "typecheck": "npm run typecheck --workspace=api && npm run typecheck --workspace=web"
   },
   "overrides": {
     "@nestjs/common": "^11.1.12",

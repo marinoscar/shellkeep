@@ -6,10 +6,15 @@
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:debug"],
+      "runtimeArgs": [
+        "run",
+        "start:debug"
+      ],
       "cwd": "${workspaceFolder}/apps/api",
       "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/apps/api/dist/**/*.js"],
+      "outFiles": [
+        "${workspaceFolder}/apps/api/dist/**/*.js"
+      ],
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",
         "!**/node_modules/**"
@@ -26,7 +31,9 @@
       "request": "attach",
       "port": 9229,
       "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/apps/api/dist/**/*.js"],
+      "outFiles": [
+        "${workspaceFolder}/apps/api/dist/**/*.js"
+      ],
       "resolveSourceMapLocations": [
         "${workspaceFolder}/**",
         "!**/node_modules/**"
@@ -71,72 +78,23 @@
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "test:debug"],
+      "runtimeArgs": [
+        "run",
+        "test:debug"
+      ],
       "cwd": "${workspaceFolder}/apps/api",
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen"
-    },
-    {
-      "name": "Debug CLI (tools/app)",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/tools/app/bin/app.js",
-      "args": [],
-      "cwd": "${workspaceFolder}",
-      "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/tools/app/dist/**/*.js"],
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/**",
-        "!**/node_modules/**"
-      ],
-      "console": "integratedTerminal",
-      "preLaunchTask": "Start Servers + Build CLI"
-    },
-    {
-      "name": "Debug CLI with args",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/tools/app/bin/app.js",
-      "args": ["${input:cliCommand}"],
-      "cwd": "${workspaceFolder}",
-      "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/tools/app/dist/**/*.js"],
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/**",
-        "!**/node_modules/**"
-      ],
-      "console": "integratedTerminal",
-      "preLaunchTask": "Start Servers + Build CLI"
-    },
-    {
-      "name": "Debug CLI Only (no servers)",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/tools/app/bin/app.js",
-      "args": ["${input:cliCommand}"],
-      "cwd": "${workspaceFolder}",
-      "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/tools/app/dist/**/*.js"],
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/**",
-        "!**/node_modules/**"
-      ],
-      "console": "integratedTerminal",
-      "preLaunchTask": "Build CLI"
     }
   ],
   "compounds": [
     {
       "name": "Full Stack Debug (API + Web)",
-      "configurations": ["Debug API (NestJS)", "Debug Web Only (Chrome)"],
+      "configurations": [
+        "Debug API (NestJS)",
+        "Debug Web Only (Chrome)"
+      ],
       "stopAll": true
-    }
-  ],
-  "inputs": [
-    {
-      "id": "cliCommand",
-      "type": "promptString",
-      "description": "CLI command/args (e.g., 'docker up', 'health', 'auth login')"
     }
   ]
 }
