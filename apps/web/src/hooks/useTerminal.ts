@@ -39,6 +39,51 @@ function applyMobileInputAttributes(textarea: HTMLTextAreaElement): void {
   textarea.setAttribute('data-enable-grammarly', 'false');
 }
 
+/**
+ * Open a socket for `sessionId` and wire its events to the terminal and the
+ * hook's state. Terminal input is NOT wired here: the hook subscribes to it
+ * once per terminal and routes it to the current socket (issue #93).
+ */
+function openSocket(
+  sessionId: string,
+  terminal: Terminal,
+  setIsConnected: (connected: boolean) => void,
+  setError: (error: string | null) => void,
+): TerminalWebSocket {
+  // The socket reads the session's current access token on every (re)connect
+  // and re-authenticates in-band after each refresh (#47).
+  const ws = new TerminalWebSocket(sessionId);
+
+  ws.on('connect', () => {
+    setIsConnected(true);
+    setError(null);
+    // Force tmux to repaint by toggling dimensions.
+    // If the size matches what tmux already has, it won't redraw.
+    // Sending cols-1 first forces a size change, then the real
+    // size triggers a full repaint with correct dimensions.
+    setTimeout(() => {
+      ws.resize(terminal.cols - 1, terminal.rows);
+      setTimeout(() => {
+        ws.resize(terminal.cols, terminal.rows);
+      }, 50);
+    }, 200);
+  });
+
+  ws.on('data', (data: Uint8Array) => {
+    terminal.write(data);
+  });
+
+  ws.on('disconnect', () => {
+    setIsConnected(false);
+  });
+
+  ws.on('error', (err: Error) => {
+    setError(err.message);
+  });
+
+  return ws;
+}
+
 export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivElement | null>) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,51 +169,24 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
 
-    // Connect WebSocket. It reads the session's current access token on every
-    // (re)connect and re-authenticates in-band after each refresh (#47).
-    const ws = new TerminalWebSocket(sessionId);
+    const ws = openSocket(sessionId, terminal, setIsConnected, setError);
     wsRef.current = ws;
 
-    ws.on('connect', () => {
-      setIsConnected(true);
-      setError(null);
-      // Force tmux to repaint by toggling dimensions.
-      // If the size matches what tmux already has, it won't redraw.
-      // Sending cols-1 first forces a size change, then the real
-      // size triggers a full repaint with correct dimensions.
-      setTimeout(() => {
-        ws.resize(terminal.cols - 1, terminal.rows);
-        setTimeout(() => {
-          ws.resize(terminal.cols, terminal.rows);
-        }, 50);
-      }, 200);
+    // Terminal input -> the CURRENT socket. Subscribed once per terminal, so a
+    // reconnect (which replaces the socket) never adds a second subscription
+    // and a keystroke is sent exactly once (issue #93).
+    const encoder = new TextEncoder();
+    const dataSubscription = terminal.onData((data: string) => {
+      wsRef.current?.send(encoder.encode(data));
     });
 
-    ws.on('data', (data: Uint8Array) => {
-      terminal.write(data);
-    });
-
-    ws.on('disconnect', () => {
-      setIsConnected(false);
-    });
-
-    ws.on('error', (err: Error) => {
-      setError(err.message);
-    });
-
-    // Terminal input -> WebSocket
-    terminal.onData((data: string) => {
-      const encoder = new TextEncoder();
-      ws.send(encoder.encode(data));
-    });
-
-    // Terminal binary -> WebSocket
-    terminal.onBinary((data: string) => {
+    // Terminal binary -> the current socket
+    const binarySubscription = terminal.onBinary((data: string) => {
       const buffer = new Uint8Array(data.length);
       for (let i = 0; i < data.length; i++) {
         buffer[i] = data.charCodeAt(i);
       }
-      ws.send(buffer);
+      wsRef.current?.send(buffer);
     });
 
     ws.connect();
@@ -179,8 +197,9 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
       if (fitTimer !== null) clearTimeout(fitTimer);
       fitTimer = setTimeout(() => {
         fitAddon.fit();
-        if (ws.connected) {
-          ws.resize(terminal.cols, terminal.rows);
+        const current = wsRef.current;
+        if (current?.connected) {
+          current.resize(terminal.cols, terminal.rows);
         }
         fitTimer = null;
       }, 100);
@@ -192,7 +211,9 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
       resizeObserver.disconnect();
       mutationObserver.disconnect();
       container.removeEventListener('focus', handleFocus, true);
-      ws.disconnect();
+      dataSubscription?.dispose();
+      binarySubscription?.dispose();
+      wsRef.current?.disconnect();
       terminal.dispose();
       terminalRef.current = null;
       wsRef.current = null;
@@ -203,20 +224,12 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
 
   const reconnect = useCallback(() => {
     wsRef.current?.disconnect();
-    if (api.getAccessToken()) {
-      const ws = new TerminalWebSocket(sessionId);
+    const terminal = terminalRef.current;
+    if (api.getAccessToken() && terminal) {
+      // Only the socket is replaced: the terminal's single input subscription
+      // already routes to whatever `wsRef.current` is.
+      const ws = openSocket(sessionId, terminal, setIsConnected, setError);
       wsRef.current = ws;
-
-      ws.on('connect', () => setIsConnected(true));
-      ws.on('data', (data: Uint8Array) => terminalRef.current?.write(data));
-      ws.on('disconnect', () => setIsConnected(false));
-      ws.on('error', (err: Error) => setError(err.message));
-
-      terminalRef.current?.onData((data: string) => {
-        const encoder = new TextEncoder();
-        ws.send(encoder.encode(data));
-      });
-
       ws.connect();
     }
   }, [sessionId]);
