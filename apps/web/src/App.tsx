@@ -6,7 +6,9 @@ import { IdentityProviders } from './identity/IdentityProviders';
 import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
 import { Layout } from './components/common/Layout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
-import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
+import { useRegisterSW } from 'virtual:pwa-register/react';
+import { InstallPrompt, MaintenanceGate, UpdatePrompt } from '@marinoscar/platform-web/host/ui';
+import { APP_NAME } from './config/app';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
 import { AppPlatformHostProvider } from './platform/platformHost';
 
@@ -60,87 +62,92 @@ function AppRoutes() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <ErrorBoundary>
-        <Suspense fallback={<LoadingSpinner fullScreen />}>
-          <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            {/* A failed sign-in: the packaged page shows the screen for `?error=<code>`. */}
-            <Route path="/auth/error" element={<AuthCallbackPage />} />
+        {/* The host slice's client gate (#46): while the API answers a request
+            with a maintenance 503 (recorded by `services/api.ts`), the screen
+            replaces the routes; every route but the Maintenance page. */}
+        <MaintenanceGate appName={APP_NAME}>
+          <Suspense fallback={<LoadingSpinner fullScreen />}>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              {/* A failed sign-in: the packaged page shows the screen for `?error=<code>`. */}
+              <Route path="/auth/error" element={<AuthCallbackPage />} />
 
-            {/* Test login (development only) */}
-            {!import.meta.env.PROD && TestLoginPage && (
-              <Route path="/testing/login" element={<TestLoginPage />} />
-            )}
+              {/* Test login (development only) */}
+              {!import.meta.env.PROD && TestLoginPage && (
+                <Route path="/testing/login" element={<TestLoginPage />} />
+              )}
 
-            {/* Protected routes */}
-            <Route element={<RequireAuth loading={<LoadingSpinner fullScreen />} />}>
-              {/* Device activation page - without layout for full-screen experience */}
-              <Route path="/activate" element={<ActivateDevicePage />} />
+              {/* Protected routes */}
+              <Route element={<RequireAuth loading={<LoadingSpinner fullScreen />} />}>
+                {/* Device activation page - without layout for full-screen experience */}
+                <Route path="/activate" element={<ActivateDevicePage />} />
 
-              {/* Full-screen terminal - without layout */}
-              <Route
-                path="/terminal/:id"
-                element={
-                  <RequirePermission permission="sessions:read" fallback={HOME}>
-                    <TerminalAccessGate>
-                      <TerminalFullPage />
-                    </TerminalAccessGate>
-                  </RequirePermission>
-                }
-              />
-
-              <Route element={<Layout />}>
-                <Route path="/" element={<HomePage />} />
+                {/* Full-screen terminal - without layout */}
                 <Route
-                  path="/sessions"
-                  element={
-                    <RequirePermission permission="sessions:read" fallback={HOME}>
-                      <SessionsPage />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/sessions/:id/terminal"
+                  path="/terminal/:id"
                   element={
                     <RequirePermission permission="sessions:read" fallback={HOME}>
                       <TerminalAccessGate>
-                        <TerminalPage />
+                        <TerminalFullPage />
                       </TerminalAccessGate>
                     </RequirePermission>
                   }
                 />
-                <Route
-                  path="/servers"
-                  element={
-                    <RequirePermission permission="servers:read" fallback={HOME}>
-                      <ServerProfilesPage />
-                    </RequirePermission>
-                  }
-                />
-                {/* Settings (#48): every card of USER_SETTINGS_SECTIONS has a route
-                    here, and none is gated (user_settings:* is every role's). */}
-                <Route path="/settings" element={<UserSettingsHubPage />} />
-                <Route path="/settings/profile" element={<UserProfilePage />} />
-                <Route path="/settings/appearance" element={<UserAppearancePage />} />
-                <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
-                {/* `users:read` is what `GET /api/users` enforces; the packaged page
-                    gates its Allowlist tab on `allowlist:read` itself. */}
-                <Route
-                  path="/admin/users"
-                  element={
-                    <RequirePermission permission="users:read" fallback={HOME}>
-                      <UsersPage />
-                    </RequirePermission>
-                  }
-                />
-              </Route>
-            </Route>
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+                <Route element={<Layout />}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route
+                    path="/sessions"
+                    element={
+                      <RequirePermission permission="sessions:read" fallback={HOME}>
+                        <SessionsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/sessions/:id/terminal"
+                    element={
+                      <RequirePermission permission="sessions:read" fallback={HOME}>
+                        <TerminalAccessGate>
+                          <TerminalPage />
+                        </TerminalAccessGate>
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/servers"
+                    element={
+                      <RequirePermission permission="servers:read" fallback={HOME}>
+                        <ServerProfilesPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Settings (#48): every card of USER_SETTINGS_SECTIONS has a route
+                      here, and none is gated (user_settings:* is every role's). */}
+                  <Route path="/settings" element={<UserSettingsHubPage />} />
+                  <Route path="/settings/profile" element={<UserProfilePage />} />
+                  <Route path="/settings/appearance" element={<UserAppearancePage />} />
+                  <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
+                  {/* `users:read` is what `GET /api/users` enforces; the packaged page
+                      gates its Allowlist tab on `allowlist:read` itself. */}
+                  <Route
+                    path="/admin/users"
+                    element={
+                      <RequirePermission permission="users:read" fallback={HOME}>
+                        <UsersPage />
+                      </RequirePermission>
+                    }
+                  />
+                </Route>
+              </Route>
+
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </MaintenanceGate>
       </ErrorBoundary>
     </ThemeProvider>
   );
@@ -152,7 +159,10 @@ export default function App() {
       <IdentityProviders>
         <AppPlatformHostProvider>
           <AppRoutes />
-          <PWAUpdatePrompt />
+          {/* The host slice's PWA prompts (#46): the update prompt also
+              registers the service worker. */}
+          <UpdatePrompt useRegisterSW={useRegisterSW} />
+          <InstallPrompt appName={APP_NAME} />
         </AppPlatformHostProvider>
       </IdentityProviders>
     </ThemeContextProvider>

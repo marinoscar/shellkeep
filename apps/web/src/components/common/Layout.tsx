@@ -1,6 +1,7 @@
 import { Box, useTheme } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import { useState, useCallback } from 'react';
+import { MaintenanceBanner } from '@marinoscar/platform-web/host/ui';
 import { AppBar } from '../navigation/AppBar';
 import { Sidebar } from '../navigation/Sidebar';
 
@@ -37,6 +38,9 @@ export function Layout() {
             overflow: 'auto',
           }}
         >
+          {/* An open maintenance window, for an administrator it lets through
+              (#46). Renders nothing for everyone else. */}
+          <MaintenanceBanner />
           <Outlet />
         </Box>
       </Box>

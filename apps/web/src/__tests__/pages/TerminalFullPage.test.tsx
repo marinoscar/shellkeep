@@ -30,6 +30,8 @@ vi.mock('../../services/api', () => ({
   uploadFile: vi.fn(),
   getDownloadUrl: vi.fn(),
   api: { getAccessToken: vi.fn(() => 'mock-token') },
+  // The platform host (rendered by the test wrapper) spreads the app's client.
+  platformApi: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock('../../services/terminal-api', () => ({

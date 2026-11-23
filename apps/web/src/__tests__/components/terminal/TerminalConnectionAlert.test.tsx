@@ -20,6 +20,8 @@ vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => 
 
 vi.mock('../../../services/api', () => ({
   api: { getAccessToken: vi.fn(() => 'mock-token') },
+  // The platform host (rendered by the test wrapper) spreads the app's client.
+  platformApi: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
 import { TerminalConnectionAlert } from '../../../components/terminal/TerminalConnectionAlert';
