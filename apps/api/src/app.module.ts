@@ -12,8 +12,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { platformHostModule } from './platform/platform-host.module';
 import { doctorModule } from './platform/doctor.config';
 import { identityModule } from './platform/identity/identity.config';
-import { CommonModule } from './common/common.module';
-import { SettingsModule } from './settings/settings.module';
+import { credentialsModules } from './platform/credentials/credentials.config';
 import { HealthModule } from './health/health.module';
 import { StorageModule } from './storage/storage.module';
 import { ServerProfilesModule } from './server-profiles/server-profiles.module';
@@ -55,7 +54,6 @@ import configuration from './config/configuration';
     LoggerModule,
 
     // Feature modules
-    CommonModule,
     // The platform's identity slice (#47): `/api/auth/*`, `/api/users`,
     // `/api/roles`, `/api/allowlist`, `/api/pat`, `/api/auth/device/*` and,
     // outside production, `/api/auth/test/login`, in single-organization mode.
@@ -63,7 +61,9 @@ import configuration from './config/configuration';
     // test-auth modules. Global: it provides `PatService` and the guards'
     // dependencies to every module.
     identityModule,
-    SettingsModule,
+    // The platform credential stores (#48): the identity slice's sign-in secrets and
+    // the server profiles' SSH secrets (`ssh` purpose).
+    ...credentialsModules,
     HealthModule,
     StorageModule,
     ServerProfilesModule,

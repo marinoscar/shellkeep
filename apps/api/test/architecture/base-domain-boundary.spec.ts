@@ -4,11 +4,10 @@ import { join, relative, sep } from 'path';
 /**
  * Base-to-domain boundary guard (issue #44).
  *
- * The base modules (platform, health, settings, storage, common, config,
- * prisma) must not know the terminal
+ * The base modules (platform, health, storage, common, config, prisma) must not know the terminal
  * domain: no import from `server-profiles/` or `terminal/`, no `servers:` or
  * `sessions:` permission string, no mention of `terminal`. The domain reaches
- * the base through registries (`settings/registry`, `app-registrations`).
+ * the base through registries (`app-registrations`, the registries of the platform slices).
  *
  * `app.module.ts`, `main.ts`, `shellkeep.manifest.ts` and `app-registrations/`
  * are the composition root and are not scanned.
@@ -20,10 +19,9 @@ const SRC = join(__dirname, '../../src');
 const BASE_DIRS = [
   // The platform bindings (identity, host ports, Doctor); the identity slice itself
   // is the package's since #47 (the forked auth, users, allowlist, device-auth and
-  // test-auth modules are deleted).
+  // test-auth modules are deleted), and the settings slice since #48.
   'platform',
   'health',
-  'settings',
   'storage',
   'common',
   'config',

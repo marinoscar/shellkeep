@@ -2,5 +2,11 @@
   "ui": {
     "allowUserThemeOverride": true
   },
-  "features": {}
+  "features": {},
+  "terminal": {
+    "detachAfterMinutes": 60,
+    "terminateDetachedAfterHours": 12,
+    "purgeTerminatedAfterDays": 3,
+    "doctorProbeProfileId": null
+  }
 }

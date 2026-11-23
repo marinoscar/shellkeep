@@ -111,7 +111,7 @@ cp infra/compose/.env.example infra/compose/.env
 #    - POSTGRES_HOST (your PostgreSQL host)
 #    - GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
 #    - JWT_SECRET (min 32 chars)
-#    - ENCRYPTION_KEY (openssl rand -base64 32)
+#    - SECRETS_ENCRYPTION_KEY (openssl rand -base64 32)
 #    - INITIAL_ADMIN_EMAIL
 
 # 4. Create the shared Docker network (one-time)

@@ -40,9 +40,9 @@ vi.mock('../../services/terminal-api', () => ({
   downloadSessionHistory: vi.fn(),
 }));
 
-// Mock useUserSettings to avoid API calls in page tests
-vi.mock('../../hooks/useUserSettings', () => ({
-  useUserSettings: vi.fn(() => ({
+// Mock useTerminalSettings to avoid API calls in page tests
+vi.mock('../../hooks/useTerminalSettings', () => ({
+  useTerminalSettings: vi.fn(() => ({
     settings: { terminal: { showScrollButtons: true } },
     isLoading: false,
     error: null,

@@ -3,20 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { ServerProfilesService } from './server-profiles.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AUDIT_SINK } from '@marinoscar/platform-api/core';
-import * as encryptionUtil from '../common/utils/encryption.util';
-
-jest.mock('../common/utils/encryption.util');
-
-const mockedEncrypt = encryptionUtil.encrypt as jest.MockedFunction<
-  typeof encryptionUtil.encrypt
->;
-const mockedDecrypt = encryptionUtil.decrypt as jest.MockedFunction<
-  typeof encryptionUtil.decrypt
->;
-const mockedGetEncryptionKey =
-  encryptionUtil.getEncryptionKey as jest.MockedFunction<
-    typeof encryptionUtil.getEncryptionKey
-  >;
+import { UserCredentialsService } from '@marinoscar/platform-api/credentials';
 
 describe('ServerProfilesService', () => {
   let service: ServerProfilesService;
@@ -26,8 +13,19 @@ describe('ServerProfilesService', () => {
   const mockOrgId = 'org-default';
   const mockScope = { userId: mockUserId, orgId: mockOrgId };
   const auditSink = { record: jest.fn().mockResolvedValue(undefined) };
-  const mockProfileId = 'profile-456';
-  const mockKey = Buffer.alloc(32, 'k');
+  const mockProfileId = '7d1f0a52-3c4e-4b6a-9f21-5e8a1c0d2b34';
+  const OTHER_ID = '0b9e6c31-8a2d-4f57-b1c3-9d4e7a6f1c20';
+
+  // The credential store, as the service uses it: set, delete, list (names only), get.
+  const credentials = {
+    setSecret: jest.fn(),
+    deleteSecret: jest.fn(),
+    getSecret: jest.fn(),
+    list: jest.fn(),
+  };
+  const nameOf = (field: string, id = mockProfileId) => `profile.${id}.${field}`;
+  const stored = (...fields: string[]) =>
+    credentials.list.mockResolvedValue(fields.map((field) => ({ purpose: 'ssh', name: nameOf(field) })));
 
   const mockProfile = {
     id: mockProfileId,
@@ -38,7 +36,8 @@ describe('ServerProfilesService', () => {
     username: 'admin',
     authMethod: 'password',
     tags: ['prod'],
-    encryptedPassword: 'enc-password',
+    // The legacy ciphertext columns: still on the row, never read (#48).
+    encryptedPassword: 'legacy-ciphertext',
     encryptedPrivateKey: null,
     encryptedPassphrase: null,
     createdAt: new Date('2025-01-01'),
@@ -46,16 +45,16 @@ describe('ServerProfilesService', () => {
   };
 
   beforeEach(async () => {
-    mockedGetEncryptionKey.mockReturnValue(mockKey);
-    mockedEncrypt.mockImplementation((plaintext) => `encrypted:${plaintext}`);
-    mockedDecrypt.mockImplementation((encrypted) =>
-      encrypted.replace('enc-', ''),
-    );
+    credentials.setSecret.mockResolvedValue(undefined);
+    credentials.deleteSecret.mockResolvedValue(undefined);
+    credentials.getSecret.mockResolvedValue(null);
+    credentials.list.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ServerProfilesService,
         { provide: AUDIT_SINK, useValue: auditSink },
+        { provide: UserCredentialsService, useValue: credentials },
         {
           provide: PrismaService,
           useValue: {
@@ -179,121 +178,99 @@ describe('ServerProfilesService', () => {
   });
 
   describe('create', () => {
-    it('should encrypt password before storage', async () => {
-      const createdProfile = { ...mockProfile, encryptedPassword: 'encrypted:my-pass' };
-      (prisma.serverProfile.create as jest.Mock).mockResolvedValue(
-        createdProfile,
-      );
+    const base = {
+      name: 'My Server',
+      hostname: 'example.com',
+      port: 22,
+      username: 'admin',
+      tags: [],
+      color: 'default' as const,
+    };
 
-      await service.create(mockScope, {
-        name: 'My Server',
-        hostname: 'example.com',
-        port: 22,
-        username: 'admin',
-        authMethod: 'password',
-        password: 'my-pass',
-        tags: [],
-        color: 'default',
-      });
+    it('stores the password in the credential store, not on the profile row', async () => {
+      (prisma.serverProfile.create as jest.Mock).mockResolvedValue(mockProfile);
+      stored('password');
 
-      expect(mockedEncrypt).toHaveBeenCalledWith('my-pass', mockKey);
-      expect(prisma.serverProfile.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          encryptedPassword: 'encrypted:my-pass',
-          userId: mockUserId,
-          orgId: 'org-default',
-        }),
-      });
+      const result = await service.create(mockScope, { ...base, authMethod: 'password', password: 'my-pass' });
+
+      expect(credentials.setSecret).toHaveBeenCalledWith(mockUserId, 'ssh', nameOf('password'), 'my-pass');
+      const data = (prisma.serverProfile.create as jest.Mock).mock.calls[0][0].data;
+      expect(data).toEqual(expect.objectContaining({ userId: mockUserId, orgId: 'org-default' }));
+      expect(data).not.toHaveProperty('encryptedPassword');
+      expect(data).not.toHaveProperty('encryptedPrivateKey');
+      expect(data).not.toHaveProperty('encryptedPassphrase');
+      expect(result.hasPassword).toBe(true);
     });
 
-    it('should encrypt privateKey and passphrase before storage', async () => {
-      (prisma.serverProfile.create as jest.Mock).mockResolvedValue({
-        ...mockProfile,
-        authMethod: 'key',
-        encryptedPassword: null,
-        encryptedPrivateKey: 'encrypted:my-key',
-        encryptedPassphrase: 'encrypted:my-phrase',
-      });
+    it('stores the private key and the passphrase under their own names', async () => {
+      (prisma.serverProfile.create as jest.Mock).mockResolvedValue({ ...mockProfile, authMethod: 'key' });
+      stored('private_key', 'passphrase');
 
-      await service.create(mockScope, {
-        name: 'Key Server',
-        hostname: 'example.com',
-        port: 22,
-        username: 'admin',
+      const result = await service.create(mockScope, {
+        ...base,
         authMethod: 'key',
         privateKey: 'my-key',
         passphrase: 'my-phrase',
-        tags: [],
-        color: 'default',
       });
 
-      expect(mockedEncrypt).toHaveBeenCalledWith('my-key', mockKey);
-      expect(mockedEncrypt).toHaveBeenCalledWith('my-phrase', mockKey);
+      expect(credentials.setSecret).toHaveBeenCalledWith(mockUserId, 'ssh', nameOf('private_key'), 'my-key');
+      expect(credentials.setSecret).toHaveBeenCalledWith(mockUserId, 'ssh', nameOf('passphrase'), 'my-phrase');
+      expect(credentials.setSecret).toHaveBeenCalledTimes(2);
+      expect(result).toMatchObject({ hasPassword: false, hasPrivateKey: true, hasPassphrase: true });
     });
 
-    it('should not encrypt fields that are not provided', async () => {
-      (prisma.serverProfile.create as jest.Mock).mockResolvedValue({
-        ...mockProfile,
-        authMethod: 'agent',
-        encryptedPassword: null,
-      });
+    it('stores nothing for the fields that are not provided', async () => {
+      (prisma.serverProfile.create as jest.Mock).mockResolvedValue({ ...mockProfile, authMethod: 'agent' });
 
-      await service.create(mockScope, {
-        name: 'Agent Server',
-        hostname: 'example.com',
-        port: 22,
-        username: 'admin',
-        authMethod: 'agent',
-        tags: [],
-        color: 'default',
-      });
+      await service.create(mockScope, { ...base, authMethod: 'agent' });
 
-      expect(mockedEncrypt).not.toHaveBeenCalled();
+      expect(credentials.setSecret).not.toHaveBeenCalled();
+    });
+
+    it('removes the profile when its secret cannot be stored, so none claims a secret it lacks', async () => {
+      (prisma.serverProfile.create as jest.Mock).mockResolvedValue(mockProfile);
+      credentials.setSecret.mockRejectedValueOnce(new Error('store down'));
+
+      await expect(
+        service.create(mockScope, { ...base, authMethod: 'password', password: 'my-pass' }),
+      ).rejects.toThrow('store down');
+
+      expect(prisma.serverProfile.delete).toHaveBeenCalledWith({ where: { id: mockProfileId } });
     });
   });
 
   describe('update', () => {
-    it('should encrypt new credentials on update', async () => {
-      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(
-        mockProfile,
-      );
-      (prisma.serverProfile.update as jest.Mock).mockResolvedValue({
-        ...mockProfile,
-        encryptedPassword: 'encrypted:new-pass',
-      });
+    it('stores a new credential in the credential store', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(mockProfile);
+      (prisma.serverProfile.update as jest.Mock).mockResolvedValue(mockProfile);
+      stored('password');
 
-      await service.update(mockProfileId, mockScope, {
-        password: 'new-pass',
-      });
+      await service.update(mockProfileId, mockScope, { password: 'new-pass' });
 
-      expect(mockedEncrypt).toHaveBeenCalledWith('new-pass', mockKey);
-      expect(prisma.serverProfile.update).toHaveBeenCalledWith({
-        where: { id: mockProfileId },
-        data: expect.objectContaining({
-          encryptedPassword: 'encrypted:new-pass',
-        }),
-      });
+      expect(credentials.setSecret).toHaveBeenCalledWith(mockUserId, 'ssh', nameOf('password'), 'new-pass');
+      const data = (prisma.serverProfile.update as jest.Mock).mock.calls[0][0].data;
+      expect(data).not.toHaveProperty('encryptedPassword');
     });
 
-    it('should set encrypted field to null when credential is cleared', async () => {
-      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(
-        mockProfile,
-      );
-      (prisma.serverProfile.update as jest.Mock).mockResolvedValue({
-        ...mockProfile,
-        encryptedPassword: null,
-      });
+    it('removes the credential when it is cleared', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(mockProfile);
+      (prisma.serverProfile.update as jest.Mock).mockResolvedValue(mockProfile);
 
-      await service.update(mockProfileId, mockScope, {
-        password: '',
-      });
+      const result = await service.update(mockProfileId, mockScope, { password: '' });
 
-      expect(prisma.serverProfile.update).toHaveBeenCalledWith({
-        where: { id: mockProfileId },
-        data: expect.objectContaining({
-          encryptedPassword: null,
-        }),
-      });
+      expect(credentials.deleteSecret).toHaveBeenCalledWith(mockUserId, 'ssh', nameOf('password'));
+      expect(credentials.setSecret).not.toHaveBeenCalled();
+      expect(result.hasPassword).toBe(false);
+    });
+
+    it('keeps every stored secret when the update does not name one', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(mockProfile);
+      (prisma.serverProfile.update as jest.Mock).mockResolvedValue(mockProfile);
+
+      await service.update(mockProfileId, mockScope, { name: 'Renamed' });
+
+      expect(credentials.setSecret).not.toHaveBeenCalled();
+      expect(credentials.deleteSecret).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when profile not found', async () => {
@@ -302,6 +279,7 @@ describe('ServerProfilesService', () => {
       await expect(
         service.update(mockProfileId, mockScope, { name: 'New Name' }),
       ).rejects.toThrow(NotFoundException);
+      expect(credentials.setSecret).not.toHaveBeenCalled();
     });
   });
 
@@ -324,6 +302,18 @@ describe('ServerProfilesService', () => {
       });
     });
 
+    it('removes the three stored secrets of the profile', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(mockProfile);
+      (prisma.serverProfile.delete as jest.Mock).mockResolvedValue(mockProfile);
+
+      await service.remove(mockProfileId, mockScope);
+
+      expect(credentials.deleteSecret.mock.calls.map(([, , name]) => name).sort()).toEqual(
+        [nameOf('passphrase'), nameOf('password'), nameOf('private_key')].sort(),
+      );
+      expect(credentials.deleteSecret).toHaveBeenCalledWith(mockUserId, 'ssh', nameOf('password'));
+    });
+
     it('should throw NotFoundException when profile not found', async () => {
       (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(null);
 
@@ -334,38 +324,80 @@ describe('ServerProfilesService', () => {
   });
 
   describe('toResponse', () => {
-    it('should strip encrypted fields and add has* booleans', async () => {
-      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(
-        mockProfile,
-      );
+    it('reports which secrets the credential store holds, never the legacy columns', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(mockProfile);
 
       const result = await service.findOne(mockProfileId, mockScope);
 
+      // The row's legacy `encryptedPassword` is ignored: the store holds nothing.
+      expect(result.hasPassword).toBe(false);
+      expect(result.hasPrivateKey).toBe(false);
+      expect(result.hasPassphrase).toBe(false);
       expect(result).not.toHaveProperty('encryptedPassword');
       expect(result).not.toHaveProperty('encryptedPrivateKey');
       expect(result).not.toHaveProperty('encryptedPassphrase');
-      expect(result.hasPassword).toBe(true);
-      expect(result.hasPrivateKey).toBe(false);
-      expect(result.hasPassphrase).toBe(false);
     });
 
-    it('should set has* booleans correctly when all credentials present', async () => {
-      const fullProfile = {
-        ...mockProfile,
-        encryptedPrivateKey: 'enc-key',
-        encryptedPassphrase: 'enc-phrase',
-      };
-      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(
-        fullProfile,
-      );
+    it('sets the has* booleans from the stored credentials', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(mockProfile);
+      stored('password', 'private_key', 'passphrase');
 
       const result = await service.findOne(mockProfileId, mockScope);
 
-      expect(result.hasPassword).toBe(true);
-      expect(result.hasPrivateKey).toBe(true);
-      expect(result.hasPassphrase).toBe(true);
+      expect(result).toMatchObject({ hasPassword: true, hasPrivateKey: true, hasPassphrase: true });
+      expect(credentials.list).toHaveBeenCalledWith(mockUserId, 'ssh');
+    });
+
+    it('lists the stored secrets once for a whole page of profiles', async () => {
+      const other = { ...mockProfile, id: OTHER_ID };
+      (prisma.serverProfile.findMany as jest.Mock).mockResolvedValue([mockProfile, other]);
+      (prisma.serverProfile.count as jest.Mock).mockResolvedValue(2);
+      credentials.list.mockResolvedValue([
+        { purpose: 'ssh', name: nameOf('password') },
+        { purpose: 'ssh', name: nameOf('private_key', OTHER_ID) },
+        { purpose: 'ssh', name: 'unrelated-name' },
+      ]);
+
+      const result = await service.findAll(mockScope, { page: 1, pageSize: 20 });
+
+      expect(credentials.list).toHaveBeenCalledTimes(1);
+      expect(result.items.map((item) => [item.hasPassword, item.hasPrivateKey])).toEqual([
+        [true, false],
+        [false, true],
+      ]);
     });
   });
+
+  describe('getDecryptedProfile', () => {
+    it('reads each secret from the credential store of the profile owner', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(mockProfile);
+      credentials.getSecret.mockImplementation(async (_user: string, _purpose: string, name: string) =>
+        name === nameOf('password') ? 'my-pass' : null,
+      );
+
+      const result = await service.getDecryptedProfile(mockProfileId, mockScope);
+
+      expect(credentials.getSecret).toHaveBeenCalledWith(mockUserId, 'ssh', nameOf('password'));
+      expect(result).toMatchObject({ password: 'my-pass', privateKey: null, passphrase: null });
+    });
+
+    it('does not read the legacy ciphertext columns', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(mockProfile);
+
+      const result = await service.getDecryptedProfile(mockProfileId, mockScope);
+
+      expect(result.password).toBeNull();
+      expect(JSON.stringify(result)).not.toContain('legacy-ciphertext');
+    });
+
+    it('throws NotFoundException for a profile of another owner or organization', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.getDecryptedProfile(mockProfileId, mockScope)).rejects.toThrow(NotFoundException);
+      expect(credentials.getSecret).not.toHaveBeenCalled();
+    });
+  });
+
   describe('organization scope and audit', () => {
     const otherOrg = { userId: mockUserId, orgId: 'org-other' };
 

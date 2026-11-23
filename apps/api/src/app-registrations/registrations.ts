@@ -13,6 +13,8 @@
 // Registration is once per process: a second import is a no-op (the ES module
 // cache), and registering the same id twice is `DUPLICATE_ID`.
 //
+// The credential purposes (`ssh`, #48) register here too.
+//
 // SLICES: only the platform slices ShellKeep has adopted contribute
 // permissions. Append a slice here in the issue that adopts it (jobs #49,
 // storage #50, notifications #51, ai #55, ...) and regenerate the catalog
@@ -29,6 +31,7 @@ import { APP_MODEL_OWNERSHIP } from './model-ownership';
 import { ADOPTED_PLATFORM_SLICES } from './platform-slices';
 import { APP_PERMISSIONS } from './permissions';
 import { APP_USER_OWNED_MODELS } from './user-owned-models';
+import { registerShellkeepCredentialPurposes } from './credentials';
 
 registerPlatformPermissions({
   slices: [...ADOPTED_PLATFORM_SLICES],
@@ -36,3 +39,4 @@ registerPlatformPermissions({
 });
 registerPlatformUserOwnedModels(APP_USER_OWNED_MODELS);
 registerPlatformModelOwnership(APP_MODEL_OWNERSHIP);
+registerShellkeepCredentialPurposes();

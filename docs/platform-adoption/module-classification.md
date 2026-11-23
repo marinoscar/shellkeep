@@ -45,11 +45,11 @@ Issue numbers are GitHub issues of `marinoscar/shellkeep`: #44 base to domain de
 
 | Workaround | What it is | Used by | Applied by |
 |---|---|---|---|
-| Terminal user-settings namespace | The `terminal` block (`showScrollButtons`, `keyShortcuts`, max 50) is domain content inside the base user-settings schema, types and service. It moves to `apps/api/src/terminal/settings/terminal.user-settings.ts` and is registered with `registerUserSettingsNamespaces`; stored key names do not change. Resolved by #44 (API): the registry is `settings/registry/user-settings-namespaces.ts`, the namespace is registered by `shellkeep.manifest.ts`. | settings, `common/schemas`, `common/types` | #44, then #48 |
+| Terminal user-settings namespace | The `terminal` block (`showScrollButtons`, `keyShortcuts`, max 50) is domain content inside the base user-settings schema, types and service. It moves to `apps/api/src/terminal/settings/terminal.user-settings.ts` and is registered with `registerUserSettingsNamespaces`; stored key names do not change. Resolved by #44 (API), then #48: the namespace is registered with the platform registry by `platform/settings/registry.ts` (`app-registrations/settings.ts`); the local registry is deleted. | settings, `common/schemas`, `common/types` | #44, #48 (done) |
 | App permission declarations | `servers:read\|write\|delete` and `sessions:read\|write\|delete` live in the base `roles.constants.ts` and `prisma/seed.ts`. They move to `app-registrations/permissions.ts` (`APP_PERMISSIONS`) and become platform `PermissionDeclaration`s with the same defaults (admin and contributor all six, viewer the two read permissions). Resolved by #44: `roles.constants.ts` and `prisma/seed.ts` derive from `APP_PERMISSIONS`. | `common/constants`, `prisma/seed.ts` | #44, then #47 |
 | Terminal web extraction | `KeyShortcutsSettings`, `KeystrokeEditor` and the terminal API calls leave base web files (`components/settings`, `services/api.ts`, `types/index.ts`, `Sidebar`/`HomePage` destinations) for `components/terminal/settings/`, `services/terminal-api.ts` and `config/destinations.ts`. Resolved by #44 (web): terminal types are in `types/terminal.ts` (the `terminal` user-settings namespace augments `UserSettingsNamespaces`), the settings panel is mounted through `config/userSettingsPanels.tsx`, and `src/__tests__/architecture/base-domain-boundary.test.ts` guards the base files. | `components/settings`, `services`, `types` | #44, then #76, #80 |
 | ShellKeep storage key prefixes | The platform owns `uploads/`, where every existing object lives. ShellKeep adds `session-logs/` and `runbook-artifacts/` through `registerStorageKeyPrefixes`; the S3 environment variables are removed (storage is runtime-configured). | storage | #50 |
-| SSH credential re-encryption | `ServerProfile` secrets are encrypted with `ENCRYPTION_KEY` by `encryption.util.ts`; they are re-encrypted with the credentials slice's `SECRETS_ENCRYPTION_KEY` and the three `encrypted*` columns are retired. | `common/utils` | #48 |
+| SSH credential re-encryption | `ServerProfile` secrets are encrypted with `ENCRYPTION_KEY` by `encryption.util.ts`; they are re-encrypted with the credentials slice's `SECRETS_ENCRYPTION_KEY` and the three `encrypted*` columns are retired. Resolved by #48: `encryption.util.ts` is deleted, `server-profiles/migrate/` holds the frozen cipher and the `ssh:migrate-secrets` command, the columns stay (unread) until #84 ([runbook](../runbooks/ssh-secret-reencryption.md)). | `common/utils` | #48 (done), #84 (drop the columns) |
 | Terminal WebSocket authorization | The gateway verifies the JWT and `isActive` but checks no permission. A `TerminalPrincipalResolver` over the identity slice enforces `sessions:write` and the token expiry. Resolved by #47 (the resolver is a `PLATFORM-ADOPTION-SHIM`; a seam request to the platform is pending). | `terminal` | #47 |
 
 ## Classification
@@ -66,27 +66,27 @@ The **Drift** column uses the slice view where the module has a packaged slice a
 | `apps/api/src/device-auth` | 11.8% / +184 −869 | 18 | noise | identity slice | #47 | deleted by #47 |
 | `apps/api/src/test-auth` | 9.1% / +63 −152 | 7 | noise | identity slice (`identity/testing`) | #47 | deleted by #47 |
 | `apps/api/src/health` | 0% / +23 −58 | 5 | noise | host slice (`host/health`) | #46 | none |
-| `apps/api/src/settings` | 0% / +250 −685 | 15 | backport | settings slice | #48 | `terminal` user-settings namespace (`showScrollButtons`, `keyShortcuts`) moved to `apps/api/src/terminal/settings/` and registered with `registerUserSettingsNamespaces`; stored shape unchanged (resolved by #44; #48 swaps the local registry for the package's) |
+| `apps/api/src/settings` | 0% / +250 −685 | 15 | backport | settings slice | #48 | deleted by #48 (the platform settings slice is bound in `platform/settings/`; the `terminal` user and system namespaces are `terminal/settings/`) |
 | `apps/api/src/common` | 0% / +27 −164 | 23 | mixed (see sub-rows) | split across host, core, settings, credentials, identity and otel-core | #44, #46, #47, #48, #53 | see the `common/` rows |
 | `apps/api/src/storage` | 1.1% / +367 −1060 | 29 | noise | storage slice | #50 | ShellKeep key prefixes registered with `registerStorageKeyPrefixes` (`session-logs/`, `runbook-artifacts/`); the S3 environment variables are removed |
 | `apps/api/src/config` | 0% / +29 −42 | 1 | noise | host core (config and `buildCorsOptions`) | #46 | Env-derived `DATABASE_URL` and the S3 and Uptrace variables disappear with #50 and #53 |
 | `apps/api/src/prisma` | 0% / +3 −37 | 2 | noise | platform-db and core data-access (`PrismaService`) | #45 | none |
 | `apps/api/src/server-profiles` | n/a / +0 −0 | 8 | domain | keep | — | none |
 | `apps/api/src/terminal` | n/a / +0 −0 | 17 | domain | keep (its `tasks/session-cleanup` `@Cron` becomes an enqueue-only cron and a `terminal.session.reap` job) | #49 (cron), #47 (WebSocket auth) | none |
-| `apps/api/src/app-registrations` | n/a / +0 −0 | 6 | domain | keep (composition root with `shellkeep.manifest.ts`: `APP_PERMISSIONS`, the user-owned model and ownership classifications and `registrations.ts` with the platform manifest registrations (#47); the settings and credential registrations follow in #48) | #44, #47, #48 | none |
-| `apps/api/src/platform` | n/a / +0 −0 | 10 | domain | keep (bindings of the packaged slices: `platform-host.module.ts`, `doctor.config.ts` and `identity/` from #47; one folder per slice as each is adopted) | #47 | Interim host-port adapters are `PLATFORM-ADOPTION-SHIM`s listed in `local-exceptions.md` |
+| `apps/api/src/app-registrations` | n/a / +0 −0 | 6 | domain | keep (composition root with `shellkeep.manifest.ts`: `APP_PERMISSIONS`, the user-owned model and ownership classifications `registrations.ts` with the platform manifest registrations (#47), `settings.ts` (the terminal and `ui`/`features` namespaces) and `credentials.ts` (the `ssh` purpose) (#48)) | #44, #47, #48 | none |
+| `apps/api/src/platform` | n/a / +0 −0 | 10 | domain | keep (bindings of the packaged slices: `platform-host.module.ts`, `doctor.config.ts` and `identity/` from #47, `settings/` and `credentials/` from #48; one folder per slice as each is adopted) | #47 | Interim host-port adapters are `PLATFORM-ADOPTION-SHIM`s listed in `local-exceptions.md` |
 | `apps/api/src/common/filters` | 0% / +17 −100 | 2 | noise | host/core (`http-exception.filter`) | #46 | none |
 | `apps/api/src/common/interceptors` | 0% / +7 −61 | 4 | noise | host (`logging.interceptor`, `transform.interceptor`) | #46 | A `304` shim (the platform transform wraps it) is a known risk; record it in `local-exceptions.md` if met |
 | `apps/api/src/common/middleware` | 0% / +3 −3 | 2 | noise | host (`request-id.middleware`) | #46 | none |
 | `apps/api/src/common/logger` | n/a / +0 −0 | 4 | noise | host core (Pino logging) | #46 | none |
-| `apps/api/src/common/schemas` | 0% / +39 −140 | 2 | backport | settings slice | #48 | Terminal part of the user-settings schema (`keyShortcutSchema`, `terminal`) moved to the terminal namespace (resolved by #44) |
-| `apps/api/src/common/types` | 0% / +95 −4 | 1 | backport | settings slice | #48 | `KeyShortcut`, `DEFAULT_KEY_SHORTCUTS` and `terminal?` moved to the terminal namespace (resolved by #44) |
-| `apps/api/src/common/utils` | n/a / +0 −0 | 2 | noise | credentials slice (`encryption.util.ts`, AES-256-GCM) | #48 | SSH credentials are re-encrypted from `ENCRYPTION_KEY` to `SECRETS_ENCRYPTION_KEY` in #48 |
+| `apps/api/src/common/schemas` | 0% / +39 −140 | 2 | backport | settings slice | #48 | deleted by #48 (the terminal part moved to the terminal namespace by #44) |
+| `apps/api/src/common/types` | 0% / +95 −4 | 1 | backport | settings slice | #48 | `settings.types.ts` deleted by #48 (`KeyShortcut`, `DEFAULT_KEY_SHORTCUTS` moved to the terminal namespace by #44); `owner-scope.ts` stays |
+| `apps/api/src/common/utils` | n/a / +0 −0 | 2 | noise | credentials slice (`encryption.util.ts`, AES-256-GCM) | #48 | deleted by #48 (SSH credentials are re-encrypted from `ENCRYPTION_KEY` to `SECRETS_ENCRYPTION_KEY`; the frozen cipher copy is `server-profiles/migrate/legacy-cipher.ts`) |
 | `apps/api/src/common/services` | n/a / +0 −0 | 2 | noise | identity slice (`admin-bootstrap.service.ts`) | #47 | deleted by #47 |
 | `apps/api/src/common/decorators` | 0% / +0 −0 | 1 | noise | otel-core (`@Trace()`) | #53 | none |
 | `apps/api/src/common/constants` | 0% / +28 −16 | 1 | backport | identity slice (roles and permissions) | #44, #47 | `servers:*` and `sessions:*` permissions moved to `app-registrations/permissions.ts` (`APP_PERMISSIONS`, resolved by #44), then to platform `PermissionDeclaration` (resolved by #47: org scoped, org_admin and contributor write, viewer reads; `ROLES` and `PERMISSIONS` are derived from the platform declarations); defaults keep admin and contributor with all six, viewer with the two read permissions |
 | `apps/api/src/common/exceptions` | n/a / +0 −0 | 1 | noise | core errors (`database-seed.exception.ts`) | #46 | none |
-| `apps/api/src/common/common.module.ts` | 0% / +3 −3 | 1 | noise | host core | #46 | none |
+| `apps/api/src/common/common.module.ts` | 0% / +3 −3 | 1 | noise | host core | #46 | deleted by #48 (its only provider froze the local registry primitive, deleted with the settings module) |
 
 ### API top-level files and the four base `@Cron` tasks
 
@@ -112,9 +112,10 @@ Drift comes from the apps view.
 | `apps/web/src/components` | 22.2% / +216 −65 | 40 | mixed (see `components/…` rows) | see below | — | see below |
 | `apps/web/src/contexts` | 0% / +56 −8 | 1 | noise | `AuthContext` deleted by #47 (identity web `AuthProvider`); `ThemeContext` to shell theme (#76) | #47, #76 | `AuthContext.tsx` deleted by #47 |
 | `apps/web/src/hooks` | 11.1% / +173 −20 | 11 | mixed (see `hooks/…` rows) | see below | — | see below |
-| `apps/web/src/config` | n/a / +0 −0 | 2 | shellkeep-divergence | app composition root: `destinations.ts` (consumed by `Sidebar`, maps onto `ShellNavigation`), `userSettingsPanels.tsx` (domain panels on the user settings page); #76 adds `adminSections.tsx` and `userSettingsSections.tsx`, #80 turns the panels into cards | #44, #76, #80 | none |
+| `apps/web/src/config` | n/a / +0 −0 | 2 | shellkeep-divergence | app composition root: `destinations.ts` (consumed by `Sidebar`, maps onto `ShellNavigation`), `userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`, the registry the packaged `SettingsHub` draws at `/settings`: packaged Profile and Appearance, the terminal domain's Terminal card); #76 adds `adminSections.tsx`, #80 redesigns the Terminal card | #44, #48, #76, #80 | `userSettingsPanels.tsx` deleted by #48 (folded into `USER_SETTINGS_SECTIONS`) |
 | `apps/web/src/identity` | n/a / +0 −0 | 3 | shellkeep-divergence | identity web bindings (#47): `IdentityProviders` (packaged `AuthProvider` on the app client, `IdentityWebAdaptersProvider`), `identityAdapters.ts`, `LoginPage` (packaged page with the ShellKeep `Logo` slot) | #47 | none |
-| `apps/web/src/lib` | n/a / +0 −0 | 2 | domain | keep (`lib/terminal`) | — | none |
+| `apps/web/src/platform` | n/a / +0 −0 | 1 | shellkeep-divergence | platform host binding (#48): `platformHost.tsx` mounts the packaged `PlatformHostProvider` (the app client, the viewer, `applyTheme` to the theme context) | #48, #76 | `GET /storage/status` answered `configured: false` (`PLATFORM-ADOPTION-SHIM(#50)`) so the packaged profile page shows no upload control |
+| `apps/web/src/lib` | n/a / +0 −0 | 3 | domain | keep (`lib/terminal`; `settings.ts` holds the terminal namespace defaults since #48) | — | none |
 | `apps/web/src/pages` | 0% / +35 −12 | 12 | mixed (see page rows) | see below | — | see below |
 | `apps/web/src/services` | 0% / +353 −23 | 2 | mixed (see `services/…` rows) | see below | — | see below |
 | `apps/web/src/theme` | 0% / +76 −17 | 4 | noise | shell theme (`createShellTheme`, `ShellThemeProvider`) | #76 | none |
@@ -129,8 +130,9 @@ Drift comes from the apps view.
 |---|---|---|---|---|---|---|
 | `apps/web/src/App.tsx` | 0% / +23 −644 | 1 | shellkeep-divergence | app routing, rebuilt on the shell and registries | #76 | none |
 | `apps/web/src/main.tsx` | 0% / +0 −10 | 1 | shellkeep-divergence | app entry (providers) | #42, #76 | none |
-| `apps/web/src/hooks/useSystemSettings.ts` | 0% / +89 −7 | 1 | noise | settings web hooks | #48 | none |
-| `apps/web/src/hooks/useUserSettings.ts` | 0% / +84 −13 | 1 | noise | settings web hooks | #48 | none |
+| `apps/web/src/hooks/useSystemSettings.ts` | 0% / +89 −7 | 1 | noise | settings web hooks (`useSystemSettings`) | #48 | deleted by #48 |
+| `apps/web/src/hooks/useUserSettings.ts` | 0% / +84 −13 | 1 | noise | settings web hooks (`useUserSettings`) | #48 | deleted by #48 (the terminal pages read `useTerminalSettings`) |
+| `apps/web/src/hooks/useTerminalSettings.ts` | n/a / +0 −0 | 1 | domain | keep: the terminal namespace on the packaged `useUserSettings`, defaults applied (#48) | #48 | none |
 | `apps/web/src/hooks/useUsers.ts` | n/a / +0 −0 | 1 | noise | identity web hooks | #47 | deleted by #47 |
 | `apps/web/src/hooks/useAllowlist.ts` | n/a / +0 −0 | 1 | noise | identity web hooks | #47 | deleted by #47 |
 | `apps/web/src/hooks/usePermissions.ts` | n/a / +0 −0 | 1 | noise | identity web hooks | #47 | deleted by #47 |
@@ -143,8 +145,9 @@ Drift comes from the apps view.
 | `apps/web/src/services/terminal-api.ts` | n/a / +0 −0 | 1 | domain | keep (server-profile and session calls on the base client) | #44 | none |
 | `apps/web/src/services/terminal-ws.ts` | n/a / +0 −0 | 1 | domain | keep (re-sends `auth` after token refresh, #47) | #47 | none |
 | `apps/web/src/pages/UserManagementPage.tsx` | n/a / +0 −0 | 1 | noise | identity web (`UsersPage`) | #47 | deleted by #47 |
-| `apps/web/src/pages/SystemSettingsPage.tsx` | n/a / +0 −0 | 1 | noise | orphan: no route renders it; delete | #76 | none |
-| `apps/web/src/pages/UserSettingsPage.tsx` | n/a / +0 −0 | 1 | noise | settings web (`SettingsHub`, `UserProfilePage`, `UserAppearancePage`) | #48, #80 | none |
+| `apps/web/src/pages/SystemSettingsPage.tsx` | n/a / +0 −0 | 1 | noise | orphan: no route renders it; delete | #76 | deleted by #48 (its hook and editors were replaced, so it no longer compiled) |
+| `apps/web/src/pages/UserSettingsPage.tsx` | n/a / +0 −0 | 1 | noise | settings web (`SettingsHub`, `UserProfilePage`, `UserAppearancePage`) | #48, #80 | deleted by #48 |
+| `apps/web/src/pages/UserSettingsHubPage.tsx` | n/a / +0 −0 | 1 | shellkeep-divergence | binding of the packaged `SettingsHub` over `USER_SETTINGS_SECTIONS` (#48) | #48 | none |
 | `apps/web/src/pages/LoginPage.tsx` | n/a / +0 −0 | 1 | noise | identity web (`LoginPage`) | #47 | deleted by #47 |
 | `apps/web/src/pages/AuthCallbackPage.tsx` | n/a / +0 −0 | 1 | noise | identity web | #47 | deleted by #47 |
 | `apps/web/src/pages/ActivateDevicePage.tsx` | n/a / +0 −0 | 1 | noise | identity web (device activation) | #47 | deleted by #47 |
@@ -164,11 +167,11 @@ Drift comes from the apps view.
 |---|---|---|---|---|---|---|
 | `apps/web/src/components/navigation` | 0% / +175 −26 | 3 | noise | shell (`ShellAppBar`, `ShellNavigationRail`, `ShellUserMenu`); `Sidebar` destinations come from `config/destinations.ts` (resolved by #44) | #76 | none |
 | `apps/web/src/components/common` | 66.7% / +36 −34 | 6 | noise | shell and identity guards (`Layout.tsx` to `ShellLayout`; `ProtectedRoute`, `RequirePermission`, `AdminOnly` to identity web; `ErrorBoundary`, `LoadingSpinner` to the host) | #76, #47 | `ProtectedRoute`, `RequirePermission`, `AdminOnly` deleted by #47 (identity web `RequireAuth`, `RequirePermission`) |
-| `apps/web/src/components/admin` | n/a / +0 −0 | 6 | noise | identity web (`AddEmailDialog`, `AllowlistTable`, `UserList`); `FeatureFlagsList`, `SystemSettingsEditor`, `UISettings` to settings web | #47, #48 | `AddEmailDialog`, `AllowlistTable`, `UserList` deleted by #47 (identity web `UsersPage`) |
+| `apps/web/src/components/admin` | n/a / +0 −0 | 6 | noise | identity web (`AddEmailDialog`, `AllowlistTable`, `UserList`); `FeatureFlagsList`, `SystemSettingsEditor`, `UISettings` to settings web | #47, #48 | `AddEmailDialog`, `AllowlistTable`, `UserList` deleted by #47 (identity web `UsersPage`); `FeatureFlagsList`, `SystemSettingsEditor`, `UISettings` deleted by #48 (folder gone) |
 | `apps/web/src/components/auth` | n/a / +0 −0 | 1 | noise | identity web (`OAuthButton`) | #47 | deleted by #47 |
 | `apps/web/src/components/device-activation` | n/a / +0 −0 | 3 | noise | identity web | #47 | deleted by #47 |
 | `apps/web/src/components/user` | 0% / +5 −5 | 1 | noise | identity web (`UserProfileCard`) | #47 | none |
-| `apps/web/src/components/settings` | n/a / +0 −0 | 3 | backport | settings web (`ImageUpload`, `ProfileSettings`, `ThemeSettings`); `KeyShortcutsSettings` and `KeystrokeEditor` are terminal domain | #48, #80 | `KeyShortcutsSettings` and `KeystrokeEditor` moved to `components/terminal/settings/` (resolved by #44); they become the "Terminal" settings card in #80 |
+| `apps/web/src/components/settings` | n/a / +0 −0 | 3 | backport | settings web (`ImageUpload`, `ProfileSettings`, `ThemeSettings`); `KeyShortcutsSettings` and `KeystrokeEditor` are terminal domain | #48, #80 | `KeyShortcutsSettings` and `KeystrokeEditor` moved to `components/terminal/settings/` (resolved by #44); `ImageUpload`, `ProfileSettings`, `ThemeSettings` deleted by #48 (packaged `UserProfilePage`, `UserAppearancePage`; folder gone); the "Terminal" card (`TerminalSettingsPage`) since #48, redesigned in #80 |
 | `apps/web/src/components/terminal` | n/a / +0 −0 | 10 | domain | keep (`settings/` holds `KeyShortcutsSettings` and `KeystrokeEditor` since #44) | — | none |
 | `apps/web/src/components/server-profiles` | n/a / +0 −0 | 2 | domain | keep | — | none |
 | `apps/web/src/components/home` | 0% / +0 −0 | 4 | domain | keep | — | none |

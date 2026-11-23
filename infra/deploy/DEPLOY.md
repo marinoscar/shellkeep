@@ -76,8 +76,11 @@ JWT_ACCESS_TTL_MINUTES=15
 JWT_REFRESH_TTL_DAYS=14
 COOKIE_SECRET=<generate with: openssl rand -hex 32>
 
-# Encryption (AES-256-GCM for SSH credentials)
-ENCRYPTION_KEY=<generate with: openssl rand -base64 32>
+# Encryption (AES-256-GCM, platform credential store: SSH credentials)
+SECRETS_ENCRYPTION_KEY=<generate with: openssl rand -base64 32>
+# Legacy key: only for `npm run ssh:migrate-secrets` on a deployment that stored SSH
+# secrets before the credential store (docs/runbooks/ssh-secret-reencryption.md)
+ENCRYPTION_KEY=<the existing value, or empty on a new deployment>
 
 # Google OAuth
 GOOGLE_CLIENT_ID=<your-google-client-id>
@@ -236,10 +239,12 @@ https://shellkeep.marin.cr/api/auth/google/callback
 Verify the VPS proxy config includes the `/api/terminal/ws` location block with WebSocket upgrade headers and extended timeouts (3600s for long-lived SSH sessions).
 
 ### SSH credential encryption errors
-Ensure `ENCRYPTION_KEY` is set in `.env`. Generate with:
+Ensure `SECRETS_ENCRYPTION_KEY` is set in `.env` (the API refuses to start without it once a credential is stored). Generate with:
 ```bash
 openssl rand -base64 32
 ```
+A deployment that stored SSH secrets before the credential store must also run the re-encryption once:
+[docs/runbooks/ssh-secret-reencryption.md](../../docs/runbooks/ssh-secret-reencryption.md).
 
 ## Service Management
 

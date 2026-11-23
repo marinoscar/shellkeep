@@ -5,14 +5,24 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AUDIT_SINK, type AuditSink } from '@marinoscar/platform-api/core';
+import { UserCredentialsService } from '@marinoscar/platform-api/credentials';
 import { PrismaService } from '../prisma/prisma.service';
 import type { OwnerScope } from '../common/types/owner-scope';
 import { recordAudit } from '../common/audit/record-audit';
 import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
 import { ServerProfilesQueryDto } from './dto/server-profiles-query.dto';
-import { encrypt, decrypt, getEncryptionKey } from '../common/utils/encryption.util';
+import {
+  SSH_CREDENTIAL_PURPOSE,
+  SSH_SECRET_FIELDS,
+  parseSshCredentialName,
+  sshCredentialName,
+  type SshSecretField,
+} from './ssh-credentials';
 import { Client } from 'ssh2';
+
+/** Which secret fields of a profile are stored, for the `has*` flags of a response. */
+type StoredSecrets = ReadonlySet<SshSecretField>;
 
 @Injectable()
 export class ServerProfilesService {
@@ -21,7 +31,43 @@ export class ServerProfilesService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
+    private readonly credentials: UserCredentialsService,
   ) {}
+
+  /**
+   * The secret fields stored for each of the owner's profiles, from ONE presentation
+   * read of the credential store (no secret, hint or ciphertext is fetched).
+   */
+  private async storedSecretsByProfile(userId: string): Promise<Map<string, Set<SshSecretField>>> {
+    const byProfile = new Map<string, Set<SshSecretField>>();
+    for (const info of await this.credentials.list(userId, SSH_CREDENTIAL_PURPOSE)) {
+      const parsed = parseSshCredentialName(info.name);
+      if (!parsed) continue;
+      const fields = byProfile.get(parsed.profileId) ?? new Set<SshSecretField>();
+      fields.add(parsed.field);
+      byProfile.set(parsed.profileId, fields);
+    }
+    return byProfile;
+  }
+
+  private async storedSecrets(userId: string, profileId: string): Promise<StoredSecrets> {
+    return (await this.storedSecretsByProfile(userId)).get(profileId) ?? new Set();
+  }
+
+  /** Stores, replaces or (for a blank value) removes one secret field of a profile. */
+  private async writeSecret(
+    userId: string,
+    profileId: string,
+    field: SshSecretField,
+    value: string | null | undefined,
+  ): Promise<void> {
+    const name = sshCredentialName(profileId, field);
+    if (value) {
+      await this.credentials.setSecret(userId, SSH_CREDENTIAL_PURPOSE, name, value);
+    } else {
+      await this.credentials.deleteSecret(userId, SSH_CREDENTIAL_PURPOSE, name);
+    }
+  }
 
   /** Audit row: the hostname only, never a credential. */
   private audit(
@@ -65,8 +111,10 @@ export class ServerProfilesService {
       this.prisma.serverProfile.count({ where }),
     ]);
 
+    const stored = await this.storedSecretsByProfile(scope.userId);
+
     return {
-      items: items.map((item) => this.toResponse(item)),
+      items: items.map((item) => this.toResponse(item, stored.get(item.id) ?? new Set())),
       total,
       page,
       pageSize,
@@ -86,15 +134,13 @@ export class ServerProfilesService {
       throw new NotFoundException(`Server profile with ID ${id} not found`);
     }
 
-    return this.toResponse(profile);
+    return this.toResponse(profile, await this.storedSecrets(scope.userId, profile.id));
   }
 
   /**
    * Create a new server profile
    */
   async create(scope: OwnerScope, dto: CreateServerProfileDto) {
-    const key = getEncryptionKey();
-
     const data: any = {
       userId: scope.userId,
       orgId: scope.orgId,
@@ -107,22 +153,24 @@ export class ServerProfilesService {
       color: dto.color || 'default',
     };
 
-    if (dto.password) {
-      data.encryptedPassword = encrypt(dto.password, key);
-    }
-    if (dto.privateKey) {
-      data.encryptedPrivateKey = encrypt(dto.privateKey, key);
-    }
-    if (dto.passphrase) {
-      data.encryptedPassphrase = encrypt(dto.passphrase, key);
-    }
-
     const profile = await this.prisma.serverProfile.create({ data });
+
+    // The secrets go to the credential store; a failure there must not leave a
+    // profile that claims an auth method it has no secret for.
+    try {
+      await this.writeSecret(scope.userId, profile.id, 'password', dto.password);
+      await this.writeSecret(scope.userId, profile.id, 'private_key', dto.privateKey);
+      await this.writeSecret(scope.userId, profile.id, 'passphrase', dto.passphrase);
+    } catch (error) {
+      await this.removeSecrets(scope.userId, profile.id);
+      await this.prisma.serverProfile.delete({ where: { id: profile.id } });
+      throw error;
+    }
 
     await this.audit('server_profile.create', scope, profile);
     this.logger.log(`Server profile "${dto.name}" created by user ${scope.userId}`);
 
-    return this.toResponse(profile);
+    return this.toResponse(profile, await this.storedSecrets(scope.userId, profile.id));
   }
 
   /**
@@ -138,8 +186,6 @@ export class ServerProfilesService {
       throw new NotFoundException(`Server profile with ID ${id} not found`);
     }
 
-    const key = getEncryptionKey();
-
     const data: any = {};
 
     if (dto.name !== undefined) data.name = dto.name;
@@ -150,14 +196,15 @@ export class ServerProfilesService {
     if (dto.tags !== undefined) data.tags = dto.tags;
     if (dto.color !== undefined) data.color = dto.color;
 
+    // An omitted secret keeps the stored one; a blank value removes it.
     if (dto.password !== undefined) {
-      data.encryptedPassword = dto.password ? encrypt(dto.password, key) : null;
+      await this.writeSecret(scope.userId, id, 'password', dto.password);
     }
     if (dto.privateKey !== undefined) {
-      data.encryptedPrivateKey = dto.privateKey ? encrypt(dto.privateKey, key) : null;
+      await this.writeSecret(scope.userId, id, 'private_key', dto.privateKey);
     }
     if (dto.passphrase !== undefined) {
-      data.encryptedPassphrase = dto.passphrase ? encrypt(dto.passphrase, key) : null;
+      await this.writeSecret(scope.userId, id, 'passphrase', dto.passphrase);
     }
 
     const profile = await this.prisma.serverProfile.update({
@@ -168,7 +215,7 @@ export class ServerProfilesService {
     await this.audit('server_profile.update', scope, profile);
     this.logger.log(`Server profile "${profile.name}" updated by user ${scope.userId}`);
 
-    return this.toResponse(profile);
+    return this.toResponse(profile, await this.storedSecrets(scope.userId, profile.id));
   }
 
   /**
@@ -184,9 +231,21 @@ export class ServerProfilesService {
     }
 
     await this.prisma.serverProfile.delete({ where: { id } });
+    await this.removeSecrets(scope.userId, id);
 
     await this.audit('server_profile.delete', scope, existing);
     this.logger.log(`Server profile "${existing.name}" deleted by user ${scope.userId}`);
+  }
+
+  /** Removes every stored secret of a profile (idempotent). */
+  private async removeSecrets(userId: string, profileId: string): Promise<void> {
+    for (const field of SSH_SECRET_FIELDS) {
+      await this.credentials.deleteSecret(
+        userId,
+        SSH_CREDENTIAL_PURPOSE,
+        sshCredentialName(profileId, field),
+      );
+    }
   }
 
   /**
@@ -250,7 +309,14 @@ export class ServerProfilesService {
       throw new NotFoundException(`Server profile with ID ${id} not found`);
     }
 
-    const key = getEncryptionKey();
+    // Server-side only, at the moment of connect: the plaintext reaches the SSH
+    // client and nothing else (no log, response, span or job payload).
+    const secret = (field: SshSecretField) =>
+      this.credentials.getSecret(
+        profile.userId,
+        SSH_CREDENTIAL_PURPOSE,
+        sshCredentialName(profile.id, field),
+      );
 
     return {
       id: profile.id,
@@ -261,18 +327,19 @@ export class ServerProfilesService {
       username: profile.username,
       authMethod: profile.authMethod,
       tags: profile.tags,
-      password: profile.encryptedPassword ? decrypt(profile.encryptedPassword, key) : null,
-      privateKey: profile.encryptedPrivateKey ? decrypt(profile.encryptedPrivateKey, key) : null,
-      passphrase: profile.encryptedPassphrase ? decrypt(profile.encryptedPassphrase, key) : null,
+      password: await secret('password'),
+      privateKey: await secret('private_key'),
+      passphrase: await secret('passphrase'),
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     };
   }
 
   /**
-   * Transform a profile for API response, stripping encrypted fields
+   * Transform a profile for API response: the `has*` flags say which secrets the
+   * credential store holds; no secret, hint or ciphertext is ever returned.
    */
-  private toResponse(profile: any) {
+  private toResponse(profile: any, stored: StoredSecrets) {
     return {
       id: profile.id,
       userId: profile.userId,
@@ -283,9 +350,9 @@ export class ServerProfilesService {
       authMethod: profile.authMethod,
       tags: profile.tags,
       color: profile.color,
-      hasPassword: !!profile.encryptedPassword,
-      hasPrivateKey: !!profile.encryptedPrivateKey,
-      hasPassphrase: !!profile.encryptedPassphrase,
+      hasPassword: stored.has('password'),
+      hasPrivateKey: stored.has('private_key'),
+      hasPassphrase: stored.has('passphrase'),
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     };

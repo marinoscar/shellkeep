@@ -4,8 +4,9 @@
 //
 // `runPlatformConformance` runs the platform's executable rules over ShellKeep's
 // own source and registrations. Suites adopted with their slice are added here:
-// `cron-enqueue-only`, `user-owned-data` and `identity` from #47; the jobs,
-// storage, settings, notifications, AI and the rest follow with #46 and #48-#55.
+// `cron-enqueue-only`, `user-owned-data` and `identity` from #47, `settings` and
+// `credentials` from #48; the jobs, storage, notifications, AI and the rest follow with
+// #46 and #49-#55.
 //
 // The registries are filled by the first two imports, as `main.ts` fills them.
 // =============================================================================
@@ -13,6 +14,7 @@ import '../src/shellkeep.manifest';
 import '../src/app-registrations/registrations';
 
 import { Module } from '@nestjs/common';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -22,11 +24,20 @@ import {
   roleRegistry,
   userOwnedModelRegistry,
 } from '@marinoscar/platform-api/core';
-// Registers the `identity` suite with the conformance harness.
+// Register the `credentials`, `identity` and `settings` suites with the conformance harness.
+import '@marinoscar/platform-api/credentials/testing';
+import { STORAGE_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/storage';
 import { discoverControllers } from '@marinoscar/platform-api/identity/testing';
+import '@marinoscar/platform-api/settings/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
 import { AppModule } from '../src/app.module';
+import {
+  SETTINGS_CATALOG_STALE_MESSAGE,
+  SYSTEM_SETTINGS_CATALOG_RELATIVE_PATH,
+} from '../src/platform/settings/settings-catalog';
+
+const catalogPath = join(__dirname, '..', SYSTEM_SETTINGS_CATALOG_RELATIVE_PATH);
 
 const API_DIR = join(__dirname, '..');
 
@@ -89,5 +100,24 @@ runPlatformConformance({
       roles: roleRegistry.list(),
       grants: catalogGrants(buildPermissionCatalog()),
     },
+    // Every system and user namespace is declared and bounded (no secret-named field), the
+    // settings permissions are registered with the right scope, and the committed system
+    // defaults catalog the seed reads is current.
+    settings: {
+      permissions: permissionRegistry.list(),
+      catalog: {
+        contents: existsSync(catalogPath) ? readFileSync(catalogPath, 'utf8') : undefined,
+        staleMessage: SETTINGS_CATALOG_STALE_MESSAGE,
+      },
+      // ui, features, terminal (+ the platform's OAuth server namespace).
+      minSystemNamespaces: 3,
+    },
+    // Every credential purpose has a platform or app owner, every user purpose's fallback
+    // address resolves (`ssh` has none), and no credential presentation schema carries a
+    // secret-shaped field. ShellKeep registers no deployment (system or organization)
+    // purpose until #50 adopts storage, and the suite refuses a scan of zero purposes, so
+    // the owner check runs over the platform's storage definition, the first one #50
+    // registers. The user purposes are the registry's own (`ssh`).
+    credentials: { appOwners: ['app'], purposes: [STORAGE_CREDENTIAL_PURPOSE_DEF] },
   },
 });

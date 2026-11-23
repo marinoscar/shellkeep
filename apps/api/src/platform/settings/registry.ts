@@ -1,0 +1,66 @@
+// =============================================================================
+// Settings registry entry point (issue #48)
+// =============================================================================
+//
+// IMPORTING THIS FILE REGISTERS EVERY SETTINGS NAMESPACE. The platform's request
+// and response DTOs, the composed schemas and the OpenAPI document are composed
+// FROM THE REGISTRIES when `SettingsModule.forRoot()` runs, so every entry point
+// (`main.ts`, `app.module.ts`, `test/setup.ts`, `scripts/*`) reaches this file
+// first, through `shellkeep.manifest.ts`.
+//
+// Registration is once per process (a second import is a no-op).
+// =============================================================================
+
+import {
+  assembleSystemSettingsNamespaces,
+  assembleUserSettingsNamespaces,
+  registerSystemSettingsNamespaces,
+  registerUserSettingsNamespaces,
+  type SystemSettingsNamespace,
+  type UserSettingsNamespace,
+} from '@marinoscar/platform-api/settings';
+
+import {
+  APP_SYSTEM_SETTINGS_DEFAULTS,
+  APP_SYSTEM_SETTINGS_EXTENSIONS,
+  APP_SYSTEM_SETTINGS_NAMESPACES,
+  APP_USER_SETTINGS_EXTENSIONS,
+  APP_USER_SETTINGS_NAMESPACES,
+} from '../../app-registrations/settings';
+
+/** The platform's system namespaces this app registers. None yet (see `app-registrations/settings.ts`). */
+export const PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [];
+
+/** The platform's optional user namespaces this app registers. None yet. */
+export const PLATFORM_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [];
+
+/** The final, ordered system list. */
+export function assembleShellkeepSystemSettingsNamespaces(): SystemSettingsNamespace[] {
+  return assembleSystemSettingsNamespaces({
+    platform: PLATFORM_SYSTEM_SETTINGS_NAMESPACES,
+    app: APP_SYSTEM_SETTINGS_NAMESPACES,
+    appExtensions: APP_SYSTEM_SETTINGS_EXTENSIONS,
+    appDefaults: APP_SYSTEM_SETTINGS_DEFAULTS,
+  });
+}
+
+/** The final, ordered user list. */
+export function assembleShellkeepUserSettingsNamespaces(): UserSettingsNamespace[] {
+  return assembleUserSettingsNamespaces({
+    platform: PLATFORM_USER_SETTINGS_NAMESPACES,
+    app: APP_USER_SETTINGS_NAMESPACES,
+    appExtensions: APP_USER_SETTINGS_EXTENSIONS,
+  });
+}
+
+let registered = false;
+
+/** Registers the namespaces. Idempotent per process (registering twice is `DUPLICATE_ID`). */
+export function registerShellkeepSettings(): void {
+  if (registered) return;
+  registered = true;
+  registerSystemSettingsNamespaces(assembleShellkeepSystemSettingsNamespaces());
+  registerUserSettingsNamespaces(assembleShellkeepUserSettingsNamespaces());
+}
+
+registerShellkeepSettings();

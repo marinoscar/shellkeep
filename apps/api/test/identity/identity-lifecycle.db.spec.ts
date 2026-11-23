@@ -41,8 +41,9 @@ describe('Identity lifecycle (real database)', () => {
   }
 
   beforeAll(async () => {
-    // The SSH credential cipher reads this when a server profile is created.
-    process.env.ENCRYPTION_KEY = randomBytes(32).toString('base64');
+    // The platform credential store's cipher reads this when a server profile is created
+    // (SSH secrets, #48). `.env.test` sets it; a bare environment gets a throwaway key.
+    process.env.SECRETS_ENCRYPTION_KEY ??= randomBytes(32).toString('base64');
     context = await createTestApp({ useMockDatabase: false });
   });
 

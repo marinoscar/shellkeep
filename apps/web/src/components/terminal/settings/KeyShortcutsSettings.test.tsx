@@ -3,43 +3,19 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../../../__tests__/utils/test-utils';
 import { KeyShortcutsSettings } from './KeyShortcutsSettings';
-import type { UserSettings } from '../../../types';
+import type { KeyShortcut } from '../../../types/terminal';
 
 // ---------------------------------------------------------------------------
-// Mock useUserSettings
+// Props (the page owns the settings hook and hands the list in)
 // ---------------------------------------------------------------------------
 
-const mockUpdateSettings = vi.fn();
+const mockOnSave = vi.fn();
 
-const sampleShortcut = {
+const sampleShortcut: KeyShortcut = {
   id: 'shortcut-1',
   label: 'Ctrl-C',
-  keystrokes: [{ modifiers: ['ctrl' as const], key: 'c' as const }],
+  keystrokes: [{ modifiers: ['ctrl'], key: 'c' }],
 };
-
-const makeSettings = (overrides: Partial<UserSettings> = {}): UserSettings => ({
-  theme: 'system',
-  profile: {
-    displayName: 'Test User',
-    useProviderImage: true,
-    customImageUrl: null,
-  },
-  terminal: {
-    showScrollButtons: true,
-    keyShortcuts: [sampleShortcut],
-  },
-  updatedAt: new Date().toISOString(),
-  version: 1,
-  ...overrides,
-});
-
-vi.mock('../../../hooks/useUserSettings', () => ({
-  useUserSettings: vi.fn(),
-}));
-
-import { useUserSettings } from '../../../hooks/useUserSettings';
-
-const mockUseUserSettings = vi.mocked(useUserSettings);
 
 // ---------------------------------------------------------------------------
 // Mock KeystrokeEditor to avoid rendering its internals
@@ -62,22 +38,9 @@ vi.mock('./KeystrokeEditor', () => ({
 // Helper
 // ---------------------------------------------------------------------------
 
-function setup(settingsOverride?: Partial<UserSettings>) {
-  const settings = makeSettings(settingsOverride);
-  mockUpdateSettings.mockResolvedValue(undefined);
-
-  mockUseUserSettings.mockReturnValue({
-    settings,
-    isLoading: false,
-    error: null,
-    isSaving: false,
-    updateSettings: mockUpdateSettings,
-    updateTheme: vi.fn(),
-    updateProfile: vi.fn(),
-    refresh: vi.fn(),
-  });
-
-  return { settings };
+function setup(shortcuts: KeyShortcut[] = [sampleShortcut]) {
+  mockOnSave.mockResolvedValue(undefined);
+  return { shortcuts, onSave: mockOnSave };
 }
 
 // ---------------------------------------------------------------------------
@@ -95,15 +58,13 @@ describe('KeyShortcutsSettings', () => {
 
   describe('Rendering existing shortcuts', () => {
     it('renders the section heading', () => {
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       expect(screen.getByText('Key Shortcuts')).toBeInTheDocument();
     });
 
     it('renders the label of the existing shortcut', () => {
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       // The label TextField is rendered with value="Ctrl-C"
       const labelInput = screen.getByDisplayValue('Ctrl-C');
@@ -111,22 +72,19 @@ describe('KeyShortcutsSettings', () => {
     });
 
     it('renders "Add shortcut" button', () => {
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       expect(screen.getByRole('button', { name: /add shortcut/i })).toBeInTheDocument();
     });
 
     it('Save Changes button is disabled when not dirty', () => {
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     });
 
     it('Reset button is disabled when not dirty', () => {
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       expect(screen.getByRole('button', { name: /reset/i })).toBeDisabled();
     });
@@ -139,8 +97,7 @@ describe('KeyShortcutsSettings', () => {
   describe('Add shortcut', () => {
     it('clicking "Add shortcut" appends a new row', async () => {
       const user = userEvent.setup();
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       // Initially one label input ("Ctrl-C")
       expect(screen.getAllByLabelText(/shortcut \d+ label/i)).toHaveLength(1);
@@ -155,8 +112,7 @@ describe('KeyShortcutsSettings', () => {
 
     it('new shortcut has default label "New"', async () => {
       const user = userEvent.setup();
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       await user.click(screen.getByRole('button', { name: /add shortcut/i }));
 
@@ -167,8 +123,7 @@ describe('KeyShortcutsSettings', () => {
 
     it('Save Changes becomes enabled after adding a shortcut', async () => {
       const user = userEvent.setup();
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       await user.click(screen.getByRole('button', { name: /add shortcut/i }));
 
@@ -185,8 +140,7 @@ describe('KeyShortcutsSettings', () => {
   describe('Delete shortcut', () => {
     it('clicking delete removes the shortcut row', async () => {
       const user = userEvent.setup();
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       // One row initially
       expect(screen.getAllByLabelText(/shortcut \d+ label/i)).toHaveLength(1);
@@ -202,8 +156,7 @@ describe('KeyShortcutsSettings', () => {
 
     it('Save Changes becomes enabled after deleting a shortcut', async () => {
       const user = userEvent.setup();
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       const deleteBtn = screen.getByRole('button', { name: /delete shortcut 1/i });
       await user.click(deleteBtn);
@@ -219,10 +172,9 @@ describe('KeyShortcutsSettings', () => {
   // -------------------------------------------------------------------------
 
   describe('Save', () => {
-    it('calls updateSettings with terminal.keyShortcuts containing the edited label', async () => {
+    it('calls onSave with the shortcuts containing the edited label', async () => {
       const user = userEvent.setup();
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       // Edit the existing shortcut label
       const labelInput = screen.getByDisplayValue('Ctrl-C');
@@ -236,22 +188,15 @@ describe('KeyShortcutsSettings', () => {
       await user.click(saveBtn);
 
       await waitFor(() => {
-        expect(mockUpdateSettings).toHaveBeenCalledWith(
-          expect.objectContaining({
-            terminal: expect.objectContaining({
-              keyShortcuts: expect.arrayContaining([
-                expect.objectContaining({ label: 'Interrupt' }),
-              ]),
-            }),
-          }),
+        expect(mockOnSave).toHaveBeenCalledWith(
+          expect.arrayContaining([expect.objectContaining({ label: 'Interrupt' })]),
         );
       });
     });
 
     it('Save button is enabled only when dirty', async () => {
       const user = userEvent.setup();
-      setup();
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup()} />);
 
       const saveBtn = screen.getByRole('button', { name: /save changes/i });
       expect(saveBtn).toBeDisabled();
@@ -269,15 +214,13 @@ describe('KeyShortcutsSettings', () => {
 
   describe('Empty state', () => {
     it('renders no label inputs when shortcuts list is empty', () => {
-      setup({ terminal: { showScrollButtons: true, keyShortcuts: [] } });
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup([])} />);
 
       expect(screen.queryByLabelText(/shortcut \d+ label/i)).not.toBeInTheDocument();
     });
 
     it('Add shortcut button is still visible when list is empty', () => {
-      setup({ terminal: { showScrollButtons: true, keyShortcuts: [] } });
-      render(<KeyShortcutsSettings />);
+      render(<KeyShortcutsSettings {...setup([])} />);
 
       expect(screen.getByRole('button', { name: /add shortcut/i })).toBeInTheDocument();
     });
@@ -289,8 +232,7 @@ describe('KeyShortcutsSettings', () => {
 
   describe('Disabled prop', () => {
     it('disables all interactive controls when disabled={true}', () => {
-      setup();
-      render(<KeyShortcutsSettings disabled />);
+      render(<KeyShortcutsSettings {...setup()} disabled />);
 
       expect(screen.getByRole('button', { name: /add shortcut/i })).toBeDisabled();
       expect(screen.getByRole('button', { name: /delete shortcut 1/i })).toBeDisabled();

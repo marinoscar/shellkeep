@@ -6,11 +6,11 @@ import { join, posix, relative, sep } from 'node:path';
  * Base-to-domain boundary guard, web half (issue #44; the API half is
  * apps/api/test/architecture/base-domain-boundary.spec.ts).
  *
- * The base web modules (components/{common,navigation,settings,admin},
- * contexts, identity, services/api.ts) must not know the terminal domain: no import from
+ * The base web modules (components/{common,navigation}, contexts, identity,
+ * platform, services/api.ts) must not know the terminal domain: no import from
  * a domain module, no `servers:` or `sessions:` permission string, no mention
  * of `terminal`. The domain reaches the base through the registries in
- * `config/` (destinations, user settings panels).
+ * `config/` (destinations, user settings sections).
  *
  * `App.tsx`, `main.tsx`, `config/` and `pages/` are the composition root and
  * are not scanned.
@@ -23,11 +23,12 @@ const SRC = join(__dirname, '..', '..');
 const BASE_PATHS = [
   'components/common',
   'components/navigation',
-  'components/settings',
-  'components/admin',
   'contexts',
   // The identity slice's bindings (issue #47; `components/auth` was deleted with it).
   'identity',
+  // The platform host binding (issue #48; `components/settings` and
+  // `components/admin` were deleted for the packaged settings pages).
+  'platform',
   'services/api.ts',
 ];
 
@@ -39,6 +40,7 @@ const DOMAIN_MODULES = [
   'components/server-profiles',
   'components/home',
   'hooks/useTerminal',
+  'hooks/useTerminalSettings',
   'hooks/useSessions',
   'hooks/useServerProfiles',
   'hooks/useTouchScroll',
@@ -109,7 +111,8 @@ describe('base-domain boundary (web)', () => {
     expect(rels).toContain('components/navigation/Sidebar.tsx');
     expect(rels).toContain('contexts/ThemeContext.tsx');
     expect(rels).toContain('identity/IdentityProviders.tsx');
-    expect(files.length).toBeGreaterThan(15);
+    expect(rels).toContain('platform/platformHost.tsx');
+    expect(files.length).toBeGreaterThan(10);
   });
 
   it('keeps the allowlist empty', () => {
