@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { withoutAuthGuards } from '../../../test/helpers/allow-guards';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { SystemSettingsController } from './system-settings.controller';
 import { SystemSettingsService } from './system-settings.service';
@@ -25,12 +26,12 @@ describe('SystemSettingsController', () => {
       patchSettings: jest.fn(),
     } as any;
 
-    const module: TestingModule = await Test.createTestingModule({
+    const module: TestingModule = await withoutAuthGuards(Test.createTestingModule({
       controllers: [SystemSettingsController],
       providers: [
         { provide: SystemSettingsService, useValue: mockSystemSettingsService },
       ],
-    }).compile();
+    })).compile();
 
     controller = module.get<SystemSettingsController>(SystemSettingsController);
   });

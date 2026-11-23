@@ -5,7 +5,7 @@ import {
   HealthCheckService,
   HealthCheckResult,
 } from '@nestjs/terminus';
-import { Public } from '../auth/decorators/public.decorator';
+import { Public } from '@marinoscar/platform-api/identity';
 import { DatabaseHealthIndicator } from './indicators/database.indicator';
 
 @ApiTags('Health')

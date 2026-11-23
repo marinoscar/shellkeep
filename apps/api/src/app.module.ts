@@ -9,18 +9,16 @@ import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
 
 import { PrismaModule } from './prisma/prisma.module';
+import { platformHostModule } from './platform/platform-host.module';
+import { doctorModule } from './platform/doctor.config';
+import { identityModule } from './platform/identity/identity.config';
 import { CommonModule } from './common/common.module';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
 import { SettingsModule } from './settings/settings.module';
 import { HealthModule } from './health/health.module';
-import { AllowlistModule } from './allowlist/allowlist.module';
-import { DeviceAuthModule } from './device-auth/device-auth.module';
 import { StorageModule } from './storage/storage.module';
 import { ServerProfilesModule } from './server-profiles/server-profiles.module';
 import { TerminalModule } from './terminal/terminal.module';
 import { LoggerModule } from './common/logger/logger.module';
-import { TestAuthModule } from './test-auth/test-auth.module';
 
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -46,23 +44,30 @@ import configuration from './config/configuration';
     // Database
     PrismaModule,
 
+    // The platform's DI-time host ports (audit sink, `PLATFORM_PRISMA`), bound
+    // to ShellKeep's services (#47). Global.
+    platformHostModule,
+    // The platform Doctor: the identity slice registers its health checks with
+    // it, so it cannot boot without it (#47). One read-only admin route.
+    doctorModule,
+
     // Logger
     LoggerModule,
 
     // Feature modules
     CommonModule,
-    AuthModule,
-    UsersModule,
+    // The platform's identity slice (#47): `/api/auth/*`, `/api/users`,
+    // `/api/roles`, `/api/allowlist`, `/api/pat`, `/api/auth/device/*` and,
+    // outside production, `/api/auth/test/login`, in single-organization mode.
+    // Replaces ShellKeep's own auth, users, allowlist, device-auth and
+    // test-auth modules. Global: it provides `PatService` and the guards'
+    // dependencies to every module.
+    identityModule,
     SettingsModule,
     HealthModule,
-    AllowlistModule,
-    DeviceAuthModule,
     StorageModule,
     ServerProfilesModule,
     TerminalModule,
-
-    // Test modules (non-production only)
-    ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),
   ],
   providers: [
     // Global validation pipe (Zod)
