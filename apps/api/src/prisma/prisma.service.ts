@@ -29,6 +29,7 @@ export class PrismaService
 
     // Log queries in development
     if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment -- @ts-ignore is deliberate: the 'query' event overload exists only when the client enables query logging, so @ts-expect-error would fail to compile
       // @ts-ignore - Prisma event typing
       this.$on('query', (e: any) => {
         this.logger.debug(`Query: ${e.query}`);

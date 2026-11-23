@@ -25,9 +25,7 @@ The expected first entry is the domain schema (`server_profiles`, `terminal_sess
 
 ## Standing constraints
 
-| Constraint | Detail | Resolved by |
-|---|---|---|
-| `MonoRepo` rollback tag missing | The tag is to be placed on `95145d0d850a4a53757b65d289158d58e34fc33d`. Pushing it was blocked by the agent session's git proxy. A maintainer must run `git tag MonoRepo 95145d0 && git push origin MonoRepo`. #43 and the cutover runbook (#84) depend on it. | A maintainer pushes the tag |
+None. The `MonoRepo` rollback tag exists on `95145d0d850a4a53757b65d289158d58e34fc33d`.
 
 ## Drift allowlist
 

@@ -75,7 +75,7 @@ apps/web/
 
 ```json
 {
-  "name": "enterprise-app",
+  "name": "shellkeep",
   "private": true,
   "workspaces": ["apps/*"],
   "scripts": {

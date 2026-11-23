@@ -1,0 +1,15 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["npm"],
+  "packageRules": [
+    {
+      "description": "Every @marinoscar/platform-* package moves together in one PR, pinned exactly, never auto-merged.",
+      "matchPackageNames": ["@marinoscar/platform-*"],
+      "groupName": "marinoscar platform packages",
+      "rangeStrategy": "pin",
+      "automerge": false,
+      "dependencyDashboardApproval": false
+    }
+  ]
+}

@@ -65,7 +65,7 @@ export function useUserSettings(): UseUserSettingsReturn {
         if (err instanceof ApiError && err.status === 409) {
           // Version conflict - refresh and retry
           await fetchSettings();
-          throw new Error('Settings were updated elsewhere. Please try again.');
+          throw Object.assign(new Error('Settings were updated elsewhere. Please try again.'), { cause: err });
         }
         const message = err instanceof ApiError ? err.message : 'Failed to save settings';
         setError(message);

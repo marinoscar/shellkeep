@@ -1,12 +1,15 @@
 export type TerminalWsEventType = 'data' | 'connect' | 'disconnect' | 'error';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- listeners receive differently shaped payloads per event
+type Listener = (...args: any[]) => void;
+
 export class TerminalWebSocket {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
-  private listeners: Map<TerminalWsEventType, Set<Function>> = new Map();
+  private listeners: Map<TerminalWsEventType, Set<Listener>> = new Map();
   private _connected = false;
 
   constructor(
@@ -111,14 +114,14 @@ export class TerminalWebSocket {
     }
   }
 
-  on(event: TerminalWsEventType, callback: Function): void {
+  on(event: TerminalWsEventType, callback: Listener): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
     this.listeners.get(event)!.add(callback);
   }
 
-  off(event: TerminalWsEventType, callback: Function): void {
+  off(event: TerminalWsEventType, callback: Listener): void {
     this.listeners.get(event)?.delete(callback);
   }
 

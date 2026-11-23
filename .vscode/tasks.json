@@ -3,44 +3,21 @@
   "tasks": [
     {
       "label": "Start API + Web Dev Servers",
-      "dependsOn": ["Start API Dev Server", "Start Web Dev Server"],
+      "dependsOn": [
+        "Start API Dev Server",
+        "Start Web Dev Server"
+      ],
       "dependsOrder": "sequence",
       "problemMatcher": []
-    },
-    {
-      "label": "Start Servers + Build CLI",
-      "dependsOn": ["Start API + Web Dev Servers", "Build CLI"],
-      "dependsOrder": "sequence",
-      "problemMatcher": []
-    },
-    {
-      "label": "Build CLI",
-      "type": "shell",
-      "command": "npm",
-      "args": ["run", "build"],
-      "options": {
-        "cwd": "${workspaceFolder}/tools/app"
-      },
-      "group": "build",
-      "problemMatcher": ["$tsc"]
-    },
-    {
-      "label": "Watch CLI",
-      "type": "shell",
-      "command": "npm",
-      "args": ["run", "dev"],
-      "options": {
-        "cwd": "${workspaceFolder}/tools/app"
-      },
-      "isBackground": true,
-      "group": "build",
-      "problemMatcher": ["$tsc-watch"]
     },
     {
       "label": "Start Web Dev Server",
       "type": "shell",
       "command": "npm",
-      "args": ["run", "dev"],
+      "args": [
+        "run",
+        "dev"
+      ],
       "options": {
         "cwd": "${workspaceFolder}/apps/web"
       },
@@ -60,7 +37,10 @@
       "label": "Start API Dev Server",
       "type": "shell",
       "command": "npm",
-      "args": ["run", "start:dev"],
+      "args": [
+        "run",
+        "start:dev"
+      ],
       "options": {
         "cwd": "${workspaceFolder}/apps/api"
       },
@@ -80,23 +60,33 @@
       "label": "Build API",
       "type": "shell",
       "command": "npm",
-      "args": ["run", "build"],
+      "args": [
+        "run",
+        "build"
+      ],
       "options": {
         "cwd": "${workspaceFolder}/apps/api"
       },
       "group": "build",
-      "problemMatcher": ["$tsc"]
+      "problemMatcher": [
+        "$tsc"
+      ]
     },
     {
       "label": "Build Web",
       "type": "shell",
       "command": "npm",
-      "args": ["run", "build"],
+      "args": [
+        "run",
+        "build"
+      ],
       "options": {
         "cwd": "${workspaceFolder}/apps/web"
       },
       "group": "build",
-      "problemMatcher": ["$tsc"]
+      "problemMatcher": [
+        "$tsc"
+      ]
     }
   ]
 }

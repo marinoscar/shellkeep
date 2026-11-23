@@ -4,7 +4,17 @@ module.exports = {
   rootDir: '..',
   testRegex: '.*\\.spec\\.ts$',
   transform: {
-    '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.test.json' }],
+    '^.+\\.(t|j)s$': [
+      'ts-jest',
+      {
+        tsconfig: '<rootDir>/tsconfig.test.json',
+        // TS151002: ts-jest wants isolatedModules for the node16 module kind.
+        // apps/api has no "type": "module", so node16 resolves to CommonJS
+        // (with `exports`-map resolution), and isolatedModules cannot be on
+        // because NestJS needs emitDecoratorMetadata.
+        diagnostics: { ignoreCodes: [151002] },
+      },
+    ],
   },
   collectCoverageFrom: [
     'src/**/*.ts',
