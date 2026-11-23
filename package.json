@@ -18,17 +18,22 @@
     "check:classification": "node scripts/platform-adoption/check-classification.mjs",
     "typecheck": "npm run typecheck --workspace=api && npm run typecheck --workspace=web",
     "lint": "eslint \"apps/{api,web}/src/**/*.{ts,tsx}\"",
-    "check:platform-imports": "eslint --max-warnings=0 --config eslint.platform-imports.config.mjs \"apps/{api,web}/src/**/*.{ts,tsx}\""
+    "check:platform-imports": "eslint --max-warnings=0 --config eslint.platform-imports.config.mjs \"apps/{api,web}/src/**/*.{ts,tsx}\"",
+    "check:platform-pin": "node scripts/check-platform-pin.mjs",
+    "check:single-instance": "node scripts/check-single-instance.mjs",
+    "test:scripts": "node --test scripts/__tests__/*.test.mjs"
   },
   "overrides": {
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
     "@nestjs/platform-fastify": "^11.1.12",
     "@nestjs/platform-ws": "^11.1.12",
-    "@nestjs/websockets": "^11.1.12"
+    "@nestjs/websockets": "^11.1.12",
+    "@marinoscar/platform-contract": "$@marinoscar/platform-contract"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@marinoscar/platform-contract": "0.1.0-next.39",
     "eslint": "^10.15.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "typescript-eslint": "^8.74.0"
