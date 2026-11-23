@@ -45,6 +45,11 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'storage.migrate_object': 'Storage migration (copy object)',
   'storage.migrate_plan': 'Storage migration (plan)',
   'storage.object.process': 'Object processing',
+  // The notifications slice (#51): the admin broadcast fan-out and the two retention purges.
+  'admin.broadcast.start': 'Broadcast start',
+  'admin.broadcast.chunk': 'Broadcast delivery',
+  'notifications.inbox.purge': 'Notification inbox purge',
+  'notifications.deliveries.purge': 'Delivery log purge',
 };
 
 /** Types registered without a label of their own, shown as the type string. */

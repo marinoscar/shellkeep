@@ -32,6 +32,8 @@ import { ADOPTED_PLATFORM_SLICES } from './platform-slices';
 import { APP_PERMISSIONS } from './permissions';
 import { APP_USER_OWNED_MODELS } from './user-owned-models';
 import { registerShellkeepCredentialPurposes } from './credentials';
+// Channels, email templates and notification events (#51); registers itself at import.
+import './notifications';
 
 registerPlatformPermissions({
   slices: [...ADOPTED_PLATFORM_SLICES],
