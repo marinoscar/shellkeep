@@ -82,13 +82,19 @@ const WorkersPage = lazy(() =>
 // Storage (issue #50): the packaged object-storage configuration page.
 const StorageConfigPage = lazy(() => import('@marinoscar/platform-web/storage/ui'));
 
-// Notifications (issue #51): the packaged email, Web Push and broadcasts pages.
+// Notifications (issue #51): the packaged email, Web Push and broadcasts
+// pages, and the user's notification preferences.
 const EmailSettingsPage = lazy(() => import('@marinoscar/platform-web/email/ui'));
 const PushConfigPage = lazy(() =>
   import('@marinoscar/platform-web/notifications/ui').then((m) => ({ default: m.PushConfigPage })),
 );
 const BroadcastsPage = lazy(() =>
   import('@marinoscar/platform-web/notifications/ui').then((m) => ({ default: m.BroadcastsPage })),
+);
+const UserNotificationsPage = lazy(() =>
+  import('@marinoscar/platform-web/notifications/ui').then((m) => ({
+    default: m.UserNotificationsPage,
+  })),
 );
 
 // Test login page (development only). The platform's test login endpoint
@@ -175,6 +181,7 @@ function AppRoutes() {
                   <Route path="/settings/profile" element={<UserProfilePage />} />
                   <Route path="/settings/appearance" element={<UserAppearancePage />} />
                   <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
+                  <Route path="/settings/notifications" element={<UserNotificationsPage />} />
                   {/* Admin settings (#46): every card of ADMIN_SECTIONS has a route
                       here, gated on the card's permission (the string its API
                       controller enforces). The hub admits any card's permission
