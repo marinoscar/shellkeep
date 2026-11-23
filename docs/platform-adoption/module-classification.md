@@ -47,7 +47,7 @@ Issue numbers are GitHub issues of `marinoscar/shellkeep`: #44 base to domain de
 |---|---|---|---|
 | Terminal user-settings namespace | The `terminal` block (`showScrollButtons`, `keyShortcuts`, max 50) is domain content inside the base user-settings schema, types and service. It moves to `apps/api/src/terminal/settings/terminal.user-settings.ts` and is registered with `registerUserSettingsNamespaces`; stored key names do not change. Resolved by #44 (API): the registry is `settings/registry/user-settings-namespaces.ts`, the namespace is registered by `shellkeep.manifest.ts`. | settings, `common/schemas`, `common/types` | #44, then #48 |
 | App permission declarations | `servers:read\|write\|delete` and `sessions:read\|write\|delete` live in the base `roles.constants.ts` and `prisma/seed.ts`. They move to `app-registrations/permissions.ts` (`APP_PERMISSIONS`) and become platform `PermissionDeclaration`s with the same defaults (admin and contributor all six, viewer the two read permissions). Resolved by #44: `roles.constants.ts` and `prisma/seed.ts` derive from `APP_PERMISSIONS`. | `common/constants`, `prisma/seed.ts` | #44, then #47 |
-| Terminal web extraction | `KeyShortcutsSettings`, `KeystrokeEditor` and the terminal API calls leave base web files (`components/settings`, `services/api.ts`, `types/index.ts`, `Sidebar`/`HomePage` destinations) for `components/terminal/settings/`, `services/terminal-api.ts` and `config/destinations.ts`. | `components/settings`, `services`, `types` | #44, then #76, #80 |
+| Terminal web extraction | `KeyShortcutsSettings`, `KeystrokeEditor` and the terminal API calls leave base web files (`components/settings`, `services/api.ts`, `types/index.ts`, `Sidebar`/`HomePage` destinations) for `components/terminal/settings/`, `services/terminal-api.ts` and `config/destinations.ts`. Resolved by #44 (web): terminal types are in `types/terminal.ts` (the `terminal` user-settings namespace augments `UserSettingsNamespaces`), the settings panel is mounted through `config/userSettingsPanels.tsx`, and `src/__tests__/architecture/base-domain-boundary.test.ts` guards the base files. | `components/settings`, `services`, `types` | #44, then #76, #80 |
 | ShellKeep storage key prefixes | The platform owns `uploads/`, where every existing object lives. ShellKeep adds `session-logs/` and `runbook-artifacts/` through `registerStorageKeyPrefixes`; the S3 environment variables are removed (storage is runtime-configured). | storage | #50 |
 | SSH credential re-encryption | `ServerProfile` secrets are encrypted with `ENCRYPTION_KEY` by `encryption.util.ts`; they are re-encrypted with the credentials slice's `SECRETS_ENCRYPTION_KEY` and the three `encrypted*` columns are retired. | `common/utils` | #48 |
 | Terminal WebSocket authorization | The gateway verifies the JWT and `isActive` but checks no permission. A `TerminalPrincipalResolver` over the identity slice enforces `sessions:*` and the token expiry. | `terminal` | #47 |
@@ -111,11 +111,12 @@ Drift comes from the apps view.
 | `apps/web/src/components` | 22.2% / +216 −65 | 40 | mixed (see `components/…` rows) | see below | — | see below |
 | `apps/web/src/contexts` | 0% / +56 −8 | 2 | noise | `AuthContext` to identity web (#47); `ThemeContext` to shell theme (#76) | #47, #76 | none |
 | `apps/web/src/hooks` | 11.1% / +173 −20 | 11 | mixed (see `hooks/…` rows) | see below | — | see below |
+| `apps/web/src/config` | n/a / +0 −0 | 2 | shellkeep-divergence | app composition root: `destinations.ts` (consumed by `Sidebar`, maps onto `ShellNavigation`), `userSettingsPanels.tsx` (domain panels on the user settings page); #76 adds `adminSections.tsx` and `userSettingsSections.tsx`, #80 turns the panels into cards | #44, #76, #80 | none |
 | `apps/web/src/lib` | n/a / +0 −0 | 2 | domain | keep (`lib/terminal`) | — | none |
 | `apps/web/src/pages` | 0% / +35 −12 | 12 | mixed (see page rows) | see below | — | see below |
 | `apps/web/src/services` | 0% / +353 −23 | 2 | mixed (see `services/…` rows) | see below | — | see below |
 | `apps/web/src/theme` | 0% / +76 −17 | 4 | noise | shell theme (`createShellTheme`, `ShellThemeProvider`) | #76 | none |
-| `apps/web/src/types` | 0% / +162 −71 | 1 | backport | web types: base types to the packages, terminal types to the domain | #44, #76 | Terminal types move out of `types/index.ts` in #44 |
+| `apps/web/src/types` | 0% / +162 −71 | 1 | backport | web types: base types to the packages, terminal types to the domain | #44, #76 | Terminal types moved to `types/terminal.ts`; `types/index.ts` re-exports them for existing imports (resolved by #44) |
 | `apps/web/src/utils` | 50% / +0 −0 | 2 | domain | keep (`dispatchXtermScroll.ts`) | — | none |
 
 ### Web files that are classified one by one
@@ -136,7 +137,8 @@ Drift comes from the apps view.
 | `apps/web/src/hooks/useKeyboardInset.ts` | n/a / +0 −0 | 1 | domain | keep | — | none |
 | `apps/web/src/hooks/useSessions.ts` | n/a / +0 −0 | 1 | domain | keep | — | none |
 | `apps/web/src/hooks/useServerProfiles.ts` | n/a / +0 −0 | 1 | domain | keep | — | none |
-| `apps/web/src/services/api.ts` | 0% / +353 −23 | 1 | backport | core web client (`createPlatformApiClient`); terminal calls move to `services/terminal-api.ts` in #44 | #44, #76 | Terminal API calls extracted to `services/terminal-api.ts` |
+| `apps/web/src/services/api.ts` | 0% / +353 −23 | 1 | backport | core web client (`createPlatformApiClient`); terminal calls moved to `services/terminal-api.ts` | #44, #76 | Terminal API calls extracted to `services/terminal-api.ts` (resolved by #44) |
+| `apps/web/src/services/terminal-api.ts` | n/a / +0 −0 | 1 | domain | keep (server-profile and session calls on the base client) | #44 | none |
 | `apps/web/src/services/terminal-ws.ts` | n/a / +0 −0 | 1 | domain | keep (re-sends `auth` after token refresh, #47) | #47 | none |
 | `apps/web/src/pages/UserManagementPage.tsx` | n/a / +0 −0 | 1 | noise | identity web (`UsersPage`) | #47 | none |
 | `apps/web/src/pages/SystemSettingsPage.tsx` | n/a / +0 −0 | 1 | noise | orphan: no route renders it; delete | #76 | none |
@@ -158,14 +160,14 @@ Drift comes from the apps view.
 
 | Module | Drift | Files | Category | Target | Issue | Workaround |
 |---|---|---|---|---|---|---|
-| `apps/web/src/components/navigation` | 0% / +175 −26 | 3 | noise | shell (`ShellAppBar`, `ShellNavigationRail`, `ShellUserMenu`); `Sidebar` destinations come from `config/destinations.ts` (#44) | #76 | none |
+| `apps/web/src/components/navigation` | 0% / +175 −26 | 3 | noise | shell (`ShellAppBar`, `ShellNavigationRail`, `ShellUserMenu`); `Sidebar` destinations come from `config/destinations.ts` (resolved by #44) | #76 | none |
 | `apps/web/src/components/common` | 66.7% / +36 −34 | 6 | noise | shell and identity guards (`Layout.tsx` to `ShellLayout`; `ProtectedRoute`, `RequirePermission`, `AdminOnly` to identity web; `ErrorBoundary`, `LoadingSpinner` to the host) | #76, #47 | none |
 | `apps/web/src/components/admin` | n/a / +0 −0 | 6 | noise | identity web (`AddEmailDialog`, `AllowlistTable`, `UserList`); `FeatureFlagsList`, `SystemSettingsEditor`, `UISettings` to settings web | #47, #48 | none |
 | `apps/web/src/components/auth` | n/a / +0 −0 | 1 | noise | identity web (`OAuthButton`) | #47 | none |
 | `apps/web/src/components/device-activation` | n/a / +0 −0 | 3 | noise | identity web | #47 | none |
 | `apps/web/src/components/user` | 0% / +5 −5 | 1 | noise | identity web (`UserProfileCard`) | #47 | none |
-| `apps/web/src/components/settings` | n/a / +0 −0 | 6 | backport | settings web (`ImageUpload`, `ProfileSettings`, `ThemeSettings`); `KeyShortcutsSettings` and `KeystrokeEditor` are terminal domain | #48, #80 | `KeyShortcutsSettings` and `KeystrokeEditor` move to `components/terminal/settings/` in #44 and become the "Terminal" settings card in #80 |
-| `apps/web/src/components/terminal` | n/a / +0 −0 | 7 | domain | keep | — | none |
+| `apps/web/src/components/settings` | n/a / +0 −0 | 3 | backport | settings web (`ImageUpload`, `ProfileSettings`, `ThemeSettings`); `KeyShortcutsSettings` and `KeystrokeEditor` are terminal domain | #48, #80 | `KeyShortcutsSettings` and `KeystrokeEditor` moved to `components/terminal/settings/` (resolved by #44); they become the "Terminal" settings card in #80 |
+| `apps/web/src/components/terminal` | n/a / +0 −0 | 10 | domain | keep (`settings/` holds `KeyShortcutsSettings` and `KeystrokeEditor` since #44) | — | none |
 | `apps/web/src/components/server-profiles` | n/a / +0 −0 | 2 | domain | keep | — | none |
 | `apps/web/src/components/home` | 0% / +0 −0 | 4 | domain | keep | — | none |
 
