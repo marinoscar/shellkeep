@@ -1609,7 +1609,7 @@ cd apps/web && npm test
 
 | Document | Purpose |
 |----------|---------|
-| [System_Specification_Document.md](System_Specification_Document.md) | Full system requirements |
+| `System_Specification_Document.md` (not in this repository) | Full system requirements |
 | [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) | Detailed security documentation |
 | [API.md](API.md) | API endpoint reference |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Development guide |
