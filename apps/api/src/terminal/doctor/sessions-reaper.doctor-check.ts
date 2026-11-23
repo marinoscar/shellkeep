@@ -53,7 +53,8 @@ export class SessionsReaperDoctorCheck implements DoctorCheck, OnModuleInit {
         status: 'warn',
         detail: `${overdue} active session(s) have been idle for more than twice the ${detachAfterMinutes}-minute detach threshold`,
         remedy:
-          'The session reaper is not running or is failing: check the API log for SessionCleanupTask errors and restart the API. ' +
+          'The session reaper is not running or is failing: open Admin > Jobs and look for failed or stuck `terminal.session.reap` jobs, ' +
+          'check the API log for SessionCleanupTask and SessionReapHandler errors, and make sure a job worker is running. ' +
           'Idle sessions keep their SSH connection until it runs.',
         data: { overdue, detach_after_minutes: detachAfterMinutes },
       };
