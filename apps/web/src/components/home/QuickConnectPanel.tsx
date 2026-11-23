@@ -16,7 +16,7 @@ import {
   PlayArrow as ConnectIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { getServerProfiles, createSession } from '../../services/api';
+import { getServerProfiles, createSession } from '../../services/terminal-api';
 import type { ServerProfile } from '../../types';
 
 export function QuickConnectPanel() {

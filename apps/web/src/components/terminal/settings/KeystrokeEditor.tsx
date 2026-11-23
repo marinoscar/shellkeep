@@ -7,7 +7,7 @@ import {
   Stack,
 } from '@mui/material';
 import { RemoveCircleOutlineOutlined as RemoveIcon } from '@mui/icons-material';
-import { KeyShortcutModifier, Keystroke, KEY_SHORTCUT_BASE_KEYS } from '../../../types';
+import { KeyShortcutModifier, Keystroke, KEY_SHORTCUT_BASE_KEYS } from '../../../types/terminal';
 
 // Friendly display labels for special keys
 const KEY_LABELS: Record<string, string> = {

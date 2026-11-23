@@ -6,7 +6,7 @@ import {
   updateSession as updateSessionApi,
   deleteSession as deleteSessionApi,
   batchTerminateSessions as batchTerminateSessionsApi,
-} from '../services/api';
+} from '../services/terminal-api';
 
 interface UseSessionsResult {
   sessions: TerminalSession[];

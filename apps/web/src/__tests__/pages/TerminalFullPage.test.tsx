@@ -16,12 +16,15 @@ vi.mock('react-router-dom', async (importOriginal) => {
 
 // Mock API service
 vi.mock('../../services/api', () => ({
-  getSession: vi.fn(),
   uploadFile: vi.fn(),
   getDownloadUrl: vi.fn(),
+  api: { getAccessToken: vi.fn(() => 'mock-token') },
+}));
+
+vi.mock('../../services/terminal-api', () => ({
+  getSession: vi.fn(),
   createSession: vi.fn(),
   downloadSessionHistory: vi.fn().mockRejectedValue(new Error('History unavailable')),
-  api: { getAccessToken: vi.fn(() => 'mock-token') },
 }));
 
 // Mock useUserSettings to avoid API calls in page tests
@@ -58,7 +61,7 @@ vi.mock('../../components/terminal/TerminalView', () => ({
 }));
 
 import TerminalFullPage from '../../pages/TerminalFullPage';
-import { getSession } from '../../services/api';
+import { getSession } from '../../services/terminal-api';
 
 const mockSession: TerminalSession = {
   id: 'session-1',

@@ -7,7 +7,7 @@ import { ActiveSessionsPanel } from '../components/home/ActiveSessionsPanel';
 import { QuickConnectPanel } from '../components/home/QuickConnectPanel';
 import { RecentActivityPanel } from '../components/home/RecentActivityPanel';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
-import { createSession } from '../services/api';
+import { createSession } from '../services/terminal-api';
 import { CreateSessionData } from '../types';
 
 export default function HomePage() {

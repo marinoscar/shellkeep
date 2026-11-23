@@ -3,7 +3,7 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { useServerProfiles } from '../../hooks/useServerProfiles';
 
 // Mock the API service
-vi.mock('../../services/api', () => ({
+vi.mock('../../services/terminal-api', () => ({
   getServerProfiles: vi.fn(),
   createServerProfile: vi.fn(),
   updateServerProfile: vi.fn(),
@@ -17,7 +17,7 @@ import {
   updateServerProfile,
   deleteServerProfile,
   testServerProfile,
-} from '../../services/api';
+} from '../../services/terminal-api';
 
 import type {
   ServerProfile,

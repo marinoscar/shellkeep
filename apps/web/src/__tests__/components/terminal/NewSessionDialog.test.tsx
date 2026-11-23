@@ -5,11 +5,11 @@ import { render } from '../../utils/test-utils';
 import { NewSessionDialog } from '../../../components/terminal/NewSessionDialog';
 
 // Mock the API service
-vi.mock('../../../services/api', () => ({
+vi.mock('../../../services/terminal-api', () => ({
   getServerProfiles: vi.fn(),
 }));
 
-import { getServerProfiles } from '../../../services/api';
+import { getServerProfiles } from '../../../services/terminal-api';
 
 import type { ServerProfile, ServerProfilesResponse } from '../../../types';
 

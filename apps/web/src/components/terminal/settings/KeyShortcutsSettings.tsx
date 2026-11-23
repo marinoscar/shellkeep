@@ -17,7 +17,7 @@ import {
   AddCircleOutlineOutlined as AddCircleIcon,
   DeleteOutlineOutlined as DeleteIcon,
 } from '@mui/icons-material';
-import { KeyShortcut, Keystroke } from '../../../types';
+import { KeyShortcut, Keystroke } from '../../../types/terminal';
 import { useUserSettings } from '../../../hooks/useUserSettings';
 import { KeystrokeEditor } from './KeystrokeEditor';
 

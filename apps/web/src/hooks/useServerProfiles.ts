@@ -11,7 +11,7 @@ import {
   updateServerProfile as updateProfileApi,
   deleteServerProfile as deleteProfileApi,
   testServerProfile as testProfileApi,
-} from '../services/api';
+} from '../services/terminal-api';
 
 interface UseServerProfilesResult {
   profiles: ServerProfile[];
