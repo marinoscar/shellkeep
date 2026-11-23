@@ -35,8 +35,19 @@ export type AccessTokenRefreshedListener = (token: string) => void;
  */
 export class AppHttpClient extends PlatformHttpClient {
   private refreshedListeners = new Set<AccessTokenRefreshedListener>();
+  /** The refresh in progress: concurrent callers share it, so listeners fire once per refresh (#93). */
+  private refreshInFlight: Promise<boolean> | null = null;
 
-  override async refreshToken(): Promise<boolean> {
+  override refreshToken(): Promise<boolean> {
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.refreshAndNotify().finally(() => {
+        this.refreshInFlight = null;
+      });
+    }
+    return this.refreshInFlight;
+  }
+
+  private async refreshAndNotify(): Promise<boolean> {
     const refreshed = await super.refreshToken();
     const token = this.getAccessToken();
     if (refreshed && token) {
