@@ -45,8 +45,8 @@ Issue numbers are GitHub issues of `marinoscar/shellkeep`: #44 base to domain de
 
 | Workaround | What it is | Used by | Applied by |
 |---|---|---|---|
-| Terminal user-settings namespace | The `terminal` block (`showScrollButtons`, `keyShortcuts`, max 50) is domain content inside the base user-settings schema, types and service. It moves to `apps/api/src/terminal/settings/terminal.user-settings.ts` and is registered with `registerUserSettingsNamespaces`; stored key names do not change. | settings, `common/schemas`, `common/types` | #44, then #48 |
-| App permission declarations | `servers:read\|write\|delete` and `sessions:read\|write\|delete` live in the base `roles.constants.ts` and `prisma/seed.ts`. They move to `app-registrations/permissions.ts` (`APP_PERMISSIONS`) and become platform `PermissionDeclaration`s with the same defaults (admin and contributor all six, viewer the two read permissions). | `common/constants`, `prisma/seed.ts` | #44, then #47 |
+| Terminal user-settings namespace | The `terminal` block (`showScrollButtons`, `keyShortcuts`, max 50) is domain content inside the base user-settings schema, types and service. It moves to `apps/api/src/terminal/settings/terminal.user-settings.ts` and is registered with `registerUserSettingsNamespaces`; stored key names do not change. Resolved by #44 (API): the registry is `settings/registry/user-settings-namespaces.ts`, the namespace is registered by `shellkeep.manifest.ts`. | settings, `common/schemas`, `common/types` | #44, then #48 |
+| App permission declarations | `servers:read\|write\|delete` and `sessions:read\|write\|delete` live in the base `roles.constants.ts` and `prisma/seed.ts`. They move to `app-registrations/permissions.ts` (`APP_PERMISSIONS`) and become platform `PermissionDeclaration`s with the same defaults (admin and contributor all six, viewer the two read permissions). Resolved by #44: `roles.constants.ts` and `prisma/seed.ts` derive from `APP_PERMISSIONS`. | `common/constants`, `prisma/seed.ts` | #44, then #47 |
 | Terminal web extraction | `KeyShortcutsSettings`, `KeystrokeEditor` and the terminal API calls leave base web files (`components/settings`, `services/api.ts`, `types/index.ts`, `Sidebar`/`HomePage` destinations) for `components/terminal/settings/`, `services/terminal-api.ts` and `config/destinations.ts`. | `components/settings`, `services`, `types` | #44, then #76, #80 |
 | ShellKeep storage key prefixes | The platform owns `uploads/`, where every existing object lives. ShellKeep adds `session-logs/` and `runbook-artifacts/` through `registerStorageKeyPrefixes`; the S3 environment variables are removed (storage is runtime-configured). | storage | #50 |
 | SSH credential re-encryption | `ServerProfile` secrets are encrypted with `ENCRYPTION_KEY` by `encryption.util.ts`; they are re-encrypted with the credentials slice's `SECRETS_ENCRYPTION_KEY` and the three `encrypted*` columns are retired. | `common/utils` | #48 |
@@ -66,23 +66,24 @@ The **Drift** column uses the slice view where the module has a packaged slice a
 | `apps/api/src/device-auth` | 11.8% / +184 −869 | 18 | noise | identity slice | #47 | none |
 | `apps/api/src/test-auth` | 9.1% / +63 −152 | 7 | noise | identity slice (`identity/testing`) | #47 | none |
 | `apps/api/src/health` | 0% / +23 −58 | 5 | noise | host slice (`host/health`) | #46 | none |
-| `apps/api/src/settings` | 0% / +250 −685 | 15 | backport | settings slice | #48 | `terminal` user-settings namespace (`showScrollButtons`, `keyShortcuts`) moved to `apps/api/src/terminal/settings/` by #44 and registered with `registerUserSettingsNamespaces`; stored shape unchanged |
+| `apps/api/src/settings` | 0% / +250 −685 | 15 | backport | settings slice | #48 | `terminal` user-settings namespace (`showScrollButtons`, `keyShortcuts`) moved to `apps/api/src/terminal/settings/` and registered with `registerUserSettingsNamespaces`; stored shape unchanged (resolved by #44; #48 swaps the local registry for the package's) |
 | `apps/api/src/common` | 0% / +27 −164 | 23 | mixed (see sub-rows) | split across host, core, settings, credentials, identity and otel-core | #44, #46, #47, #48, #53 | see the `common/` rows |
 | `apps/api/src/storage` | 1.1% / +367 −1060 | 29 | noise | storage slice | #50 | ShellKeep key prefixes registered with `registerStorageKeyPrefixes` (`session-logs/`, `runbook-artifacts/`); the S3 environment variables are removed |
 | `apps/api/src/config` | 0% / +29 −42 | 1 | noise | host core (config and `buildCorsOptions`) | #46 | Env-derived `DATABASE_URL` and the S3 and Uptrace variables disappear with #50 and #53 |
 | `apps/api/src/prisma` | 0% / +3 −37 | 2 | noise | platform-db and core data-access (`PrismaService`) | #45 | none |
 | `apps/api/src/server-profiles` | n/a / +0 −0 | 8 | domain | keep | — | none |
 | `apps/api/src/terminal` | n/a / +0 −0 | 17 | domain | keep (its `tasks/session-cleanup` `@Cron` becomes an enqueue-only cron and a `terminal.session.reap` job) | #49 (cron), #47 (WebSocket auth) | none |
+| `apps/api/src/app-registrations` | n/a / +0 −0 | 2 | domain | keep (composition root with `shellkeep.manifest.ts`: `APP_PERMISSIONS` now, the platform manifest registrations from #47 and #48) | #44, #47, #48 | none |
 | `apps/api/src/common/filters` | 0% / +17 −100 | 2 | noise | host/core (`http-exception.filter`) | #46 | none |
 | `apps/api/src/common/interceptors` | 0% / +7 −61 | 4 | noise | host (`logging.interceptor`, `transform.interceptor`) | #46 | A `304` shim (the platform transform wraps it) is a known risk; record it in `local-exceptions.md` if met |
 | `apps/api/src/common/middleware` | 0% / +3 −3 | 2 | noise | host (`request-id.middleware`) | #46 | none |
 | `apps/api/src/common/logger` | n/a / +0 −0 | 4 | noise | host core (Pino logging) | #46 | none |
-| `apps/api/src/common/schemas` | 0% / +39 −140 | 2 | backport | settings slice | #48 | Terminal part of the user-settings schema (`keyShortcutSchema`, `terminal`) moves to the terminal namespace in #44 |
-| `apps/api/src/common/types` | 0% / +95 −4 | 1 | backport | settings slice | #48 | `KeyShortcut`, `DEFAULT_KEY_SHORTCUTS` and `terminal?` move to the terminal namespace in #44 |
+| `apps/api/src/common/schemas` | 0% / +39 −140 | 2 | backport | settings slice | #48 | Terminal part of the user-settings schema (`keyShortcutSchema`, `terminal`) moved to the terminal namespace (resolved by #44) |
+| `apps/api/src/common/types` | 0% / +95 −4 | 1 | backport | settings slice | #48 | `KeyShortcut`, `DEFAULT_KEY_SHORTCUTS` and `terminal?` moved to the terminal namespace (resolved by #44) |
 | `apps/api/src/common/utils` | n/a / +0 −0 | 2 | noise | credentials slice (`encryption.util.ts`, AES-256-GCM) | #48 | SSH credentials are re-encrypted from `ENCRYPTION_KEY` to `SECRETS_ENCRYPTION_KEY` in #48 |
 | `apps/api/src/common/services` | n/a / +0 −0 | 2 | noise | identity slice (`admin-bootstrap.service.ts`) | #47 | none |
 | `apps/api/src/common/decorators` | 0% / +0 −0 | 1 | noise | otel-core (`@Trace()`) | #53 | none |
-| `apps/api/src/common/constants` | 0% / +28 −16 | 1 | backport | identity slice (roles and permissions) | #44, #47 | `servers:*` and `sessions:*` permissions move to `app-registrations/permissions.ts` (`APP_PERMISSIONS`, #44), then to platform `PermissionDeclaration` (#47); defaults keep admin and contributor with all six, viewer with the two read permissions |
+| `apps/api/src/common/constants` | 0% / +28 −16 | 1 | backport | identity slice (roles and permissions) | #44, #47 | `servers:*` and `sessions:*` permissions moved to `app-registrations/permissions.ts` (`APP_PERMISSIONS`, resolved by #44), then to platform `PermissionDeclaration` (#47); defaults keep admin and contributor with all six, viewer with the two read permissions |
 | `apps/api/src/common/exceptions` | n/a / +0 −0 | 1 | noise | core errors (`database-seed.exception.ts`) | #46 | none |
 | `apps/api/src/common/common.module.ts` | 0% / +3 −3 | 1 | noise | host core | #46 | none |
 
@@ -201,7 +202,7 @@ The 14 base models are the 14 of EAB `0001_initial`. `DeviceCode` and `StorageOb
 |---|---|---|---|---|---|
 | `20260124223146_initial` | identical (byte for byte) to platform `0001_initial` | noise | `@marinoscar/platform-db` migration `0001_initial` | #45 | Recorded in the `platform.lock` baseline; never edited |
 | `20260322203853_add_server_profile_color` | app-only (`ALTER TABLE "server_profiles" ADD COLUMN "color"`) | domain | domain migration set | #45 | No migration creates `server_profiles` or `terminal_sessions`: the two tables exist only in `schema.prisma`. #45 must create them in a domain migration that is a no-op on a database that already has them, before this column migration is replayed |
-| `apps/api/prisma/seed.ts` | modified (+167 −15) | backport | platform seed plus an app seed | #45, #47 | The added content is the `servers:*`/`sessions:*` permissions and their role grants; they come from `APP_PERMISSIONS` (see the workaround table) |
+| `apps/api/prisma/seed.ts` | modified (+167 −15) | backport | platform seed plus an app seed | #45, #47 | The added content is the `servers:*`/`sessions:*` permissions and their role grants; they now come from `APP_PERMISSIONS` (resolved by #44, see the workaround table) |
 | `apps/api/prisma/tsconfig.json` | modified (+5 −15) | noise | platform-db tooling | #45 | none |
 
 ## Not classified here
