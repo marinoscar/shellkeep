@@ -24,6 +24,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
+      - name: Check module classification
+        run: node scripts/platform-adoption/check-classification.mjs
       - run: npm run prisma:generate --workspace=api
       - run: npm run typecheck --workspace=api
       - run: npm run typecheck --workspace=web

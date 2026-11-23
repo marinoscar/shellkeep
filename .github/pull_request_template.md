@@ -2,9 +2,11 @@
 
 <!-- Brief description of the changes in this PR -->
 
-## Type of Change
+## Linked issue
 
-<!-- Mark the relevant option with an 'x' -->
+<!-- Fixes #123 / Relates to #123. Every feature or bug fix needs a tracking issue and its own worktree (see AGENTS.md). chore/docs/refactor need none. -->
+
+## Type of Change
 
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
@@ -13,46 +15,50 @@
 - [ ] Refactoring (no functional changes)
 - [ ] CI/CD or infrastructure change
 
-## Related Issues
-
-<!-- Link any related issues here using "Fixes #123" or "Relates to #123" -->
-
 ## Changes Made
 
-<!-- List the key changes made in this PR -->
-
 -
 -
 -
 
-## Testing
+## Checks run
 
-<!-- Describe the tests you ran to verify your changes -->
+<!-- Check the commands you ran; see docs/TESTING.md. Say why for any you could not run. -->
 
-- [ ] Unit tests pass (`npm test`)
-- [ ] Type checks pass (`npm run typecheck`)
-- [ ] E2E tests pass (if applicable)
-- [ ] Manual testing completed
+- [ ] `cd apps/api && npm test`
+- [ ] `cd apps/web && npm run test:run`
+- [ ] `npm run typecheck` in each app touched (`apps/api`, `apps/web`)
+- [ ] AI-config and docs-link guards (`apps/api/test/ai-assistant-config.spec.ts`, `apps/api/test/docs-links.spec.ts`)
+- [ ] OpenAPI regenerated and linted (routes changed)
+- [ ] Manual check (terminal I/O, reconnect, mobile key bar, touch scroll, keyboard inset at phone width) when the terminal UI or gateway changed
 
-### Test Instructions
+## Migrations
 
-<!-- If manual testing is needed, provide steps to test -->
+<!-- Check the one that applies -->
 
-1.
-2.
-3.
+- [ ] No database change
+- [ ] New migration added (never edit an applied or installed one); applied to an empty database and to one with prior migrations
+- [ ] Platform migration or `platform.lock` change (at most one open PR may carry this)
 
-## Screenshots
+## Docs updated
 
-<!-- If applicable, add screenshots to help explain your changes -->
+<!-- Check the one that applies -->
+
+- [ ] Spec (`docs/specs/*.md`)
+- [ ] Runbook (`docs/runbooks/*.md`)
+- [ ] README or `docs/*.md`
+- [ ] AGENTS.md / CLAUDE.md
+- [ ] None needed
+
+## Rollback
+
+<!-- How to undo this change safely: revert the PR, and anything else (migration down-path, setting to flip, data to restore). If a revert is not enough, say so. -->
 
 ## Checklist
 
-- [ ] My code follows the project's coding standards
 - [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
 - [ ] My changes generate no new warnings
+- [ ] No secrets, SSH credentials, hostnames or user data in code, tests, logs or examples
 - [ ] Any dependent changes have been merged and published
 
 ## Additional Notes

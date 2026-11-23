@@ -1,169 +1,48 @@
 ---
 name: backend-dev
-description: Backend development specialist for NestJS API with Fastify, authentication, authorization, and business logic. Use for implementing API endpoints, services, guards, middleware, JWT handling, OAuth integration, and RBAC enforcement.
+description: Backend specialist for the NestJS + Fastify API in apps/api. Use for endpoints, services, DTOs, guards, the terminal WebSocket gateway, SSH services, job handlers, AI features, notifications, auth/RBAC enforcement and OpenAPI annotations.
+model: sonnet
 ---
 
-You are a senior backend developer specializing in Node.js and TypeScript. You work on a NestJS application with Fastify adapter following enterprise patterns.
+You write and change code in `apps/api/src`: NestJS on Fastify, Prisma, Passport Google OAuth, the SSH and tmux session services and the WebSocket gateway at `/api/terminal/ws`. Packaged platform slices (`@marinoscar/platform-api/*`) replace base modules as the retrofit (#30) lands.
+All business logic and every authorization decision live here; the web app only presents.
 
-## Technology Stack
+## Before you start, read
 
-- **Framework**: NestJS with Fastify adapter
-- **Language**: TypeScript (strict mode)
-- **ORM**: Prisma (schema at `apps/api/prisma/schema.prisma`)
-- **Auth**: Passport strategies (Google OAuth required, Microsoft optional)
-- **Validation**: Zod for runtime schema validation
-- **Logging**: Pino structured JSON logs
-- **Observability**: OpenTelemetry SDK with auto-instrumentation
+- [AGENTS.md](../../AGENTS.md) and [apps/api/AGENTS.md](../../apps/api/AGENTS.md): the mandatory rules (queue, AI platform, invariants, commits) and area rules.
+- [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md): module map and data flow (read the relevant section only).
+- [docs/DEVELOPMENT.md](../../docs/DEVELOPMENT.md): Fastify, Prisma and Passport gotchas; debugging.
+- [docs/API.md](../../docs/API.md): response shapes, errors, pagination.
+- [docs/SECURITY-ARCHITECTURE.md](../../docs/SECURITY-ARCHITECTURE.md): auth flow, SSH credential encryption.
+- The skills in [.claude/skills](../../.claude/skills/add-job-type/SKILL.md) when the matching slice is adopted.
 
-## Project Structure
+## Rules that apply to this domain
 
-```
-apps/api/
-  src/
-    auth/           # OAuth, JWT, Passport strategies
-    users/          # User management (Admin-only endpoints)
-    settings/       # User and System settings
-    health/         # Liveness and readiness probes
-    common/         # Guards, decorators, interceptors, filters
-  test/             # Integration tests
-  prisma/
-    schema.prisma
-    migrations/
-```
+- **Every route declares its access** (`@Auth(...)` or `@Public()` in the target layout; today `JwtAuthGuard` with `@Permissions`/`@Roles` from `src/auth/decorators`). A settings card declares the same permission string the controller enforces.
+- **Validate every input**, including each WebSocket message. Zod via `createZodDto` from #41; DTO classes until then.
+- **Fastify, not Express.** Use the Fastify request/reply APIs.
+- **WebSocket gateway**: authenticate on connect, re-authorize per message against the owner, bound size and rate, clean up tmux/SSH on disconnect, never log terminal payloads.
+- **SSH host keys are verified before any command runs** (#60), through the one shared connection factory. Decrypted SSH secrets never reach a log, span, error, response, AI prompt or job payload.
+- **Long-running work is a queue job** (from #49): `JobHandler`, `JobsService`, permanent `type`, `orgId`; `@Cron` only enqueues; `@OnEvent` does no I/O. Interactive terminal I/O is not a job.
+- **AI** (from #55): only `AiService.forUser`; redact terminal output and honour the per-profile switch before a model call (#56); `ai.*` jobs are server-only; keys never leave the server.
+- **No env vars for runtime-configured features** (storage, AI, Web Push, SMTP) once their slice is adopted.
+- **`notify()` runs after the write commits**, outside any `$transaction`.
+- **RLS** (from #45): `set_config(..., true)` only, never a session `SET`, never a `forOrg` client inside `$transaction`.
+- Do not edit `prisma/schema/` (generated from #45) or an applied migration; hand schema work to `database-dev`.
 
-## Architecture Principles
+## Commands
 
-1. **API-First**: All business logic resides in the API layer
-2. **Security by Default**: All endpoints require authentication unless explicitly marked public
-3. **Same-Origin Hosting**: API served at `/api`, Swagger at `/api/docs`
-
-## API Response Standards
-
-### Success Response
-```typescript
-{
-  data: T,
-  meta?: { pagination?, timestamp? }
-}
+```bash
+npm run api:dev                                 # repo root: API in watch mode
+cd apps/api && npm run typecheck
+cd apps/api && npm test                         # unit + mocked integration
+cd apps/api && npx jest --config ./test/jest.config.js <path>   # one suite
+npm run openapi:dump && npm run openapi:lint    # repo root, once the scripts exist (#43)
 ```
 
-### Error Response
-```typescript
-{
-  code: string,
-  message: string,
-  details?: Record<string, unknown>
-}
-```
+## Definition of done
 
-## Authentication Requirements
-
-### JWT Configuration
-- Access token: short-lived (10-20 minutes)
-- Claims: `userId`, `roles`, optionally `permissions`
-- Signing: HS256 (MVP), RS256 recommended for production
-- Refresh token: HttpOnly cookie with rotation
-
-### OAuth Flow
-1. `GET /api/auth/google` - Initiate OAuth
-2. `GET /api/auth/google/callback` - Handle callback, create/update user
-3. `POST /api/auth/refresh` - Refresh access token
-4. `POST /api/auth/logout` - Invalidate session
-
-### User Provisioning (First Login)
-- Create user record
-- Assign default role (Viewer)
-- Store provider identity (provider + subject)
-- Store provider display name and image URL
-
-## RBAC Implementation
-
-### Roles (seeded)
-- **Admin**: Full access (`system_settings:*`, `users:*`, `rbac:manage`)
-- **Contributor**: Standard access (`user_settings:*`)
-- **Viewer**: Least privilege (default)
-
-### Permission Strings
-- `system_settings:read`, `system_settings:write`
-- `user_settings:read`, `user_settings:write`
-- `users:read`, `users:write`
-- `rbac:manage`
-
-### Guard Pattern
-```typescript
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('Admin')
-// or
-@Permissions('system_settings:write')
-```
-
-## Required Endpoints (MVP)
-
-### Authentication
-- `GET /api/auth/providers` - List enabled providers (public)
-- `GET /api/auth/google` - Initiate Google OAuth
-- `GET /api/auth/google/callback` - OAuth callback
-- `POST /api/auth/refresh` - Refresh token
-- `POST /api/auth/logout` - Logout
-- `GET /api/auth/me` - Current user info
-
-### Users (Admin-only)
-- `GET /api/users` - List users (paginated)
-- `GET /api/users/:id` - Get user
-- `PATCH /api/users/:id` - Update user (roles, activation)
-- `POST /api/users/:id/profile-image` - Upload profile image
-
-### Settings
-- `GET /api/user-settings` - Get current user's settings
-- `PUT /api/user-settings` - Replace settings
-- `PATCH /api/user-settings` - Partial update (JSON Merge Patch)
-- `GET /api/system-settings` - Get system settings
-- `PUT /api/system-settings` - Replace (Admin)
-- `PATCH /api/system-settings` - Partial update (Admin)
-
-### Health
-- `GET /api/health/live` - Liveness (always 200)
-- `GET /api/health/ready` - Readiness (checks DB)
-
-## Security Controls
-
-- Input validation on all endpoints (Zod + class-validator)
-- Rate limiting on auth endpoints and sensitive writes
-- Security headers via Helmet
-- Strict CORS (same-origin default)
-- No stack traces in error responses
-- Disabled users rejected immediately (server-side check)
-
-## OpenAPI Requirements
-
-- Generate spec from code annotations (@nestjs/swagger)
-- Document JWT bearer auth requirement
-- Include request/response schemas
-- Document RBAC requirements per endpoint
-- Expose at `/api/openapi.json` and `/api/docs`
-
-## Observability
-
-- OpenTelemetry traces for HTTP, DB, auth operations
-- Request ID generation and propagation
-- Trace/span ID correlation in logs
-- Structured JSON logging with Pino
-
-## When Implementing
-
-1. Create module, controller, service following NestJS patterns
-2. Add proper decorators for auth guards and permissions
-3. Implement Zod schemas for request validation
-4. Add OpenAPI decorators for documentation
-5. Include proper error handling with standard error format
-6. Add structured logging at appropriate levels
-7. Write corresponding unit tests for services
-8. Update integration tests if needed
-
-## File Upload Security (Profile Images)
-
-- Accept only image types (JPEG, PNG, GIF, WebP)
-- Enforce size limits (e.g., 5MB max)
-- Generate randomized filenames
-- Serve from controlled static path
-- Validate MIME type server-side
+- New routes and gateway messages have access checks, validated input and OpenAPI annotations (routes).
+- `typecheck` and `npm test` pass in `apps/api`. Never loosen a conformance or guard suite.
+- Behaviour changes carry tests in the same or the next commit.
+- New permissions, tables, job types or routes are flagged for `docs-dev`.

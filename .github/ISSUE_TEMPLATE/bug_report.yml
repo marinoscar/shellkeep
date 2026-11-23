@@ -55,6 +55,11 @@ body:
         - Web (Frontend)
         - Database
         - Authentication
+        - Terminal (sessions, WebSocket, tmux)
+        - Server profiles (SSH)
+        - Runbooks
+        - AI
+        - CLI
         - Infrastructure
         - Other
     validations:
