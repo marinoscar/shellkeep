@@ -31,6 +31,14 @@ jobs:
       - run: npm run typecheck --workspace=web
       - run: npm run lint --workspace=api --if-present
       - run: npm run lint --workspace=web --if-present
+      - name: Platform pin (one exact version everywhere)
+        run: npm run check:platform-pin
+      - name: Platform pin check self-test
+        run: npm run test:scripts
+      - name: Single instance of shared dependencies
+        run: npm run check:single-instance
+      - name: No deep imports into platform packages
+        run: npm run check:platform-imports
 
   test:
     name: Tests
