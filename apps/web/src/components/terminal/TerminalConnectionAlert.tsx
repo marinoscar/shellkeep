@@ -2,13 +2,15 @@ import { useCallback } from 'react';
 import { Alert, Box, Button } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@marinoscar/platform-web/identity/headless';
-import { EXPIRED_MESSAGE, FORBIDDEN_MESSAGE } from '../../services/terminal-ws';
+import { EXPIRED_MESSAGE, FORBIDDEN_MESSAGE, MAINTENANCE_MESSAGE } from '../../services/terminal-ws';
 
 interface TerminalConnectionAlertProps {
   /** The terminal's error (`TerminalView`'s `onError`), or `null` for none. */
   error: string | null;
   /** Hide a recoverable error; the final ones (expired, forbidden) cannot be dismissed. */
   onDismiss?: () => void;
+  /** Open a fresh socket; offered on the maintenance refusal (#46). */
+  onRetry?: () => void;
 }
 
 /**
@@ -19,9 +21,11 @@ interface TerminalConnectionAlertProps {
  * - Expired session: "Sign in again" ends the dead session and opens the login
  *   page, which returns to this terminal after sign-in.
  * - Forbidden: the role cannot open a terminal; "Back to sessions".
+ * - Maintenance (#46): a window is open and the gateway refuses new sessions;
+ *   the socket does not reconnect by itself, and "Retry" tries once more.
  * - Anything else: a dismissible error; a later successful connect clears it.
  */
-export function TerminalConnectionAlert({ error, onDismiss }: TerminalConnectionAlertProps) {
+export function TerminalConnectionAlert({ error, onDismiss, onRetry }: TerminalConnectionAlertProps) {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,6 +42,7 @@ export function TerminalConnectionAlert({ error, onDismiss }: TerminalConnection
 
   const expired = error === EXPIRED_MESSAGE;
   const forbidden = error === FORBIDDEN_MESSAGE;
+  const maintenance = error === MAINTENANCE_MESSAGE;
 
   let action;
   if (expired) {
@@ -46,6 +51,12 @@ export function TerminalConnectionAlert({ error, onDismiss }: TerminalConnection
         Sign in again
       </Button>
     );
+  } else if (maintenance) {
+    action = onRetry ? (
+      <Button color="inherit" size="small" onClick={onRetry}>
+        Retry
+      </Button>
+    ) : undefined;
   } else if (forbidden) {
     action = (
       <Button color="inherit" size="small" onClick={() => navigate('/sessions')}>
@@ -69,10 +80,11 @@ export function TerminalConnectionAlert({ error, onDismiss }: TerminalConnection
     >
       <Alert
         data-testid="terminal-connection-alert"
-        severity={forbidden ? 'warning' : 'error'}
+        data-variant={maintenance ? 'maintenance' : expired ? 'expired' : forbidden ? 'forbidden' : 'error'}
+        severity={maintenance ? 'info' : forbidden ? 'warning' : 'error'}
         variant="filled"
         action={action}
-        onClose={expired || forbidden ? undefined : onDismiss}
+        onClose={expired || forbidden || maintenance ? undefined : onDismiss}
         sx={{ pointerEvents: 'auto', maxWidth: 640, width: '100%', boxShadow: 3 }}
       >
         {error}
