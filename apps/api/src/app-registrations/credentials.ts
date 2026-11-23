@@ -19,9 +19,12 @@
 // =============================================================================
 
 import {
+  registerCredentialPurpose,
   registerUserCredentialPurpose,
   type UserCredentialPurposeDef,
 } from '@marinoscar/platform-api/credentials';
+
+import { STORAGE_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/storage';
 
 import { SSH_CREDENTIAL_PURPOSE } from '../server-profiles/ssh-credentials';
 
@@ -42,5 +45,7 @@ let registered = false;
 export function registerShellkeepCredentialPurposes(): void {
   if (registered) return;
   registered = true;
+  // The deployment's object-storage secret access key (the storage slice's own definition, #50).
+  registerCredentialPurpose(STORAGE_CREDENTIAL_PURPOSE_DEF);
   for (const def of APP_USER_CREDENTIAL_PURPOSES) registerUserCredentialPurpose(def);
 }
