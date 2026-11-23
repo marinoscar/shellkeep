@@ -10,6 +10,7 @@ import { Readable } from 'stream';
 
 import { ObjectsService } from './objects.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DefaultOrgResolver } from '../../prisma/default-org.resolver';
 import { STORAGE_PROVIDER } from '../providers/storage-provider.interface';
 import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/prisma.mock';
 import { createMockStorageProvider } from '../../../test/mocks/storage-provider.mock';
@@ -58,6 +59,7 @@ describe('ObjectsService', () => {
         { provide: STORAGE_PROVIDER, useValue: mockStorageProvider },
         { provide: ConfigService, useValue: mockConfig },
         { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: DefaultOrgResolver, useValue: { resolve: jest.fn().mockResolvedValue('org-default') } },
       ],
     }).compile();
 

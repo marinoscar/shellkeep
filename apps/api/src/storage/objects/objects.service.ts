@@ -15,6 +15,7 @@ import { extname } from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { STORAGE_PROVIDER } from '../providers/storage-provider.interface';
+import { DefaultOrgResolver } from '../../prisma/default-org.resolver';
 import type { StorageProvider } from '../providers/storage-provider.interface';
 import {
   InitUploadDto,
@@ -58,6 +59,7 @@ export class ObjectsService {
     private readonly storageProvider: StorageProvider,
     private readonly config: ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly defaultOrg: DefaultOrgResolver,
   ) {}
 
   /**
@@ -106,6 +108,7 @@ export class ObjectsService {
     // Create StorageObject record
     const storageObject = await this.prisma.storageObject.create({
       data: {
+        orgId: await this.defaultOrg.resolve(),
         name,
         size: BigInt(size),
         mimeType,
@@ -231,6 +234,7 @@ export class ObjectsService {
           },
           create: {
             objectId,
+            orgId: storageObject.orgId,
             partNumber: part.partNumber,
             eTag: part.eTag,
             size: BigInt(0), // We don't know exact part size from client
@@ -343,6 +347,7 @@ export class ObjectsService {
     // Use a default size of 0, should be updated in post-processing
     const storageObject = await this.prisma.storageObject.create({
       data: {
+        orgId: await this.defaultOrg.resolve(),
         name: filename,
         size: BigInt(0), // Will be updated by post-processing
         mimeType: mimetype,
