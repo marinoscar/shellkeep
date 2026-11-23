@@ -35,6 +35,7 @@
     "db:policies": "platform db policies",
     "db:promote": "platform db promote",
     "db:test": "node scripts/test-db-connection.js",
+    "ssh:migrate-secrets": "node scripts/ssh-secrets-migrate.js",
     "catalog:permissions": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-permission-catalog.ts",
     "catalog:settings": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-settings-catalog.ts"
   },
