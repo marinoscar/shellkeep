@@ -49,8 +49,33 @@ export const userSettingsSchema = z.object({
 
 export type UserSettingsDto = z.infer<typeof userSettingsSchema>;
 
-// Partial schema for PATCH operations
-export const userSettingsPatchSchema = userSettingsSchema.deepPartial();
+// Partial schema for PATCH operations. Written out by hand: zod 4 removed
+// `.deepPartial()`.
+export const userSettingsPatchSchema = z.object({
+  theme: z.enum(['light', 'dark', 'system']).optional(),
+  profile: z
+    .object({
+      displayName: z.string().max(100).optional(),
+      useProviderImage: z.boolean().optional(),
+      customImageUrl: z.string().url().nullable().optional(),
+    })
+    .optional(),
+  terminal: z
+    .object({
+      showScrollButtons: z.boolean().optional(),
+      keyShortcuts: z
+        .array(
+          z.object({
+            id: z.string().uuid().optional(),
+            label: z.string().min(1).max(40).optional(),
+            keystrokes: z.array(keystrokeSchema.partial()).min(1).max(3).optional(),
+          }),
+        )
+        .max(50)
+        .optional(),
+    })
+    .optional(),
+});
 
 // =============================================================================
 // System Settings Schema
@@ -65,5 +90,12 @@ export const systemSettingsSchema = z.object({
 
 export type SystemSettingsDto = z.infer<typeof systemSettingsSchema>;
 
-// Partial schema for PATCH operations
-export const systemSettingsPatchSchema = systemSettingsSchema.deepPartial();
+// Partial schema for PATCH operations (hand-written: no `.deepPartial()` in zod 4)
+export const systemSettingsPatchSchema = z.object({
+  ui: z
+    .object({
+      allowUserThemeOverride: z.boolean().optional(),
+    })
+    .optional(),
+  features: z.record(z.string(), z.boolean().optional()).optional(),
+});
