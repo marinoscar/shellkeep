@@ -89,7 +89,9 @@ export function SessionCard({ session, onOpen, onRename, onTerminate, selected, 
           />
         </Box>
 
-        <Typography variant="body2" color="text.secondary" noWrap>
+        <Typography variant="body2" noWrap sx={{
+          color: "text.secondary"
+        }}>
           {serverInfo}
         </Typography>
 
@@ -100,7 +102,13 @@ export function SessionCard({ session, onOpen, onRename, onTerminate, selected, 
           variant="filled"
         />
 
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            display: 'block',
+            mt: 1
+          }}>
           Last activity: {getRelativeTime(session.lastActivityAt)}
         </Typography>
       </CardContent>

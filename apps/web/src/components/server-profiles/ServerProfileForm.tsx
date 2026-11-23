@@ -204,7 +204,9 @@ export function ServerProfileForm({
               onChange={(e) => setPort(parseInt(e.target.value, 10) || 22)}
               disabled={isSubmitting}
               sx={{ mb: 2 }}
-              inputProps={{ min: 1, max: 65535 }}
+              slotProps={{
+                htmlInput: { min: 1, max: 65535 }
+              }}
             />
             <TextField
               label="Username"
@@ -318,7 +320,13 @@ export function ServerProfileForm({
               helperText="Comma-separated list of tags"
             />
             <Box sx={{ mt: 2 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  mb: 1,
+                  display: 'block'
+                }}>
                 Color Label
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>

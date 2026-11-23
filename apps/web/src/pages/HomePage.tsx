@@ -27,7 +27,11 @@ export default function HomePage() {
         <Typography variant="h4" component="h1" gutterBottom>
           Welcome back{user?.displayName ? `, ${user.displayName}` : ''}
         </Typography>
-        <Typography color="text.secondary" paragraph>
+        <Typography
+          sx={{
+            color: "text.secondary",
+            marginBottom: "16px"
+          }}>
           ShellKeep Control Center
         </Typography>
 
@@ -37,12 +41,12 @@ export default function HomePage() {
         {/* Main Grid */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
           {/* Active Sessions Panel */}
-          <Grid item xs={12} md={8}>
+          <Grid size={{ xs: 12, md: 8 }}>
             <ActiveSessionsPanel />
           </Grid>
 
           {/* Quick Connect Panel */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <QuickConnectPanel />
           </Grid>
         </Grid>

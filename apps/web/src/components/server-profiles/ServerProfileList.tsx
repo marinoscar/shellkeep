@@ -167,7 +167,9 @@ export function ServerProfileList({
         </Box>
       ) : profiles.length === 0 ? (
         <Box sx={{ p: 4, textAlign: 'center' }}>
-          <Typography color="text.secondary">
+          <Typography sx={{
+            color: "text.secondary"
+          }}>
             {search
               ? 'No servers found matching your search'
               : 'No server profiles yet. Click "Add Server" to create one.'}
@@ -214,7 +216,9 @@ export function ServerProfileList({
                           ))}
                         </Box>
                       ) : (
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                          color: "text.secondary"
+                        }}>
                           -
                         </Typography>
                       )}

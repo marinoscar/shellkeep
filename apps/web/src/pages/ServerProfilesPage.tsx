@@ -59,7 +59,12 @@ export default function ServerProfilesPage() {
             Server Profiles
           </Typography>
         </Box>
-        <Typography color="text.secondary" sx={{ ml: 6, mb: 2 }}>
+        <Typography
+          sx={{
+            color: "text.secondary",
+            ml: 6,
+            mb: 2
+          }}>
           Manage SSH server connections
         </Typography>
 

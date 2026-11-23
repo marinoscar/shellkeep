@@ -63,7 +63,9 @@ export function QuickConnectPanel() {
         ) : profiles.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 3 }}>
             <DnsIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-            <Typography color="text.secondary" variant="body2">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               Add a server to get started.
             </Typography>
             <Button
@@ -89,9 +91,10 @@ export function QuickConnectPanel() {
                 <ListItemText
                   primary={profile.name}
                   secondary={`${profile.username}@${profile.hostname}:${profile.port}`}
-                  primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
-                  secondaryTypographyProps={{ noWrap: true, variant: 'caption' }}
-                />
+                  slotProps={{
+                    primary: { noWrap: true, variant: 'body2' },
+                    secondary: { noWrap: true, variant: 'caption' }
+                  }} />
                 <ListItemSecondaryAction>
                   <Button
                     size="small"

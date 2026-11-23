@@ -14,8 +14,8 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
-  AddCircleOutline as AddCircleIcon,
-  DeleteOutline as DeleteIcon,
+  AddCircleOutlineOutlined as AddCircleIcon,
+  DeleteOutlineOutlined as DeleteIcon,
 } from '@mui/icons-material';
 import { KeyShortcut, Keystroke } from '../../types';
 import { useUserSettings } from '../../hooks/useUserSettings';
@@ -142,7 +142,12 @@ export function KeyShortcutsSettings({ disabled = false }: KeyShortcutsSettingsP
         <Typography variant="h6" gutterBottom>
           Key Shortcuts
         </Typography>
-        <Typography variant="body2" color="text.secondary" paragraph>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            marginBottom: "16px"
+          }}>
           Configure custom key sequences sent to the terminal. Shortcuts appear
           in the terminal toolbar and can be tapped on mobile.
         </Typography>
@@ -153,11 +158,12 @@ export function KeyShortcutsSettings({ disabled = false }: KeyShortcutsSettingsP
               <Stack
                 direction="row"
                 spacing={1}
-                alignItems="flex-start"
-                flexWrap="wrap"
                 useFlexGap
-                sx={{ gap: 1 }}
-              >
+                sx={{
+                  alignItems: "flex-start",
+                  flexWrap: "wrap",
+                  gap: 1
+                }}>
                 {/* Label field */}
                 <TextField
                   size="small"
@@ -165,8 +171,10 @@ export function KeyShortcutsSettings({ disabled = false }: KeyShortcutsSettingsP
                   value={shortcut.label}
                   onChange={(e) => updateShortcut(si, { label: e.target.value })}
                   disabled={isDisabled}
-                  inputProps={{ 'aria-label': `shortcut ${si + 1} label` }}
                   sx={{ width: { xs: '100%', sm: 140 } }}
+                  slotProps={{
+                    htmlInput: { 'aria-label': `shortcut ${si + 1} label` }
+                  }}
                 />
 
                 {/* Keystrokes */}

@@ -70,10 +70,14 @@ export function ActiveSessionsPanel() {
         ) : sessions.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 3 }}>
             <TerminalIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-            <Typography color="text.secondary" variant="body2">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               No active sessions.
             </Typography>
-            <Typography color="text.secondary" variant="body2">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               Start one from your saved servers.
             </Typography>
           </Box>
@@ -93,9 +97,10 @@ export function ActiveSessionsPanel() {
                 <ListItemText
                   primary={session.name}
                   secondary={`${session.serverProfile.username}@${session.serverProfile.hostname} - ${getRelativeTime(session.lastActivityAt)}`}
-                  primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
-                  secondaryTypographyProps={{ noWrap: true, variant: 'caption' }}
-                />
+                  slotProps={{
+                    primary: { noWrap: true, variant: 'body2' },
+                    secondary: { noWrap: true, variant: 'caption' }
+                  }} />
                 <ListItemSecondaryAction>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <Chip
