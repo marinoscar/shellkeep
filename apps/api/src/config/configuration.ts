@@ -1,4 +1,5 @@
 import { identityConfiguration } from '@marinoscar/platform-api/identity';
+import { jobsConfiguration } from '@marinoscar/platform-api/jobs';
 
 export default () => {
   // Construct DATABASE_URL from individual PostgreSQL variables
@@ -39,6 +40,9 @@ export default () => {
   // GOOGLE_CALLBACK_URL, INITIAL_ADMIN_EMAIL, DEVICE_CODE_EXPIRY_MINUTES,
   // DEVICE_CODE_POLL_INTERVAL). TENANCY_MODE is unset: single organization.
   ...identityConfiguration(),
+
+  // The jobs and nodes slices (#49): `jobs.*` and `nodes.*`, built from JOBS_* and NODE_*_ENABLED.
+  ...jobsConfiguration(process.env),
 
   // Observability
   otel: {

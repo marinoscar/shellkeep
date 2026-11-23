@@ -13,6 +13,12 @@
 
 import { MAINTENANCE_SYSTEM_SETTINGS } from '@marinoscar/platform-api/host';
 import {
+  JOBS_SYSTEM_SETTINGS,
+  RETENTION_SYSTEM_SETTINGS,
+  registerRetentionPolicy,
+} from '@marinoscar/platform-api/jobs';
+import { NODES_SYSTEM_SETTINGS } from '@marinoscar/platform-api/nodes';
+import {
   assembleSystemSettingsNamespaces,
   assembleUserSettingsNamespaces,
   registerSystemSettingsNamespaces,
@@ -28,6 +34,11 @@ import {
   APP_USER_SETTINGS_EXTENSIONS,
   APP_USER_SETTINGS_NAMESPACES,
 } from '../../app-registrations/settings';
+import { APP_RETENTION_POLICIES } from '../../app-registrations/jobs';
+
+// The app's retention policies BEFORE anything reads RETENTION_SYSTEM_SETTINGS: the
+// namespace is composed once, from the policies registered by then. None yet.
+for (const policy of APP_RETENTION_POLICIES) registerRetentionPolicy(policy);
 
 /** The platform's system namespaces this app registers ahead of its own. None yet. */
 export const PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [];
@@ -35,12 +46,18 @@ export const PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespa
 /**
  * The platform's system namespaces appended AFTER the app's own, so the stored key order
  * of the `global` row stays the app's own namespaces first, then the platform's additions:
- * `maintenance` (the host slice, #46). Registered here, before `SettingsModule.forRoot()`
+ * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49). Registered here, before `SettingsModule.forRoot()`
  * composes the request bodies, so the host core does not have to (its `forRoot()` registers
  * the namespace only when nothing did).
  */
 export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [
   MAINTENANCE_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The jobs slice's `jobs` and `retention` and the nodes slice's `nodes` (#49), appended for the
+  // same reason: `JobsModule.forRoot()` and `NodesModule.forRoot()` register them only when
+  // nothing did, and the stored key order of the `global` row must stay append-only.
+  JOBS_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  NODES_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  RETENTION_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
 /** The platform's optional user namespaces this app registers. None yet. */
