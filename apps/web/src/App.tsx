@@ -9,13 +9,6 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { InstallPrompt, MaintenanceGate, UpdatePrompt } from '@marinoscar/platform-web/host/ui';
 import { APP_NAME } from './config/app';
-import {
-  ABOUT_PATH,
-  ADMIN_HUB_PATH,
-  ADMIN_HUB_PERMISSIONS,
-  MAINTENANCE_PATH,
-  TERMINAL_SYSTEM_SETTINGS_PATH,
-} from './config/adminSections';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
 import { AppPlatformHostProvider } from './platform/platformHost';
 
@@ -157,17 +150,19 @@ function AppRoutes() {
                   <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
                   {/* Admin settings (#46): every card of ADMIN_SECTIONS has a route
                       here, gated on the card's permission (the string its API
-                      controller enforces). The hub admits any card's permission. */}
+                      controller enforces). The hub admits any card's permission
+                    (`ADMIN_HUB_PERMISSIONS`). Paths are spelled out: the
+                    registry test parses this file as text. */}
                   <Route
-                    path={ADMIN_HUB_PATH}
+                    path="/admin/settings"
                     element={
-                      <RequirePermission permissions={ADMIN_HUB_PERMISSIONS} fallback={HOME}>
+                      <RequirePermission permissions={['system_settings:read', 'users:read']} fallback={HOME}>
                         <AdminSettingsHubPage />
                       </RequirePermission>
                     }
                   />
                   <Route
-                    path={ABOUT_PATH}
+                    path="/admin/settings/about"
                     element={
                       <RequirePermission permission="system_settings:read" fallback={HOME}>
                         <AboutPage />
@@ -175,7 +170,7 @@ function AppRoutes() {
                     }
                   />
                   <Route
-                    path={MAINTENANCE_PATH}
+                    path="/admin/settings/maintenance"
                     element={
                       <RequirePermission permission="system_settings:read" fallback={HOME}>
                         <MaintenancePage />
@@ -183,7 +178,7 @@ function AppRoutes() {
                     }
                   />
                   <Route
-                    path={TERMINAL_SYSTEM_SETTINGS_PATH}
+                    path="/admin/settings/terminal"
                     element={
                       <RequirePermission permission="system_settings:read" fallback={HOME}>
                         <TerminalSystemSettingsPage />
