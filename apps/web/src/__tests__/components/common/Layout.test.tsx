@@ -34,8 +34,9 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-// Mock usePermissions hook for Sidebar
-vi.mock('../../../hooks/usePermissions', () => ({
+// Mock the identity slice's usePermissions hook for Sidebar
+vi.mock('@marinoscar/platform-web/identity/headless', async () => ({
+  ...(await vi.importActual('@marinoscar/platform-web/identity/headless')),
   usePermissions: vi.fn(() => ({
     permissions: new Set(),
     roles: new Set(),

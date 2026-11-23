@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Box, Container, Typography, Grid } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '@marinoscar/platform-web/identity/headless';
 import { SessionStatsBar } from '../components/home/SessionStatsBar';
 import { ActiveSessionsPanel } from '../components/home/ActiveSessionsPanel';
 import { QuickConnectPanel } from '../components/home/QuickConnectPanel';

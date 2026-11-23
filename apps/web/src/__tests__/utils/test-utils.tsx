@@ -4,10 +4,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { CssBaseline } from '@mui/material';
 import { vi } from 'vitest';
 
-// Import AuthContext and ThemeContextProvider
-import { AuthContext } from '../../contexts/AuthContext';
+// The packaged auth context (identity slice, issue #47) and the app's theme
+import {
+  AuthContext,
+  type AuthContextValue,
+  type AuthProviderInfo as AuthProviderType,
+} from '@marinoscar/platform-web/identity/headless';
 import { ThemeContextProvider } from '../../contexts/ThemeContext';
-import type { AuthProvider as AuthProviderType } from '../../types';
 
 interface WrapperOptions {
   route?: string;
@@ -80,14 +83,19 @@ function MockAuthProvider({
   isLoading = false,
   providers = defaultMockProviders,
 }: MockAuthProviderProps) {
-  const contextValue = {
+  const contextValue: AuthContextValue = {
     user: authenticated ? user : null,
     isLoading,
     isAuthenticated: authenticated,
     providers,
+    sessionExpired: false,
     login: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     refreshUser: vi.fn().mockResolvedValue(undefined),
+    setAccessToken: vi.fn(),
+    activeOrg: null,
+    memberships: [],
+    switchOrg: vi.fn().mockResolvedValue(undefined),
   };
 
   return (

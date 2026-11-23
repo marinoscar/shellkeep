@@ -12,7 +12,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { usePermissions } from '../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import {
   DESTINATIONS,
   isDestinationVisible,
@@ -32,9 +32,9 @@ export function Sidebar({ open, onClose, destinations = DESTINATIONS }: SidebarP
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const { permissions, roles } = usePermissions();
+  const { hasPermission } = usePermissions();
 
-  const menuItems = destinations.filter((d) => isDestinationVisible(d, permissions, roles));
+  const menuItems = destinations.filter((d) => isDestinationVisible(d, hasPermission));
 
   const handleNavigate = useCallback(
     (path: string) => {

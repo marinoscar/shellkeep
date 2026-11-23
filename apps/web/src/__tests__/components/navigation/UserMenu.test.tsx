@@ -5,11 +5,12 @@ import { render, mockUser, mockAdminUser } from '../../utils/test-utils';
 import { UserMenu } from '../../../components/navigation/UserMenu';
 
 // Mock usePermissions hook
-vi.mock('../../../hooks/usePermissions', () => ({
-  usePermissions: vi.fn(),
-}));
+vi.mock('@marinoscar/platform-web/identity/headless', async () => {
+  const actual = await vi.importActual('@marinoscar/platform-web/identity/headless');
+  return { ...actual, usePermissions: vi.fn() };
+});
 
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 
 const mockUsePermissions = vi.mocked(usePermissions);
 

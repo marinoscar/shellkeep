@@ -17,12 +17,33 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-// Mock usePermissions hook
-vi.mock('../../../hooks/usePermissions', () => ({
-  usePermissions: vi.fn(),
-}));
+// Mock the identity slice's usePermissions hook (issue #47)
+vi.mock('@marinoscar/platform-web/identity/headless', async () => {
+  const actual = await vi.importActual('@marinoscar/platform-web/identity/headless');
+  return { ...actual, usePermissions: vi.fn() };
+});
 
-import { usePermissions } from '../../../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
+
+/** What a contributor or viewer holds on the navigation's destinations. */
+const MEMBER_PERMISSIONS = ['sessions:read', 'servers:read'];
+/** What an administrator holds: also `users:read`, the User Management gate. */
+const ADMIN_PERMISSIONS = [...MEMBER_PERMISSIONS, 'users:read'];
+
+/** A `usePermissions()` result whose predicates answer from `perms`. */
+function permissionsFor(perms: string[], roles: string[] = []) {
+  const set = new Set(perms);
+  return {
+    permissions: set,
+    roles: new Set(roles),
+    hasPermission: (p: string) => set.has(p),
+    hasAnyPermission: (...ps: string[]) => ps.some((p) => set.has(p)),
+    hasAllPermissions: (...ps: string[]) => ps.every((p) => set.has(p)),
+    hasRole: (r: string) => roles.includes(r),
+    hasAnyRole: (...rs: string[]) => rs.some((r) => roles.includes(r)),
+    isAdmin: roles.includes('admin'),
+  };
+}
 
 describe('Sidebar', () => {
   const mockOnClose = vi.fn();
@@ -34,16 +55,7 @@ describe('Sidebar', () => {
 
   describe('Rendering', () => {
     it('should render Drawer component even when open is false', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       // The key test: calling render should work without the component returning null
       // Even though drawer content won't be in DOM with keepMounted: false and open: false,
@@ -56,16 +68,7 @@ describe('Sidebar', () => {
     });
 
     it('should render Drawer component when open is true', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -75,16 +78,7 @@ describe('Sidebar', () => {
     });
 
     it('should render visible menu items', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -95,16 +89,7 @@ describe('Sidebar', () => {
     });
 
     it('should not render admin menu items for non-admin users', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -112,17 +97,8 @@ describe('Sidebar', () => {
       expect(container.textContent).not.toContain('User Management');
     });
 
-    it('should render admin menu items for admin users', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(['admin']),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
+    it('should render admin menu items for holders of users:read', () => {
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(ADMIN_PERMISSIONS, ['admin']));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />, {
         wrapperOptions: { user: mockAdminUser },
@@ -138,16 +114,7 @@ describe('Sidebar', () => {
 
   describe('ModalProps Configuration', () => {
     it('should have keepMounted set to false', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -157,16 +124,7 @@ describe('Sidebar', () => {
     });
 
     it('should have disablePortal set to true', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -178,16 +136,7 @@ describe('Sidebar', () => {
 
   describe('Menu Item Visibility Filtering', () => {
     it('should filter menu items based on visibility property', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -197,16 +146,7 @@ describe('Sidebar', () => {
     });
 
     it('should show all menu items when user is admin', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(['admin']),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(ADMIN_PERMISSIONS, ['admin']));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />, {
         wrapperOptions: { user: mockAdminUser },
@@ -217,33 +157,15 @@ describe('Sidebar', () => {
       expect(menuButtons).toHaveLength(4);
     });
 
-    it('should dynamically update menu items when isAdmin changes', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+    it('should dynamically update menu items when users:read is granted', () => {
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { rerender, container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
       expect(container.textContent).not.toContain('User Management');
 
       // Update to admin
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(['admin']),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(ADMIN_PERMISSIONS, ['admin']));
 
       rerender(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -264,16 +186,7 @@ describe('Sidebar', () => {
         callOrder.push('navigate');
       });
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={trackingOnClose} />);
 
@@ -296,16 +209,7 @@ describe('Sidebar', () => {
     it('should navigate to home when Dashboard menu item is clicked', async () => {
       const user = userEvent.setup();
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -321,16 +225,7 @@ describe('Sidebar', () => {
     it('should navigate to /sessions when Sessions menu item is clicked', async () => {
       const user = userEvent.setup();
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -346,16 +241,7 @@ describe('Sidebar', () => {
     it('should navigate to /servers when Servers menu item is clicked', async () => {
       const user = userEvent.setup();
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -371,16 +257,7 @@ describe('Sidebar', () => {
     it('should navigate to admin/users when User Management is clicked', async () => {
       const user = userEvent.setup();
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(['admin']),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(ADMIN_PERMISSIONS, ['admin']));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />, {
         wrapperOptions: { user: mockAdminUser },
@@ -400,16 +277,7 @@ describe('Sidebar', () => {
     it('should highlight current route', () => {
       mockLocation.pathname = '/sessions';
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -421,16 +289,7 @@ describe('Sidebar', () => {
     it('should not highlight non-current routes', () => {
       mockLocation.pathname = '/';
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -442,16 +301,7 @@ describe('Sidebar', () => {
     it('should highlight admin routes when on admin page', () => {
       mockLocation.pathname = '/admin/users';
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(['admin']),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(ADMIN_PERMISSIONS, ['admin']));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />, {
         wrapperOptions: { user: mockAdminUser },
@@ -465,16 +315,7 @@ describe('Sidebar', () => {
 
   describe('Drawer Close Behavior', () => {
     it('should pass onClose prop to Drawer', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -487,16 +328,7 @@ describe('Sidebar', () => {
     it('should call onClose for each menu item click', async () => {
       const user = userEvent.setup();
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -515,16 +347,7 @@ describe('Sidebar', () => {
 
   describe('Menu Icons', () => {
     it('should render icons for all menu items', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(['admin']),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: true,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(ADMIN_PERMISSIONS, ['admin']));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />, {
         wrapperOptions: { user: mockAdminUser },
@@ -538,16 +361,7 @@ describe('Sidebar', () => {
     it('should highlight icon for selected menu item', () => {
       mockLocation.pathname = '/sessions';
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -563,16 +377,7 @@ describe('Sidebar', () => {
 
   describe('Accessibility', () => {
     it('should render drawer with proper structure', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -582,16 +387,7 @@ describe('Sidebar', () => {
     });
 
     it('should have accessible button labels', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -604,16 +400,7 @@ describe('Sidebar', () => {
     it('should be keyboard navigable', async () => {
       const user = userEvent.setup();
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -631,16 +418,7 @@ describe('Sidebar', () => {
 
   describe('Regression Tests', () => {
     it('should NOT return null when open is false (critical bug fix)', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       // CRITICAL REGRESSION TEST:
       // Previously, the component conditionally returned null when open was false:
@@ -677,16 +455,7 @@ describe('Sidebar', () => {
         expect(drawerClosed).toBe(true);
       });
 
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={trackingOnClose} />);
 
@@ -704,16 +473,7 @@ describe('Sidebar', () => {
     });
 
     it('should maintain ModalProps configuration for backdrop click handling', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(MEMBER_PERMISSIONS));
 
       const { container } = render(<Sidebar open={true} onClose={mockOnClose} />);
 
@@ -729,16 +489,7 @@ describe('Sidebar', () => {
 
   describe('Destinations', () => {
     it('draws the destinations it is given, gated by permission', () => {
-      vi.mocked(usePermissions).mockReturnValue({
-        permissions: new Set(['reports:read']),
-        roles: new Set(),
-        hasPermission: vi.fn(),
-        hasAnyPermission: vi.fn(),
-        hasAllPermissions: vi.fn(),
-        hasRole: vi.fn(),
-        hasAnyRole: vi.fn(),
-        isAdmin: false,
-      });
+      vi.mocked(usePermissions).mockReturnValue(permissionsFor(['reports:read']));
       const Icon = () => <span data-testid="dest-icon" />;
 
       const { container } = render(
