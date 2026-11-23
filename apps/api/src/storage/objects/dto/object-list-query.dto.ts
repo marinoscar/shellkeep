@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { StorageObjectStatus } from '@prisma/client';
 import { ObjectResponseDto } from './object-response.dto';
 
 export const objectListQuerySchema = z.object({

@@ -40,13 +40,14 @@ export function FeatureFlagsList({ flags, onSave, disabled }: FeatureFlagsListPr
 
   const handleDelete = (key: string) => {
     setLocalFlags((prev) => {
-      const { [key]: _, ...rest } = prev;
+      const rest = { ...prev };
+      delete rest[key];
       return rest;
     });
   };
 
   const handleAddFlag = () => {
-    if (newFlagName && !localFlags.hasOwnProperty(newFlagName)) {
+    if (newFlagName && !Object.prototype.hasOwnProperty.call(localFlags, newFlagName)) {
       setLocalFlags((prev) => ({
         ...prev,
         [newFlagName]: false,

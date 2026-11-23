@@ -58,7 +58,7 @@ export function useSystemSettings(): UseSystemSettingsReturn {
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
           await fetchSettings();
-          throw new Error('Settings were updated elsewhere. Please review and try again.');
+          throw Object.assign(new Error('Settings were updated elsewhere. Please review and try again.'), { cause: err });
         }
         const message = err instanceof ApiError ? err.message : 'Failed to save settings';
         setError(message);

@@ -1,5 +1,3 @@
-import { Readable } from 'stream';
-
 /**
  * Options for uploading a file to storage
  */

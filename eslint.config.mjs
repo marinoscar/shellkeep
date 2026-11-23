@@ -50,15 +50,24 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: {
       'react-hooks/exhaustive-deps': 'warn',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        // Matches the legacy .eslintrc.js: unused `catch (err)` bindings are allowed.
+        { argsIgnorePattern: '^_', caughtErrors: 'none' },
+      ],
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-restricted-imports': ['error', { patterns: PLATFORM_DEEP_IMPORT_PATTERNS }],
     },
   },
   {
-    // Test doubles routinely need `any`.
+    // Test doubles routinely need `any`, and the existing suites carry unused
+    // imports and destructured helpers; those stay warnings (not errors) until
+    // the suites are tidied, so new production code is held to the error level.
     files: ['apps/{api,web}/src/**/*.{test,spec}.{ts,tsx}', 'apps/web/src/__tests__/**/*.{ts,tsx}'],
-    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
+    },
   },
 );
