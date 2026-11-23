@@ -8,7 +8,7 @@ import {
 import { useState } from 'react';
 import { ThemeSettings } from '../components/settings/ThemeSettings';
 import { ProfileSettings } from '../components/settings/ProfileSettings';
-import { KeyShortcutsSettings } from '../components/settings/KeyShortcutsSettings';
+import { KeyShortcutsSettings } from '../components/terminal/settings/KeyShortcutsSettings';
 import { useUserSettings } from '../hooks/useUserSettings';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 
