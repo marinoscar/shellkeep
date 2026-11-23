@@ -22,6 +22,14 @@
  *   - Users & Allowlist: the identity slice's card (`users:read`).
  *   - Doctor: `GET /api/admin/doctor`, `system_settings:read` (the packaged
  *     page's descriptor).
+ *   - Jobs and Job Insights (#49): `GET /api/admin/jobs` and
+ *     `GET /api/admin/jobs/insights`, `jobs:read` (the jobs slice's
+ *     `job-admin.controller.ts`); retry, cancel and reset-stuck need
+ *     `jobs:write`, gated inside the pages.
+ *   - Worker Nodes (#49): `GET /api/admin/nodes`, `nodes:read` (the nodes
+ *     slice's `nodes-admin.controller.ts`, deliberately not `jobs:read`);
+ *     deleting a node and creating or revoking a credential need
+ *     `nodes:write`, gated inside the page.
  *
  * The composition root: the `Terminal` card is the terminal domain's
  * (`components/terminal/settings/TerminalSystemSettingsPage.tsx`), declared
@@ -34,6 +42,7 @@ import TerminalIcon from '@mui/icons-material/Terminal';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
+import { jobsAdminSections } from '@marinoscar/platform-web/jobs/ui';
 import {
   TERMINAL_SYSTEM_SETTINGS_DESCRIPTION,
   TERMINAL_SYSTEM_SETTINGS_TITLE,
@@ -93,6 +102,14 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
   {
     label: 'Observability',
     cards: [{ ...doctorSettingsPage.card, Icon: doctorSettingsPage.Icon }],
+  },
+  {
+    label: 'Operations',
+    // The jobs slice's cards (#49), as data and in this order: `Jobs`
+    // (`/admin/settings/jobs`, `jobs:read`), `Job Insights`
+    // (`/admin/settings/jobs/insights`, `jobs:read`, nested under the Jobs
+    // path) and `Worker Nodes` (`/admin/settings/workers`, `nodes:read`).
+    cards: [...jobsAdminSections.operations],
   },
 ];
 

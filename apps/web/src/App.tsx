@@ -11,6 +11,7 @@ import { InstallPrompt, MaintenanceGate, UpdatePrompt } from '@marinoscar/platfo
 import { APP_NAME } from './config/app';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
 import { AppPlatformHostProvider } from './platform/platformHost';
+import { JobsNodesProviders } from './platform/jobsAdapters';
 
 // Pages (lazy loaded)
 import { Suspense, lazy } from 'react';
@@ -62,6 +63,16 @@ const DoctorPage = lazy(() =>
 );
 const TerminalSystemSettingsPage = lazy(
   () => import('./components/terminal/settings/TerminalSystemSettingsPage'),
+);
+// Operations (issue #49): the packaged jobs and nodes pages.
+const JobsPage = lazy(() =>
+  import('@marinoscar/platform-web/jobs/ui').then((m) => ({ default: m.JobsPage })),
+);
+const JobInsightsPage = lazy(() =>
+  import('@marinoscar/platform-web/jobs/ui').then((m) => ({ default: m.JobInsightsPage })),
+);
+const WorkersPage = lazy(() =>
+  import('@marinoscar/platform-web/nodes/ui').then((m) => ({ default: m.WorkersPage })),
 );
 
 // Test login page (development only). The platform's test login endpoint
@@ -156,7 +167,7 @@ function AppRoutes() {
                   <Route
                     path="/admin/settings"
                     element={
-                      <RequirePermission permissions={['system_settings:read', 'users:read']} fallback={HOME}>
+                      <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read']} fallback={HOME}>
                         <AdminSettingsHubPage />
                       </RequirePermission>
                     }
@@ -201,6 +212,36 @@ function AppRoutes() {
                       </RequirePermission>
                     }
                   />
+                  {/* Operations (#49). `jobs:read` is what the jobs slice's
+                      admin controller enforces on the list, the stats and the
+                      insights; `nodes:read` is the nodes admin controller's.
+                      Writes (`jobs:write`, `nodes:write`) are gated inside the
+                      pages. Job Insights nests under the Jobs path: two routes,
+                      not a tab. */}
+                  <Route
+                    path="/admin/settings/jobs"
+                    element={
+                      <RequirePermission permission="jobs:read" fallback={HOME}>
+                        <JobsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/jobs/insights"
+                    element={
+                      <RequirePermission permission="jobs:read" fallback={HOME}>
+                        <JobInsightsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/workers"
+                    element={
+                      <RequirePermission permission="nodes:read" fallback={HOME}>
+                        <WorkersPage />
+                      </RequirePermission>
+                    }
+                  />
                   {/* `users:read` is what `GET /api/users` enforces; the packaged page
                       gates its Allowlist tab on `allowlist:read` itself. */}
                   <Route
@@ -229,7 +270,9 @@ export default function App() {
     <ThemeContextProvider>
       <IdentityProviders>
         <AppPlatformHostProvider>
-          <AppRoutes />
+          <JobsNodesProviders>
+            <AppRoutes />
+          </JobsNodesProviders>
           {/* The host slice's PWA prompts (#46): the update prompt also
               registers the service worker. */}
           <UpdatePrompt useRegisterSW={useRegisterSW} />
