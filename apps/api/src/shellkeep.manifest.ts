@@ -14,6 +14,7 @@
 // ORDER IS THE STORED KEY ORDER: append, never insert.
 //   settings namespaces: platform/settings/registry.ts (app-registrations/settings.ts)
 //   platform roles, permissions and ownership: app-registrations/registrations.ts
+//   host registrations (About contributor): app-registrations/host.ts
 //
 // Registration is once per module registry (once per process, once per Jest
 // test file): registering a namespace twice is a `DUPLICATE_ID` error.
@@ -23,5 +24,7 @@
 import './platform/settings/registry';
 // Fills core's role, permission, user-owned-model and model-ownership registries.
 import './app-registrations/registrations';
+// The host slice's import-time registrations (the About `terminal` section).
+import './app-registrations/host';
 // The OpenAPI tags of the app's controllers.
 import './app-registrations/openapi-tags';
