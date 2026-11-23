@@ -27,11 +27,6 @@ export interface AppDestination {
    * string the controller enforces. Absent means any authenticated user.
    */
   permission?: string;
-  /**
-   * The role that makes the destination reachable. Transitional: the
-   * identity slice (#47) replaces it with the `users:read` permission.
-   */
-  role?: string;
 }
 
 /**
@@ -41,27 +36,38 @@ export interface AppDestination {
  */
 export const DESTINATIONS: readonly AppDestination[] = [
   { id: 'dashboard', label: 'Dashboard', path: '/', icon: HomeIcon },
-  { id: 'sessions', label: 'Sessions', path: '/sessions', icon: TerminalIcon },
-  { id: 'servers', label: 'Servers', path: '/servers', icon: DnsIcon },
+  {
+    id: 'sessions',
+    label: 'Sessions',
+    path: '/sessions',
+    icon: TerminalIcon,
+    permission: 'sessions:read',
+  },
+  {
+    id: 'servers',
+    label: 'Servers',
+    path: '/servers',
+    icon: DnsIcon,
+    permission: 'servers:read',
+  },
   {
     id: 'user-management',
     label: 'User Management',
     path: '/admin/users',
     icon: PeopleIcon,
-    role: 'admin',
+    // The string the platform's users controller enforces on `GET /api/users`.
+    permission: 'users:read',
   },
 ];
 
 /**
- * Whether a viewer with these permissions and roles may reach the
- * destination.
+ * Whether a viewer may reach the destination. `hasPermission` is the identity
+ * slice's predicate (`usePermissions().hasPermission`), the same one every
+ * route guard uses.
  */
 export function isDestinationVisible(
   destination: AppDestination,
-  permissions: ReadonlySet<string>,
-  roles: ReadonlySet<string>,
+  hasPermission: (permission: string) => boolean,
 ): boolean {
-  if (destination.permission && !permissions.has(destination.permission)) return false;
-  if (destination.role && !roles.has(destination.role)) return false;
-  return true;
+  return !destination.permission || hasPermission(destination.permission);
 }

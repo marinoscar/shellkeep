@@ -25,8 +25,7 @@ import { FastifyReply } from 'fastify';
 
 import { SessionsService } from './sessions.service';
 import { SshService } from './ssh.service';
-import { Auth } from '../auth/decorators/auth.decorator';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Auth, CurrentOrg, CurrentUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
@@ -52,9 +51,10 @@ export class SessionsController {
   @ApiResponse({ status: 200, description: 'Paginated terminal sessions' })
   async findAll(
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
     @Query() query: SessionQueryDto,
   ) {
-    return this.sessionsService.findAll(userId, query);
+    return this.sessionsService.findAll({ userId, orgId }, query);
   }
 
   @Post('batch-terminate')
@@ -64,9 +64,10 @@ export class SessionsController {
   @ApiResponse({ status: 200, description: 'Sessions terminated' })
   async batchTerminate(
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
     @Body() dto: BatchTerminateSessionsDto,
   ) {
-    return this.sessionsService.batchTerminate(dto.ids, userId);
+    return this.sessionsService.batchTerminate(dto.ids, { userId, orgId });
   }
 
   @Get(':id/history')
@@ -79,10 +80,11 @@ export class SessionsController {
   async getHistory(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
     @Res() res: FastifyReply,
   ) {
     // findOne does ownership check
-    const session = await this.sessionsService.findOne(id, userId);
+    const session = await this.sessionsService.findOne(id, { userId, orgId });
 
     if (session.status === 'terminated') {
       throw new BadRequestException('Cannot download history for a terminated session');
@@ -90,7 +92,7 @@ export class SessionsController {
 
     const profile = await this.serverProfilesService.getDecryptedProfile(
       session.serverProfileId,
-      userId,
+      { userId, orgId },
     );
 
     try {
@@ -130,8 +132,9 @@ export class SessionsController {
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
   ) {
-    return this.sessionsService.findOne(id, userId);
+    return this.sessionsService.findOne(id, { userId, orgId });
   }
 
   @Post()
@@ -140,9 +143,10 @@ export class SessionsController {
   @ApiResponse({ status: 201, description: 'Terminal session created' })
   async create(
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
     @Body() dto: CreateSessionDto,
   ) {
-    return this.sessionsService.create(userId, dto);
+    return this.sessionsService.create({ userId, orgId }, dto);
   }
 
   @Patch(':id')
@@ -154,9 +158,10 @@ export class SessionsController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
     @Body() dto: UpdateSessionDto,
   ) {
-    return this.sessionsService.update(id, userId, dto);
+    return this.sessionsService.update(id, { userId, orgId }, dto);
   }
 
   @Delete(':id')
@@ -169,7 +174,8 @@ export class SessionsController {
   async terminate(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
   ) {
-    await this.sessionsService.terminate(id, userId);
+    await this.sessionsService.terminate(id, { userId, orgId });
   }
 }

@@ -18,38 +18,37 @@ describe('DESTINATIONS', () => {
     expect(new Set(DESTINATIONS.map((d) => d.path)).size).toBe(DESTINATIONS.length);
   });
 
-  it('gates User Management on the admin role only', () => {
-    const gated = DESTINATIONS.filter((d) => d.permission || d.role).map((d) => d.id);
-    expect(gated).toEqual(['user-management']);
+  it('gates each destination on the permission its API enforces', () => {
+    expect(DESTINATIONS.map((d) => [d.id, d.permission])).toEqual([
+      ['dashboard', undefined],
+      ['sessions', 'sessions:read'],
+      ['servers', 'servers:read'],
+      ['user-management', 'users:read'],
+    ]);
+  });
+
+  it('gates nothing on a role name', () => {
+    for (const d of DESTINATIONS) expect(d).not.toHaveProperty('role');
   });
 });
 
 describe('isDestinationVisible', () => {
-  const none = new Set<string>();
+  const holds = (...perms: string[]) => (p: string) => perms.includes(p);
 
   it('shows an ungated destination to any viewer', () => {
     const d: AppDestination = { id: 'a', label: 'A', path: '/a', icon: Icon };
-    expect(isDestinationVisible(d, none, none)).toBe(true);
+    expect(isDestinationVisible(d, holds())).toBe(true);
   });
 
   it('requires the declared permission', () => {
     const d: AppDestination = { id: 'a', label: 'A', path: '/a', icon: Icon, permission: 'x:read' };
-    expect(isDestinationVisible(d, none, none)).toBe(false);
-    expect(isDestinationVisible(d, new Set(['x:read']), none)).toBe(true);
+    expect(isDestinationVisible(d, holds())).toBe(false);
+    expect(isDestinationVisible(d, holds('x:read'))).toBe(true);
   });
 
-  it('requires the declared role', () => {
-    const d: AppDestination = { id: 'a', label: 'A', path: '/a', icon: Icon, role: 'admin' };
-    expect(isDestinationVisible(d, none, none)).toBe(false);
-    expect(isDestinationVisible(d, none, new Set(['admin']))).toBe(true);
-  });
-
-  it('requires both when both are declared', () => {
-    const d: AppDestination = {
-      id: 'a', label: 'A', path: '/a', icon: Icon, permission: 'x:read', role: 'admin',
-    };
-    expect(isDestinationVisible(d, new Set(['x:read']), none)).toBe(false);
-    expect(isDestinationVisible(d, none, new Set(['admin']))).toBe(false);
-    expect(isDestinationVisible(d, new Set(['x:read']), new Set(['admin']))).toBe(true);
+  it('shows User Management to a holder of users:read whatever the role names', () => {
+    const d = DESTINATIONS.find((x) => x.id === 'user-management')!;
+    expect(isDestinationVisible(d, holds('users:read'))).toBe(true);
+    expect(isDestinationVisible(d, holds('sessions:read', 'servers:read'))).toBe(false);
   });
 });

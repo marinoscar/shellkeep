@@ -660,3 +660,55 @@ describe('ApiService', () => {
     });
   });
 });
+
+describe('AppHttpClient.onAccessTokenRefreshed (#47)', () => {
+  afterEach(() => {
+    api.setAccessToken(null);
+  });
+
+  it('tells subscribers the new token after a successful refresh', async () => {
+    server.use(
+      http.post('*/api/auth/refresh', () =>
+        HttpResponse.json({ data: { accessToken: 'fresh-token', expiresIn: 900 } }),
+      ),
+    );
+    const seen: string[] = [];
+    const off = api.onAccessTokenRefreshed((t) => seen.push(t));
+    await expect(api.refreshToken()).resolves.toBe(true);
+    off();
+    await api.refreshToken();
+    expect(seen).toEqual(['fresh-token']);
+  });
+
+  it('tells nobody when the refresh is refused', async () => {
+    server.use(
+      http.post('*/api/auth/refresh', () => HttpResponse.json({ message: 'no' }, { status: 401 })),
+    );
+    const seen: string[] = [];
+    const off = api.onAccessTokenRefreshed((t) => seen.push(t));
+    await expect(api.refreshToken()).resolves.toBe(false);
+    off();
+    expect(seen).toEqual([]);
+  });
+
+  it('also fires for the refresh behind a 401 retry', async () => {
+    let calls = 0;
+    server.use(
+      http.post('*/api/auth/refresh', () =>
+        HttpResponse.json({ data: { accessToken: 'retry-token', expiresIn: 900 } }),
+      ),
+      http.get('*/api/health/live', () => {
+        calls += 1;
+        return calls === 1
+          ? HttpResponse.json({ message: 'expired' }, { status: 401 })
+          : HttpResponse.json({ data: { status: 'ok' } });
+      }),
+    );
+    api.setAccessToken('stale-token');
+    const seen: string[] = [];
+    const off = api.onAccessTokenRefreshed((t) => seen.push(t));
+    await api.get('/health/live');
+    off();
+    expect(seen).toEqual(['retry-token']);
+  });
+});

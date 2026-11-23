@@ -1,10 +1,13 @@
 import {
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { AUDIT_SINK, type AuditSink } from '@marinoscar/platform-api/core';
 import { PrismaService } from '../prisma/prisma.service';
-import { DefaultOrgResolver } from '../prisma/default-org.resolver';
+import type { OwnerScope } from '../common/types/owner-scope';
+import { recordAudit } from '../common/audit/record-audit';
 import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
 import { ServerProfilesQueryDto } from './dto/server-profiles-query.dto';
@@ -17,17 +20,33 @@ export class ServerProfilesService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly defaultOrg: DefaultOrgResolver,
+    @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
   ) {}
+
+  /** Audit row: the hostname only, never a credential. */
+  private audit(
+    action: string,
+    scope: OwnerScope,
+    profile: { id: string; hostname: string },
+    extra: Record<string, string | number | boolean | null> = {},
+  ): Promise<void> {
+    return recordAudit(this.auditSink, this.logger, {
+      action,
+      actorUserId: scope.userId,
+      targetType: 'server_profile',
+      targetId: profile.id,
+      meta: { hostname: profile.hostname, ...extra },
+    });
+  }
 
   /**
    * List server profiles for a user with pagination and search
    */
-  async findAll(userId: string, query: ServerProfilesQueryDto) {
+  async findAll(scope: OwnerScope, query: ServerProfilesQueryDto) {
     const { page, pageSize, search } = query;
     const skip = (page - 1) * pageSize;
 
-    const where: any = { userId };
+    const where: any = { userId: scope.userId, orgId: scope.orgId };
 
     if (search) {
       where.OR = [
@@ -58,9 +77,9 @@ export class ServerProfilesService {
   /**
    * Get a single server profile by ID with owner check
    */
-  async findOne(id: string, userId: string) {
+  async findOne(id: string, scope: OwnerScope) {
     const profile = await this.prisma.serverProfile.findFirst({
-      where: { id, userId },
+      where: { id, userId: scope.userId, orgId: scope.orgId },
     });
 
     if (!profile) {
@@ -73,12 +92,12 @@ export class ServerProfilesService {
   /**
    * Create a new server profile
    */
-  async create(userId: string, dto: CreateServerProfileDto) {
+  async create(scope: OwnerScope, dto: CreateServerProfileDto) {
     const key = getEncryptionKey();
 
     const data: any = {
-      userId,
-      orgId: await this.defaultOrg.resolve(),
+      userId: scope.userId,
+      orgId: scope.orgId,
       name: dto.name,
       hostname: dto.hostname,
       port: dto.port,
@@ -100,7 +119,8 @@ export class ServerProfilesService {
 
     const profile = await this.prisma.serverProfile.create({ data });
 
-    this.logger.log(`Server profile "${dto.name}" created by user ${userId}`);
+    await this.audit('server_profile.create', scope, profile);
+    this.logger.log(`Server profile "${dto.name}" created by user ${scope.userId}`);
 
     return this.toResponse(profile);
   }
@@ -108,10 +128,10 @@ export class ServerProfilesService {
   /**
    * Update an existing server profile
    */
-  async update(id: string, userId: string, dto: UpdateServerProfileDto) {
+  async update(id: string, scope: OwnerScope, dto: UpdateServerProfileDto) {
     // Verify ownership
     const existing = await this.prisma.serverProfile.findFirst({
-      where: { id, userId },
+      where: { id, userId: scope.userId, orgId: scope.orgId },
     });
 
     if (!existing) {
@@ -145,7 +165,8 @@ export class ServerProfilesService {
       data,
     });
 
-    this.logger.log(`Server profile "${profile.name}" updated by user ${userId}`);
+    await this.audit('server_profile.update', scope, profile);
+    this.logger.log(`Server profile "${profile.name}" updated by user ${scope.userId}`);
 
     return this.toResponse(profile);
   }
@@ -153,9 +174,9 @@ export class ServerProfilesService {
   /**
    * Delete a server profile with owner check
    */
-  async remove(id: string, userId: string) {
+  async remove(id: string, scope: OwnerScope) {
     const existing = await this.prisma.serverProfile.findFirst({
-      where: { id, userId },
+      where: { id, userId: scope.userId, orgId: scope.orgId },
     });
 
     if (!existing) {
@@ -164,16 +185,17 @@ export class ServerProfilesService {
 
     await this.prisma.serverProfile.delete({ where: { id } });
 
-    this.logger.log(`Server profile "${existing.name}" deleted by user ${userId}`);
+    await this.audit('server_profile.delete', scope, existing);
+    this.logger.log(`Server profile "${existing.name}" deleted by user ${scope.userId}`);
   }
 
   /**
    * Test SSH connection using stored credentials
    */
-  async testConnection(id: string, userId: string): Promise<{ success: boolean; error?: string }> {
-    const profile = await this.getDecryptedProfile(id, userId);
+  async testConnection(id: string, scope: OwnerScope): Promise<{ success: boolean; error?: string }> {
+    const profile = await this.getDecryptedProfile(id, scope);
 
-    return new Promise((resolve) => {
+    const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
       const conn = new Client();
       const timeout = setTimeout(() => {
         conn.end();
@@ -211,14 +233,17 @@ export class ServerProfilesService {
 
       conn.connect(connectConfig);
     });
+
+    await this.audit('server_profile.test', scope, profile, { success: result.success });
+    return result;
   }
 
   /**
    * Get a profile with decrypted credentials (for internal use by terminal module)
    */
-  async getDecryptedProfile(id: string, userId: string) {
+  async getDecryptedProfile(id: string, scope: OwnerScope) {
     const profile = await this.prisma.serverProfile.findFirst({
-      where: { id, userId },
+      where: { id, userId: scope.userId, orgId: scope.orgId },
     });
 
     if (!profile) {

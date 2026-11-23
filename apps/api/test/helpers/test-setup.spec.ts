@@ -1,5 +1,4 @@
 import { createMockPrismaService } from '../mocks/prisma.mock';
-import { createMockGoogleProfile } from '../mocks/google-oauth.mock';
 
 describe('Test Framework Setup', () => {
   describe('Prisma Mock', () => {
@@ -8,28 +7,6 @@ describe('Test Framework Setup', () => {
       expect(mockPrisma).toBeDefined();
       expect(mockPrisma.user).toBeDefined();
       expect(mockPrisma.role).toBeDefined();
-    });
-  });
-
-  describe('Google OAuth Mock', () => {
-    it('should create a mock Google profile', () => {
-      const profile = createMockGoogleProfile({
-        email: 'test@example.com',
-      });
-
-      expect(profile).toBeDefined();
-      expect(profile.email).toBe('test@example.com');
-      expect(profile.id).toContain('google-');
-      expect(profile.displayName).toBeDefined();
-    });
-
-    it('should create unique profiles with different emails', () => {
-      const profile1 = createMockGoogleProfile({ email: 'user1@example.com' });
-      const profile2 = createMockGoogleProfile({ email: 'user2@example.com' });
-
-      expect(profile1.email).toBe('user1@example.com');
-      expect(profile2.email).toBe('user2@example.com');
-      expect(profile1.email).not.toBe(profile2.email);
     });
   });
 

@@ -1,17 +1,6 @@
-export interface Role {
-  name: string;
-}
-
-export interface User {
-  id: string;
-  email: string;
-  displayName: string | null;
-  profileImageUrl: string | null;
-  roles: Role[];
-  permissions: string[];
-  isActive: boolean;
-  createdAt: string;
-}
+// The signed-in user, the sign-in providers, users, the allowlist and the
+// device flow are the identity slice's types (`@marinoscar/platform-web/identity/headless`:
+// `AuthUser`, `AuthProviderInfo`, `UserListItem`, `AllowedEmailEntry`, ...), issue #47.
 
 /**
  * Per-namespace user settings contributed by domain modules. A domain adds its
@@ -41,65 +30,6 @@ export interface SystemSettings {
   updatedAt: string;
   updatedBy: { id: string; email: string } | null;
   version: number;
-}
-
-export interface AuthProvider {
-  name: string;
-  authUrl: string;
-}
-
-export interface AllowedEmailEntry {
-  id: string;
-  email: string;
-  addedBy: { id: string; email: string } | null;
-  addedAt: string;
-  claimedBy: { id: string; email: string } | null;
-  claimedAt: string | null;
-  notes: string | null;
-}
-
-export interface AllowlistResponse {
-  items: AllowedEmailEntry[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
-
-export interface UserListItem {
-  id: string;
-  email: string;
-  displayName: string | null;
-  providerDisplayName: string | null;
-  profileImageUrl: string | null;
-  providerProfileImageUrl?: string | null;
-  isActive: boolean;
-  roles: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface UsersResponse {
-  items: UserListItem[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
-
-export interface DeviceActivationInfo {
-  userCode: string;
-  clientInfo: {
-    deviceName?: string;
-    userAgent?: string;
-    ipAddress?: string;
-  };
-  expiresAt: string;
-}
-
-export interface DeviceAuthorizationResponse {
-  success: boolean;
-  message: string;
 }
 
 // Domain types, re-exported so existing `types` imports keep working. New

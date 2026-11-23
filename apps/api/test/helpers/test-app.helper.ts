@@ -26,6 +26,14 @@ export interface TestAppOptions {
    * Set to false only for true E2E tests that need a real database
    */
   useMockDatabase?: boolean;
+
+  /**
+   * Provider substitutions applied on top of the mandatory `PrismaService` mock,
+   * e.g. `{ provide: SessionManagerService, useValue: fake }`. Every other
+   * provider stays the REAL one wired by `AppModule`: a spec opts in one entry
+   * per provider, so its fixtures are a visible, reviewable list.
+   */
+  overrideProviders?: Array<{ provide: unknown; useValue: unknown }>;
 }
 
 /**
@@ -42,14 +50,17 @@ export async function createTestApp(
 
   if (shouldUseMock) {
     // Create test module with mocked PrismaService
-    moduleFixture = await Test.createTestingModule({
+    let builder = Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
       .overrideProvider(DefaultOrgResolver)
-      .useValue({ resolve: async () => 'org-default' })
-      .compile();
+      .useValue({ resolve: async () => 'org-default' });
+    for (const override of options.overrideProviders ?? []) {
+      builder = builder.overrideProvider(override.provide).useValue(override.useValue);
+    }
+    moduleFixture = await builder.compile();
   } else {
     // Create test module with real database (for true E2E tests)
     moduleFixture = await Test.createTestingModule({

@@ -14,6 +14,7 @@
 //
 // ORDER IS THE STORED KEY ORDER: append, never insert.
 //   user settings: terminal
+//   platform roles, permissions and ownership: app-registrations/registrations.ts
 //
 // Registration is once per module registry (once per process, once per Jest
 // test file): registering a namespace twice is a `DUPLICATE_ID` error.
@@ -21,6 +22,7 @@
 
 import { registerUserSettingsNamespaces } from './settings/registry/user-settings-namespaces';
 import { TERMINAL_USER_SETTINGS } from './terminal/settings/terminal.user-settings';
-import './app-registrations/permissions';
+// Fills core's role, permission, user-owned-model and model-ownership registries.
+import './app-registrations/registrations';
 
 registerUserSettingsNamespaces([TERMINAL_USER_SETTINGS]);

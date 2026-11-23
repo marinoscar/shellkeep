@@ -51,8 +51,7 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const token = api.getAccessToken();
-    if (!token) {
+    if (!api.getAccessToken()) {
       setError('Not authenticated');
       return;
     }
@@ -125,8 +124,9 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
 
-    // Connect WebSocket
-    const ws = new TerminalWebSocket(sessionId, token);
+    // Connect WebSocket. It reads the session's current access token on every
+    // (re)connect and re-authenticates in-band after each refresh (#47).
+    const ws = new TerminalWebSocket(sessionId);
     wsRef.current = ws;
 
     ws.on('connect', () => {
@@ -203,9 +203,8 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
 
   const reconnect = useCallback(() => {
     wsRef.current?.disconnect();
-    const token = api.getAccessToken();
-    if (token) {
-      const ws = new TerminalWebSocket(sessionId, token);
+    if (api.getAccessToken()) {
+      const ws = new TerminalWebSocket(sessionId);
       wsRef.current = ws;
 
       ws.on('connect', () => setIsConnected(true));

@@ -1,8 +1,10 @@
-import { APP_PERMISSIONS, APP_PERMISSION_IDS } from './permissions';
+import { APP_PERMISSIONS as APP_PERMISSION_MAP, APP_PERMISSION_IDS } from './permissions';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 
+const APP_PERMISSIONS = Object.values(APP_PERMISSION_MAP);
+
 const grantsOf = (role: string) =>
-  APP_PERMISSIONS.filter((p) => p.defaultGrants.includes(role))
+  APP_PERMISSIONS.filter((p) => (p.defaultGrants as readonly string[]).includes(role))
     .map((p) => p.id)
     .sort();
 
@@ -28,7 +30,8 @@ describe('APP_PERMISSIONS', () => {
       'sessions:read',
       'sessions:write',
     ];
-    expect(grantsOf('admin')).toEqual(all);
+    expect(grantsOf('org_admin')).toEqual(all);
+    expect(grantsOf('admin')).toEqual([]);
     expect(grantsOf('contributor')).toEqual(all);
     expect(grantsOf('viewer')).toEqual(['servers:read', 'sessions:read']);
   });

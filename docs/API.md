@@ -72,9 +72,28 @@ Endpoints returning lists support pagination with the following query parameters
 
 ---
 
+## Terminal WebSocket
+
+`WS /api/terminal/ws`. The client's first message authenticates it; the token is never read from the URL.
+
+| Direction | Message | Meaning |
+|---|---|---|
+| client | `{ "type": "auth", "token": "<access token>" }` | Authenticate (within 5 seconds of connecting), or, on an authenticated socket, replace the token with a fresh one |
+| server | `{ "type": "auth_ok" }` | Authenticated |
+| server | `{ "type": "auth_refreshed" }` | The replacement token was accepted; the socket stays open |
+| server | `{ "type": "auth_fail", "reason": "forbidden" }` then close | The caller lacks `sessions:write` (a Viewer), or tried to re-authenticate as another user or organization |
+| server | `{ "type": "auth_fail", "reason": "Invalid token" \| "Invalid user" \| "Authentication timeout" }` then close | Bad, expired or revoked token; inactive user; no `auth` in time |
+| server | `{ "type": "auth_expired" }` then close | The access token expired and no fresh `auth` arrived; the client refreshes its token and reconnects |
+| client | `{ "type": "connect", "sessionId": "<uuid>" }` | Attach to a session the caller owns in the current organization |
+| server | `{ "type": "session_error", "code": "NOT_FOUND" }` | Not a UUID, not the caller's, or in another organization (never says which) |
+
+Binary frames are terminal input and output; `resize` and `ping` are unchanged. Each denial is logged as `ws.auth.denied` with the user id and the reason, never the token.
+
 ## Endpoints
 
 ### Authentication
+
+Since #47 these routes (and `/users`, `/allowlist`, `/roles`, `/pat`) are served by the platform identity slice (`@marinoscar/platform-api/identity`); the per-endpoint reference is the OpenAPI document at `/api/docs`, which wins over the examples below where they differ.
 
 #### GET /auth/providers
 **Public endpoint** - List enabled OAuth providers.

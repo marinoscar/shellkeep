@@ -1,8 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { JwtService } from '@nestjs/jwt';
 import { EventEmitter } from 'events';
 import { TerminalGateway } from './terminal.gateway';
-import { PrismaService } from '../prisma/prisma.service';
+import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
 import { ServerProfilesService } from '../server-profiles/server-profiles.service';
 import { SessionsService } from './sessions.service';
 import { SessionManagerService } from './session-manager.service';
@@ -41,8 +40,7 @@ function emitBinaryMessage(ws: any, data: Buffer): void {
 
 describe('TerminalGateway', () => {
   let gateway: TerminalGateway;
-  let jwtService: jest.Mocked<JwtService>;
-  let prisma: { user: { findUnique: jest.Mock } };
+  let principals: { resolve: jest.Mock };
   let serverProfilesService: jest.Mocked<Pick<ServerProfilesService, 'getDecryptedProfile'>>;
   let sessionsService: jest.Mocked<Pick<SessionsService, 'findOne' | 'updateStatus'>>;
   let sessionManager: jest.Mocked<
@@ -51,13 +49,21 @@ describe('TerminalGateway', () => {
 
   const VALID_USER_ID = 'user-abc-123';
   const VALID_TOKEN = 'valid.jwt.token';
-  const SESSION_ID = 'session-xyz-456';
+  const SESSION_ID = '5e55a0b1-7c1d-4f3e-9a2b-0c4d5e6f7a8b';
+  const ORG_ID = 'org-default-001';
+  const SCOPE = { userId: VALID_USER_ID, orgId: ORG_ID };
 
-  const mockActiveUser = {
-    id: VALID_USER_ID,
-    email: 'user@example.com',
-    isActive: true,
-  };
+  /** The principal the identity slice resolves for a Contributor: holds `sessions:write`. */
+  const principalFor = (overrides: Record<string, unknown> = {}) => ({
+    ok: true as const,
+    principal: {
+      userId: VALID_USER_ID,
+      orgId: ORG_ID,
+      permissions: ['sessions:read', 'sessions:write', 'sessions:delete'],
+      expiresAtMs: Date.now() + 15 * 60 * 1000,
+      ...overrides,
+    },
+  });
 
   const mockSession = {
     id: SESSION_ID,
@@ -81,15 +87,7 @@ describe('TerminalGateway', () => {
   beforeEach(async () => {
     jest.useFakeTimers();
 
-    prisma = {
-      user: {
-        findUnique: jest.fn(),
-      },
-    };
-
-    jwtService = {
-      verify: jest.fn(),
-    } as any;
+    principals = { resolve: jest.fn().mockResolvedValue(principalFor()) };
 
     serverProfilesService = {
       getDecryptedProfile: jest.fn(),
@@ -111,8 +109,7 @@ describe('TerminalGateway', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TerminalGateway,
-        { provide: JwtService, useValue: jwtService },
-        { provide: PrismaService, useValue: prisma },
+        { provide: TerminalPrincipalResolver, useValue: principals },
         { provide: ServerProfilesService, useValue: serverProfilesService },
         { provide: SessionsService, useValue: sessionsService },
         { provide: SessionManagerService, useValue: sessionManager },
@@ -156,8 +153,7 @@ describe('TerminalGateway', () => {
 
     it('should NOT fire auth timeout when client authenticates in time', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
 
       gateway.handleConnection(ws);
 
@@ -199,8 +195,7 @@ describe('TerminalGateway', () => {
 
     it('should clear ping interval when authenticated client disconnects', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
@@ -227,18 +222,14 @@ describe('TerminalGateway', () => {
   describe('auth message handling', () => {
     it('should send auth_ok and start ping interval on valid token and active user', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
 
-      expect(jwtService.verify).toHaveBeenCalledWith(VALID_TOKEN);
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({
-        where: { id: VALID_USER_ID },
-      });
+      expect(principals.resolve).toHaveBeenCalledWith(VALID_TOKEN);
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'auth_ok' }),
       );
@@ -246,9 +237,7 @@ describe('TerminalGateway', () => {
 
     it('should send auth_fail and close socket when token is invalid', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockImplementation(() => {
-        throw new Error('invalid signature');
-      });
+      principals.resolve.mockResolvedValue({ ok: false, reason: 'invalid_token' });
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: 'bad.token' });
@@ -263,8 +252,7 @@ describe('TerminalGateway', () => {
 
     it('should send auth_fail and close socket when user does not exist', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: 'ghost-user' });
-      prisma.user.findUnique.mockResolvedValue(null);
+      principals.resolve.mockResolvedValue({ ok: false, reason: 'invalid_user' });
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
@@ -279,8 +267,7 @@ describe('TerminalGateway', () => {
 
     it('should send auth_fail and close socket when user is inactive', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue({ ...mockActiveUser, isActive: false });
+      principals.resolve.mockResolvedValue({ ok: false, reason: 'invalid_user' });
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
@@ -301,8 +288,7 @@ describe('TerminalGateway', () => {
   describe('ping/pong heartbeat', () => {
     it('should respond with pong when authenticated client sends ping', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
@@ -318,8 +304,7 @@ describe('TerminalGateway', () => {
 
     it('should send WebSocket-level ping every 30 seconds after authentication', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
@@ -337,8 +322,7 @@ describe('TerminalGateway', () => {
 
     it('should NOT send ping when socket is not OPEN', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
@@ -371,8 +355,7 @@ describe('TerminalGateway', () => {
 
   describe('connect message handling', () => {
     async function authenticateWs(ws: any): Promise<void> {
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
@@ -472,7 +455,7 @@ describe('TerminalGateway', () => {
 
       expect(serverProfilesService.getDecryptedProfile).toHaveBeenCalledWith(
         mockSession.serverProfileId,
-        VALID_USER_ID,
+        SCOPE,
       );
       expect(sessionManager.startSession).toHaveBeenCalledWith(
         SESSION_ID,
@@ -533,8 +516,7 @@ describe('TerminalGateway', () => {
 
   describe('binary input forwarding', () => {
     async function authenticateAndConnect(ws: any): Promise<void> {
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
       sessionsService.findOne.mockResolvedValue(mockSession as any);
       sessionManager.isSessionRunning.mockReturnValue(true);
       sessionManager.attachWebSocket.mockReturnValue(true);
@@ -577,8 +559,7 @@ describe('TerminalGateway', () => {
 
     it('should not forward binary data when authenticated but no session connected', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
@@ -598,8 +579,7 @@ describe('TerminalGateway', () => {
 
   describe('resize message handling', () => {
     async function authenticateAndConnect(ws: any): Promise<void> {
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
       sessionsService.findOne.mockResolvedValue(mockSession as any);
       sessionManager.isSessionRunning.mockReturnValue(true);
       sessionManager.attachWebSocket.mockReturnValue(true);
@@ -637,8 +617,7 @@ describe('TerminalGateway', () => {
 
     it('should ignore resize when no session is connected', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
@@ -676,8 +655,7 @@ describe('TerminalGateway', () => {
 
     it('should not forward input when a message handler throws internally', async () => {
       const ws = createMockWebSocket();
-      jwtService.verify.mockReturnValue({ sub: VALID_USER_ID });
-      prisma.user.findUnique.mockResolvedValue(mockActiveUser);
+      principals.resolve.mockResolvedValue(principalFor());
 
       gateway.handleConnection(ws);
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });

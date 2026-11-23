@@ -4,8 +4,8 @@ import { join, relative, sep } from 'path';
 /**
  * Base-to-domain boundary guard (issue #44).
  *
- * The base modules (auth, users, allowlist, device-auth, test-auth, health,
- * settings, storage, common, config, prisma) must not know the terminal
+ * The base modules (platform, health, settings, storage, common, config,
+ * prisma) must not know the terminal
  * domain: no import from `server-profiles/` or `terminal/`, no `servers:` or
  * `sessions:` permission string, no mention of `terminal`. The domain reaches
  * the base through registries (`settings/registry`, `app-registrations`).
@@ -18,11 +18,10 @@ import { join, relative, sep } from 'path';
 const SRC = join(__dirname, '../../src');
 
 const BASE_DIRS = [
-  'auth',
-  'users',
-  'allowlist',
-  'device-auth',
-  'test-auth',
+  // The platform bindings (identity, host ports, Doctor); the identity slice itself
+  // is the package's since #47 (the forked auth, users, allowlist, device-auth and
+  // test-auth modules are deleted).
+  'platform',
   'health',
   'settings',
   'storage',
@@ -66,7 +65,7 @@ describe('base-domain boundary', () => {
     .filter((f) => !ALLOWLIST.includes(f.rel));
 
   it('scans the base directories', () => {
-    expect(files.length).toBeGreaterThan(50);
+    expect(files.length).toBeGreaterThan(40);
   });
 
   it('keeps the allowlist empty', () => {

@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { usePermissions } from '../hooks/usePermissions';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useSystemSettings } from '../hooks/useSystemSettings';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { SystemSettingsEditor } from '../components/admin/SystemSettingsEditor';

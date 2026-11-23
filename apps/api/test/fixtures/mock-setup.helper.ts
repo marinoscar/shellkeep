@@ -2,13 +2,12 @@ import { prismaMock, mockPrismaTransaction } from '../mocks/prisma.mock';
 import {
   createMockUser,
   createMockUserWithRelations,
-  createMockAllowedEmail,
   createMockAuditEvent,
   createMockSystemSettings,
   mockRoles,
   mockPermissions,
+  MOCK_DEFAULT_ORG_ID,
   CreateMockUserOptions,
-  CreateMockAllowedEmailOptions,
 } from './test-data.factory';
 
 /**
@@ -154,285 +153,17 @@ export function setupMockUser(
   // Add user to registry
   mockUserRegistry.set(user.id, user);
 
-  const roles = user.userRoles?.map((ur: any) => ur.role.name) || [];
+  // The role names the access token carries: the system roles plus the org role.
+  const roles = [
+    ...(user.userRoles?.map((ur: any) => ur.role.name) || []),
+    ...(user.memberships?.map((m: any) => m.role.name) || []),
+  ];
 
   return {
     id: user.id,
     email: user.email,
     roles,
   };
-}
-
-/**
- * Setup multiple mock users for list queries
- * Adds them to the user registry so they work with other mock user functions
- * This does NOT clear existing users - it merges with them by replacing users with matching emails
- */
-export function setupMockUserList(
-  users: Array<CreateMockUserOptions>,
-): SetupMockUserResponse[] {
-  const mockUsers = users.map((opts) => createMockUserWithRelations(opts));
-
-  // Replace or add users to the registry
-  // If a user with the same email exists, replace it with the new one
-  mockUsers.forEach((newUser) => {
-    // Find existing user with same email
-    let existingId: string | null = null;
-    for (const [id, existingUser] of mockUserRegistry.entries()) {
-      if (existingUser.email === newUser.email) {
-        existingId = id;
-        break;
-      }
-    }
-
-    if (existingId) {
-      // Replace existing user (keep same ID for JWT tokens to work)
-      newUser.id = existingId;
-      mockUserRegistry.set(existingId, newUser);
-    } else {
-      // Add new user
-      mockUserRegistry.set(newUser.id, newUser);
-    }
-  });
-
-  // Mock user.findMany to use the registry (all users)
-  (prismaMock.user.findMany as jest.Mock).mockImplementation(
-    async (args: any) => {
-      const where = args?.where;
-      const include = args?.include;
-      const skip = args?.skip || 0;
-      const take = args?.take;
-      const orderBy = args?.orderBy;
-
-      // Get all users from registry
-      let filtered = Array.from(mockUserRegistry.values());
-
-      // Apply filters
-      if (where) {
-        // Handle isActive filter
-        if (where.isActive !== undefined) {
-          filtered = filtered.filter((u) => u.isActive === where.isActive);
-        }
-        // Handle OR clause (search)
-        if (where.OR && Array.isArray(where.OR)) {
-          filtered = filtered.filter((u: any) =>
-            where.OR.some((condition: any) => {
-              if (condition.email?.contains) {
-                const search = condition.email.contains.toLowerCase();
-                return u.email?.toLowerCase().includes(search);
-              }
-              if (condition.displayName?.contains) {
-                const search = condition.displayName.contains.toLowerCase();
-                return u.displayName?.toLowerCase().includes(search);
-              }
-              if (condition.providerDisplayName?.contains) {
-                const search = condition.providerDisplayName.contains.toLowerCase();
-                return u.providerDisplayName?.toLowerCase().includes(search);
-              }
-              return false;
-            }),
-          );
-        }
-        // Handle simple email filter
-        if (
-          where.email &&
-          typeof where.email === 'object' &&
-          'contains' in where.email
-        ) {
-          const search = where.email.contains.toLowerCase();
-          filtered = filtered.filter((u: any) =>
-            u.email.toLowerCase().includes(search),
-          );
-        }
-        // Handle role filter
-        if (where.userRoles && 'some' in where.userRoles) {
-          const roleFilter = where.userRoles.some;
-          if (roleFilter?.role?.name) {
-            filtered = filtered.filter((u: any) =>
-              u.userRoles?.some(
-                (ur: any) => ur.role.name === roleFilter.role.name,
-              ),
-            );
-          }
-        }
-      }
-
-      // Apply sorting
-      if (orderBy) {
-        const [sortField, sortDirection] = Object.entries(orderBy)[0] as [string, 'asc' | 'desc'];
-        filtered = [...filtered].sort((a: any, b: any) => {
-          const aVal = a[sortField];
-          const bVal = b[sortField];
-          if (aVal === null || aVal === undefined) return 1;
-          if (bVal === null || bVal === undefined) return -1;
-
-          let comparison = 0;
-          if (typeof aVal === 'string' && typeof bVal === 'string') {
-            comparison = aVal.localeCompare(bVal);
-          } else if (aVal instanceof Date && bVal instanceof Date) {
-            comparison = aVal.getTime() - bVal.getTime();
-          } else {
-            comparison = aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-          }
-
-          return sortDirection === 'desc' ? -comparison : comparison;
-        });
-      }
-
-      // Apply pagination
-      let paginated = filtered;
-      if (skip || take) {
-        paginated = filtered.slice(skip, take ? skip + take : undefined);
-      }
-
-      return paginated;
-    },
-  );
-
-  // Mock user.count
-  (prismaMock.user.count as jest.Mock).mockImplementation(async (args: any) => {
-    const where = args?.where;
-
-    // Get all users from registry
-    let filtered = Array.from(mockUserRegistry.values());
-
-    if (where) {
-      // Handle isActive filter
-      if (where.isActive !== undefined) {
-        filtered = filtered.filter((u) => u.isActive === where.isActive);
-      }
-      // Handle OR clause (search)
-      if (where.OR && Array.isArray(where.OR)) {
-        filtered = filtered.filter((u: any) =>
-          where.OR.some((condition: any) => {
-            if (condition.email?.contains) {
-              const search = condition.email.contains.toLowerCase();
-              return u.email?.toLowerCase().includes(search);
-            }
-            if (condition.displayName?.contains) {
-              const search = condition.displayName.contains.toLowerCase();
-              return u.displayName?.toLowerCase().includes(search);
-            }
-            if (condition.providerDisplayName?.contains) {
-              const search = condition.providerDisplayName.contains.toLowerCase();
-              return u.providerDisplayName?.toLowerCase().includes(search);
-            }
-            return false;
-          }),
-        );
-      }
-      // Handle simple email filter
-      if (
-        where.email &&
-        typeof where.email === 'object' &&
-        'contains' in where.email
-      ) {
-        const search = where.email.contains.toLowerCase();
-        filtered = filtered.filter((u: any) =>
-          u.email.toLowerCase().includes(search),
-        );
-      }
-      // Handle role filter
-      if (where.userRoles && 'some' in where.userRoles) {
-        const roleFilter = where.userRoles.some;
-        if (roleFilter?.role?.name) {
-          filtered = filtered.filter((u: any) =>
-            u.userRoles?.some(
-              (ur: any) => ur.role.name === roleFilter.role.name,
-            ),
-          );
-        }
-      }
-    }
-
-    return filtered.length;
-  });
-
-  return mockUsers.map((user: any) => ({
-    id: user.id,
-    email: user.email,
-    roles: user.userRoles?.map((ur: any) => ur.role.name) || [],
-  }));
-}
-
-// ============================================================================
-// Allowlist Mocks
-// ============================================================================
-
-export function setupMockAllowedEmail(
-  options: CreateMockAllowedEmailOptions,
-): void {
-  const allowedEmail = createMockAllowedEmail(options);
-
-  (prismaMock.allowedEmail.findUnique as jest.Mock).mockImplementation(
-    async ({ where }: any) => {
-      if (where.email === allowedEmail.email || where.id === allowedEmail.id) {
-        return allowedEmail;
-      }
-      return null;
-    },
-  );
-
-  (prismaMock.allowedEmail.create as jest.Mock).mockResolvedValue(allowedEmail);
-}
-
-export function setupMockAllowedEmailList(
-  allowedEmails: Array<CreateMockAllowedEmailOptions>,
-): void {
-  const mockEmails = allowedEmails.map((opts) => createMockAllowedEmail(opts));
-
-  (prismaMock.allowedEmail.findMany as jest.Mock).mockImplementation(
-    async (args: any) => {
-      const where = args?.where;
-      let filtered = mockEmails;
-
-      // Apply filters
-      if (where) {
-        if (
-          where.email &&
-          typeof where.email === 'object' &&
-          'contains' in where.email
-        ) {
-          const search = where.email.contains.toLowerCase();
-          filtered = filtered.filter((e) => e.email.includes(search));
-        }
-        if (where.claimedById === null) {
-          // Status: pending
-          filtered = filtered.filter((e) => e.claimedById === null);
-        } else if (where.claimedById && 'not' in where.claimedById) {
-          // Status: claimed
-          filtered = filtered.filter((e) => e.claimedById !== null);
-        }
-      }
-
-      return filtered;
-    },
-  );
-
-  (prismaMock.allowedEmail.count as jest.Mock).mockImplementation(
-    async (args: any) => {
-      const where = args?.where;
-      let filtered = mockEmails;
-
-      if (where) {
-        if (
-          where.email &&
-          typeof where.email === 'object' &&
-          'contains' in where.email
-        ) {
-          const search = where.email.contains.toLowerCase();
-          filtered = filtered.filter((e) => e.email.includes(search));
-        }
-        if (where.claimedById === null) {
-          filtered = filtered.filter((e) => e.claimedById === null);
-        } else if (where.claimedById && 'not' in where.claimedById) {
-          filtered = filtered.filter((e) => e.claimedById !== null);
-        }
-      }
-
-      return filtered.length;
-    },
-  );
 }
 
 // ============================================================================
@@ -600,15 +331,9 @@ export function setupBaseMocks(): void {
   // Mock transactions
   mockPrismaTransaction();
 
-  // Mock userRole operations (used in transactions)
-  (prismaMock.userRole.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
-  (prismaMock.userRole.create as jest.Mock).mockImplementation(async ({ data }: any) => ({
-    userId: data.userId,
-    roleId: data.roleId,
-  }));
-  (prismaMock.userRole.createMany as jest.Mock).mockImplementation(async ({ data }: any) => ({
-    count: Array.isArray(data) ? data.length : 1,
-  }));
+  // The default organization, as `organizations WHERE is_default` answers it
+  // (the identity slice resolves a legacy token's organization through it).
+  (prismaMock.organization.findFirst as jest.Mock).mockResolvedValue({ id: MOCK_DEFAULT_ORG_ID });
 
   // Mock $connect and $disconnect
   (prismaMock.$connect as jest.Mock).mockResolvedValue(undefined);

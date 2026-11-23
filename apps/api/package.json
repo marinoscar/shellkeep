@@ -34,7 +34,9 @@
     "db:baseline": "node scripts/platform-env.js db baseline",
     "db:policies": "platform db policies",
     "db:promote": "platform db promote",
-    "db:test": "node scripts/test-db-connection.js"
+    "db:test": "node scripts/test-db-connection.js",
+    "catalog:permissions": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-permission-catalog.ts",
+    "catalog:settings": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-settings-catalog.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.975.0",

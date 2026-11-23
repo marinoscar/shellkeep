@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { withoutAuthGuards } from '../../test/helpers/allow-guards';
 import { NotFoundException } from '@nestjs/common';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
@@ -10,6 +11,7 @@ describe('SessionsController', () => {
   let mockSessionsService: jest.Mocked<SessionsService>;
 
   const userId = 'user-uuid';
+  const orgId = 'org-uuid';
   const sessionId = 'session-uuid';
 
   const mockSession = {
@@ -30,14 +32,14 @@ describe('SessionsController', () => {
       batchTerminate: jest.fn(),
     } as any;
 
-    const module: TestingModule = await Test.createTestingModule({
+    const module: TestingModule = await withoutAuthGuards(Test.createTestingModule({
       controllers: [SessionsController],
       providers: [
         { provide: SessionsService, useValue: mockSessionsService },
         { provide: SshService, useValue: {} },
         { provide: ServerProfilesService, useValue: {} },
       ],
-    }).compile();
+    })).compile();
 
     controller = module.get<SessionsController>(SessionsController);
   });
@@ -53,25 +55,25 @@ describe('SessionsController', () => {
       };
       mockSessionsService.findAll.mockResolvedValue(serviceResult as any);
 
-      const result = await controller.findAll(userId, query);
+      const result = await controller.findAll(userId, orgId, query);
 
       expect(result).toEqual(serviceResult);
-      expect(mockSessionsService.findAll).toHaveBeenCalledWith(userId, query);
+      expect(mockSessionsService.findAll).toHaveBeenCalledWith({ userId, orgId }, query);
     });
 
     it('should pass status filter to service', async () => {
       const query = { page: 1, pageSize: 20, status: 'active' } as any;
       mockSessionsService.findAll.mockResolvedValue({ items: [], total: 0 } as any);
 
-      await controller.findAll(userId, query);
+      await controller.findAll(userId, orgId, query);
 
-      expect(mockSessionsService.findAll).toHaveBeenCalledWith(userId, query);
+      expect(mockSessionsService.findAll).toHaveBeenCalledWith({ userId, orgId }, query);
     });
 
     it('should propagate service errors', async () => {
       mockSessionsService.findAll.mockRejectedValue(new Error('DB error'));
 
-      await expect(controller.findAll(userId, {} as any)).rejects.toThrow('DB error');
+      await expect(controller.findAll(userId, orgId, {} as any)).rejects.toThrow('DB error');
     });
   });
 
@@ -79,10 +81,10 @@ describe('SessionsController', () => {
     it('should return a session by id for the current user', async () => {
       mockSessionsService.findOne.mockResolvedValue(mockSession as any);
 
-      const result = await controller.findOne(sessionId, userId);
+      const result = await controller.findOne(sessionId, userId, orgId);
 
       expect(result).toEqual(mockSession);
-      expect(mockSessionsService.findOne).toHaveBeenCalledWith(sessionId, userId);
+      expect(mockSessionsService.findOne).toHaveBeenCalledWith(sessionId, { userId, orgId });
     });
 
     it('should propagate NotFoundException when session not found', async () => {
@@ -90,7 +92,7 @@ describe('SessionsController', () => {
         new NotFoundException('Terminal session not found'),
       );
 
-      await expect(controller.findOne('missing-uuid', userId)).rejects.toThrow(NotFoundException);
+      await expect(controller.findOne('missing-uuid', userId, orgId)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -99,16 +101,16 @@ describe('SessionsController', () => {
       const dto = { name: 'New Terminal', serverProfileId: 'profile-uuid' } as any;
       mockSessionsService.create.mockResolvedValue(mockSession as any);
 
-      const result = await controller.create(userId, dto);
+      const result = await controller.create(userId, orgId, dto);
 
       expect(result).toEqual(mockSession);
-      expect(mockSessionsService.create).toHaveBeenCalledWith(userId, dto);
+      expect(mockSessionsService.create).toHaveBeenCalledWith({ userId, orgId }, dto);
     });
 
     it('should propagate service errors on create', async () => {
       mockSessionsService.create.mockRejectedValue(new Error('SSH connection failed'));
 
-      await expect(controller.create(userId, {} as any)).rejects.toThrow('SSH connection failed');
+      await expect(controller.create(userId, orgId, {} as any)).rejects.toThrow('SSH connection failed');
     });
   });
 
@@ -118,10 +120,10 @@ describe('SessionsController', () => {
       const updatedSession = { ...mockSession, name: 'Renamed Terminal' };
       mockSessionsService.update.mockResolvedValue(updatedSession as any);
 
-      const result = await controller.update(sessionId, userId, dto);
+      const result = await controller.update(sessionId, userId, orgId, dto);
 
       expect(result).toEqual(updatedSession);
-      expect(mockSessionsService.update).toHaveBeenCalledWith(sessionId, userId, dto);
+      expect(mockSessionsService.update).toHaveBeenCalledWith(sessionId, { userId, orgId }, dto);
     });
 
     it('should propagate NotFoundException when session not found', async () => {
@@ -129,7 +131,7 @@ describe('SessionsController', () => {
         new NotFoundException('Terminal session not found'),
       );
 
-      await expect(controller.update('missing-uuid', userId, {} as any)).rejects.toThrow(
+      await expect(controller.update('missing-uuid', userId, orgId, {} as any)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -139,10 +141,10 @@ describe('SessionsController', () => {
     it('should terminate a session and return undefined', async () => {
       mockSessionsService.terminate.mockResolvedValue(undefined as any);
 
-      const result = await controller.terminate(sessionId, userId);
+      const result = await controller.terminate(sessionId, userId, orgId);
 
       expect(result).toBeUndefined();
-      expect(mockSessionsService.terminate).toHaveBeenCalledWith(sessionId, userId);
+      expect(mockSessionsService.terminate).toHaveBeenCalledWith(sessionId, { userId, orgId });
     });
 
     it('should propagate NotFoundException when session not found', async () => {
@@ -150,7 +152,7 @@ describe('SessionsController', () => {
         new NotFoundException('Terminal session not found'),
       );
 
-      await expect(controller.terminate('missing-uuid', userId)).rejects.toThrow(NotFoundException);
+      await expect(controller.terminate('missing-uuid', userId, orgId)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -161,17 +163,17 @@ describe('SessionsController', () => {
       const serviceResult = { terminated: 2 };
       mockSessionsService.batchTerminate.mockResolvedValue(serviceResult);
 
-      const result = await controller.batchTerminate(userId, dto);
+      const result = await controller.batchTerminate(userId, orgId, dto);
 
       expect(result).toEqual(serviceResult);
-      expect(mockSessionsService.batchTerminate).toHaveBeenCalledWith(ids, userId);
+      expect(mockSessionsService.batchTerminate).toHaveBeenCalledWith(ids, { userId, orgId });
     });
 
     it('should return zero terminated when all sessions are already terminated', async () => {
       const dto = { ids: [sessionId] } as any;
       mockSessionsService.batchTerminate.mockResolvedValue({ terminated: 0 });
 
-      const result = await controller.batchTerminate(userId, dto);
+      const result = await controller.batchTerminate(userId, orgId, dto);
 
       expect(result).toEqual({ terminated: 0 });
     });
@@ -180,7 +182,7 @@ describe('SessionsController', () => {
       mockSessionsService.batchTerminate.mockRejectedValue(new Error('DB error'));
 
       await expect(
-        controller.batchTerminate(userId, { ids: [sessionId] } as any),
+        controller.batchTerminate(userId, orgId, { ids: [sessionId] } as any),
       ).rejects.toThrow('DB error');
     });
   });

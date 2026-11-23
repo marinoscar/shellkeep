@@ -28,9 +28,14 @@ export interface MockAuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   providers: any[];
+  sessionExpired: boolean;
   login: () => void;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  setAccessToken: (token: string | null) => void;
+  activeOrg: null;
+  memberships: [];
+  switchOrg: (orgId: string) => Promise<void>;
 }
 
 export const createMockAuthContext = (
@@ -40,9 +45,14 @@ export const createMockAuthContext = (
   isLoading: false,
   isAuthenticated: false,
   providers: [],
+  sessionExpired: false,
   login: vi.fn(),
   logout: vi.fn().mockResolvedValue(undefined),
   refreshUser: vi.fn().mockResolvedValue(undefined),
+  setAccessToken: vi.fn(),
+  activeOrg: null,
+  memberships: [],
+  switchOrg: vi.fn().mockResolvedValue(undefined),
   ...overrides,
 });
 

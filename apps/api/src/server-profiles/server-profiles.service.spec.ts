@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { ServerProfilesService } from './server-profiles.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { DefaultOrgResolver } from '../prisma/default-org.resolver';
+import { AUDIT_SINK } from '@marinoscar/platform-api/core';
 import * as encryptionUtil from '../common/utils/encryption.util';
 
 jest.mock('../common/utils/encryption.util');
@@ -23,6 +23,9 @@ describe('ServerProfilesService', () => {
   let prisma: PrismaService;
 
   const mockUserId = 'user-123';
+  const mockOrgId = 'org-default';
+  const mockScope = { userId: mockUserId, orgId: mockOrgId };
+  const auditSink = { record: jest.fn().mockResolvedValue(undefined) };
   const mockProfileId = 'profile-456';
   const mockKey = Buffer.alloc(32, 'k');
 
@@ -52,7 +55,7 @@ describe('ServerProfilesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ServerProfilesService,
-        { provide: DefaultOrgResolver, useValue: { resolve: jest.fn().mockResolvedValue('org-default') } },
+        { provide: AUDIT_SINK, useValue: auditSink },
         {
           provide: PrismaService,
           useValue: {
@@ -83,14 +86,14 @@ describe('ServerProfilesService', () => {
       (prisma.serverProfile.findMany as jest.Mock).mockResolvedValue(profiles);
       (prisma.serverProfile.count as jest.Mock).mockResolvedValue(1);
 
-      const result = await service.findAll(mockUserId, {
+      const result = await service.findAll(mockScope, {
         page: 1,
         pageSize: 20,
       });
 
       expect(prisma.serverProfile.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId: mockUserId },
+          where: { userId: mockUserId, orgId: mockOrgId },
           skip: 0,
           take: 20,
           orderBy: { updatedAt: 'desc' },
@@ -107,7 +110,7 @@ describe('ServerProfilesService', () => {
       (prisma.serverProfile.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.serverProfile.count as jest.Mock).mockResolvedValue(0);
 
-      await service.findAll(mockUserId, {
+      await service.findAll(mockScope, {
         page: 1,
         pageSize: 20,
         search: 'prod',
@@ -117,6 +120,7 @@ describe('ServerProfilesService', () => {
         expect.objectContaining({
           where: {
             userId: mockUserId,
+            orgId: mockOrgId,
             OR: [
               { name: { contains: 'prod', mode: 'insensitive' } },
               { hostname: { contains: 'prod', mode: 'insensitive' } },
@@ -130,7 +134,7 @@ describe('ServerProfilesService', () => {
       (prisma.serverProfile.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.serverProfile.count as jest.Mock).mockResolvedValue(45);
 
-      const result = await service.findAll(mockUserId, {
+      const result = await service.findAll(mockScope, {
         page: 2,
         pageSize: 20,
       });
@@ -148,10 +152,10 @@ describe('ServerProfilesService', () => {
         mockProfile,
       );
 
-      const result = await service.findOne(mockProfileId, mockUserId);
+      const result = await service.findOne(mockProfileId, mockScope);
 
       expect(prisma.serverProfile.findFirst).toHaveBeenCalledWith({
-        where: { id: mockProfileId, userId: mockUserId },
+        where: { id: mockProfileId, userId: mockUserId, orgId: mockOrgId },
       });
       expect(result.id).toBe(mockProfileId);
       expect(result.name).toBe('My Server');
@@ -161,7 +165,7 @@ describe('ServerProfilesService', () => {
       (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.findOne('nonexistent', mockUserId),
+        service.findOne('nonexistent', mockScope),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -169,7 +173,7 @@ describe('ServerProfilesService', () => {
       (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.findOne(mockProfileId, 'other-user'),
+        service.findOne(mockProfileId, { ...mockScope, userId: 'other-user' }),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -181,7 +185,7 @@ describe('ServerProfilesService', () => {
         createdProfile,
       );
 
-      await service.create(mockUserId, {
+      await service.create(mockScope, {
         name: 'My Server',
         hostname: 'example.com',
         port: 22,
@@ -211,7 +215,7 @@ describe('ServerProfilesService', () => {
         encryptedPassphrase: 'encrypted:my-phrase',
       });
 
-      await service.create(mockUserId, {
+      await service.create(mockScope, {
         name: 'Key Server',
         hostname: 'example.com',
         port: 22,
@@ -234,7 +238,7 @@ describe('ServerProfilesService', () => {
         encryptedPassword: null,
       });
 
-      await service.create(mockUserId, {
+      await service.create(mockScope, {
         name: 'Agent Server',
         hostname: 'example.com',
         port: 22,
@@ -258,7 +262,7 @@ describe('ServerProfilesService', () => {
         encryptedPassword: 'encrypted:new-pass',
       });
 
-      await service.update(mockProfileId, mockUserId, {
+      await service.update(mockProfileId, mockScope, {
         password: 'new-pass',
       });
 
@@ -280,7 +284,7 @@ describe('ServerProfilesService', () => {
         encryptedPassword: null,
       });
 
-      await service.update(mockProfileId, mockUserId, {
+      await service.update(mockProfileId, mockScope, {
         password: '',
       });
 
@@ -296,7 +300,7 @@ describe('ServerProfilesService', () => {
       (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.update(mockProfileId, mockUserId, { name: 'New Name' }),
+        service.update(mockProfileId, mockScope, { name: 'New Name' }),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -310,10 +314,10 @@ describe('ServerProfilesService', () => {
         mockProfile,
       );
 
-      await service.remove(mockProfileId, mockUserId);
+      await service.remove(mockProfileId, mockScope);
 
       expect(prisma.serverProfile.findFirst).toHaveBeenCalledWith({
-        where: { id: mockProfileId, userId: mockUserId },
+        where: { id: mockProfileId, userId: mockUserId, orgId: mockOrgId },
       });
       expect(prisma.serverProfile.delete).toHaveBeenCalledWith({
         where: { id: mockProfileId },
@@ -324,7 +328,7 @@ describe('ServerProfilesService', () => {
       (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.remove(mockProfileId, 'wrong-user'),
+        service.remove(mockProfileId, { ...mockScope, userId: 'wrong-user' }),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -335,7 +339,7 @@ describe('ServerProfilesService', () => {
         mockProfile,
       );
 
-      const result = await service.findOne(mockProfileId, mockUserId);
+      const result = await service.findOne(mockProfileId, mockScope);
 
       expect(result).not.toHaveProperty('encryptedPassword');
       expect(result).not.toHaveProperty('encryptedPrivateKey');
@@ -355,11 +359,77 @@ describe('ServerProfilesService', () => {
         fullProfile,
       );
 
-      const result = await service.findOne(mockProfileId, mockUserId);
+      const result = await service.findOne(mockProfileId, mockScope);
 
       expect(result.hasPassword).toBe(true);
       expect(result.hasPrivateKey).toBe(true);
       expect(result.hasPassphrase).toBe(true);
+    });
+  });
+  describe('organization scope and audit', () => {
+    const otherOrg = { userId: mockUserId, orgId: 'org-other' };
+
+    it('names the organization next to the owner in every lookup (another organization is a 404)', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.findOne(mockProfileId, otherOrg)).rejects.toThrow(NotFoundException);
+
+      expect(prisma.serverProfile.findFirst).toHaveBeenCalledWith({
+        where: { id: mockProfileId, userId: mockUserId, orgId: 'org-other' },
+      });
+    });
+
+    it('audits a creation with the hostname only, never a credential', async () => {
+      (prisma.serverProfile.create as jest.Mock).mockResolvedValue(mockProfile);
+
+      await service.create(mockScope, {
+        name: 'My Server',
+        hostname: 'example.com',
+        port: 22,
+        username: 'admin',
+        authMethod: 'password',
+        password: 'my-pass',
+        tags: [],
+        color: 'default',
+      });
+
+      expect(auditSink.record).toHaveBeenCalledWith({
+        action: 'server_profile.create',
+        actorUserId: mockUserId,
+        targetType: 'server_profile',
+        targetId: mockProfileId,
+        meta: { hostname: 'example.com' },
+      });
+      expect(JSON.stringify(auditSink.record.mock.calls)).not.toContain('my-pass');
+    });
+
+    it('audits an update and a deletion', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(mockProfile);
+      (prisma.serverProfile.update as jest.Mock).mockResolvedValue(mockProfile);
+      (prisma.serverProfile.delete as jest.Mock).mockResolvedValue(mockProfile);
+
+      await service.update(mockProfileId, mockScope, { name: 'Renamed' });
+      await service.remove(mockProfileId, mockScope);
+
+      const actions = auditSink.record.mock.calls.map(([event]) => event.action);
+      expect(actions).toEqual(['server_profile.update', 'server_profile.delete']);
+    });
+
+    it('does not fail the action when the audit sink fails', async () => {
+      (prisma.serverProfile.create as jest.Mock).mockResolvedValue(mockProfile);
+      auditSink.record.mockRejectedValueOnce(new Error('audit down'));
+
+      await expect(
+        service.create(mockScope, {
+          name: 'My Server',
+          hostname: 'example.com',
+          port: 22,
+          username: 'admin',
+          authMethod: 'agent',
+          tags: [],
+          color: 'default',
+        }),
+      ).resolves.toMatchObject({ id: mockProfileId });
     });
   });
 });

@@ -1,313 +1,87 @@
+import {
+  ApiError,
+  PlatformHttpClient,
+  createPlatformApiClient,
+  type PlatformHttpRequestOptions,
+} from '@marinoscar/platform-web/core';
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
-interface RequestOptions extends RequestInit {
-  skipAuth?: boolean;
-}
+/**
+ * The package's error class, re-exported so call sites that import `ApiError`
+ * from `services/api` keep doing so (same `message`, `status`, `code`,
+ * `details`, so an `instanceof` check still matches).
+ */
+export { ApiError };
 
-class ApiService {
-  private accessToken: string | null = null;
-  private refreshPromise: Promise<boolean> | null = null;
+/** Request options of {@link api}, for the few callers that name the type. */
+export type RequestOptions = PlatformHttpRequestOptions;
 
-  setAccessToken(token: string | null) {
-    this.accessToken = token;
+/** Called with the new access token after every successful refresh. */
+export type AccessTokenRefreshedListener = (token: string) => void;
+
+/**
+ * The app's one HTTP client (issue #47): the platform's `PlatformHttpClient`
+ * (`@marinoscar/platform-web/core`), which holds the access token in memory,
+ * sends it as `Authorization: Bearer`, refreshes once on a 401 from the
+ * HttpOnly `refresh_token` cookie and serialises refreshes across tabs. The
+ * packaged `AuthProvider` drives sessions through it.
+ *
+ * The one addition is {@link AppHttpClient.onAccessTokenRefreshed}: long-lived
+ * connections that carry the access token outside HTTP (a WebSocket that
+ * re-authenticates in-band) subscribe to it so they can present the fresh
+ * token. Every refresh goes through `refreshToken()` (the client's own
+ * 401-retry calls it too), so overriding it observes all of them.
+ */
+export class AppHttpClient extends PlatformHttpClient {
+  private refreshedListeners = new Set<AccessTokenRefreshedListener>();
+
+  override async refreshToken(): Promise<boolean> {
+    const refreshed = await super.refreshToken();
+    const token = this.getAccessToken();
+    if (refreshed && token) {
+      for (const listener of [...this.refreshedListeners]) {
+        try {
+          listener(token);
+        } catch (error) {
+          console.error('Access token listener failed:', error);
+        }
+      }
+    }
+    return refreshed;
   }
 
-  getAccessToken(): string | null {
-    return this.accessToken;
-  }
-
-  private async request<T>(
-    endpoint: string,
-    options: RequestOptions = {},
-  ): Promise<T> {
-    const { skipAuth = false, ...fetchOptions } = options;
-
-    const headers: HeadersInit = {
-      ...fetchOptions.headers,
+  /**
+   * Subscribe to "a new access token is held" (after a successful refresh).
+   *
+   * @param listener - called with the new token.
+   * @returns the unsubscribe function.
+   */
+  onAccessTokenRefreshed(listener: AccessTokenRefreshedListener): () => void {
+    this.refreshedListeners.add(listener);
+    return () => {
+      this.refreshedListeners.delete(listener);
     };
-
-    // Only set Content-Type for requests with a body (Fastify 5 is strict about this)
-    if (fetchOptions.body) {
-      (headers as Record<string, string>)['Content-Type'] = 'application/json';
-    }
-
-    if (!skipAuth && this.accessToken) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...fetchOptions,
-      headers,
-      credentials: 'include', // Include cookies for refresh token
-    });
-
-    if (response.status === 401 && !skipAuth) {
-      // Try to refresh token (only once, avoid infinite loops)
-      const refreshed = await this.refreshToken();
-      if (refreshed) {
-        // Update authorization header with new token and retry ONCE
-        const retryHeaders: HeadersInit = {
-          'Content-Type': 'application/json',
-          ...fetchOptions.headers,
-          'Authorization': `Bearer ${this.accessToken}`,
-        };
-
-        const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
-          ...fetchOptions,
-          headers: retryHeaders,
-          credentials: 'include',
-        });
-
-        if (!retryResponse.ok) {
-          const error = await retryResponse.json().catch(() => ({}));
-          throw new ApiError(
-            error.message || 'Request failed',
-            retryResponse.status,
-            error.code,
-            error.details,
-          );
-        }
-
-        if (retryResponse.status === 204) {
-          return undefined as T;
-        }
-
-        const data = await retryResponse.json();
-        return data.data ?? data;
-      }
-      throw new ApiError('Unauthorized', 401);
-    }
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new ApiError(
-        error.message || 'Request failed',
-        response.status,
-        error.code,
-        error.details,
-      );
-    }
-
-    // Handle 204 No Content
-    if (response.status === 204) {
-      return undefined as T;
-    }
-
-    const data = await response.json();
-    return data.data ?? data;
-  }
-
-  async refreshToken(): Promise<boolean> {
-    // If a refresh is already in progress, wait for it
-    if (this.refreshPromise) {
-      return this.refreshPromise;
-    }
-
-    // Start a new refresh
-    this.refreshPromise = this.doRefreshToken();
-
-    try {
-      return await this.refreshPromise;
-    } finally {
-      this.refreshPromise = null;
-    }
-  }
-
-  private async doRefreshToken(): Promise<boolean> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        this.accessToken = null;
-        return false;
-      }
-
-      const responseData = await response.json();
-      // Unwrap the { data: { accessToken } } structure from TransformInterceptor
-      const tokenData = responseData.data ?? responseData;
-
-      // Validate that we actually got a token
-      if (!tokenData.accessToken || typeof tokenData.accessToken !== 'string') {
-        this.accessToken = null;
-        return false;
-      }
-
-      this.accessToken = tokenData.accessToken;
-      return true;
-    } catch {
-      this.accessToken = null;
-      return false;
-    }
-  }
-
-  // Generic methods
-  get<T>(endpoint: string, options?: RequestOptions) {
-    return this.request<T>(endpoint, { ...options, method: 'GET' });
-  }
-
-  post<T>(endpoint: string, body?: unknown, options?: RequestOptions) {
-    return this.request<T>(endpoint, {
-      ...options,
-      method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  }
-
-  put<T>(endpoint: string, body?: unknown, options?: RequestOptions) {
-    return this.request<T>(endpoint, {
-      ...options,
-      method: 'PUT',
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  }
-
-  patch<T>(endpoint: string, body?: unknown, options?: RequestOptions) {
-    return this.request<T>(endpoint, {
-      ...options,
-      method: 'PATCH',
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  }
-
-  delete<T>(endpoint: string, options?: RequestOptions) {
-    return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
 }
 
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-    public code?: string,
-    public details?: unknown,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
+export const api = new AppHttpClient({
+  baseUrl: API_BASE_URL,
+  // Named after the app so two apps on one origin never contend for a lock.
+  refreshLockName: 'shellkeep-auth-refresh',
+});
 
-export const api = new ApiService();
-
-// Import types
-import type {
-  AllowlistResponse,
-  AllowedEmailEntry,
-  UsersResponse,
-  UserListItem,
-  DeviceActivationInfo,
-  DeviceAuthorizationResponse,
-} from '../types';
-
-// Allowlist API
-export async function getAllowlist(params?: {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  status?: 'all' | 'pending' | 'claimed';
-}): Promise<AllowlistResponse> {
-  const searchParams = new URLSearchParams();
-  if (params?.page) searchParams.set('page', String(params.page));
-  if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
-  if (params?.search) searchParams.set('search', params.search);
-  if (params?.status) searchParams.set('status', params.status);
-
-  return api.get<AllowlistResponse>(`/allowlist?${searchParams}`);
-}
-
-export async function addToAllowlist(
-  email: string,
-  notes?: string,
-): Promise<AllowedEmailEntry> {
-  return api.post<AllowedEmailEntry>('/allowlist', { email, notes });
-}
-
-export async function removeFromAllowlist(id: string): Promise<void> {
-  await api.delete<void>(`/allowlist/${id}`);
-}
-
-// Users API
-export async function getUsers(params?: {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  role?: string;
-  isActive?: boolean;
-}): Promise<UsersResponse> {
-  const searchParams = new URLSearchParams();
-  if (params?.page) searchParams.set('page', String(params.page));
-  if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
-  if (params?.search) searchParams.set('search', params.search);
-  if (params?.role) searchParams.set('role', params.role);
-  if (params?.isActive !== undefined)
-    searchParams.set('isActive', String(params.isActive));
-
-  return api.get<UsersResponse>(`/users?${searchParams}`);
-}
-
-export async function updateUser(
-  id: string,
-  data: { displayName?: string; isActive?: boolean },
-): Promise<UserListItem> {
-  return api.patch<UserListItem>(`/users/${id}`, data);
-}
-
-export async function updateUserRoles(
-  id: string,
-  roles: string[],
-): Promise<UserListItem> {
-  return api.put<UserListItem>(`/users/${id}/roles`, { roles });
-}
-
-// Device Activation API
-export async function getDeviceActivationInfo(
-  userCode: string,
-): Promise<DeviceActivationInfo> {
-  return api.get<DeviceActivationInfo>(`/auth/device/activate?code=${userCode}`);
-}
-
-export async function authorizeDevice(
-  userCode: string,
-  approve: boolean,
-): Promise<DeviceAuthorizationResponse> {
-  return api.post<DeviceAuthorizationResponse>('/auth/device/authorize', {
-    userCode,
-    approve,
-  });
-}
+/**
+ * The packaged `PlatformApiClient` over {@link api}, for the platform pages and
+ * hooks. Built once, at module scope: packaged hooks key on its identity.
+ */
+export const platformApi = createPlatformApiClient(api);
 
 // Storage API
 export async function uploadFile(file: Blob, filename: string): Promise<{ id: string; status: string }> {
   const formData = new FormData();
   formData.append('file', file, filename);
-
-  const token = api.getAccessToken();
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${API_BASE_URL}/storage/objects`, {
-    method: 'POST',
-    headers,
-    credentials: 'include',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new ApiError(
-      error.message || 'Upload failed',
-      response.status,
-      error.code,
-      error.details,
-    );
-  }
-
-  const data = await response.json();
-  return data.data ?? data;
+  return api.postFormData<{ id: string; status: string }>('/storage/objects', formData);
 }
 
 export async function getDownloadUrl(objectId: string, expiresIn = 3600): Promise<string> {

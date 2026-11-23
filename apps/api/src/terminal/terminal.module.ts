@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { AuthModule } from '@marinoscar/platform-api/identity';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CommonModule } from '../common/common.module';
 import { ServerProfilesModule } from '../server-profiles/server-profiles.module';
@@ -9,6 +8,7 @@ import { SessionsService } from './sessions.service';
 import { SshService } from './ssh.service';
 import { SessionManagerService } from './session-manager.service';
 import { TerminalGateway } from './terminal.gateway';
+import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
 import { SessionCleanupTask } from './tasks/session-cleanup.task';
 
 @Module({
@@ -16,16 +16,20 @@ import { SessionCleanupTask } from './tasks/session-cleanup.task';
     PrismaModule,
     CommonModule,
     ServerProfilesModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get('jwt.secret'),
-      }),
-    }),
+    // The identity slice's own module: `AuthService` (its principal resolution)
+    // and `JwtService` for `TerminalPrincipalResolver`. Nest modules are
+    // singletons, so this is the instance `IdentityModule.forRoot()` mounts.
+    AuthModule,
   ],
   controllers: [SessionsController],
-  providers: [SessionsService, SshService, SessionManagerService, TerminalGateway, SessionCleanupTask],
+  providers: [
+    SessionsService,
+    SshService,
+    SessionManagerService,
+    TerminalPrincipalResolver,
+    TerminalGateway,
+    SessionCleanupTask,
+  ],
   exports: [SessionsService],
 })
 export class TerminalModule {}

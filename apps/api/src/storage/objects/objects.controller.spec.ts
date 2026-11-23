@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { withoutAuthGuards } from '../../../test/helpers/allow-guards';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ObjectsController } from './objects.controller';
 import { ObjectsService } from './objects.service';
@@ -34,12 +35,12 @@ describe('ObjectsController', () => {
       simpleUpload: jest.fn(),
     } as any;
 
-    const module: TestingModule = await Test.createTestingModule({
+    const module: TestingModule = await withoutAuthGuards(Test.createTestingModule({
       controllers: [ObjectsController],
       providers: [
         { provide: ObjectsService, useValue: mockObjectsService },
       ],
-    }).compile();
+    })).compile();
 
     controller = module.get<ObjectsController>(ObjectsController);
   });

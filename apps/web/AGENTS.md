@@ -4,7 +4,8 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 ## Layout
 
-- `src/pages/`, `src/components/` (`terminal/`, `server-profiles/`, `navigation/`, `settings/`, `admin/`, `auth/`, `common/`), `src/hooks/`, `src/contexts/`, `src/services/api.ts`, `src/theme/`.
+- `src/pages/`, `src/components/` (`terminal/`, `server-profiles/`, `navigation/`, `settings/`, `admin/`, `common/`), `src/hooks/`, `src/contexts/`, `src/services/api.ts`, `src/theme/`.
+- Identity is the platform's (`@marinoscar/platform-web/identity`, since #47): `src/identity/` binds `AuthProvider`, the adapters and the branded `LoginPage`; read the user with `useAuth()` and gate on `usePermissions().hasPermission('<the exact API string>')`, never on a role name. The terminal socket re-sends `auth` after each token refresh (`services/terminal-ws.ts`).
 - Target *(from #76)*: `src/config/` holds the registries (`adminSections.tsx`, `userSettingsSections.tsx`, `destinations.ts`); most features come from `@marinoscar/platform-web/<slice>` and the app binds them. Fix a packaged page in the platform, not by copying it here.
 - Tests: `src/__tests__/` (Vitest + RTL) and beside components. Run `npm run test:run` and `npm run typecheck` in this folder.
 

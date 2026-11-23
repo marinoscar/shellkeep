@@ -17,16 +17,16 @@ vi.mock('../../../components/settings/ImageUpload', () => ({
   ),
 }));
 
-// Mock the AuthContext - need to import original to get AuthContext
-vi.mock('../../../contexts/AuthContext', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../contexts/AuthContext')>();
+// Mock the identity slice's useAuth - import the original to keep AuthContext
+vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@marinoscar/platform-web/identity/headless')>();
   return {
     ...actual,
     useAuth: vi.fn(),
   };
 });
 
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '@marinoscar/platform-web/identity/headless';
 
 const mockUseAuth = vi.mocked(useAuth);
 
@@ -49,9 +49,14 @@ describe('ProfileSettings', () => {
       isLoading: false,
       isAuthenticated: true,
       providers: [],
+      sessionExpired: false,
       login: vi.fn(),
       logout: vi.fn(),
       refreshUser: mockRefreshUser.mockResolvedValue(undefined),
+      setAccessToken: vi.fn(),
+      activeOrg: null,
+      memberships: [],
+      switchOrg: vi.fn(),
     });
 
     mockOnSave.mockResolvedValue(undefined);
