@@ -12,6 +12,10 @@ import { APP_NAME } from './config/app';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
 import { AppPlatformHostProvider } from './platform/platformHost';
 import { JobsNodesProviders } from './platform/jobsAdapters';
+// The notifications web slice (#51): its configuration first, for its side
+// effect, before the first render.
+import './platform/notifications';
+import { NotificationProvider } from '@marinoscar/platform-web/notifications/headless';
 
 // Pages (lazy loaded)
 import { Suspense, lazy } from 'react';
@@ -286,9 +290,14 @@ export default function App() {
     <ThemeContextProvider>
       <IdentityProviders>
         <AppPlatformHostProvider>
-          <JobsNodesProviders>
-            <AppRoutes />
-          </JobsNodesProviders>
+          {/* The live inbox (#51): one SSE stream per tab, opened only while
+              signed in (the provider watches the session), so the bell in
+              the app bar and the toasts work on every route. */}
+          <NotificationProvider>
+            <JobsNodesProviders>
+              <AppRoutes />
+            </JobsNodesProviders>
+          </NotificationProvider>
           {/* The host slice's PWA prompts (#46): the update prompt also
               registers the service worker. */}
           <UpdatePrompt useRegisterSW={useRegisterSW} />
