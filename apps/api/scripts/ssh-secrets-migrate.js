@@ -41,9 +41,9 @@ if (existsSync(compiled)) {
 
 entry.main(process.argv.slice(2)).then(
   (code) => process.exit(code),
-  () => {
-    // Never print the error: a connection string or a row could be in it.
-    console.error('SSH secret re-encryption failed (database or key error). Nothing is logged here by design.');
+  (error) => {
+    // The class and code only: a message can carry a connection string or a value.
+    console.error(entry.describeFailure(error));
     process.exit(2);
   },
 );

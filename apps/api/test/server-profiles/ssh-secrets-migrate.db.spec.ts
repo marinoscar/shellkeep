@@ -30,6 +30,7 @@ import { registerShellkeepCredentialPurposes } from '../../src/app-registrations
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { encrypt, getEncryptionKey } from '../../src/server-profiles/migrate/legacy-cipher';
 import {
+  describeFailure,
   formatReport,
   main,
   migrateSshSecrets,
@@ -300,6 +301,28 @@ describe('SSH secret re-encryption (real database)', () => {
     });
 
     afterEach(() => jest.restoreAllMocks());
+
+    it('fills the platform registries itself, so the command works outside the server', () => {
+      // A fresh module registry: nothing has registered `UserCredential` as user-owned yet.
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { userOwnedModelRegistry } = require('@marinoscar/platform-api/core');
+        expect(userOwnedModelRegistry.list().map((def: { model: string }) => def.model)).not.toContain('UserCredential');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('../../src/server-profiles/migrate/ssh-secrets-migrate');
+        expect(userOwnedModelRegistry.list().map((def: { model: string }) => def.model)).toContain('UserCredential');
+      });
+    });
+
+    it('describes an unexpected failure by class and code, never by message', () => {
+      const error = Object.assign(new Error('postgresql://user:pw@host/db is down'), { code: 'ECONNREFUSED' });
+
+      const line = describeFailure(error);
+
+      expect(line).toContain('Error (ECONNREFUSED)');
+      expect(line).not.toContain('postgresql://');
+      expect(describeFailure('boom')).toContain('string');
+    });
 
     it('parses the mode and refuses --apply with --verify', () => {
       expect(parseMode([])).toBe('dry-run');

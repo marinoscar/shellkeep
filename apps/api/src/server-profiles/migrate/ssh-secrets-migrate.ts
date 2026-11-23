@@ -30,6 +30,11 @@
 // This is the only file outside `legacy-cipher.ts` that may read the legacy key.
 // =============================================================================
 
+// FIRST: the platform credential store reaches `user_credentials` through `forUser`, which refuses
+// a model nobody classified as user-owned. The registries are filled by this import (the server
+// fills them through `shellkeep.manifest.ts`); a command that skips it fails with ScopedAccessError.
+import '../../app-registrations/registrations';
+
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { assertEncryptionKeyConfigured } from '@marinoscar/platform-api/core';
@@ -254,6 +259,16 @@ export function parseMode(argv: readonly string[]): MigrationMode {
 }
 
 /**
+ * One line for an unexpected failure: the error's class and code only. Never its message, which
+ * can carry a connection string, a row or a value.
+ */
+export function describeFailure(error: unknown): string {
+  const name = error instanceof Error ? error.name : typeof error;
+  const code = (error as { code?: unknown } | null)?.code;
+  return `SSH secret re-encryption failed: ${name}${typeof code === 'string' ? ` (${code})` : ''}. The message is withheld by design: it can carry a connection string or a value.`;
+}
+
+/**
  * The command: connects with `POSTGRES_*`, runs one mode, prints the report. Returns the
  * process exit code: 0 when clean, 1 when a row needs attention, 2 for a usage or
  * configuration error.
@@ -299,9 +314,8 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
 if (require.main === module) {
   main().then(
     (code) => process.exit(code),
-    () => {
-      // Never print the error: a connection string or a row could be in it.
-      console.error('SSH secret re-encryption failed (database or key error). Nothing is logged here by design.');
+    (error) => {
+      console.error(describeFailure(error));
       process.exit(2);
     },
   );
