@@ -36,6 +36,7 @@
     "db:promote": "platform db promote",
     "db:test": "node scripts/test-db-connection.js",
     "ssh:migrate-secrets": "node scripts/ssh-secrets-migrate.js",
+    "storage:import-env": "node scripts/storage-import-env.js",
     "openapi:dump": "ts-node -P scripts/tsconfig.json --transpile-only scripts/dump-openapi.ts",
     "openapi:typecheck": "tsc -p scripts/tsconfig.json",
     "catalog:permissions": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-permission-catalog.ts",
