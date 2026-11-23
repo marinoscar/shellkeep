@@ -110,9 +110,10 @@ Drift comes from the apps view.
 |---|---|---|---|---|---|---|
 | `apps/web/src/__tests__` | 4% / +1484 −2889 | 68 | mixed | tests follow their module: delete with the module they cover, keep for domain code | per module | none |
 | `apps/web/src/components` | 22.2% / +216 −65 | 40 | mixed (see `components/…` rows) | see below | — | see below |
-| `apps/web/src/contexts` | 0% / +56 −8 | 2 | noise | `AuthContext` to identity web (#47); `ThemeContext` to shell theme (#76) | #47, #76 | none |
+| `apps/web/src/contexts` | 0% / +56 −8 | 1 | noise | `AuthContext` deleted by #47 (identity web `AuthProvider`); `ThemeContext` to shell theme (#76) | #47, #76 | `AuthContext.tsx` deleted by #47 |
 | `apps/web/src/hooks` | 11.1% / +173 −20 | 11 | mixed (see `hooks/…` rows) | see below | — | see below |
 | `apps/web/src/config` | n/a / +0 −0 | 2 | shellkeep-divergence | app composition root: `destinations.ts` (consumed by `Sidebar`, maps onto `ShellNavigation`), `userSettingsPanels.tsx` (domain panels on the user settings page); #76 adds `adminSections.tsx` and `userSettingsSections.tsx`, #80 turns the panels into cards | #44, #76, #80 | none |
+| `apps/web/src/identity` | n/a / +0 −0 | 3 | shellkeep-divergence | identity web bindings (#47): `IdentityProviders` (packaged `AuthProvider` on the app client, `IdentityWebAdaptersProvider`), `identityAdapters.ts`, `LoginPage` (packaged page with the ShellKeep `Logo` slot) | #47 | none |
 | `apps/web/src/lib` | n/a / +0 −0 | 2 | domain | keep (`lib/terminal`) | — | none |
 | `apps/web/src/pages` | 0% / +35 −12 | 12 | mixed (see page rows) | see below | — | see below |
 | `apps/web/src/services` | 0% / +353 −23 | 2 | mixed (see `services/…` rows) | see below | — | see below |
@@ -130,9 +131,9 @@ Drift comes from the apps view.
 | `apps/web/src/main.tsx` | 0% / +0 −10 | 1 | shellkeep-divergence | app entry (providers) | #42, #76 | none |
 | `apps/web/src/hooks/useSystemSettings.ts` | 0% / +89 −7 | 1 | noise | settings web hooks | #48 | none |
 | `apps/web/src/hooks/useUserSettings.ts` | 0% / +84 −13 | 1 | noise | settings web hooks | #48 | none |
-| `apps/web/src/hooks/useUsers.ts` | n/a / +0 −0 | 1 | noise | identity web hooks | #47 | none |
-| `apps/web/src/hooks/useAllowlist.ts` | n/a / +0 −0 | 1 | noise | identity web hooks | #47 | none |
-| `apps/web/src/hooks/usePermissions.ts` | n/a / +0 −0 | 1 | noise | identity web hooks | #47 | none |
+| `apps/web/src/hooks/useUsers.ts` | n/a / +0 −0 | 1 | noise | identity web hooks | #47 | deleted by #47 |
+| `apps/web/src/hooks/useAllowlist.ts` | n/a / +0 −0 | 1 | noise | identity web hooks | #47 | deleted by #47 |
+| `apps/web/src/hooks/usePermissions.ts` | n/a / +0 −0 | 1 | noise | identity web hooks | #47 | deleted by #47 |
 | `apps/web/src/hooks/useTerminal.ts` | n/a / +0 −0 | 1 | domain | keep | — | none |
 | `apps/web/src/hooks/useTouchScroll.ts` | n/a / +0 −0 | 1 | domain | keep | — | none |
 | `apps/web/src/hooks/useKeyboardInset.ts` | n/a / +0 −0 | 1 | domain | keep | — | none |
@@ -141,13 +142,13 @@ Drift comes from the apps view.
 | `apps/web/src/services/api.ts` | 0% / +353 −23 | 1 | backport | core web client (`createPlatformApiClient`); terminal calls moved to `services/terminal-api.ts` | #44, #76 | Terminal API calls extracted to `services/terminal-api.ts` (resolved by #44) |
 | `apps/web/src/services/terminal-api.ts` | n/a / +0 −0 | 1 | domain | keep (server-profile and session calls on the base client) | #44 | none |
 | `apps/web/src/services/terminal-ws.ts` | n/a / +0 −0 | 1 | domain | keep (re-sends `auth` after token refresh, #47) | #47 | none |
-| `apps/web/src/pages/UserManagementPage.tsx` | n/a / +0 −0 | 1 | noise | identity web (`UsersPage`) | #47 | none |
+| `apps/web/src/pages/UserManagementPage.tsx` | n/a / +0 −0 | 1 | noise | identity web (`UsersPage`) | #47 | deleted by #47 |
 | `apps/web/src/pages/SystemSettingsPage.tsx` | n/a / +0 −0 | 1 | noise | orphan: no route renders it; delete | #76 | none |
 | `apps/web/src/pages/UserSettingsPage.tsx` | n/a / +0 −0 | 1 | noise | settings web (`SettingsHub`, `UserProfilePage`, `UserAppearancePage`) | #48, #80 | none |
-| `apps/web/src/pages/LoginPage.tsx` | n/a / +0 −0 | 1 | noise | identity web (`LoginPage`) | #47 | none |
-| `apps/web/src/pages/AuthCallbackPage.tsx` | n/a / +0 −0 | 1 | noise | identity web | #47 | none |
-| `apps/web/src/pages/ActivateDevicePage.tsx` | n/a / +0 −0 | 1 | noise | identity web (device activation) | #47 | none |
-| `apps/web/src/pages/TestLoginPage.tsx` | 0% / +2 −2 | 1 | noise | identity web (testing) | #47 | none |
+| `apps/web/src/pages/LoginPage.tsx` | n/a / +0 −0 | 1 | noise | identity web (`LoginPage`) | #47 | deleted by #47 |
+| `apps/web/src/pages/AuthCallbackPage.tsx` | n/a / +0 −0 | 1 | noise | identity web | #47 | deleted by #47 |
+| `apps/web/src/pages/ActivateDevicePage.tsx` | n/a / +0 −0 | 1 | noise | identity web (device activation) | #47 | deleted by #47 |
+| `apps/web/src/pages/TestLoginPage.tsx` | 0% / +2 −2 | 1 | noise | identity web (testing) | #47 | kept by #47: the platform ships the test login endpoint (`identity/testing`) but no web page; the form posts to `POST /api/auth/test/login` and stays out of production builds |
 | `apps/web/src/pages/HomePage.tsx` | 0% / +33 −10 | 1 | domain | keep (dashboard, redone in #78) | #78 | none |
 | `apps/web/src/pages/ServerProfilesPage.tsx` | n/a / +0 −0 | 1 | domain | keep (redone in #79) | #79 | none |
 | `apps/web/src/pages/SessionsPage.tsx` | n/a / +0 −0 | 1 | domain | keep | — | none |
@@ -162,10 +163,10 @@ Drift comes from the apps view.
 | Module | Drift | Files | Category | Target | Issue | Workaround |
 |---|---|---|---|---|---|---|
 | `apps/web/src/components/navigation` | 0% / +175 −26 | 3 | noise | shell (`ShellAppBar`, `ShellNavigationRail`, `ShellUserMenu`); `Sidebar` destinations come from `config/destinations.ts` (resolved by #44) | #76 | none |
-| `apps/web/src/components/common` | 66.7% / +36 −34 | 6 | noise | shell and identity guards (`Layout.tsx` to `ShellLayout`; `ProtectedRoute`, `RequirePermission`, `AdminOnly` to identity web; `ErrorBoundary`, `LoadingSpinner` to the host) | #76, #47 | none |
-| `apps/web/src/components/admin` | n/a / +0 −0 | 6 | noise | identity web (`AddEmailDialog`, `AllowlistTable`, `UserList`); `FeatureFlagsList`, `SystemSettingsEditor`, `UISettings` to settings web | #47, #48 | none |
-| `apps/web/src/components/auth` | n/a / +0 −0 | 1 | noise | identity web (`OAuthButton`) | #47 | none |
-| `apps/web/src/components/device-activation` | n/a / +0 −0 | 3 | noise | identity web | #47 | none |
+| `apps/web/src/components/common` | 66.7% / +36 −34 | 6 | noise | shell and identity guards (`Layout.tsx` to `ShellLayout`; `ProtectedRoute`, `RequirePermission`, `AdminOnly` to identity web; `ErrorBoundary`, `LoadingSpinner` to the host) | #76, #47 | `ProtectedRoute`, `RequirePermission`, `AdminOnly` deleted by #47 (identity web `RequireAuth`, `RequirePermission`) |
+| `apps/web/src/components/admin` | n/a / +0 −0 | 6 | noise | identity web (`AddEmailDialog`, `AllowlistTable`, `UserList`); `FeatureFlagsList`, `SystemSettingsEditor`, `UISettings` to settings web | #47, #48 | `AddEmailDialog`, `AllowlistTable`, `UserList` deleted by #47 (identity web `UsersPage`) |
+| `apps/web/src/components/auth` | n/a / +0 −0 | 1 | noise | identity web (`OAuthButton`) | #47 | deleted by #47 |
+| `apps/web/src/components/device-activation` | n/a / +0 −0 | 3 | noise | identity web | #47 | deleted by #47 |
 | `apps/web/src/components/user` | 0% / +5 −5 | 1 | noise | identity web (`UserProfileCard`) | #47 | none |
 | `apps/web/src/components/settings` | n/a / +0 −0 | 3 | backport | settings web (`ImageUpload`, `ProfileSettings`, `ThemeSettings`); `KeyShortcutsSettings` and `KeystrokeEditor` are terminal domain | #48, #80 | `KeyShortcutsSettings` and `KeystrokeEditor` moved to `components/terminal/settings/` (resolved by #44); they become the "Terminal" settings card in #80 |
 | `apps/web/src/components/terminal` | n/a / +0 −0 | 10 | domain | keep (`settings/` holds `KeyShortcutsSettings` and `KeystrokeEditor` since #44) | — | none |
