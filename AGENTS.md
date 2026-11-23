@@ -93,7 +93,7 @@ Create clean, frequent commits, then land the work through a pull request. Assum
 
 ## MANDATORY: Every Long-Running Activity Is a Queue Job
 
-**Applies from #49.** Until #49 the existing cleanup task (`apps/api/src/terminal/tasks/session-cleanup.task.ts`) is the only cron; it moves to enqueue-only in #49.
+**In force since #49.** The queue and the worker-node fleet are the platform's (`src/platform/jobs/`); the session cleanup cron (`apps/api/src/terminal/tasks/session-cleanup.task.ts`) only enqueues the `terminal.session.reap` job (`terminal/jobs/session-reap.handler.ts`).
 
 1. **No long-running work outside the queue.** Anything that outlives the HTTP request, WebSocket message or cron tick that started it is a registered `JobHandler` with a declared `type`, enqueued through `JobsService` (`@marinoscar/platform-api/jobs`). A detached `void this.doX()`, an `@OnEvent` body that connects, downloads or spawns, and a `@Cron` body that works inline are violations. A `@Cron` only decides whether work is due and enqueues it (`enqueueHousekeepingJob`). Interactive terminal I/O is not a job; runbook runs, summaries and exports are.
    - Exactly three permanent exemptions, all the platform's: the lease reaper (`JobStuckResetTask`), `TempFileJanitorTask` and `NodeSecretSweepTask`. Executable form: conformance suites `cron-enqueue-only` and `on-event-no-io`. A fourth needs a platform change.
