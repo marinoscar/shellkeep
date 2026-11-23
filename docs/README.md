@@ -18,6 +18,7 @@ ShellKeep is a browser-based terminal workspace with persistent tmux-backed sess
 | Deploy to a VPS | [../infra/deploy/DEPLOY.md](../infra/deploy/DEPLOY.md), [ssl-nginx-setup.md](ssl-nginx-setup.md), [docker-compose-project-name-fix.md](docker-compose-project-name-fix.md) |
 | Work with Claude Code or OpenCode on this repo | [AI-ASSISTANTS.md](AI-ASSISTANTS.md), [../AGENTS.md](../AGENTS.md) |
 | Baseline an existing database, create the application role | [runbooks/database-baseline.md](runbooks/database-baseline.md), [runbooks/application-role.md](runbooks/application-role.md) |
+| Move the SSH secrets of a deployed database into the credential store | [runbooks/ssh-secret-reencryption.md](runbooks/ssh-secret-reencryption.md) |
 | See the original build specs | [specs/README.md](specs/README.md) |
 
 ## Index
@@ -34,6 +35,7 @@ ShellKeep is a browser-based terminal workspace with persistent tmux-backed sess
 | [AI-ASSISTANTS.md](AI-ASSISTANTS.md) | Claude Code and OpenCode configuration, size budgets, guards |
 | [runbooks/database-baseline.md](runbooks/database-baseline.md) | Baseline a deployed database onto the platform migration history |
 | [runbooks/application-role.md](runbooks/application-role.md) | The `shellkeep_app` database role |
+| [runbooks/ssh-secret-reencryption.md](runbooks/ssh-secret-reencryption.md) | Re-encrypt SSH secrets into the platform credential store (dry run, apply, verify, rollback) |
 | [specs/README.md](specs/README.md) | Foundation implementation specs |
 | [ssl-nginx-setup.md](ssl-nginx-setup.md) | SSL and Nginx reverse proxy notes |
 | [docker-compose-project-name-fix.md](docker-compose-project-name-fix.md) | Compose project name note |

@@ -1715,3 +1715,15 @@ This security architecture provides defense-in-depth through multiple layers:
 5. **Audit**: Comprehensive logging for compliance and monitoring
 
 The system is designed for production use and follows industry best practices for web application security. Regular security audits and updates are recommended to maintain security posture.
+
+---
+
+## SSH Credential Storage (issue #48)
+
+A server profile's password, private key and passphrase are stored in the platform's per-user credential store (`UserCredentialsService`, `user_credentials`), not on the profile row.
+
+- **Address**: `(userId = the profile's owner, purpose 'ssh', name)`; names `profile.<profileId>.password`, `profile.<profileId>.private_key`, `profile.<profileId>.passphrase`.
+- **Encryption**: AES-256-GCM under a sub-key derived from `SECRETS_ENCRYPTION_KEY` and the owner-bound domain `user:<userId>:ssh`. A ciphertext copied into another user's row fails authentication instead of decrypting. The key is verified at startup: the API refuses to boot with a missing or malformed key once a credential is stored.
+- **No fallback**: the `ssh` purpose is registered with `system: null` and `fallback: []`, so an organization or deployment credential can never answer an SSH secret. Org-owned or group-shared servers (#71, #35) will use `OrgCredentialsService` with the same names, decrypted server-side by the owner's credential, never shipped to a node.
+- **Egress**: `getSecret` is called only at the moment of connect, inside the API process (`ServerProfilesService.getDecryptedProfile`). Responses carry the booleans `hasPassword`, `hasPrivateKey` and `hasPassphrase` and nothing else; no secret, hint or ciphertext reaches a log, span, audit `meta`, export or AI prompt. The store logs only `Stored/Deleted user credential "ssh/<name>" for user <id>`.
+- **Legacy columns**: `server_profiles.encrypted_password`, `encrypted_private_key` and `encrypted_passphrase` (AES-256-GCM under the old `ENCRYPTION_KEY`) are no longer read or written. They stay until a later migration drops them after production verification (#84). The copy is [runbooks/ssh-secret-reencryption.md](runbooks/ssh-secret-reencryption.md).

@@ -124,7 +124,7 @@ Cross-cutting capability (identity, settings, jobs, storage, notifications, AI, 
 Each is or will be enforced by tests.
 
 - **SSH host keys are verified before any command runs** (#60). Trust on first use, store the fingerprint, refuse a changed key. No connection path (terminal, test connection, runbook, probe) may skip verification or auto-accept a changed key.
-- **SSH secrets never leave the API process**: no log, span, metric label, export, API response, AI prompt, job payload or node. Stored encrypted (AES-256-GCM today, the platform credential store from #48); only the decrypted value inside the SSH call.
+- **SSH secrets never leave the API process**: no log, span, metric label, export, API response, AI prompt, job payload or node. Stored in the platform credential store (`UserCredentialsService`, purpose `ssh`, since #48); only the decrypted value inside the SSH call.
 - **The WebSocket gateway authorizes every connection and message**: validate the access token on connect, re-check ownership of the session or profile, never trust a client-supplied id.
 - **`apps/api/prisma/schema/` is generated (applies from #45); never hand-edit it.** Edit the fragment (`apps/api/prisma/fragments/`, or the platform package's), run `npm run db:compose`, then `prisma:generate`.
 - **An installed migration is never edited or renamed** (applies from #45). `prisma/platform.lock` records each sha256 and `npm run db:check` fails on any byte change, comments included. Until #45, never rewrite a migration that was applied anywhere.

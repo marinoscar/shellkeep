@@ -841,16 +841,22 @@ Remove email from allowlist.
 ### Settings
 
 #### GET /user-settings
-**Requires Authentication** - Get current user's settings.
+**Requires Authentication** - Get current user's settings. The settings routes are the platform settings slice's (`@marinoscar/platform-api/settings`, #48).
 
 **Response:**
 ```json
 {
   "theme": "light",
   "profile": {
-    "displayName": "John Doe",
-    "useProviderImage": true,
-    "customImageUrl": null
+    "imageSource": "provider",
+    "imageObjectId": null,
+    "displayName": "John Doe"
+  },
+  "terminal": {
+    "showScrollButtons": true,
+    "keyShortcuts": [
+      { "id": "11111111-1111-4111-8111-111111111101", "label": "ESC", "keystrokes": [{ "modifiers": [], "key": "Escape" }] }
+    ]
   },
   "updatedAt": "2024-01-01T00:00:00.000Z",
   "version": 1
@@ -861,11 +867,15 @@ Remove email from allowlist.
 | Field | Type | Description |
 |-------|------|-------------|
 | `theme` | enum | UI theme: `light`, `dark`, `system` |
-| `profile.displayName` | string \| null | User's display name override |
-| `profile.useProviderImage` | boolean | Whether to use OAuth provider's profile image |
-| `profile.customImageUrl` | string \| null | Custom profile image URL |
+| `profile.displayName` | string | User's display name override (omitted when unset) |
+| `profile.imageSource` | enum | Which picture represents the user: `provider`, `none` or `upload` (`upload` needs the storage slice, #50) |
+| `profile.imageObjectId` | string \| null | The uploaded picture's object id |
+| `profile.timezone` | string | IANA time zone (omitted when unset) |
+| `terminal` | object | Optional namespace, present only when stored: `showScrollButtons` (boolean) and `keyShortcuts` (at most 50; each has a UUID `id`, a `label` of 1 to 40 characters and 1 to 3 `keystrokes`, each with a required `modifiers` array and a `key`). **Absent means the client's built-in defaults** (scroll buttons shown, the default shortcut bar). New users are created with the defaults stored |
 | `updatedAt` | string | ISO 8601 timestamp of last update |
 | `version` | number | Version number for optimistic concurrency control |
+
+A row written before #48 may still carry `profile.useProviderImage` and `profile.customImageUrl`: they read as `imageSource` (`none` when `useProviderImage` was `false`, otherwise `provider`) and are dropped from the stored value by the next write.
 
 ---
 
@@ -878,27 +888,14 @@ Remove email from allowlist.
   "theme": "dark",
   "profile": {
     "displayName": "Jane Doe",
-    "useProviderImage": false,
-    "customImageUrl": "https://example.com/avatar.jpg"
+    "imageSource": "none"
   }
 }
 ```
 
-**Response:**
-```json
-{
-  "theme": "dark",
-  "profile": {
-    "displayName": "Jane Doe",
-    "useProviderImage": false,
-    "customImageUrl": "https://example.com/avatar.jpg"
-  },
-  "updatedAt": "2024-01-01T12:00:00.000Z",
-  "version": 2
-}
-```
+**Response:** the same shape as `GET`.
 
-**Note:** This replaces the entire settings object. Use PATCH for partial updates.
+**Note:** This replaces the entire settings object (a `terminal` namespace left out of the body is removed). Use PATCH for partial updates.
 
 ---
 
@@ -908,7 +905,7 @@ Remove email from allowlist.
 **Request Body:**
 ```json
 {
-  "theme": "dark"
+  "terminal": { "showScrollButtons": false }
 }
 ```
 
@@ -917,26 +914,16 @@ Remove email from allowlist.
 If-Match: 1
 ```
 
-**Response:**
-```json
-{
-  "theme": "dark",
-  "profile": {
-    "displayName": "John Doe",
-    "useProviderImage": true,
-    "customImageUrl": null
-  },
-  "updatedAt": "2024-01-01T12:00:00.000Z",
-  "version": 2
-}
-```
+**Response:** the same shape as `GET`.
 
 **Optimistic Concurrency Control:**
 - Include `If-Match: <version>` header to ensure settings haven't been modified by another request
 - Returns **409 Conflict** if version mismatch detected
 - Prevents lost updates in concurrent scenarios
 
-**Note:** This performs a shallow merge with existing settings.
+**Merge semantics (JSON Merge Patch):**
+- `theme` and the `profile` fields in the body replace the stored ones; the others are kept.
+- `terminal`: a field in the body replaces the stored field (`keyShortcuts` replaces the whole list); a user without the namespace starts from the defaults; `"terminal": null` removes the namespace.
 
 ---
 
@@ -951,11 +938,17 @@ Get system-wide settings.
   "ui": {
     "allowUserThemeOverride": true
   },
+  "features": {},
+  "terminal": {
+    "detachAfterMinutes": 60,
+    "terminateDetachedAfterHours": 12,
+    "purgeTerminatedAfterDays": 3,
+    "doctorProbeProfileId": null
+  },
   "security": {
     "jwtAccessTtlMinutes": 15,
     "refreshTtlDays": 14
   },
-  "features": {},
   "updatedAt": "2024-01-01T00:00:00.000Z",
   "updatedBy": {
     "id": "uuid",
@@ -972,6 +965,10 @@ Get system-wide settings.
 | `security.jwtAccessTtlMinutes` | number | JWT access token TTL in minutes |
 | `security.refreshTtlDays` | number | Refresh token TTL in days |
 | `features` | object | Feature flags (extensible) |
+| `terminal.detachAfterMinutes` | integer | A session with no client is `detached` after this long (default 60, 5 to 1440) |
+| `terminal.terminateDetachedAfterHours` | integer | A `detached` session is terminated after this long (default 12, 1 to 720) |
+| `terminal.purgeTerminatedAfterDays` | integer | A `terminated` session row is purged after this long (default 3, 1 to 365) |
+| `terminal.doctorProbeProfileId` | string \| null | The server profile the Doctor probes (UUID, or `null`) |
 | `updatedAt` | string | ISO 8601 timestamp of last update |
 | `updatedBy` | object | User who last updated settings |
 | `version` | number | Version number for optimistic concurrency control |
@@ -981,7 +978,7 @@ Get system-wide settings.
 #### PUT /system-settings
 **Requires:** `system_settings:write` permission (Admin only)
 
-Replace all system settings.
+Replace all system settings. `ui`, `features` and `terminal` are each optional in the body: a namespace left out keeps its stored value. `security` is derived from the session policy and is read-only.
 
 **Request Body:**
 ```json
@@ -989,25 +986,28 @@ Replace all system settings.
   "ui": {
     "allowUserThemeOverride": true
   },
-  "security": {
-    "jwtAccessTtlMinutes": 15,
-    "refreshTtlDays": 14
-  },
-  "features": {}
+  "features": {},
+  "terminal": {
+    "detachAfterMinutes": 60,
+    "terminateDetachedAfterHours": 12,
+    "purgeTerminatedAfterDays": 3,
+    "doctorProbeProfileId": null
+  }
 }
 ```
 
-**Response:**
+**Response:** the same shape as `GET`:
 ```json
 {
   "ui": {
     "allowUserThemeOverride": true
   },
+  "features": {},
+  "terminal": { "detachAfterMinutes": 60, "terminateDetachedAfterHours": 12, "purgeTerminatedAfterDays": 3, "doctorProbeProfileId": null },
   "security": {
     "jwtAccessTtlMinutes": 15,
     "refreshTtlDays": 14
   },
-  "features": {},
   "updatedAt": "2024-01-01T12:00:00.000Z",
   "updatedBy": {
     "id": "uuid",
@@ -1044,11 +1044,12 @@ If-Match: 1
   "ui": {
     "allowUserThemeOverride": false
   },
+  "features": {},
+  "terminal": { "detachAfterMinutes": 60, "terminateDetachedAfterHours": 12, "purgeTerminatedAfterDays": 3, "doctorProbeProfileId": null },
   "security": {
     "jwtAccessTtlMinutes": 15,
     "refreshTtlDays": 14
   },
-  "features": {},
   "updatedAt": "2024-01-01T12:00:00.000Z",
   "updatedBy": {
     "id": "uuid",
@@ -1062,6 +1063,8 @@ If-Match: 1
 - Include `If-Match: <version>` header to ensure settings haven't been modified by another request
 - Returns **409 Conflict** if version mismatch detected
 - Prevents lost updates when multiple admins modify settings concurrently
+
+**Merge semantics:** `ui` merges per field, `features` per flag (a flag is added or replaced, never removed by a PATCH), `terminal` per field (`doctorProbeProfileId: null` clears the probe profile). A value outside the bounds above is a **400**.
 
 ---
 

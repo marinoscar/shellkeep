@@ -1,6 +1,6 @@
 # Local exceptions to the platform
 
-Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, and the issue that removes it. Introduced by #40 (epic #31), completed by #83. An exception without a row here is a bug. At the baseline commit there are none: ShellKeep has not adopted any package yet.
+Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, and the issue that removes it. Introduced by #40 (epic #31), completed by #83. An exception without a row here is a bug. At the baseline commit there were none; rows are added as slices are adopted.
 
 ## How to use this page
 
@@ -28,7 +28,8 @@ Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, a
 | `IdentityJobsAdapter` (`IDENTITY_JOBS`) | `apps/api/src/platform/identity/identity-jobs.adapter.ts` | ShellKeep has no job queue. The identity slice registers its two housekeeping handlers (`auth.token.cleanup`, `auth.device-code.cleanup`) with `registerHandler` and its enqueue-only crons call `enqueueHousekeepingJob`; the adapter runs the registered handler in-process, one at a time per type. Both are idempotent deletes of expired credential rows | #49 (jobs: the platform's `JobsService` and `JobHandlerRegistry`) |
 | `IdentityNodeCredentialsAdapter` (`IDENTITY_NODE_CREDENTIALS`) | `apps/api/src/platform/identity/identity-node-credentials.adapter.ts` | Resolves no `nod_` worker-node token (every one is a 401); ShellKeep has no worker nodes | #49 (nodes: `NodeCredentialService`) |
 | `IdentityNotifierAdapter` (`IDENTITY_NOTIFIER`) | `apps/api/src/platform/identity/identity-notifier.adapter.ts` | Logs (debug, no address) and drops `roleChanged`, `userWelcomed` and `allowlistInvitation`; `orgInvitation` is dropped for good in single-organization mode. ShellKeep has no email or notifications slice | #51 (notifications: `NotificationsService`) |
-| `ShellkeepProfileImages` (`IDENTITY_PROFILE_IMAGES`) | `apps/api/src/platform/identity/identity-user.adapters.ts` | Reads the stored `profile` user setting as ShellKeep always has (custom image when `useProviderImage` is false, else the provider's). The platform rule reads `profile.imageSource` and an uploaded storage object | #50 (storage: `resolveProfileImageUrl`) |
+| `ShellkeepProfileImages` (`IDENTITY_PROFILE_IMAGES`) | `apps/api/src/platform/identity/identity-user.adapters.ts` | Picks the picture `/api/auth/me` and `/api/users` report from the stored `profile` setting: `imageSource` `none` hides it (the platform settings slice writes it since #48), a legacy row keeps ShellKeep's old rule (custom image when `useProviderImage` is false, else the provider's). The platform rule also serves an uploaded avatar object | #50 (storage: `resolveProfileImageUrl`) |
+| `ShellkeepSettingsProfileImages` (`SETTINGS_PROFILE_IMAGES`) | `apps/api/src/platform/settings/settings-profile-images.adapter.ts` | Normalises a stored `profile` with the platform's rule (a legacy `useProviderImage` row reads as `imageSource`); `isUploadedAvatar` answers false because ShellKeep's own storage module writes no avatar object, so `imageSource: 'upload'` is a 400 | #50 (storage: the avatar check) |
 | `TerminalPrincipalResolver` | `apps/api/src/terminal/ws/terminal-principal.resolver.ts` | Verifies an access token sent on the terminal WebSocket and resolves the principal (`JwtService` with the slice's secret, `AuthService.validateJwtPayload`, `toPrincipal`), because the identity slice resolves a bearer token only inside its HTTP guard. Seam request EnterpriseAppBase#1216: "verify an access token for a non-HTTP transport and return the principal". It relies on three `@internal` exports | The platform release that ships the seam, adopted in the PR that bumps the pin and replaces the class with the seam (no ShellKeep issue yet; tracked by EnterpriseAppBase#1216) |
 | `DefaultOrgResolver` | `apps/api/src/prisma/default-org.resolver.ts`, used by `ObjectsService` only (storage objects, whose platform model requires `org_id`) | Reads the default organization's id once and caches it, so every new storage object is stamped with it. The domain (server profiles, terminal sessions) takes the organization from the request since #47 | #50 (storage slice) |
 
@@ -38,6 +39,7 @@ Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, a
 |---|---|---|---|
 | `cron-enqueue-only` | `terminal/tasks/session-cleanup.task.ts` | Reaps stale sessions inline; no queue yet | #49 (becomes the enqueue-only cron and the `terminal.session.reap` job) |
 | `cron-enqueue-only` | `storage/tasks/storage-cleanup.task.ts`, `storage/tasks/storage-expiry.task.ts` | ShellKeep's own storage module works inline | #50 (deleted for the storage slice) |
+| `credentials` | the suite's `purposes` option names the platform's storage purpose definition instead of the registry | ShellKeep registers no deployment (system or organization) credential purpose until #50, and the suite refuses a scan of zero; the `ssh` user purpose is checked from the registry | #50 (storage registers its purpose; the option is deleted) |
 | `user-owned-data` | raw SQL in `prisma/prisma.service.ts` (test-only `cleanDatabase()`) and `health/indicators/database.indicator.ts` (`SELECT 1`) | Neither touches a user-owned table | Kept; the health indicator goes with #46 |
 
 ### Optional identity ports left unbound
@@ -48,15 +50,28 @@ Not code shims: the ports are optional, and leaving one unbound means the slice 
 |---|---|---|
 | `IDENTITY_METRICS` | The slice records no metrics | #46 (host: `AppMetricsService`) |
 | `IDENTITY_EVENT_BUS` | The principal cache is invalidated in this process only (single instance) | #46 (host: the event bus) |
-| `IDENTITY_AUTH_CREDENTIALS` | Google reads `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from the environment | #48 (credentials store) |
-| `SYSTEM_SETTINGS_STORE` (platform host port) | Not injected by the identity slice; ShellKeep's own system settings stay in `settings/` | #48 |
 
-Adopted ahead of #46 because identity needs them: `platformHostModule` (`AUDIT_SINK`, `PLATFORM_PRISMA`) and `doctorModule` (`GET /api/admin/doctor`, `system_settings:read`, with the slice's `auth.*` and `tenancy.*` checks). #46 mounts the rest of the host core and the Doctor's other checks.
+`IDENTITY_AUTH_CREDENTIALS` (bound to the deployment `CredentialsService`; Google still reads the environment) and the host port `SYSTEM_SETTINGS_STORE` (bound to the settings slice's `SystemSettingsService`) were bound by #48.
+
+Adopted ahead of #46 because identity needs them: `platformHostModule` (`AUDIT_SINK`, `PLATFORM_PRISMA`, since #48 also `SYSTEM_SETTINGS_STORE`) and `doctorModule` (`GET /api/admin/doctor`, `system_settings:read`, with the slice's `auth.*` and `tenancy.*` checks). #46 mounts the rest of the host core and the Doctor's other checks.
+
+## App-owned settings and credentials (not shims)
+
+What ShellKeep declares itself because the platform has no equivalent. None is removed by a later issue unless it says so.
+
+| Declaration | Where | Why it is the app's | Removed by |
+|---|---|---|---|
+| System namespaces `ui` (`allowUserThemeOverride`) and `features` (free-form flags) | `apps/api/src/platform/settings/app-system-settings.ts`, listed in `app-registrations/settings.ts` | Keys the `global` row has always held; the platform declares no `ui` or `features` namespace and ShellKeep stores no key without a home (the platform also keeps unknown keys on write, so nothing is dropped either way) | Kept; revisit with the shell (#76) if the platform grows an equivalent |
+| System namespace `terminal` (`detachAfterMinutes`, `terminateDetachedAfterHours`, `purgeTerminatedAfterDays`, `doctorProbeProfileId`) and user namespace `terminal` (`showScrollButtons`, `keyShortcuts`) | `apps/api/src/terminal/settings/` | The terminal domain's own settings | Kept (domain) |
+| `USER_DEFAULTS` seeds the terminal defaults | `app-registrations/settings.ts` (`APP_USER_SETTINGS_INITIAL_VALUES`), used by `platform/identity/identity-user.adapters.ts` | A new user's stored document keeps the shape ShellKeep always created (the platform leaves an optional namespace absent) | Kept until the web applies its own defaults everywhere (#80), then optional |
+| User purpose `ssh` (`system: null`, `fallback: []`) | `apps/api/src/app-registrations/credentials.ts` | A server's secret is its owner's alone | Kept (domain) |
+| The platform's `dataTables` and `navigation` user namespaces are not registered | `apps/api/src/platform/settings/registry.ts` | ShellKeep's web has no consumer yet; unknown stored keys are stripped on write, and no row holds them | #76 (shell) and #80 register them with their first consumer |
 
 ## Standing constraints
 
 | Constraint | Detail | Removed by |
 |---|---|---|
+| `server_profiles.encrypted_password`, `encrypted_private_key` and `encrypted_passphrase` are LEGACY | Never read or written since #48; they hold the secrets as the old build left them (AES-256-GCM under the legacy `ENCRYPTION_KEY`), so the previous build still works for a rollback. `ENCRYPTION_KEY` stays in the environment for `npm run ssh:migrate-secrets` only ([runbook](../runbooks/ssh-secret-reencryption.md)) | #84 (a migration drops the columns after production verification; `ENCRYPTION_KEY` leaves the environment and `server-profiles/migrate/` is deleted) |
 | `server_profiles` and `terminal_sessions` carry `org_id` but are not under row-level security | Single organization only: the tables are not isolated per organization, and the API still connects as the bootstrap superuser (the `shellkeep_app` role exists but is not switched, #52). Every row's `org_id` is the default organization | A future multi-organization epic |
 
 The `MonoRepo` rollback tag exists on `95145d0d850a4a53757b65d289158d58e34fc33d`.
