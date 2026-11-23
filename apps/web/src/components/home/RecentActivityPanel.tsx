@@ -64,7 +64,12 @@ export function RecentActivityPanel() {
             <CircularProgress size={24} />
           </Box>
         ) : sessions.length === 0 ? (
-          <Typography color="text.secondary" variant="body2" sx={{ py: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              py: 2
+            }}>
             No recent activity.
           </Typography>
         ) : (
@@ -87,11 +92,14 @@ export function RecentActivityPanel() {
                 <ListItemText
                   primary={session.name}
                   secondary={`${session.serverProfile.name} (${session.serverProfile.username}@${session.serverProfile.hostname})`}
-                  primaryTypographyProps={{ variant: 'body2' }}
-                  secondaryTypographyProps={{ variant: 'caption' }}
-                />
+                  slotProps={{
+                    primary: { variant: 'body2' },
+                    secondary: { variant: 'caption' }
+                  }} />
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 1 }}>
-                  <Typography variant="caption" color="text.secondary" noWrap>
+                  <Typography variant="caption" noWrap sx={{
+                    color: "text.secondary"
+                  }}>
                     {getRelativeTime(session.lastActivityAt)}
                   </Typography>
                   <Chip

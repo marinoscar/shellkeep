@@ -6,7 +6,7 @@ import {
   ContentCopy as CopyIcon,
   Download as DownloadIcon,
   ContentPaste as PasteIcon,
-  AddCircleOutline as NewSessionIcon,
+  AddCircleOutlineOutlined as NewSessionIcon,
   UnfoldMore as UnfoldMoreIcon,
   UnfoldLess as UnfoldLessIcon,
   Keyboard as KeyboardIcon,

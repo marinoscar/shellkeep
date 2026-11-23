@@ -158,7 +158,7 @@ describe('ServerProfilesPage', () => {
         const alert = screen.getByRole('alert');
         expect(alert).toHaveTextContent('Connection successful!');
         // MUI applies a class for the severity
-        expect(alert.closest('.MuiAlert-filledSuccess')).toBeInTheDocument();
+        expect(alert.closest('.MuiAlert-filled.MuiAlert-colorSuccess')).toBeInTheDocument();
       });
     });
 
@@ -171,7 +171,7 @@ describe('ServerProfilesPage', () => {
 
       await waitFor(() => {
         const alert = screen.getByRole('alert');
-        expect(alert.closest('.MuiAlert-filledError')).toBeInTheDocument();
+        expect(alert.closest('.MuiAlert-filled.MuiAlert-colorError')).toBeInTheDocument();
       });
     });
   });
@@ -198,7 +198,7 @@ describe('ServerProfilesPage', () => {
 
       await waitFor(() => {
         const alert = screen.getByRole('alert');
-        expect(alert.closest('.MuiAlert-filledSuccess')).toBeInTheDocument();
+        expect(alert.closest('.MuiAlert-filled.MuiAlert-colorSuccess')).toBeInTheDocument();
       });
     });
   });
@@ -225,7 +225,7 @@ describe('ServerProfilesPage', () => {
 
       await waitFor(() => {
         const alert = screen.getByRole('alert');
-        expect(alert.closest('.MuiAlert-filledError')).toBeInTheDocument();
+        expect(alert.closest('.MuiAlert-filled.MuiAlert-colorError')).toBeInTheDocument();
       });
     });
   });

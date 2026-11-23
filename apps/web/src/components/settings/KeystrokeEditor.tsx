@@ -6,7 +6,7 @@ import {
   Select,
   Stack,
 } from '@mui/material';
-import { RemoveCircleOutline as RemoveIcon } from '@mui/icons-material';
+import { RemoveCircleOutlineOutlined as RemoveIcon } from '@mui/icons-material';
 import { KeyShortcutModifier, Keystroke, KEY_SHORTCUT_BASE_KEYS } from '../../types';
 
 // Friendly display labels for special keys
@@ -61,11 +61,12 @@ export function KeystrokeEditor({
     <Stack
       direction="row"
       spacing={0.5}
-      alignItems="center"
-      flexWrap="wrap"
       useFlexGap
-      sx={{ gap: 0.5 }}
-    >
+      sx={{
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 0.5
+      }}>
       <FormControlLabel
         control={
           <Checkbox

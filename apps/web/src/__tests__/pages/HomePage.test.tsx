@@ -161,7 +161,7 @@ describe('HomePage', () => {
     it('should have responsive grid items', () => {
       const { container } = render(<HomePage />);
 
-      const gridItems = container.querySelectorAll('.MuiGrid-item');
+      const gridItems = container.querySelectorAll('.MuiGrid-root:not(.MuiGrid-container)');
       expect(gridItems.length).toBeGreaterThanOrEqual(2);
     });
   });

@@ -155,7 +155,11 @@ export default function SessionsPage() {
                 Terminal Sessions
               </Typography>
             </Box>
-            <Typography color="text.secondary" sx={{ ml: 6 }}>
+            <Typography
+              sx={{
+                color: "text.secondary",
+                ml: 6
+              }}>
               Manage your SSH terminal sessions
             </Typography>
           </Box>
@@ -209,10 +213,16 @@ export default function SessionsPage() {
           </Box>
         ) : sessions.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 6 }}>
-            <Typography variant="h6" color="text.secondary" gutterBottom>
+            <Typography variant="h6" gutterBottom sx={{
+              color: "text.secondary"
+            }}>
               No sessions found
             </Typography>
-            <Typography color="text.secondary" paragraph>
+            <Typography
+              sx={{
+                color: "text.secondary",
+                marginBottom: "16px"
+              }}>
               {statusFilter === 'all'
                 ? 'Create your first terminal session to get started.'
                 : `No ${statusFilter} sessions.`}
@@ -230,7 +240,7 @@ export default function SessionsPage() {
         ) : (
           <Grid container spacing={2}>
             {sessions.map((session) => (
-              <Grid item xs={12} sm={6} md={4} key={session.id}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={session.id}>
                 <SessionCard
                   session={session}
                   onOpen={handleOpenSession}
