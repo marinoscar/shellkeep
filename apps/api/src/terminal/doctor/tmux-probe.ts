@@ -5,6 +5,10 @@
 // One connection, one command, one disconnect, bounded in time. READ-ONLY on the
 // remote host too: the only command run is `command -v tmux && tmux -V`.
 //
+// PLATFORM-ADOPTION-SHIM(#60): this is a one-shot connection of its own, because the
+// single SSH connection factory of the host-key work does not exist yet; #60 replaces
+// it with that factory (see local-exceptions.md).
+//
 // HOST KEY FIRST. The presented key is compared with the profile's pinned
 // fingerprint inside ssh2's `hostVerifier`, which runs BEFORE user
 // authentication: on a mismatch the connection is refused and no credential is

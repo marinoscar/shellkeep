@@ -4,9 +4,11 @@
 //
 // The OpenSSH fingerprint format: `SHA256:` followed by the base64 of the
 // SHA-256 of the key blob, WITHOUT `=` padding (`ssh-keygen -lf`). This is the
-// format `server_profiles.fingerprint` holds. The host-key trust flow (#60) owns
-// the canonical `fingerprintOf`; this is the same two lines for the one
-// read-only consumer that exists before it, and #60 replaces it.
+// format `server_profiles.fingerprint` holds.
+//
+// PLATFORM-ADOPTION-SHIM(#60): the host-key trust flow owns the canonical
+// `fingerprintOf`; this is the same two lines for the one read-only consumer
+// that exists before it, and #60 replaces it (see local-exceptions.md).
 // =============================================================================
 
 import { createHash, timingSafeEqual } from 'node:crypto';
