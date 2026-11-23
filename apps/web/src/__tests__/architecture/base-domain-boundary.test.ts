@@ -6,8 +6,8 @@ import { join, posix, relative, sep } from 'node:path';
  * Base-to-domain boundary guard, web half (issue #44; the API half is
  * apps/api/test/architecture/base-domain-boundary.spec.ts).
  *
- * The base web modules (components/{common,navigation,settings,admin,auth},
- * contexts, services/api.ts) must not know the terminal domain: no import from
+ * The base web modules (components/{common,navigation,settings,admin},
+ * contexts, identity, services/api.ts) must not know the terminal domain: no import from
  * a domain module, no `servers:` or `sessions:` permission string, no mention
  * of `terminal`. The domain reaches the base through the registries in
  * `config/` (destinations, user settings panels).
@@ -25,8 +25,9 @@ const BASE_PATHS = [
   'components/navigation',
   'components/settings',
   'components/admin',
-  'components/auth',
   'contexts',
+  // The identity slice's bindings (issue #47; `components/auth` was deleted with it).
+  'identity',
   'services/api.ts',
 ];
 
@@ -106,8 +107,9 @@ describe('base-domain boundary (web)', () => {
     const rels = files.map((f) => f.rel);
     expect(rels).toContain('services/api.ts');
     expect(rels).toContain('components/navigation/Sidebar.tsx');
-    expect(rels).toContain('contexts/AuthContext.tsx');
-    expect(files.length).toBeGreaterThan(20);
+    expect(rels).toContain('contexts/ThemeContext.tsx');
+    expect(rels).toContain('identity/IdentityProviders.tsx');
+    expect(files.length).toBeGreaterThan(15);
   });
 
   it('keeps the allowlist empty', () => {
