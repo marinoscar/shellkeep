@@ -6,7 +6,7 @@
 // own source and registrations. Suites adopted with their slice are added here:
 // `cron-enqueue-only`, `user-owned-data` and `identity` from #47, `settings` and
 // `credentials` from #48, `host` and `doctor-read-only` from #46, `on-event-no-io` and
-// `nodes` from #49, `storage` from #50; notifications, AI and the rest follow with #51-#55.
+// `nodes` from #49, `storage` from #50, `email` and `notifications` from #51; AI and the rest follow with #52-#55.
 //
 // The registries are filled by the first two imports, as `main.ts` fills them.
 // =============================================================================
@@ -34,6 +34,9 @@ import '@marinoscar/platform-api/jobs/testing';
 import '@marinoscar/platform-api/nodes/testing';
 // Register the `storage` suite.
 import '@marinoscar/platform-api/storage/testing';
+// Register the `email` and `notifications` suites (#51).
+import '@marinoscar/platform-api/email/testing';
+import '@marinoscar/platform-api/notifications/testing';
 import { discoverControllers } from '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/settings/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
@@ -72,15 +75,32 @@ runPlatformConformance({
     },
     // Queue rule 1, the `@OnEvent` half. SKIPPED with a reason that is no longer a violation:
     // ShellKeep declares no `@OnEvent` listener at all since #50 deleted its own storage module
-    // (`storage/processing`, the app's only one), the suite scans the app's `.ts` sources only
-    // (the package ships compiled output; its own listeners are scanned in the platform's
-    // repository), and it refuses a scan that finds no listener (`minListenerFiles` is a positive
-    // integer, so it cannot pass vacuously). Re-enable it with `{ minListenerFiles: 1 }` in the
-    // PR that adds ShellKeep's first listener (the notifications slice, #51, is the likely one).
-    // Listed in docs/platform-adoption/local-exceptions.md.
+    // (`storage/processing`, the app's only one). #51 did not add one: the notifications slice's
+    // listeners (job failure, broadcast failure, node offline) ship compiled in the package, the
+    // suite scans the app's `.ts` sources only (the package's own listeners are scanned in the
+    // platform's repository), and it refuses a scan that finds no listener (`minListenerFiles` is
+    // a positive integer, so it cannot pass vacuously). Re-enable it with `{ minListenerFiles: 1 }`
+    // in the PR that adds ShellKeep's first listener. Listed in
+    // docs/platform-adoption/local-exceptions.md.
     onEventNoIo: {
       skip: 'ShellKeep declares no @OnEvent listener (the suite refuses a scan that finds none); re-enable with the first one',
     },
+    // The email slice (#51): every platform template is registered, ShellKeep's own render a
+    // complete message from sample data and escape markup in it, and neither the stored settings
+    // nor the admin view declares a secret-bearing field. The sample uses invented names only.
+    email: {
+      samples: {
+        'terminal-session-reaped': {
+          sessions: [{ name: 'Session <b>A</b>', serverName: 'server-a.example.test', idleMinutes: 185 }],
+          moreCount: 0,
+        },
+      },
+    },
+    // The notifications slice (#51): the platform's channels and events are registered, every
+    // event that declares email has a template, no `notify` call sits inside a `$transaction`
+    // (the reaper's call follows the committed update; nothing is allowlisted) and neither the Web
+    // Push settings nor their admin view carries a secret.
+    notifications: {},
     // The storage slice (#50): the registered key prefixes are well formed, disjoint and complete
     // (ShellKeep's two writers' prefixes must be among them), org-scoped prefixes build
     // org-segmented keys, no storage setting is secret-named, per-row routing keeps an object on
