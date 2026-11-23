@@ -101,15 +101,3 @@ export const api = new AppHttpClient({
  * hooks. Built once, at module scope: packaged hooks key on its identity.
  */
 export const platformApi = createPlatformApiClient(api);
-
-// Storage API
-export async function uploadFile(file: Blob, filename: string): Promise<{ id: string; status: string }> {
-  const formData = new FormData();
-  formData.append('file', file, filename);
-  return api.postFormData<{ id: string; status: string }>('/storage/objects', formData);
-}
-
-export async function getDownloadUrl(objectId: string, expiresIn = 3600): Promise<string> {
-  const result = await api.get<{ url: string; expiresIn: number }>(`/storage/objects/${objectId}/download?expiresIn=${expiresIn}`);
-  return result.url;
-}

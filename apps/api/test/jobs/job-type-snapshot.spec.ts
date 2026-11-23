@@ -40,6 +40,11 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   // when that server is enabled, which ShellKeep does not do.
   'auth.token.cleanup': 'Token cleanup',
   'device-auth.code.cleanup': 'Device code cleanup',
+  // The storage slice (#50): stale-upload sweep, post-upload processing, provider migration.
+  'storage.cleanup.stale-uploads': 'Stale upload cleanup',
+  'storage.migrate_object': 'Storage migration (copy object)',
+  'storage.migrate_plan': 'Storage migration (plan)',
+  'storage.object.process': 'Object processing',
 };
 
 /** Types registered without a label of their own, shown as the type string. */

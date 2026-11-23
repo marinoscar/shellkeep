@@ -75,6 +75,9 @@ const WorkersPage = lazy(() =>
   import('@marinoscar/platform-web/nodes/ui').then((m) => ({ default: m.WorkersPage })),
 );
 
+// Storage (issue #50): the packaged object-storage configuration page.
+const StorageConfigPage = lazy(() => import('@marinoscar/platform-web/storage/ui'));
+
 // Test login page (development only). The platform's test login endpoint
 // (`POST /api/auth/test/login`) has no packaged page; this form posts to it.
 const TestLoginPage = import.meta.env.PROD
@@ -167,7 +170,7 @@ function AppRoutes() {
                   <Route
                     path="/admin/settings"
                     element={
-                      <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read']} fallback={HOME}>
+                      <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read']} fallback={HOME}>
                         <AdminSettingsHubPage />
                       </RequirePermission>
                     }
@@ -193,6 +196,19 @@ function AppRoutes() {
                     element={
                       <RequirePermission permission="system_settings:read" fallback={HOME}>
                         <TerminalSystemSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Storage (#50): `storage_config:read` is what the storage
+                      slice's `/api/admin/storage-config` GET enforces (not
+                      `storage:read`, which every role holds). Saving, testing
+                      and migrating need `storage_config:write`, gated inside
+                      the packaged page. */}
+                  <Route
+                    path="/admin/settings/storage"
+                    element={
+                      <RequirePermission permission="storage_config:read" fallback={HOME}>
+                        <StorageConfigPage />
                       </RequirePermission>
                     }
                   />

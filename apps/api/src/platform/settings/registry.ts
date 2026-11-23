@@ -18,6 +18,7 @@ import {
   registerRetentionPolicy,
 } from '@marinoscar/platform-api/jobs';
 import { NODES_SYSTEM_SETTINGS } from '@marinoscar/platform-api/nodes';
+import { STORAGE_SYSTEM_SETTINGS } from '@marinoscar/platform-api/storage';
 import {
   assembleSystemSettingsNamespaces,
   assembleUserSettingsNamespaces,
@@ -46,7 +47,7 @@ export const PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespa
 /**
  * The platform's system namespaces appended AFTER the app's own, so the stored key order
  * of the `global` row stays the app's own namespaces first, then the platform's additions:
- * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49). Registered here, before `SettingsModule.forRoot()`
+ * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49) and `storage` (#50). Registered here, before `SettingsModule.forRoot()`
  * composes the request bodies, so the host core does not have to (its `forRoot()` registers
  * the namespace only when nothing did).
  */
@@ -58,6 +59,7 @@ export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettin
   JOBS_SYSTEM_SETTINGS as SystemSettingsNamespace,
   NODES_SYSTEM_SETTINGS as SystemSettingsNamespace,
   RETENTION_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  STORAGE_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
 /** The platform's optional user namespaces this app registers. None yet. */

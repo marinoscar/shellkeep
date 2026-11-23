@@ -28,7 +28,7 @@ interface AppOpenApiTagGroup {
  * Sidebar sections, in render order. Every `@ApiTags(...)` name a controller of
  * the composed app uses appears here, the packaged slices' included: a slice
  * does not register its own tags, the app that mounts it does. A slice adopted
- * later (storage, notifications, AI) adds its tags in its own issue.
+ * later (notifications, AI) adds its tags in its own issue.
  */
 const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
   {
@@ -135,6 +135,13 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
         description:
           'File objects: simple upload, resumable multipart upload, signed download URLs, metadata, ' +
           'and deletion. A caller sees only the objects they uploaded.',
+      },
+      {
+        name: 'Storage Configuration',
+        description:
+          'Where the deployment keeps its objects: the provider, bucket and key pair (runtime configuration, ' +
+          'never environment variables), the connection test, bucket creation and the copy-only migration ' +
+          'between providers. Admin only.',
       },
     ],
   },

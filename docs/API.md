@@ -868,7 +868,7 @@ Remove email from allowlist.
 |-------|------|-------------|
 | `theme` | enum | UI theme: `light`, `dark`, `system` |
 | `profile.displayName` | string | User's display name override (omitted when unset) |
-| `profile.imageSource` | enum | Which picture represents the user: `provider`, `none` or `upload` (`upload` needs the storage slice, #50) |
+| `profile.imageSource` | enum | Which picture represents the user: `provider`, `none` or `upload` (`upload` is an avatar object the user uploaded through `/api/user-settings/profile-image`) |
 | `profile.imageObjectId` | string \| null | The uploaded picture's object id |
 | `profile.timezone` | string | IANA time zone (omitted when unset) |
 | `terminal` | object | Optional namespace, present only when stored: `showScrollButtons` (boolean) and `keyShortcuts` (at most 50; each has a UUID `id`, a `label` of 1 to 40 characters and 1 to 3 `keystrokes`, each with a required `modifiers` array and a `key`). **Absent means the client's built-in defaults** (scroll buttons shown, the default shortcut bar). New users are created with the defaults stored |
@@ -1070,7 +1070,14 @@ If-Match: 1
 
 ### Storage Objects
 
-The storage system provides file upload and management capabilities with support for large files (GB scale) through resumable multipart uploads.
+The storage system provides file upload and management capabilities with support for large files (GB scale) through resumable multipart uploads. It is the platform's storage slice since #50; the generated OpenAPI at `/api/docs` is the per-route reference.
+
+- **Provider**: runtime configuration at `/admin/settings/storage` (`/api/admin/storage-config`, `storage_config:read` / `storage_config:write`, Admin only), never environment variables. Until it is configured, the object routes answer `503`. [Runbook](runbooks/storage-configuration.md).
+- **Permissions**: reads need `storage:read`, writes `storage:write` (contributor and org_admin; a viewer reads only). `storage:delete_any` (Admin) widens delete.
+- **Ownership**: an object another user uploaded in the same organization answers `403`; another organization's object is a `404`.
+- **Additional routes of the slice**: `GET /api/storage/status`, `POST /api/storage/objects/:id/upload/part-urls`, `PUT /api/storage/objects/:id/upload/parts/:partNumber` (API-proxied parts, only for a driver without presigned URLs), `/api/admin/storage/migrations` (copy-only provider migration), `GET|POST|DELETE /api/user-settings/profile-image` and the public `GET /api/users/:userId/avatar/:objectId`.
+- **Keys**: new objects are `uploads/<orgId>/<timestamp>/<uuid><ext>` (profile images under `avatars/`); existing rows keep their stored key. ShellKeep also registers `session-logs/` and `runbook-artifacts/`.
+- **Removed**: the daily 24-hour expiry of every object. Only unfinished uploads are reclaimed.
 
 #### Initialize Resumable Upload
 

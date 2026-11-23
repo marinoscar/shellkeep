@@ -4,7 +4,7 @@ import { join, relative, sep } from 'path';
 /**
  * Base-to-domain boundary guard (issue #44).
  *
- * The base modules (platform, openapi, storage, common, config, prisma) must not know the terminal
+ * The base modules (platform, openapi, common, config, prisma) must not know the terminal
  * domain: no import from `server-profiles/` or `terminal/`, no `servers:` or
  * `sessions:` permission string, no mention of `terminal`. The domain reaches
  * the base through registries (`app-registrations`, the registries of the platform slices).
@@ -22,7 +22,6 @@ const BASE_DIRS = [
   // test-auth modules are deleted), and the settings slice since #48.
   'platform',
   'openapi',
-  'storage',
   'common',
   'config',
   'prisma',

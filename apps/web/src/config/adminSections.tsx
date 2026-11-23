@@ -30,6 +30,12 @@
  *     slice's `nodes-admin.controller.ts`, deliberately not `jobs:read`);
  *     deleting a node and creating or revoking a credential need
  *     `nodes:write`, gated inside the page.
+ *   - Storage (#50): `GET /api/admin/storage-config`, `storage_config:read`
+ *     (the storage slice's `storage-config.controller.ts`, which the storage
+ *     migrations routes `/api/admin/storage/migrations` share). Not
+ *     `storage:read`: that pair gates object access and every role holds it.
+ *     Saving, testing, creating the bucket and starting a migration need
+ *     `storage_config:write`, gated inside the packaged page.
  *
  * The composition root: the `Terminal` card is the terminal domain's
  * (`components/terminal/settings/TerminalSystemSettingsPage.tsx`), declared
@@ -39,6 +45,7 @@
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import BuildCircleOutlinedIcon from '@mui/icons-material/BuildCircleOutlined';
 import TerminalIcon from '@mui/icons-material/Terminal';
+import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
@@ -54,6 +61,8 @@ export const ABOUT_PATH = '/admin/settings/about';
 export const MAINTENANCE_PATH = '/admin/settings/maintenance';
 /** The route of the admin Terminal page. */
 export const TERMINAL_SYSTEM_SETTINGS_PATH = '/admin/settings/terminal';
+/** The route of the Storage page (the packaged `StorageConfigPage`). */
+export const STORAGE_PATH = '/admin/settings/storage';
 
 /** The admin settings sections, in hub order. */
 export const ADMIN_SECTIONS: SettingsSectionDef[] = [
@@ -82,6 +91,16 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         Icon: TerminalIcon,
         path: TERMINAL_SYSTEM_SETTINGS_PATH,
         permission: 'system_settings:read',
+      },
+      {
+        // #50: appended. Configuration an administrator sets once, so General,
+        // not Operations.
+        title: 'Storage',
+        description:
+          'Point this deployment at an object store, prove the credentials work, and create the bucket if it is not there yet.',
+        Icon: CloudOutlinedIcon,
+        path: STORAGE_PATH,
+        permission: 'storage_config:read',
       },
     ],
   },
