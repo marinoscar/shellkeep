@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../utils/test-utils';
+
+// The props the page passed to the (mocked) TerminalView, so a test can fire
+// its callbacks.
+const { terminalViewProps } = vi.hoisted(() => ({
+  terminalViewProps: {
+    current: null as null | {
+      onConnectionChange?: (c: boolean) => void;
+      onError?: (e: string) => void;
+    },
+  },
+}));
 import type { TerminalSession } from '../../types';
 
 // Mock react-router-dom so useParams returns a known session id
@@ -44,23 +55,25 @@ vi.mock('../../hooks/useTerminalSettings', () => ({
 // Mock TerminalView so no xterm/WebSocket is needed
 vi.mock('../../components/terminal/TerminalView', () => ({
   TerminalView: vi.fn(
-    ({
-      sessionId,
-      onConnectionChange,
-    }: {
+    (props: {
       sessionId: string;
       onConnectionChange?: (c: boolean) => void;
-    }) => (
-      <div
-        data-testid="terminal-view"
-        data-session-id={sessionId}
-        onClick={() => onConnectionChange?.(true)}
-      />
-    ),
+      onError?: (e: string) => void;
+    }) => {
+      terminalViewProps.current = props;
+      return (
+        <div
+          data-testid="terminal-view"
+          data-session-id={props.sessionId}
+          onClick={() => props.onConnectionChange?.(true)}
+        />
+      );
+    },
   ),
 }));
 
 import TerminalFullPage from '../../pages/TerminalFullPage';
+import { EXPIRED_MESSAGE, FORBIDDEN_MESSAGE } from '../../services/terminal-ws';
 import { getSession } from '../../services/terminal-api';
 
 const mockSession: TerminalSession = {
@@ -251,6 +264,50 @@ describe('TerminalFullPage', () => {
       await userEvent.click(screen.getByRole('button', { name: /back to sessions/i }));
 
       expect(mockNavigate).toHaveBeenCalledWith('/sessions');
+    });
+  });
+
+  describe('Connection errors (#93)', () => {
+    async function renderWithTerminal() {
+      render(<TerminalFullPage />);
+      await waitFor(() => expect(screen.getByTestId('terminal-view')).toBeInTheDocument());
+      expect(terminalViewProps.current?.onError).toBeTypeOf('function');
+    }
+
+    it('shows the session-expired message with a "Sign in again" action', async () => {
+      await renderWithTerminal();
+      expect(screen.queryByTestId('terminal-connection-alert')).not.toBeInTheDocument();
+
+      act(() => { terminalViewProps.current!.onError!(EXPIRED_MESSAGE); });
+
+      const alert = screen.getByTestId('terminal-connection-alert');
+      expect(alert).toHaveTextContent('Your session has expired. Sign in again to reconnect.');
+      expect(within(alert).getByRole('button', { name: 'Sign in again' })).toBeInTheDocument();
+      // A final error cannot be dismissed.
+      expect(within(alert).queryByRole('button', { name: /close/i })).not.toBeInTheDocument();
+      // The terminal stays mounted underneath.
+      expect(screen.getByTestId('terminal-view')).toBeInTheDocument();
+    });
+
+    it('shows the forbidden message', async () => {
+      await renderWithTerminal();
+
+      act(() => { terminalViewProps.current!.onError!(FORBIDDEN_MESSAGE); });
+
+      const alert = screen.getByTestId('terminal-connection-alert');
+      expect(alert).toHaveTextContent(FORBIDDEN_MESSAGE);
+      expect(within(alert).getByRole('button', { name: 'Back to sessions' })).toBeInTheDocument();
+      expect(within(alert).queryByRole('button', { name: 'Sign in again' })).not.toBeInTheDocument();
+    });
+
+    it('clears an error once the terminal connects again', async () => {
+      await renderWithTerminal();
+
+      act(() => { terminalViewProps.current!.onError!('WebSocket error'); });
+      expect(screen.getByTestId('terminal-connection-alert')).toHaveTextContent('WebSocket error');
+
+      act(() => { terminalViewProps.current!.onConnectionChange!(true); });
+      expect(screen.queryByTestId('terminal-connection-alert')).not.toBeInTheDocument();
     });
   });
 });
