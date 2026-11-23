@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { DefaultOrgResolver } from '../prisma/default-org.resolver';
 import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
 import { ServerProfilesQueryDto } from './dto/server-profiles-query.dto';
@@ -14,7 +15,10 @@ import { Client } from 'ssh2';
 export class ServerProfilesService {
   private readonly logger = new Logger(ServerProfilesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly defaultOrg: DefaultOrgResolver,
+  ) {}
 
   /**
    * List server profiles for a user with pagination and search
@@ -74,6 +78,7 @@ export class ServerProfilesService {
 
     const data: any = {
       userId,
+      orgId: await this.defaultOrg.resolve(),
       name: dto.name,
       hostname: dto.hostname,
       port: dto.port,

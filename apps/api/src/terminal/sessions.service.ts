@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { DefaultOrgResolver } from '../prisma/default-org.resolver';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { SessionQueryDto } from './dto/session-query.dto';
@@ -21,7 +22,10 @@ const SERVER_PROFILE_SELECT = {
 export class SessionsService {
   private readonly logger = new Logger(SessionsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly defaultOrg: DefaultOrgResolver,
+  ) {}
 
   /**
    * List terminal sessions for a user with pagination and status filter
@@ -108,6 +112,7 @@ export class SessionsService {
     const session = await this.prisma.terminalSession.create({
       data: {
         userId,
+        orgId: await this.defaultOrg.resolve(),
         serverProfileId: dto.serverProfileId,
         name,
         tmuxSessionId,

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { ServerProfilesService } from './server-profiles.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DefaultOrgResolver } from '../prisma/default-org.resolver';
 import * as encryptionUtil from '../common/utils/encryption.util';
 
 jest.mock('../common/utils/encryption.util');
@@ -51,6 +52,7 @@ describe('ServerProfilesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ServerProfilesService,
+        { provide: DefaultOrgResolver, useValue: { resolve: jest.fn().mockResolvedValue('org-default') } },
         {
           provide: PrismaService,
           useValue: {
@@ -195,6 +197,7 @@ describe('ServerProfilesService', () => {
         data: expect.objectContaining({
           encryptedPassword: 'encrypted:my-pass',
           userId: mockUserId,
+          orgId: 'org-default',
         }),
       });
     });
