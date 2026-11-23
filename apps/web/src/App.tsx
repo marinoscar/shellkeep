@@ -14,6 +14,7 @@ import {
   ADMIN_HUB_PATH,
   ADMIN_HUB_PERMISSIONS,
   MAINTENANCE_PATH,
+  TERMINAL_SYSTEM_SETTINGS_PATH,
 } from './config/adminSections';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
 import { AppPlatformHostProvider } from './platform/platformHost';
@@ -52,7 +53,8 @@ const TerminalSettingsPage = lazy(
   () => import('./components/terminal/settings/TerminalSettingsPage'),
 );
 // Admin settings (issue #46): the packaged hub over `config/adminSections.tsx`,
-// the host slice's About and Maintenance pages and the packaged Doctor.
+// the host slice's About and Maintenance pages, the packaged Doctor, and the
+// terminal domain's system settings page.
 const AdminSettingsHubPage = lazy(() => import('./pages/AdminSettingsHubPage'));
 const AboutPage = lazy(() =>
   import('@marinoscar/platform-web/host/ui').then((m) => ({ default: m.AboutPage })),
@@ -64,6 +66,9 @@ const DoctorPage = lazy(() =>
   import('@marinoscar/platform-web/doctor/ui').then((m) => ({
     default: m.doctorSettingsPage.Page,
   })),
+);
+const TerminalSystemSettingsPage = lazy(
+  () => import('./components/terminal/settings/TerminalSystemSettingsPage'),
 );
 
 // Test login page (development only). The platform's test login endpoint
@@ -174,6 +179,14 @@ function AppRoutes() {
                     element={
                       <RequirePermission permission="system_settings:read" fallback={HOME}>
                         <MaintenancePage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path={TERMINAL_SYSTEM_SETTINGS_PATH}
+                    element={
+                      <RequirePermission permission="system_settings:read" fallback={HOME}>
+                        <TerminalSystemSettingsPage />
                       </RequirePermission>
                     }
                   />

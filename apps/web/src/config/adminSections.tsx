@@ -17,21 +17,34 @@
  *     `PUT` needs `system_settings:write`, gated by the packaged page. The path
  *     is the host slice's `MAINTENANCE_ADMIN_PATH`, which `MaintenanceGate`
  *     never gates.
+ *   - Terminal: `GET /api/system-settings`, `system_settings:read`; saving
+ *     needs `system_settings:write`, gated inside the page.
  *   - Users & Allowlist: the identity slice's card (`users:read`).
  *   - Doctor: `GET /api/admin/doctor`, `system_settings:read` (the packaged
  *     page's descriptor).
+ *
+ * The composition root: the `Terminal` card is the terminal domain's
+ * (`components/terminal/settings/TerminalSystemSettingsPage.tsx`), declared
+ * here so the base code never names the domain.
  */
 
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import BuildCircleOutlinedIcon from '@mui/icons-material/BuildCircleOutlined';
+import TerminalIcon from '@mui/icons-material/Terminal';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
+import {
+  TERMINAL_SYSTEM_SETTINGS_DESCRIPTION,
+  TERMINAL_SYSTEM_SETTINGS_TITLE,
+} from '../components/terminal/settings/TerminalSystemSettingsPage';
 
 /** The route of the About page. */
 export const ABOUT_PATH = '/admin/settings/about';
 /** The route of the Maintenance page: the host slice's `MAINTENANCE_ADMIN_PATH`. */
 export const MAINTENANCE_PATH = '/admin/settings/maintenance';
+/** The route of the admin Terminal page. */
+export const TERMINAL_SYSTEM_SETTINGS_PATH = '/admin/settings/terminal';
 
 /** The admin settings sections, in hub order. */
 export const ADMIN_SECTIONS: SettingsSectionDef[] = [
@@ -52,6 +65,13 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
           'Take the application out of service for planned work, with a message for anyone who tries to use it.',
         Icon: BuildCircleOutlinedIcon,
         path: MAINTENANCE_PATH,
+        permission: 'system_settings:read',
+      },
+      {
+        title: TERMINAL_SYSTEM_SETTINGS_TITLE,
+        description: TERMINAL_SYSTEM_SETTINGS_DESCRIPTION,
+        Icon: TerminalIcon,
+        path: TERMINAL_SYSTEM_SETTINGS_PATH,
         permission: 'system_settings:read',
       },
     ],
