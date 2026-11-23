@@ -20,6 +20,9 @@
   },
   "overrides": {
     "@nestjs/common": "^11.1.12",
-    "@nestjs/core": "^11.1.12"
+    "@nestjs/core": "^11.1.12",
+    "@nestjs/platform-fastify": "^11.1.12",
+    "@nestjs/platform-ws": "^11.1.12",
+    "@nestjs/websockets": "^11.1.12"
   }
 }
