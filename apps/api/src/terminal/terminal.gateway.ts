@@ -1,19 +1,29 @@
-import { Logger } from '@nestjs/common';
+import { Logger, NotFoundException } from '@nestjs/common';
 import { WebSocketGateway, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
-import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../prisma/prisma.service';
 import { ServerProfilesService } from '../server-profiles/server-profiles.service';
+import { PERMISSIONS } from '../common/constants/roles.constants';
+import type { OwnerScope } from '../common/types/owner-scope';
 import { SessionsService } from './sessions.service';
 import { SessionManagerService } from './session-manager.service';
+import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
 import * as WebSocket from 'ws';
+
+/** setTimeout cannot hold a delay above 2^31 - 1 ms (about 24.8 days). */
+const MAX_TIMER_MS = 2_147_483_647;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface AuthenticatedClient {
   ws: WebSocket;
   userId: string;
+  orgId: string;
+  permissions: readonly string[];
   sessionId?: string;
   authenticated: boolean;
   authTimeout?: NodeJS.Timeout;
   pingInterval?: NodeJS.Timeout;
+  /** Closes the socket with `auth_expired` when the access token expires. */
+  expiryTimeout?: NodeJS.Timeout;
+  expiresAtMs: number;
 }
 
 @WebSocketGateway({ path: '/api/terminal/ws' })
@@ -22,8 +32,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
   private readonly clients = new Map<WebSocket, AuthenticatedClient>();
 
   constructor(
-    private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService,
+    private readonly principals: TerminalPrincipalResolver,
     private readonly serverProfilesService: ServerProfilesService,
     private readonly sessionsService: SessionsService,
     private readonly sessionManager: SessionManagerService,
@@ -35,6 +44,9 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     const clientState: AuthenticatedClient = {
       ws: client,
       userId: '',
+      orgId: '',
+      permissions: [],
+      expiresAtMs: 0,
       authenticated: false,
     };
 
@@ -54,7 +66,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
       try {
         if (isBinary || (data instanceof Buffer && !this.isJsonMessage(data))) {
           // Binary data = terminal input
-          if (clientState.authenticated && clientState.sessionId) {
+          if (this.isLive(client, clientState) && clientState.sessionId) {
             this.sessionManager.sendInput(clientState.sessionId, Buffer.isBuffer(data) ? data : Buffer.from(data));
           }
           return;
@@ -74,6 +86,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (clientState) {
       if (clientState.authTimeout) clearTimeout(clientState.authTimeout);
       if (clientState.pingInterval) clearInterval(clientState.pingInterval);
+      if (clientState.expiryTimeout) clearTimeout(clientState.expiryTimeout);
       this.clients.delete(client);
       this.logger.log(`WebSocket disconnected (userId: ${clientState.userId || 'unauthenticated'})`);
     }
@@ -90,7 +103,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
         break;
 
       case 'connect':
-        if (!clientState.authenticated) {
+        if (!this.isLive(client, clientState)) {
           client.send(JSON.stringify({ type: 'auth_fail', reason: 'Not authenticated' }));
           return;
         }
@@ -98,7 +111,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
         break;
 
       case 'resize':
-        if (clientState.authenticated && clientState.sessionId) {
+        if (this.isLive(client, clientState) && clientState.sessionId) {
           this.sessionManager.resizeSession(clientState.sessionId, message.cols, message.rows);
         }
         break;
@@ -109,50 +122,146 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
   }
 
-  private async handleAuth(client: WebSocket, clientState: AuthenticatedClient, token: string): Promise<void> {
+  /**
+   * Authenticates the socket, or, when it already is authenticated, replaces its
+   * token (the client re-sends `auth` after each access-token refresh so an open
+   * terminal outlives the 15-minute token).
+   *
+   * Refused with `auth_fail` and a close: an invalid token, an inactive user, a
+   * principal without `sessions:write` (`reason: 'forbidden'`: a Viewer may list
+   * sessions over HTTP but never type into one), and a re-auth as a different
+   * user or organization. The token is read only from this first-class message,
+   * never from a query string, and is never logged.
+   */
+  private async handleAuth(client: WebSocket, clientState: AuthenticatedClient, token: unknown): Promise<void> {
+    let result;
     try {
-      const payload = this.jwtService.verify(token);
-      const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
-
-      if (!user || !user.isActive) {
-        client.send(JSON.stringify({ type: 'auth_fail', reason: 'Invalid user' }));
-        client.close();
-        return;
-      }
-
-      clientState.userId = user.id;
-      clientState.authenticated = true;
-      if (clientState.authTimeout) {
-        clearTimeout(clientState.authTimeout);
-        clientState.authTimeout = undefined;
-      }
-
-      // Start ping/pong heartbeat
-      clientState.pingInterval = setInterval(() => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.ping();
-        }
-      }, 30000);
-
-      client.send(JSON.stringify({ type: 'auth_ok' }));
-      this.logger.log(`WebSocket authenticated for user ${user.id}`);
+      result = await this.principals.resolve(token);
     } catch (err) {
-      client.send(JSON.stringify({ type: 'auth_fail', reason: 'Invalid token' }));
-      client.close();
+      this.logger.error(`Principal resolution failed: ${(err as Error).message}`);
+      this.denyAuth(client, clientState, 'Invalid token', 'invalid_token');
+      return;
     }
+
+    if (!result.ok) {
+      this.denyAuth(
+        client,
+        clientState,
+        result.reason === 'invalid_user' ? 'Invalid user' : 'Invalid token',
+        result.reason,
+      );
+      return;
+    }
+
+    const { principal } = result;
+
+    if (!principal.permissions.includes(PERMISSIONS.SESSIONS_WRITE)) {
+      this.denyAuth(client, clientState, 'forbidden', 'forbidden', principal.userId);
+      return;
+    }
+
+    const reauth = clientState.authenticated;
+    if (reauth && (principal.userId !== clientState.userId || principal.orgId !== clientState.orgId)) {
+      this.denyAuth(client, clientState, 'forbidden', 'identity_changed', principal.userId);
+      return;
+    }
+
+    clientState.userId = principal.userId;
+    clientState.orgId = principal.orgId;
+    clientState.permissions = principal.permissions;
+    clientState.expiresAtMs = principal.expiresAtMs;
+    clientState.authenticated = true;
+    this.scheduleExpiry(client, clientState);
+
+    if (clientState.authTimeout) {
+      clearTimeout(clientState.authTimeout);
+      clientState.authTimeout = undefined;
+    }
+
+    if (reauth) {
+      client.send(JSON.stringify({ type: 'auth_refreshed' }));
+      this.logger.log(`WebSocket token refreshed for user ${principal.userId}`);
+      return;
+    }
+
+    // Start ping/pong heartbeat
+    clientState.pingInterval = setInterval(() => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.ping();
+      }
+    }, 30000);
+
+    client.send(JSON.stringify({ type: 'auth_ok' }));
+    this.logger.log(`WebSocket authenticated for user ${principal.userId}`);
+  }
+
+  /** Refuses an authentication attempt: log the denial (never the token), tell the client, close. */
+  private denyAuth(
+    client: WebSocket,
+    clientState: AuthenticatedClient,
+    reason: string,
+    logReason: string,
+    userId?: string,
+  ): void {
+    this.logger.warn(
+      `ws.auth.denied userId=${userId ?? (clientState.userId || 'unknown')} reason=${logReason}`,
+    );
+    client.send(JSON.stringify({ type: 'auth_fail', reason }));
+    client.close();
+  }
+
+  /** Arms (or re-arms) the timer that ends the connection when the access token expires. */
+  private scheduleExpiry(client: WebSocket, clientState: AuthenticatedClient): void {
+    if (clientState.expiryTimeout) clearTimeout(clientState.expiryTimeout);
+    const delay = Math.min(Math.max(clientState.expiresAtMs - Date.now(), 0), MAX_TIMER_MS);
+    clientState.expiryTimeout = setTimeout(() => this.expire(client, clientState), delay);
+  }
+
+  /** The access token expired and no fresh one arrived: tell the client and close. */
+  private expire(client: WebSocket, clientState: AuthenticatedClient): void {
+    if (!clientState.authenticated) return;
+    clientState.authenticated = false;
+    this.logger.log(`WebSocket token expired for user ${clientState.userId}`);
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({ type: 'auth_expired' }));
+    }
+    client.close();
+  }
+
+  /** Authenticated, holding the terminal permission, and not past the token's expiry. */
+  private isLive(client: WebSocket, clientState: AuthenticatedClient): boolean {
+    if (!clientState.authenticated) return false;
+    if (Date.now() >= clientState.expiresAtMs) {
+      this.expire(client, clientState);
+      return false;
+    }
+    return clientState.permissions.includes(PERMISSIONS.SESSIONS_WRITE);
   }
 
   private async handleConnect(
     client: WebSocket,
     clientState: AuthenticatedClient,
-    sessionId: string,
+    sessionId: unknown,
   ): Promise<void> {
     try {
-      // Verify session ownership
-      const session = await this.sessionsService.findOne(sessionId, clientState.userId);
-      if (!session) {
+      // Never trust a client-supplied id: it must be a UUID of a session owned by
+      // this user in this organization, or the answer is NOT_FOUND (also for
+      // another user's session, so existence is not disclosed).
+      if (typeof sessionId !== 'string' || !UUID.test(sessionId)) {
         client.send(JSON.stringify({ type: 'session_error', error: 'Session not found', code: 'NOT_FOUND' }));
         return;
+      }
+
+      const scope: OwnerScope = { userId: clientState.userId, orgId: clientState.orgId };
+      let session;
+      try {
+        session = await this.sessionsService.findOne(sessionId, scope);
+      } catch (err) {
+        if (err instanceof NotFoundException) {
+          client.send(JSON.stringify({ type: 'session_error', error: 'Session not found', code: 'NOT_FOUND' }));
+          return;
+        }
+        throw err;
       }
 
       if (session.status === 'terminated') {
@@ -165,7 +274,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
         // Need to start SSH connection
         const profile = await this.serverProfilesService.getDecryptedProfile(
           session.serverProfileId,
-          clientState.userId,
+          scope,
         );
 
         await this.sessionManager.startSession(
