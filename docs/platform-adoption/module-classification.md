@@ -113,10 +113,10 @@ Drift comes from the apps view.
 | `apps/web/src/components` | 22.2% / +216 −65 | 40 | mixed (see `components/…` rows) | see below | — | see below |
 | `apps/web/src/contexts` | 0% / +56 −8 | 1 | noise | `AuthContext` deleted by #47 (identity web `AuthProvider`); `ThemeContext` to shell theme (#76) | #47, #76 | `AuthContext.tsx` deleted by #47 |
 | `apps/web/src/hooks` | 11.1% / +173 −20 | 11 | mixed (see `hooks/…` rows) | see below | — | see below |
-| `apps/web/src/config` | n/a / +0 −0 | 2 | shellkeep-divergence | app composition root: `destinations.ts` (consumed by `Sidebar`, maps onto `ShellNavigation`), `userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`, the registry the packaged `SettingsHub` draws at `/settings`: packaged Profile and Appearance, the terminal domain's Terminal card); #76 adds `adminSections.tsx`, #80 redesigns the Terminal card | #44, #48, #76, #80 | `userSettingsPanels.tsx` deleted by #48 (folded into `USER_SETTINGS_SECTIONS`) |
+| `apps/web/src/config` | n/a / +0 −0 | 2 | shellkeep-divergence | app composition root: `destinations.ts` (consumed by `Sidebar`, maps onto `ShellNavigation`), `userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`, the registry the packaged `SettingsHub` draws at `/settings`: packaged Profile and Appearance, the terminal domain's Terminal card), `adminSections.tsx` (`ADMIN_SECTIONS`, drawn at `/admin/settings` since #46: About, Maintenance, the terminal domain's Terminal card, the identity slice's Users & Allowlist, the packaged Doctor); #80 redesigns the Terminal card | #44, #46, #48, #76, #80 | `userSettingsPanels.tsx` deleted by #48 (folded into `USER_SETTINGS_SECTIONS`) |
 | `apps/web/src/identity` | n/a / +0 −0 | 3 | shellkeep-divergence | identity web bindings (#47): `IdentityProviders` (packaged `AuthProvider` on the app client, `IdentityWebAdaptersProvider`), `identityAdapters.ts`, `LoginPage` (packaged page with the ShellKeep `Logo` slot) | #47 | none |
 | `apps/web/src/platform` | n/a / +0 −0 | 1 | shellkeep-divergence | platform host binding (#48): `platformHost.tsx` mounts the packaged `PlatformHostProvider` (the app client, the viewer, `applyTheme` to the theme context) | #48, #76 | `GET /storage/status` answered `configured: false` (a web shim the #50 web part removes, now that the API serves the route) so the packaged profile page shows no upload control |
-| `apps/web/src/lib` | n/a / +0 −0 | 3 | domain | keep (`lib/terminal`; `settings.ts` holds the terminal namespace defaults since #48) | — | none |
+| `apps/web/src/lib` | n/a / +0 −0 | 3 | domain | keep (`lib/terminal`; `settings.ts` holds the terminal namespace defaults since #48, `system-settings.ts` the `terminal` system namespace's bounds and defaults since #46) | — | none |
 | `apps/web/src/pages` | 0% / +35 −12 | 12 | mixed (see page rows) | see below | — | see below |
 | `apps/web/src/services` | 0% / +353 −23 | 2 | mixed (see `services/…` rows) | see below | — | see below |
 | `apps/web/src/theme` | 0% / +76 −17 | 4 | noise | shell theme (`createShellTheme`, `ShellThemeProvider`) | #76 | none |
@@ -142,13 +142,14 @@ Drift comes from the apps view.
 | `apps/web/src/hooks/useKeyboardInset.ts` | n/a / +0 −0 | 1 | domain | keep | — | none |
 | `apps/web/src/hooks/useSessions.ts` | n/a / +0 −0 | 1 | domain | keep | — | none |
 | `apps/web/src/hooks/useServerProfiles.ts` | n/a / +0 −0 | 1 | domain | keep | — | none |
-| `apps/web/src/services/api.ts` | 0% / +353 −23 | 1 | backport | core web client (`createPlatformApiClient`); terminal calls moved to `services/terminal-api.ts` | #44, #76 | Terminal API calls extracted to `services/terminal-api.ts` (resolved by #44) |
+| `apps/web/src/services/api.ts` | 0% / +353 −23 | 1 | backport | core web client (`createPlatformApiClient`); terminal calls moved to `services/terminal-api.ts`; `onErrorResponse` records a maintenance 503 in the host slice's block store for the packaged `MaintenanceGate` (#46) | #44, #46, #76 | Terminal API calls extracted to `services/terminal-api.ts` (resolved by #44) |
 | `apps/web/src/services/terminal-api.ts` | n/a / +0 −0 | 1 | domain | keep (server-profile and session calls on the base client) | #44 | none |
-| `apps/web/src/services/terminal-ws.ts` | n/a / +0 −0 | 1 | domain | keep (re-sends `auth` after token refresh, #47) | #47 | none |
+| `apps/web/src/services/terminal-ws.ts` | n/a / +0 −0 | 1 | domain | keep (re-sends `auth` after token refresh, #47; a `maintenance` refusal stops the socket with no reconnect loop and shows a banner with Retry, #46) | #46, #47 | none |
 | `apps/web/src/pages/UserManagementPage.tsx` | n/a / +0 −0 | 1 | noise | identity web (`UsersPage`) | #47 | deleted by #47 |
 | `apps/web/src/pages/SystemSettingsPage.tsx` | n/a / +0 −0 | 1 | noise | orphan: no route renders it; delete | #76 | deleted by #48 (its hook and editors were replaced, so it no longer compiled) |
 | `apps/web/src/pages/UserSettingsPage.tsx` | n/a / +0 −0 | 1 | noise | settings web (`SettingsHub`, `UserProfilePage`, `UserAppearancePage`) | #48, #80 | deleted by #48 |
 | `apps/web/src/pages/UserSettingsHubPage.tsx` | n/a / +0 −0 | 1 | shellkeep-divergence | binding of the packaged `SettingsHub` over `USER_SETTINGS_SECTIONS` (#48) | #48 | none |
+| `apps/web/src/pages/AdminSettingsHubPage.tsx` | n/a / +0 −0 | 1 | shellkeep-divergence | binding of the packaged `SettingsHub` over `ADMIN_SECTIONS` (#46); the About, Maintenance and Doctor pages are the packaged ones, routed straight from `App.tsx` | #46 | none |
 | `apps/web/src/pages/LoginPage.tsx` | n/a / +0 −0 | 1 | noise | identity web (`LoginPage`) | #47 | deleted by #47 |
 | `apps/web/src/pages/AuthCallbackPage.tsx` | n/a / +0 −0 | 1 | noise | identity web | #47 | deleted by #47 |
 | `apps/web/src/pages/ActivateDevicePage.tsx` | n/a / +0 −0 | 1 | noise | identity web (device activation) | #47 | deleted by #47 |
@@ -158,7 +159,7 @@ Drift comes from the apps view.
 | `apps/web/src/pages/SessionsPage.tsx` | n/a / +0 −0 | 1 | domain | keep | — | none |
 | `apps/web/src/pages/TerminalPage.tsx` | n/a / +0 −0 | 1 | domain | keep (workspace redone in #77) | #77 | none |
 | `apps/web/src/pages/TerminalFullPage.tsx` | n/a / +0 −0 | 1 | domain | keep (workspace redone in #77) | #77 | none |
-| `apps/web/src/components/PWAUpdatePrompt.tsx` | n/a / +0 −0 | 1 | noise | host web (`UpdatePrompt`) | #76 | none |
+| `apps/web/src/components/PWAUpdatePrompt.tsx` | n/a / +0 −0 | 1 | noise | host web (`UpdatePrompt`) | #46 | deleted by #46 (the packaged `UpdatePrompt`, which also registers the service worker, and `InstallPrompt` are mounted in `App.tsx`) |
 
 ### Web components (`apps/web/src/components`)
 
@@ -167,13 +168,13 @@ Drift comes from the apps view.
 | Module | Drift | Files | Category | Target | Issue | Workaround |
 |---|---|---|---|---|---|---|
 | `apps/web/src/components/navigation` | 0% / +175 −26 | 3 | noise | shell (`ShellAppBar`, `ShellNavigationRail`, `ShellUserMenu`); `Sidebar` destinations come from `config/destinations.ts` (resolved by #44) | #76 | none |
-| `apps/web/src/components/common` | 66.7% / +36 −34 | 6 | noise | shell and identity guards (`Layout.tsx` to `ShellLayout`; `ProtectedRoute`, `RequirePermission`, `AdminOnly` to identity web; `ErrorBoundary`, `LoadingSpinner` to the host) | #76, #47 | `ProtectedRoute`, `RequirePermission`, `AdminOnly` deleted by #47 (identity web `RequireAuth`, `RequirePermission`) |
+| `apps/web/src/components/common` | 66.7% / +36 −34 | 6 | noise | shell and identity guards (`Layout.tsx` to `ShellLayout`; `ProtectedRoute`, `RequirePermission`, `AdminOnly` to identity web; `ErrorBoundary`, `LoadingSpinner` to the host; `Layout.tsx` mounts the host slice's `MaintenanceBanner` since #46) | #76, #47 | `ProtectedRoute`, `RequirePermission`, `AdminOnly` deleted by #47 (identity web `RequireAuth`, `RequirePermission`) |
 | `apps/web/src/components/admin` | n/a / +0 −0 | 6 | noise | identity web (`AddEmailDialog`, `AllowlistTable`, `UserList`); `FeatureFlagsList`, `SystemSettingsEditor`, `UISettings` to settings web | #47, #48 | `AddEmailDialog`, `AllowlistTable`, `UserList` deleted by #47 (identity web `UsersPage`); `FeatureFlagsList`, `SystemSettingsEditor`, `UISettings` deleted by #48 (folder gone) |
 | `apps/web/src/components/auth` | n/a / +0 −0 | 1 | noise | identity web (`OAuthButton`) | #47 | deleted by #47 |
 | `apps/web/src/components/device-activation` | n/a / +0 −0 | 3 | noise | identity web | #47 | deleted by #47 |
 | `apps/web/src/components/user` | 0% / +5 −5 | 1 | noise | identity web (`UserProfileCard`) | #47 | none |
 | `apps/web/src/components/settings` | n/a / +0 −0 | 3 | backport | settings web (`ImageUpload`, `ProfileSettings`, `ThemeSettings`); `KeyShortcutsSettings` and `KeystrokeEditor` are terminal domain | #48, #80 | `KeyShortcutsSettings` and `KeystrokeEditor` moved to `components/terminal/settings/` (resolved by #44); `ImageUpload`, `ProfileSettings`, `ThemeSettings` deleted by #48 (packaged `UserProfilePage`, `UserAppearancePage`; folder gone); the "Terminal" card (`TerminalSettingsPage`) since #48, redesigned in #80 |
-| `apps/web/src/components/terminal` | n/a / +0 −0 | 10 | domain | keep (`settings/` holds `KeyShortcutsSettings` and `KeystrokeEditor` since #44) | — | none |
+| `apps/web/src/components/terminal` | n/a / +0 −0 | 10 | domain | keep (`settings/` holds `KeyShortcutsSettings` and `KeystrokeEditor` since #44, and the admin `TerminalSystemSettingsPage` for the `terminal` system namespace since #46) | — | none |
 | `apps/web/src/components/server-profiles` | n/a / +0 −0 | 2 | domain | keep | — | none |
 | `apps/web/src/components/home` | 0% / +0 −0 | 4 | domain | keep | — | none |
 

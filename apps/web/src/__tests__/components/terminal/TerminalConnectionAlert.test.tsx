@@ -20,10 +20,16 @@ vi.mock('@marinoscar/platform-web/identity/headless', async (importOriginal) => 
 
 vi.mock('../../../services/api', () => ({
   api: { getAccessToken: vi.fn(() => 'mock-token') },
+  // The platform host (rendered by the test wrapper) spreads the app's client.
+  platformApi: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
 import { TerminalConnectionAlert } from '../../../components/terminal/TerminalConnectionAlert';
-import { EXPIRED_MESSAGE, FORBIDDEN_MESSAGE } from '../../../services/terminal-ws';
+import {
+  EXPIRED_MESSAGE,
+  FORBIDDEN_MESSAGE,
+  MAINTENANCE_MESSAGE,
+} from '../../../services/terminal-ws';
 
 describe('TerminalConnectionAlert (#93)', () => {
   beforeEach(() => {
@@ -65,6 +71,26 @@ describe('TerminalConnectionAlert (#93)', () => {
     expect(screen.queryByRole('button', { name: /close/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Back to sessions' }));
     expect(mockNavigate).toHaveBeenCalledWith('/sessions');
+    expect(mockLogout).not.toHaveBeenCalled();
+  });
+
+  it('shows the maintenance refusal with Retry and no dismiss (#46)', async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <TerminalConnectionAlert error={MAINTENANCE_MESSAGE} onDismiss={onDismiss} onRetry={onRetry} />,
+    );
+
+    const alert = screen.getByTestId('terminal-connection-alert');
+    expect(alert).toHaveTextContent(
+      'ShellKeep is in maintenance. New terminal sessions are paused; try again later.',
+    );
+    expect(alert).toHaveAttribute('data-variant', 'maintenance');
+    expect(screen.queryByRole('button', { name: /close/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onDismiss).not.toHaveBeenCalled();
     expect(mockLogout).not.toHaveBeenCalled();
   });
 

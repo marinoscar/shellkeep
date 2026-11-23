@@ -10,6 +10,8 @@ export interface TerminalViewHandle {
   getTerminal: () => Terminal | null;
   sendInput: (data: string) => void;
   focus: () => void;
+  /** Open a fresh socket for the session (after a maintenance refusal, #46). */
+  reconnect: () => void;
 }
 
 interface TerminalViewProps {
@@ -22,14 +24,15 @@ interface TerminalViewProps {
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
   function TerminalView({ sessionId, onConnectionChange, onError, showScrollButtons = false }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { isConnected, error, terminal, sendInput } = useTerminal(sessionId, containerRef);
+  const { isConnected, error, terminal, sendInput, reconnect } = useTerminal(sessionId, containerRef);
   useTouchScroll(containerRef);
 
   useImperativeHandle(ref, () => ({
     getTerminal: () => terminal.current,
     sendInput,
     focus: () => terminal.current?.focus(),
-  }), [terminal, sendInput]);
+    reconnect,
+  }), [terminal, sendInput, reconnect]);
 
   // Notify parent of connection changes
   useEffect(() => {
