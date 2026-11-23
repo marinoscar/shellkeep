@@ -73,6 +73,8 @@ Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, a
 |---|---|---|---|
 | `TerminalMaintenancePolicy` | `apps/api/src/terminal/ws/terminal-maintenance.policy.ts` | `MaintenanceGuard` covers HTTP only; the terminal WebSocket applies the same window itself (the admin rule and every `registerMaintenanceBypass` predicate), refusing only a NEW `auth` or `connect` with `{ type: 'auth_fail', reason: 'maintenance' }`. An open socket is never closed | Kept (domain) |
 | The `terminal` About section and the four `terminal.*` Doctor checks, with the `terminal.ssh` egress contributor | `apps/api/src/terminal/about/`, `apps/api/src/terminal/doctor/` | The terminal domain's own facts and health | `terminal.ssh.legacy-secrets` goes with the legacy columns in #84; the rest is kept |
+| The terminal socket's maintenance state | `apps/web/src/services/terminal-ws.ts`, `components/terminal/TerminalConnectionAlert.tsx` | The packaged `MaintenanceGate` reads HTTP 503s only; the socket treats the gateway's `maintenance` refusal as its own state: no reconnect loop, an info banner with Retry | Kept (domain) |
+| The admin `Terminal` card | `apps/web/src/components/terminal/settings/TerminalSystemSettingsPage.tsx`, card in `apps/web/src/config/adminSections.tsx` | Edits the `terminal` system namespace (the reaper thresholds and the Doctor probe profile) on the packaged `useSystemSettings`; the profile select lists the viewer's own server profiles | Kept (domain) |
 
 ## App-owned settings and credentials (not shims)
 

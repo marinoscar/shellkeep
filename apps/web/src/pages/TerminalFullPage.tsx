@@ -76,6 +76,12 @@ export default function TerminalFullPage() {
     setTerminalError(null);
   }, []);
 
+  // The maintenance alert's Retry (#46): a fresh socket for this session.
+  const handleRetryTerminal = useCallback(() => {
+    setTerminalError(null);
+    terminalViewRef.current?.reconnect();
+  }, []);
+
   const getTerminalText = useCallback((): string => {
     const terminal = terminalViewRef.current?.getTerminal();
     if (!terminal) return '';
@@ -299,7 +305,11 @@ export default function TerminalFullPage() {
             onError={handleTerminalError}
             showScrollButtons={showScrollButtons}
           />
-          <TerminalConnectionAlert error={terminalError} onDismiss={handleDismissTerminalError} />
+          <TerminalConnectionAlert
+            error={terminalError}
+            onDismiss={handleDismissTerminalError}
+            onRetry={handleRetryTerminal}
+          />
         </Box>
         <Box sx={{ height: '30px', flexShrink: 0 }} aria-hidden />
       </Box>

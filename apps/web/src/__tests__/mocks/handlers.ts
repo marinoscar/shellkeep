@@ -120,6 +120,23 @@ export const handlers = [
     });
   }),
 
+  // Maintenance status (host slice, #46): no window open. The shell's
+  // MaintenanceBanner reads it for a viewer holding `system_settings:read`.
+  http.get(`${API_BASE}/admin/maintenance`, () => {
+    const policy = { enabled: false, message: 'Back soon.', allowAdmins: true, startedAt: null };
+    return HttpResponse.json({
+      data: {
+        ...policy,
+        source: 'persisted',
+        layers: {
+          env: { present: false, enabled: null },
+          memory: { present: false, override: null },
+          persisted: { readable: true, value: policy },
+        },
+      },
+    });
+  }),
+
   // Users endpoints
   http.get(`${API_BASE}/users`, () => {
     return HttpResponse.json({

@@ -11,6 +11,7 @@ import {
   type AuthProviderInfo as AuthProviderType,
 } from '@marinoscar/platform-web/identity/headless';
 import { ThemeContextProvider } from '../../contexts/ThemeContext';
+import { AppPlatformHostProvider } from '../../platform/platformHost';
 
 interface WrapperOptions {
   route?: string;
@@ -125,7 +126,9 @@ function createWrapper(options: WrapperOptions = {}) {
             isLoading={isLoading}
             providers={providers}
           >
-            {children}
+            {/* The app's platform host (#48), as App.tsx mounts it: packaged
+                components in the shell (the maintenance banner, #46) read it. */}
+            <AppPlatformHostProvider>{children}</AppPlatformHostProvider>
           </MockAuthProvider>
         </ThemeContextProvider>
       </MemoryRouter>
