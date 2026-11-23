@@ -5,8 +5,10 @@
  * `SettingsHub`) take their transport, the viewer and the theme setter from
  * ONE `PlatformHostProvider` (`@marinoscar/platform-web/core`):
  *
- *   - `api`: `hostApi`, the app's `platformApi` (`services/api.ts`) with the
- *     storage shim below. A module constant: packaged hooks key on its identity.
+ *   - `api`: the app's `platformApi` (`services/api.ts`), unchanged. A module
+ *     constant: packaged hooks key on its identity. Since #50 the API serves
+ *     `GET /api/storage/status` and the profile-image upload itself, so the
+ *     packaged profile page shows its upload control once storage is configured.
  *   - `viewer`: the signed-in user from the identity slice; `hasPermission` is
  *     `usePermissions`'s, the predicate every route guard uses.
  *   - `applyTheme`: the app theme context's `setMode`, so a theme picked on the
@@ -20,34 +22,11 @@
 import { useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
-import type {
-  PlatformApiClient,
-  PlatformViewer,
-  PlatformWebHost,
-} from '@marinoscar/platform-web/core';
+import type { PlatformViewer, PlatformWebHost } from '@marinoscar/platform-web/core';
 import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useSettingsFeatures } from '@marinoscar/platform-web/settings/headless';
 import { useThemeContext } from '../contexts/ThemeContext';
 import { platformApi } from '../services/api';
-
-/** The storage-status route the packaged profile page reads. */
-export const STORAGE_STATUS_PATH = '/storage/status';
-
-/**
- * PLATFORM-ADOPTION-SHIM(#50): ShellKeep has no platform storage slice yet, so
- * `GET /api/storage/status` does not exist and the API refuses a profile with
- * `imageSource: 'upload'` (no avatar object can exist). The packaged profile
- * page swaps its upload control for a "storage is not configured" notice only
- * on an explicit `configured: false`, so the host answers that route with it.
- * Every other call goes to the app's client unchanged. #50 deletes this.
- */
-export const hostApi: PlatformApiClient = {
-  ...platformApi,
-  get: <T,>(path: string, options?: Parameters<PlatformApiClient['get']>[1]): Promise<T> =>
-    path === STORAGE_STATUS_PATH
-      ? Promise.resolve({ configured: false } as T)
-      : platformApi.get<T>(path, options),
-};
 
 const THEME_MODES = ['light', 'dark', 'system'] as const;
 type ThemeMode = (typeof THEME_MODES)[number];
@@ -85,7 +64,7 @@ export function useAppPlatformHost(): PlatformWebHost {
     [userId, email, hasPermission, features, refreshUser],
   );
 
-  return useMemo<PlatformWebHost>(() => ({ api: hostApi, viewer, applyTheme }), [viewer, applyTheme]);
+  return useMemo<PlatformWebHost>(() => ({ api: platformApi, viewer, applyTheme }), [viewer, applyTheme]);
 }
 
 /** Mounts the packaged `PlatformHostProvider` with {@link useAppPlatformHost}. */
