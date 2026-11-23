@@ -11,6 +11,7 @@
 // Registration is once per process (a second import is a no-op).
 // =============================================================================
 
+import { MAINTENANCE_SYSTEM_SETTINGS } from '@marinoscar/platform-api/host';
 import {
   assembleSystemSettingsNamespaces,
   assembleUserSettingsNamespaces,
@@ -28,8 +29,19 @@ import {
   APP_USER_SETTINGS_NAMESPACES,
 } from '../../app-registrations/settings';
 
-/** The platform's system namespaces this app registers. None yet (see `app-registrations/settings.ts`). */
+/** The platform's system namespaces this app registers ahead of its own. None yet. */
 export const PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [];
+
+/**
+ * The platform's system namespaces appended AFTER the app's own, so the stored key order
+ * of the `global` row stays the app's own namespaces first, then the platform's additions:
+ * `maintenance` (the host slice, #46). Registered here, before `SettingsModule.forRoot()`
+ * composes the request bodies, so the host core does not have to (its `forRoot()` registers
+ * the namespace only when nothing did).
+ */
+export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [
+  MAINTENANCE_SYSTEM_SETTINGS as SystemSettingsNamespace,
+];
 
 /** The platform's optional user namespaces this app registers. None yet. */
 export const PLATFORM_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [];
@@ -60,6 +72,7 @@ export function registerShellkeepSettings(): void {
   if (registered) return;
   registered = true;
   registerSystemSettingsNamespaces(assembleShellkeepSystemSettingsNamespaces());
+  registerSystemSettingsNamespaces([...APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES]);
   registerUserSettingsNamespaces(assembleShellkeepUserSettingsNamespaces());
 }
 

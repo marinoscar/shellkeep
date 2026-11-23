@@ -12,11 +12,11 @@
 //   IDENTITY_PROFILE_IMAGES   -> the stored `profile` user setting
 //   USER_DEFAULTS             -> the platform's core defaults plus the app's initial namespaces
 //   IDENTITY_AUTH_CREDENTIALS -> the deployment credential store (#48)
+//   IDENTITY_METRICS          -> the host core's AppMetricsService (#46)
+//   IDENTITY_EVENT_BUS        -> the host core's event bus (#46)
 //
-// IDENTITY_METRICS and IDENTITY_EVENT_BUS are deliberately UNBOUND: the ports are
-// optional (identity then records no metrics and invalidates its principal cache in
-// this process only). They are bound by #46 (host). Google still reads the
-// environment: the store backs only a provider that keeps its secrets in it.
+// Google still reads the environment: the credential store backs only a provider
+// that keeps its secrets in it.
 //
 // Each shim is listed in docs/platform-adoption/local-exceptions.md with the
 // issue that removes it.
@@ -24,9 +24,12 @@
 
 import { Global, Module } from '@nestjs/common';
 import { CredentialsModule, CredentialsService } from '@marinoscar/platform-api/credentials';
+import { AppMetricsService, EVENT_BUS } from '@marinoscar/platform-api/host';
 import {
   IDENTITY_AUTH_CREDENTIALS,
+  IDENTITY_EVENT_BUS,
   IDENTITY_JOBS,
+  IDENTITY_METRICS,
   IDENTITY_NODE_CREDENTIALS,
   IDENTITY_NOTIFIER,
   IDENTITY_PROFILE_IMAGES,
@@ -45,6 +48,8 @@ const PORTS = [
   { provide: USER_DEFAULTS, useClass: ShellkeepUserDefaults },
   { provide: IDENTITY_PROFILE_IMAGES, useClass: ShellkeepProfileImages },
   { provide: IDENTITY_AUTH_CREDENTIALS, useExisting: CredentialsService },
+  { provide: IDENTITY_METRICS, useExisting: AppMetricsService },
+  { provide: IDENTITY_EVENT_BUS, useExisting: EVENT_BUS },
 ];
 
 @Global()
