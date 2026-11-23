@@ -68,7 +68,7 @@ The **Drift** column uses the slice view where the module has a packaged slice a
 | `apps/api/src/health` | 0% / +23 −58 | 5 | noise | host slice (`host/health`) | #46 | deleted by #46 (`/api/health`, `/live` and `/ready` are the host core's, same paths and bodies) |
 | `apps/api/src/settings` | 0% / +250 −685 | 15 | backport | settings slice | #48 | deleted by #48 (the platform settings slice is bound in `platform/settings/`; the `terminal` user and system namespaces are `terminal/settings/`) |
 | `apps/api/src/common` | 0% / +27 −164 | 23 | mixed (see sub-rows) | split across host, core, settings, credentials, identity and otel-core | #44, #46, #47, #48, #53 | see the `common/` rows |
-| `apps/api/src/storage` | 1.1% / +367 −1060 | 29 | noise | storage slice | #50 | ShellKeep key prefixes registered with `registerStorageKeyPrefixes` (`session-logs/`, `runbook-artifacts/`); the S3 environment variables are removed |
+| `apps/api/src/storage` | 1.1% / +367 −1060 | 29 | noise | storage slice | #50 | deleted by #50 (the platform storage slice is bound in `platform/storage/`; `session-logs/` and `runbook-artifacts/` are registered with `registerStorageKeyPrefixes` in `app-registrations/storage-prefixes.ts`; the S3 environment variables are removed and `npm run storage:import-env` carries them over once) |
 | `apps/api/src/config` | 0% / +29 −42 | 1 | noise | host core (config and `buildCorsOptions`) | #46 | Env-derived `DATABASE_URL` and the S3 and Uptrace variables disappear with #50 and #53 |
 | `apps/api/src/openapi` | n/a / +0 −0 | 2 | noise | host slice (`createOpenApiDocument`, `registerPlatformDocs`) | #46 | keep (ShellKeep's identity for the document, `APP_OPENAPI`, and `resolveApiVersion`; the tag taxonomy is `app-registrations/openapi-tags.ts`) |
 | `apps/api/src/prisma` | 0% / +3 −37 | 2 | noise | platform-db and core data-access (`PrismaService`) | #45 | none |
@@ -100,8 +100,8 @@ The four tasks are covered by their module rows above; they are listed so the sl
 | `apps/api/src/main.ts` | 0% / +27 −41 | 1 | shellkeep-divergence | app composition root (`shellkeep.manifest.ts` is imported first, #44) | #44, #46 | none |
 | `apps/api/src/auth/tasks/token-cleanup.task.ts` | 0% / +7 −12 | 1 | noise | identity slice (`@Cron`, owned by the slice) | #47 | deleted by #47 |
 | `apps/api/src/device-auth/tasks/device-code-cleanup.task.ts` | 0% / +11 −12 | 1 | noise | identity slice (`@Cron`, owned by the slice) | #47 | deleted by #47 |
-| `apps/api/src/storage/tasks/storage-cleanup.task.ts` | 0% / +57 −13 | 1 | noise | storage slice (`@Cron`, owned by the slice) | #50 | none |
-| `apps/api/src/storage/tasks/storage-expiry.task.ts` | n/a / +0 −0 | 1 | noise | storage slice (`@Cron`, owned by the slice) | #50 | none |
+| `apps/api/src/storage/tasks/storage-cleanup.task.ts` | 0% / +57 −13 | 1 | noise | storage slice (`@Cron`, owned by the slice) | #50 | deleted by #50 |
+| `apps/api/src/storage/tasks/storage-expiry.task.ts` | n/a / +0 −0 | 1 | noise | storage slice (`@Cron`, owned by the slice) | #50 | deleted by #50 |
 
 ### Web (`apps/web/src`)
 
@@ -115,7 +115,7 @@ Drift comes from the apps view.
 | `apps/web/src/hooks` | 11.1% / +173 −20 | 11 | mixed (see `hooks/…` rows) | see below | — | see below |
 | `apps/web/src/config` | n/a / +0 −0 | 2 | shellkeep-divergence | app composition root: `destinations.ts` (consumed by `Sidebar`, maps onto `ShellNavigation`), `userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`, the registry the packaged `SettingsHub` draws at `/settings`: packaged Profile and Appearance, the terminal domain's Terminal card); #76 adds `adminSections.tsx`, #80 redesigns the Terminal card | #44, #48, #76, #80 | `userSettingsPanels.tsx` deleted by #48 (folded into `USER_SETTINGS_SECTIONS`) |
 | `apps/web/src/identity` | n/a / +0 −0 | 3 | shellkeep-divergence | identity web bindings (#47): `IdentityProviders` (packaged `AuthProvider` on the app client, `IdentityWebAdaptersProvider`), `identityAdapters.ts`, `LoginPage` (packaged page with the ShellKeep `Logo` slot) | #47 | none |
-| `apps/web/src/platform` | n/a / +0 −0 | 1 | shellkeep-divergence | platform host binding (#48): `platformHost.tsx` mounts the packaged `PlatformHostProvider` (the app client, the viewer, `applyTheme` to the theme context) | #48, #76 | `GET /storage/status` answered `configured: false` (`PLATFORM-ADOPTION-SHIM(#50)`) so the packaged profile page shows no upload control |
+| `apps/web/src/platform` | n/a / +0 −0 | 1 | shellkeep-divergence | platform host binding (#48): `platformHost.tsx` mounts the packaged `PlatformHostProvider` (the app client, the viewer, `applyTheme` to the theme context) | #48, #76 | `GET /storage/status` answered `configured: false` (a web shim the #50 web part removes, now that the API serves the route) so the packaged profile page shows no upload control |
 | `apps/web/src/lib` | n/a / +0 −0 | 3 | domain | keep (`lib/terminal`; `settings.ts` holds the terminal namespace defaults since #48) | — | none |
 | `apps/web/src/pages` | 0% / +35 −12 | 12 | mixed (see page rows) | see below | — | see below |
 | `apps/web/src/services` | 0% / +353 −23 | 2 | mixed (see `services/…` rows) | see below | — | see below |
