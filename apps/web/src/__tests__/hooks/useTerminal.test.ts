@@ -621,6 +621,20 @@ describe('useTerminal', () => {
       expect(wsSendFn.mock.contexts[0]).toBe(vi.mocked(TerminalWebSocket).mock.instances[1]);
     });
 
+    it('clears the error at once, so a repeated maintenance refusal reports again (#46)', () => {
+      const refusal = 'ShellKeep is in maintenance. New terminal sessions are paused; try again later.';
+      const { result } = renderUseTerminal();
+
+      act(() => { emitWs('error', new Error(refusal)); });
+      expect(result.current.error).toBe(refusal);
+
+      act(() => { result.current.reconnect(); });
+      expect(result.current.error).toBeNull();
+
+      act(() => { emitWs('error', new Error(refusal)); });
+      expect(result.current.error).toBe(refusal);
+    });
+
     it('clears the error and repaints when a reconnected socket connects', () => {
       const { result } = renderUseTerminal();
 
