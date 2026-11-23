@@ -509,6 +509,12 @@ model Organization {
   // composed from package:webhooks.prisma
   webhookEndpoints WebhookEndpoint[]
 
+  // composed from app:shellkeep.server-profiles.prisma
+  serverProfiles ServerProfile[]
+
+  // composed from app:shellkeep.terminal.prisma
+  terminalSessions TerminalSession[]
+
   @@map("organizations")
 }
 

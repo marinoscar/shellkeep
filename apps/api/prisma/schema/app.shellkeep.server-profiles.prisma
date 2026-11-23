@@ -3,8 +3,7 @@
 
 // ShellKeep domain: SSH server profiles.
 //
-// Ownership: user-owned (`user_id`), with `orgReference: 'orgId'` once the
-//   org_id migration (shellkeep_domain_org_id) lands.
+// Ownership: user-owned (`user_id`), `orgReference: 'orgId'`.
 // Purge: Cascade on user delete (a deleted user takes their profiles with them).
 // No RLS: this table carries org_id but is not under row-level security; see
 //   docs/platform-adoption/local-exceptions.md (standing constraints).
@@ -19,6 +18,7 @@ enum AuthMethod {
 model ServerProfile {
   id                  String     @id @default(uuid()) @db.Uuid
   userId              String     @map("user_id") @db.Uuid
+  orgId               String     @map("org_id") @db.Uuid
   name                String
   hostname            String
   port                Int        @default(22)
@@ -34,9 +34,11 @@ model ServerProfile {
   updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessions TerminalSession[]
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  sessions     TerminalSession[]
 
   @@index([userId])
+  @@index([orgId, userId])
   @@map("server_profiles")
 }

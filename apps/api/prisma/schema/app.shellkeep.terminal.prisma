@@ -3,8 +3,7 @@
 
 // ShellKeep domain: tmux-backed terminal sessions.
 //
-// Ownership: user-owned (`user_id`), with `orgReference: 'orgId'` once the
-//   org_id migration (shellkeep_domain_org_id) lands.
+// Ownership: user-owned (`user_id`), `orgReference: 'orgId'`.
 // Purge: Cascade on user delete, and on delete of the owning server profile.
 // No RLS: this table carries org_id but is not under row-level security; see
 //   docs/platform-adoption/local-exceptions.md (standing constraints).
@@ -18,6 +17,7 @@ enum SessionStatus {
 model TerminalSession {
   id              String        @id @default(uuid()) @db.Uuid
   userId          String        @map("user_id") @db.Uuid
+  orgId           String        @map("org_id") @db.Uuid
   serverProfileId String        @map("server_profile_id") @db.Uuid
   name            String
   status          SessionStatus @default(active)
@@ -31,9 +31,11 @@ model TerminalSession {
 
   // Relations
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Restrict)
   serverProfile ServerProfile @relation(fields: [serverProfileId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([orgId, userId])
   @@index([serverProfileId])
   @@index([status])
   @@map("terminal_sessions")
