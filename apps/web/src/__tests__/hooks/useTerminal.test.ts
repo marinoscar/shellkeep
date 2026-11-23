@@ -43,8 +43,9 @@ vi.mock('@xterm/xterm', () => {
       container.appendChild(ta);
     });
     this.write = vi.fn();
-    this.onData = vi.fn();
-    this.onBinary = vi.fn();
+    // Like xterm, each subscription returns an IDisposable.
+    this.onData = vi.fn(() => ({ dispose: vi.fn() }));
+    this.onBinary = vi.fn(() => ({ dispose: vi.fn() }));
     this.loadAddon = vi.fn();
     this.buffer = { active: { length: 0, getLine: vi.fn() } };
   });
@@ -548,6 +549,18 @@ describe('useTerminal', () => {
 
   // -------------------------------------------------------------------------
   describe('Cleanup on unmount', () => {
+    it('should dispose the terminal input subscriptions on unmount', () => {
+      const { unmount } = renderUseTerminal();
+      const term = getTerminalInstance();
+      const dataSub = vi.mocked(term.onData).mock.results[0].value as { dispose: ReturnType<typeof vi.fn> };
+      const binarySub = vi.mocked(term.onBinary).mock.results[0].value as { dispose: ReturnType<typeof vi.fn> };
+
+      unmount();
+
+      expect(dataSub.dispose).toHaveBeenCalledTimes(1);
+      expect(binarySub.dispose).toHaveBeenCalledTimes(1);
+    });
+
     it('should disconnect ws and dispose the terminal on unmount', () => {
       const { unmount } = renderUseTerminal();
 
@@ -568,6 +581,61 @@ describe('useTerminal', () => {
 
       expect(wsDisconnectFn).toHaveBeenCalled();
       expect(vi.mocked(TerminalWebSocket).mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+
+    it('keeps one input subscription across 3 reconnects: a keystroke is sent exactly once (#93)', () => {
+      const { result } = renderUseTerminal();
+      const term = getTerminalInstance();
+
+      act(() => { result.current.reconnect(); });
+      act(() => { result.current.reconnect(); });
+      act(() => { result.current.reconnect(); });
+
+      // One subscription per terminal, never one per socket.
+      expect(term.onData).toHaveBeenCalledTimes(1);
+      expect(term.onBinary).toHaveBeenCalledTimes(1);
+
+      // xterm fires a keystroke to every live subscriber.
+      wsSendFn.mockClear();
+      for (const [cb] of vi.mocked(term.onData).mock.calls) {
+        (cb as (d: string) => void)('a');
+      }
+
+      expect(wsSendFn).toHaveBeenCalledTimes(1);
+      // ...and it goes to the newest socket, not a disconnected one.
+      const sockets = vi.mocked(TerminalWebSocket).mock.instances;
+      expect(sockets).toHaveLength(4);
+      expect(wsSendFn.mock.contexts[0]).toBe(sockets[3]);
+    });
+
+    it('routes binary input to the socket created by the last reconnect', () => {
+      const { result } = renderUseTerminal();
+      const term = getTerminalInstance();
+
+      act(() => { result.current.reconnect(); });
+      wsSendFn.mockClear();
+      const onBinaryCb = vi.mocked(term.onBinary).mock.calls[0][0] as (d: string) => void;
+      onBinaryCb('\x01');
+
+      expect(wsSendFn).toHaveBeenCalledTimes(1);
+      expect(wsSendFn.mock.contexts[0]).toBe(vi.mocked(TerminalWebSocket).mock.instances[1]);
+    });
+
+    it('clears the error and repaints when a reconnected socket connects', () => {
+      const { result } = renderUseTerminal();
+
+      act(() => { emitWs('error', new Error('WebSocket error')); });
+      expect(result.current.error).toBe('WebSocket error');
+
+      act(() => { result.current.reconnect(); });
+      wsResizeFn.mockClear();
+      // The shared listener bus fires both sockets' handlers; the newest one counts.
+      act(() => { emitWs('connect'); });
+      act(() => { vi.advanceTimersByTime(250); });
+
+      expect(result.current.isConnected).toBe(true);
+      expect(result.current.error).toBeNull();
+      expect(wsResizeFn).toHaveBeenCalled();
     });
 
     it('should not create a new WebSocket when there is no access token', () => {

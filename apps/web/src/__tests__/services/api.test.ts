@@ -680,6 +680,23 @@ describe('AppHttpClient.onAccessTokenRefreshed (#47)', () => {
     expect(seen).toEqual(['fresh-token']);
   });
 
+  it('shares one refresh between concurrent callers and notifies once (#93)', async () => {
+    let calls = 0;
+    server.use(
+      http.post('*/api/auth/refresh', () => {
+        calls += 1;
+        return HttpResponse.json({ data: { accessToken: 'shared-token', expiresIn: 900 } });
+      }),
+    );
+    const seen: string[] = [];
+    const off = api.onAccessTokenRefreshed((t) => seen.push(t));
+    const results = await Promise.all([api.refreshToken(), api.refreshToken(), api.refreshToken()]);
+    off();
+    expect(results).toEqual([true, true, true]);
+    expect(calls).toBe(1);
+    expect(seen).toEqual(['shared-token']);
+  });
+
   it('tells nobody when the refresh is refused', async () => {
     server.use(
       http.post('*/api/auth/refresh', () => HttpResponse.json({ message: 'no' }, { status: 401 })),

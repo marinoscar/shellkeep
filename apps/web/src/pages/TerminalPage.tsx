@@ -6,6 +6,7 @@ import { TerminalView } from '../components/terminal/TerminalView';
 import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { TerminalToolbar } from '../components/terminal/TerminalToolbar';
 import { TerminalKeyShortcutsBar } from '../components/terminal/TerminalKeyShortcutsBar';
+import { TerminalConnectionAlert } from '../components/terminal/TerminalConnectionAlert';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
 import { uploadFile, getDownloadUrl } from '../services/api';
 import { getSession, updateSession, createSession, downloadSessionHistory } from '../services/terminal-api';
@@ -20,6 +21,7 @@ export default function TerminalPage() {
   const terminalViewRef = useRef<TerminalViewHandle>(null);
   const [session, setSession] = useState<TerminalSession | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [terminalError, setTerminalError] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'info' });
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -52,6 +54,17 @@ export default function TerminalPage() {
 
   const handleConnectionChange = useCallback((connected: boolean) => {
     setIsConnected(connected);
+    // A (re)connected session clears whatever went wrong before.
+    if (connected) setTerminalError(null);
+  }, []);
+
+  // The terminal's errors, including session expiry and a forbidden role (#93).
+  const handleTerminalError = useCallback((error: string) => {
+    setTerminalError(error);
+  }, []);
+
+  const handleDismissTerminalError = useCallback(() => {
+    setTerminalError(null);
   }, []);
 
   const handleRename = useCallback(
@@ -221,13 +234,15 @@ export default function TerminalPage() {
 
       {/* Terminal */}
       <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ flex: 1, minHeight: 0 }}>
+        <Box sx={{ flex: 1, minHeight: 0, position: 'relative' }}>
           <TerminalView
             ref={terminalViewRef}
             sessionId={id}
             onConnectionChange={handleConnectionChange}
+            onError={handleTerminalError}
             showScrollButtons={showScrollButtons}
           />
+          <TerminalConnectionAlert error={terminalError} onDismiss={handleDismissTerminalError} />
         </Box>
         <Box sx={{ height: '30px', flexShrink: 0 }} aria-hidden />
       </Box>

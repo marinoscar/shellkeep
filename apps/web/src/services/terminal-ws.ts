@@ -44,14 +44,65 @@ export function staticTerminalAuth(token: string): TerminalAuth {
   };
 }
 
-/** How long before the token's `exp` the socket asks for a fresh one. */
+/**
+ * The longest lead before the token's `exp` at which the socket asks for a
+ * fresh one. A short-lived token gets a proportionally shorter lead
+ * ({@link REFRESH_LEAD_FRACTION}), so a token living a minute or less is not
+ * refreshed the moment it arrives (issue #93).
+ */
 export const REFRESH_LEAD_MS = 60_000;
-/** The earliest a proactive refresh runs, so an almost-expired token is not hammered. */
-const MIN_REFRESH_DELAY_MS = 1_000;
+/** The share of a token's lifetime used as the lead when that is under {@link REFRESH_LEAD_MS}. */
+export const REFRESH_LEAD_FRACTION = 0.2;
+/**
+ * The shortest time between two refreshes this socket asks for, whatever the
+ * token's claims say (a skewed clock, a server issuing very short tokens), so
+ * the refresh endpoint is never hammered.
+ */
+export const MIN_REFRESH_INTERVAL_MS = 10_000;
+
+/**
+ * How long to wait before refreshing a token, from its claims and the time of
+ * the last refresh (issue #93). The lead is `min(REFRESH_LEAD_MS, 20% of the
+ * token's lifetime)`; the lifetime is `exp - iat` when the token carries `iat`
+ * (both on the server's clock, so local clock skew does not shrink it), else
+ * the time left. The result never schedules a refresh sooner than
+ * {@link MIN_REFRESH_INTERVAL_MS} after the previous one.
+ *
+ * @param expiresAt - the token's `exp`, epoch ms.
+ * @param issuedAt - the token's `iat`, epoch ms, or `null`.
+ * @param now - the current time, epoch ms.
+ * @param lastRefreshAt - when the last refresh completed, epoch ms, or `null`.
+ * @returns the delay in ms (never negative).
+ */
+export function refreshDelayMs(
+  expiresAt: number,
+  issuedAt: number | null,
+  now: number,
+  lastRefreshAt: number | null,
+): number {
+  const remaining = expiresAt - now;
+  const lifetime = issuedAt !== null && expiresAt > issuedAt ? expiresAt - issuedAt : remaining;
+  const lead = Math.min(REFRESH_LEAD_MS, Math.max(0, lifetime) * REFRESH_LEAD_FRACTION);
+  const earliest = lastRefreshAt === null ? 0 : lastRefreshAt + MIN_REFRESH_INTERVAL_MS - now;
+  return Math.max(remaining - lead, earliest, 0);
+}
 
 export const FORBIDDEN_MESSAGE =
   'Your role can view sessions but not open a terminal. Ask an administrator for terminal access.';
 export const EXPIRED_MESSAGE = 'Your session has expired. Sign in again to reconnect.';
+
+/** The numeric claims of a JWT payload, or `null` when the token is not a readable JWT. */
+function readClaims(token: string): Record<string, unknown> | null {
+  const payload = token.split('.')[1];
+  if (!payload) return null;
+  try {
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    const claims = JSON.parse(json) as unknown;
+    return claims && typeof claims === 'object' ? (claims as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The `exp` claim of a JWT, in epoch milliseconds, or `null` when the token is
@@ -59,15 +110,14 @@ export const EXPIRED_MESSAGE = 'Your session has expired. Sign in again to recon
  * only schedules the client's own refresh.
  */
 export function tokenExpiryMs(token: string): number | null {
-  const payload = token.split('.')[1];
-  if (!payload) return null;
-  try {
-    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-    const exp = (JSON.parse(json) as { exp?: unknown }).exp;
-    return typeof exp === 'number' ? exp * 1000 : null;
-  } catch {
-    return null;
-  }
+  const exp = readClaims(token)?.exp;
+  return typeof exp === 'number' ? exp * 1000 : null;
+}
+
+/** The `iat` claim of a JWT, in epoch milliseconds, or `null` when absent or unreadable. */
+export function tokenIssuedAtMs(token: string): number | null {
+  const iat = readClaims(token)?.iat;
+  return typeof iat === 'number' ? iat * 1000 : null;
 }
 
 export class TerminalWebSocket {
@@ -88,6 +138,10 @@ export class TerminalWebSocket {
   /** Set by `disconnect()`: nothing may reopen the socket. */
   private stopped = false;
   private unsubscribeRefresh: (() => void) | null = null;
+  /** When the last refresh this socket saw completed (its own or anyone's), epoch ms. */
+  private lastRefreshAt: number | null = null;
+  /** The refresh this socket is waiting on: concurrent callers share it (issue #93). */
+  private refreshInFlight: Promise<boolean> | null = null;
   private readonly auth: TerminalAuth;
 
   /**
@@ -271,24 +325,52 @@ export class TerminalWebSocket {
   private subscribeToRefresh(): void {
     if (this.unsubscribeRefresh) return;
     this.unsubscribeRefresh = this.auth.onAccessTokenRefreshed((token) => {
+      this.lastRefreshAt = Date.now();
       if (this.ws && this.authenticated && this.ws.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ type: 'auth', token }));
       }
     });
   }
 
-  /** Refresh shortly before the current token's `exp`, so the gateway never sees it lapse. */
+  /**
+   * Refresh shortly before the current token's `exp`, so the gateway never sees
+   * it lapse. The lead scales with the token's lifetime and refreshes are at
+   * least {@link MIN_REFRESH_INTERVAL_MS} apart ({@link refreshDelayMs}).
+   */
   private scheduleRefresh(): void {
     this.clearRefreshTimer();
     const token = this.auth.getAccessToken();
     const expiresAt = token ? tokenExpiryMs(token) : null;
-    if (expiresAt === null) return; // `auth_expired` recovery still covers it
-    const delay = Math.max(expiresAt - Date.now() - REFRESH_LEAD_MS, MIN_REFRESH_DELAY_MS);
+    if (!token || expiresAt === null) return; // `auth_expired` recovery still covers it
+    const delay = refreshDelayMs(expiresAt, tokenIssuedAtMs(token), Date.now(), this.lastRefreshAt);
     this.refreshTimeout = setTimeout(() => {
       this.refreshTimeout = null;
+      // Someone else refreshed meanwhile: plan from the token held now instead of
+      // refreshing a token that was just issued. (Its `auth_refreshed` reschedules too.)
+      if (this.auth.getAccessToken() !== token) {
+        this.scheduleRefresh();
+        return;
+      }
       // A successful refresh fires the listener above, which re-sends `auth`.
-      void this.auth.refreshAccessToken().catch(() => false);
+      void this.refresh();
     }, delay);
+  }
+
+  /** Refresh the access token; concurrent callers share one in-flight request. */
+  private refresh(): Promise<boolean> {
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.auth
+        .refreshAccessToken()
+        .catch(() => false)
+        .then((refreshed) => {
+          if (refreshed) this.lastRefreshAt = Date.now();
+          return refreshed;
+        })
+        .finally(() => {
+          this.refreshInFlight = null;
+        });
+    }
+    return this.refreshInFlight;
   }
 
   private clearRefreshTimer(): void {
@@ -311,7 +393,7 @@ export class TerminalWebSocket {
       return;
     }
     this.expiryRetryUsed = true;
-    const refreshed = await this.auth.refreshAccessToken().catch(() => false);
+    const refreshed = await this.refresh();
     if (this.stopped) return;
     if (!refreshed) {
       this.failExpired();
