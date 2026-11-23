@@ -33,6 +33,7 @@ Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, a
 | `TerminalPrincipalResolver` | `apps/api/src/terminal/ws/terminal-principal.resolver.ts` | Verifies an access token sent on the terminal WebSocket and resolves the principal (`JwtService` with the slice's secret, `AuthService.validateJwtPayload`, `toPrincipal`), because the identity slice resolves a bearer token only inside its HTTP guard. Seam request EnterpriseAppBase#1216: "verify an access token for a non-HTTP transport and return the principal". It relies on three `@internal` exports | The platform release that ships the seam, adopted in the PR that bumps the pin and replaces the class with the seam (no ShellKeep issue yet; tracked by EnterpriseAppBase#1216) |
 | Storage status answered by the web host | `apps/web/src/platform/platformHost.tsx` (`hostApi`) | The packaged profile page (`UserProfilePage`) reads `GET /api/storage/status`, which ShellKeep does not serve yet, and the API refuses `imageSource: 'upload'` (see `ShellkeepSettingsProfileImages`). The host transport answers that one route with `{ configured: false }`, so the page shows the "storage is not configured" notice instead of an upload control that would fail; every other call goes to the app client | #50 (storage slice serves the route and the avatar upload) |
 | `DefaultOrgResolver` | `apps/api/src/prisma/default-org.resolver.ts`, used by `ObjectsService` only (storage objects, whose platform model requires `org_id`) | Reads the default organization's id once and caches it, so every new storage object is stamped with it. The domain (server profiles, terminal sessions) takes the organization from the request since #47 | #50 (storage slice) |
+| `fingerprintOf` / `sameFingerprint` and the probe's own SSH exchange | `apps/api/src/terminal/doctor/host-key-fingerprint.ts`, `apps/api/src/terminal/doctor/tmux-probe.ts` | The Doctor's `terminal.tmux.probe` (#46) verifies a profile's pinned `SHA256:` fingerprint inside ssh2's `hostVerifier`, before authenticating, with its own two-line fingerprint function and its own one-shot connection, because the host-key trust flow and the single SSH connection factory do not exist yet | #60 (host-key verification: the canonical `fingerprintOf` and the connection factory replace both) |
 
 ### Conformance exemptions (`apps/api/test/conformance.spec.ts`)
 
@@ -41,20 +42,29 @@ Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, a
 | `cron-enqueue-only` | `terminal/tasks/session-cleanup.task.ts` | Reaps stale sessions inline; no queue yet | #49 (becomes the enqueue-only cron and the `terminal.session.reap` job) |
 | `cron-enqueue-only` | `storage/tasks/storage-cleanup.task.ts`, `storage/tasks/storage-expiry.task.ts` | ShellKeep's own storage module works inline | #50 (deleted for the storage slice) |
 | `credentials` | the suite's `purposes` option names the platform's storage purpose definition instead of the registry | ShellKeep registers no deployment (system or organization) credential purpose until #50, and the suite refuses a scan of zero; the `ssh` user purpose is checked from the registry | #50 (storage registers its purpose; the option is deleted) |
-| `user-owned-data` | raw SQL in `prisma/prisma.service.ts` (test-only `cleanDatabase()`) and `health/indicators/database.indicator.ts` (`SELECT 1`) | Neither touches a user-owned table | Kept; the health indicator goes with #46 |
+| `user-owned-data` | raw SQL in `prisma/prisma.service.ts` (test-only `cleanDatabase()`) | It touches no user-owned table in production code | Kept (the health indicator's entry went with its file in #46; the host core's own indicator lives in the package) |
 
-### Optional identity ports left unbound
+### Identity ports bound by the host (#46)
 
-Not code shims: the ports are optional, and leaving one unbound means the slice records nothing or reads the environment.
+`IDENTITY_METRICS` is bound to the host core's `AppMetricsService` and `IDENTITY_EVENT_BUS` to its event bus (`platform/identity/identity-host.module.ts`), so the identity slice records its metrics and invalidates its principal cache across replicas (`EVENT_BUS_ADAPTER=postgres`). `IDENTITY_AUTH_CREDENTIALS` (bound to the deployment `CredentialsService`; Google still reads the environment) and the host port `SYSTEM_SETTINGS_STORE` (bound to the settings slice's `SystemSettingsService`) were bound by #48.
 
-| Port | Effect while unbound | Bound by |
+### The host core (#46)
+
+`platformHostModule` (`AUDIT_SINK`, `PLATFORM_PRISMA`, `SYSTEM_SETTINGS_STORE`) and `doctorModule` were mounted ahead of #46 because identity needs them. #46 completed the host: `platform/host-core.config.ts` (`PlatformHostCoreModule.forRoot`: event bus, app metrics, maintenance with `MaintenanceGuard` as the only `APP_GUARD`, the `{ data }` envelope, the exception filter, request ids, `/api/health`, `/live`, `/ready`), `platform/about/about.config.ts` (`GET /api/admin/about`) and `openapi/` plus `main.ts` (`registerPlatformDocs`: `/api/docs`, `/api/openapi.json`). The health paths are the platform's and equal the old ones, so no alias was needed and compose and nginx health checks are unchanged.
+
+| Difference from the previous build | Detail | Resolved by |
 |---|---|---|
-| `IDENTITY_METRICS` | The slice records no metrics | #46 (host: `AppMetricsService`) |
-| `IDENTITY_EVENT_BUS` | The principal cache is invalidated in this process only (single instance) | #46 (host: the event bus) |
+| A 400 validation error carries `details.issues` | The platform exception filter names each offending field (`path`) and the validator's message, never a submitted value; the forked filter returned only `statusCode`, `code`, `message`, `timestamp` and `path`. The web client reads `message` and `code`, so nothing breaks | Kept (the platform's contract) |
+| A maintenance 503 has `code: "ERROR"` and `details.reason: "MAINTENANCE_MODE"` | The filter derives `code` from the status; the marker the web keys on is `details.reason` (and the `Retry-After: 30` header) | Kept |
+| `common/logger` and `common/exceptions` stay | The host core has no Pino logger or seed exception; nothing injects `LoggerService` and nothing references `DatabaseSeedException`, so both are dead code | Deleted with the telemetry adoption (#53) and the seed review (#84) |
+| `@stoplight/spectral-cli` is a root dev dependency | The OpenAPI CI job lints the dumped document with the platform's Spectral ruleset (`.spectral.yaml`) | Kept |
 
-`IDENTITY_AUTH_CREDENTIALS` (bound to the deployment `CredentialsService`; Google still reads the environment) and the host port `SYSTEM_SETTINGS_STORE` (bound to the settings slice's `SystemSettingsService`) were bound by #48.
+## App-owned host pieces (not shims)
 
-Adopted ahead of #46 because identity needs them: `platformHostModule` (`AUDIT_SINK`, `PLATFORM_PRISMA`, since #48 also `SYSTEM_SETTINGS_STORE`) and `doctorModule` (`GET /api/admin/doctor`, `system_settings:read`, with the slice's `auth.*` and `tenancy.*` checks). #46 mounts the rest of the host core and the Doctor's other checks.
+| Piece | Where | Why it is the app's | Removed by |
+|---|---|---|---|
+| `TerminalMaintenancePolicy` | `apps/api/src/terminal/ws/terminal-maintenance.policy.ts` | `MaintenanceGuard` covers HTTP only; the terminal WebSocket applies the same window itself (the admin rule and every `registerMaintenanceBypass` predicate), refusing only a NEW `auth` or `connect` with `{ type: 'auth_fail', reason: 'maintenance' }`. An open socket is never closed | Kept (domain) |
+| The `terminal` About section and the four `terminal.*` Doctor checks, with the `terminal.ssh` egress contributor | `apps/api/src/terminal/about/`, `apps/api/src/terminal/doctor/` | The terminal domain's own facts and health | `terminal.ssh.legacy-secrets` goes with the legacy columns in #84; the rest is kept |
 
 ## App-owned settings and credentials (not shims)
 

@@ -65,27 +65,28 @@ The **Drift** column uses the slice view where the module has a packaged slice a
 | `apps/api/src/allowlist` | 28.6% / +12 −84 | 9 | noise | identity slice | #47 | deleted by #47 |
 | `apps/api/src/device-auth` | 11.8% / +184 −869 | 18 | noise | identity slice | #47 | deleted by #47 |
 | `apps/api/src/test-auth` | 9.1% / +63 −152 | 7 | noise | identity slice (`identity/testing`) | #47 | deleted by #47 |
-| `apps/api/src/health` | 0% / +23 −58 | 5 | noise | host slice (`host/health`) | #46 | none |
+| `apps/api/src/health` | 0% / +23 −58 | 5 | noise | host slice (`host/health`) | #46 | deleted by #46 (`/api/health`, `/live` and `/ready` are the host core's, same paths and bodies) |
 | `apps/api/src/settings` | 0% / +250 −685 | 15 | backport | settings slice | #48 | deleted by #48 (the platform settings slice is bound in `platform/settings/`; the `terminal` user and system namespaces are `terminal/settings/`) |
 | `apps/api/src/common` | 0% / +27 −164 | 23 | mixed (see sub-rows) | split across host, core, settings, credentials, identity and otel-core | #44, #46, #47, #48, #53 | see the `common/` rows |
 | `apps/api/src/storage` | 1.1% / +367 −1060 | 29 | noise | storage slice | #50 | ShellKeep key prefixes registered with `registerStorageKeyPrefixes` (`session-logs/`, `runbook-artifacts/`); the S3 environment variables are removed |
 | `apps/api/src/config` | 0% / +29 −42 | 1 | noise | host core (config and `buildCorsOptions`) | #46 | Env-derived `DATABASE_URL` and the S3 and Uptrace variables disappear with #50 and #53 |
+| `apps/api/src/openapi` | n/a / +0 −0 | 2 | noise | host slice (`createOpenApiDocument`, `registerPlatformDocs`) | #46 | keep (ShellKeep's identity for the document, `APP_OPENAPI`, and `resolveApiVersion`; the tag taxonomy is `app-registrations/openapi-tags.ts`) |
 | `apps/api/src/prisma` | 0% / +3 −37 | 2 | noise | platform-db and core data-access (`PrismaService`) | #45 | none |
 | `apps/api/src/server-profiles` | n/a / +0 −0 | 8 | domain | keep | — | none |
 | `apps/api/src/terminal` | n/a / +0 −0 | 17 | domain | keep (its `tasks/session-cleanup` `@Cron` becomes an enqueue-only cron and a `terminal.session.reap` job) | #49 (cron), #47 (WebSocket auth) | none |
 | `apps/api/src/app-registrations` | n/a / +0 −0 | 6 | domain | keep (composition root with `shellkeep.manifest.ts`: `APP_PERMISSIONS`, the user-owned model and ownership classifications `registrations.ts` with the platform manifest registrations (#47), `settings.ts` (the terminal and `ui`/`features` namespaces) and `credentials.ts` (the `ssh` purpose) (#48)) | #44, #47, #48 | none |
-| `apps/api/src/platform` | n/a / +0 −0 | 10 | domain | keep (bindings of the packaged slices: `platform-host.module.ts`, `doctor.config.ts` and `identity/` from #47, `settings/` and `credentials/` from #48; one folder per slice as each is adopted) | #47 | Interim host-port adapters are `PLATFORM-ADOPTION-SHIM`s listed in `local-exceptions.md` |
-| `apps/api/src/common/filters` | 0% / +17 −100 | 2 | noise | host/core (`http-exception.filter`) | #46 | none |
-| `apps/api/src/common/interceptors` | 0% / +7 −61 | 4 | noise | host (`logging.interceptor`, `transform.interceptor`) | #46 | A `304` shim (the platform transform wraps it) is a known risk; record it in `local-exceptions.md` if met |
-| `apps/api/src/common/middleware` | 0% / +3 −3 | 2 | noise | host (`request-id.middleware`) | #46 | none |
-| `apps/api/src/common/logger` | n/a / +0 −0 | 4 | noise | host core (Pino logging) | #46 | none |
+| `apps/api/src/platform` | n/a / +0 −0 | 10 | domain | keep (bindings of the packaged slices: `platform-host.module.ts`, `doctor.config.ts` and `identity/` from #47, `settings/` and `credentials/` from #48, `host-core.config.ts`, `host-app-metrics.ts` and `about/` from #46; one folder per slice as each is adopted) | #47 | Interim host-port adapters are `PLATFORM-ADOPTION-SHIM`s listed in `local-exceptions.md` |
+| `apps/api/src/common/filters` | 0% / +17 −100 | 2 | noise | host/core (`http-exception.filter`) | #46 | deleted by #46 (a 400 now also carries `details.issues`, see `local-exceptions.md`) |
+| `apps/api/src/common/interceptors` | 0% / +7 −61 | 4 | noise | host (`logging.interceptor`, `transform.interceptor`) | #46 | deleted by #46 (no `304` path exists in ShellKeep, so no shim was needed) |
+| `apps/api/src/common/middleware` | 0% / +3 −3 | 2 | noise | host (`request-id.middleware`) | #46 | deleted by #46 |
+| `apps/api/src/common/logger` | n/a / +0 −0 | 4 | noise | host core (Pino logging) | #46 | kept by #46: the host core has no Pino equivalent (it owns the request log line, not the logger), and the Fastify logger is Pino already; nothing injects `LoggerService`, so it is dead code to delete with the telemetry adoption (#53) |
 | `apps/api/src/common/schemas` | 0% / +39 −140 | 2 | backport | settings slice | #48 | deleted by #48 (the terminal part moved to the terminal namespace by #44) |
 | `apps/api/src/common/types` | 0% / +95 −4 | 1 | backport | settings slice | #48 | `settings.types.ts` deleted by #48 (`KeyShortcut`, `DEFAULT_KEY_SHORTCUTS` moved to the terminal namespace by #44); `owner-scope.ts` stays |
 | `apps/api/src/common/utils` | n/a / +0 −0 | 2 | noise | credentials slice (`encryption.util.ts`, AES-256-GCM) | #48 | deleted by #48 (SSH credentials are re-encrypted from `ENCRYPTION_KEY` to `SECRETS_ENCRYPTION_KEY`; the frozen cipher copy is `server-profiles/migrate/legacy-cipher.ts`) |
 | `apps/api/src/common/services` | n/a / +0 −0 | 2 | noise | identity slice (`admin-bootstrap.service.ts`) | #47 | deleted by #47 |
 | `apps/api/src/common/decorators` | 0% / +0 −0 | 1 | noise | otel-core (`@Trace()`) | #53 | none |
 | `apps/api/src/common/constants` | 0% / +28 −16 | 1 | backport | identity slice (roles and permissions) | #44, #47 | `servers:*` and `sessions:*` permissions moved to `app-registrations/permissions.ts` (`APP_PERMISSIONS`, resolved by #44), then to platform `PermissionDeclaration` (resolved by #47: org scoped, org_admin and contributor write, viewer reads; `ROLES` and `PERMISSIONS` are derived from the platform declarations); defaults keep admin and contributor with all six, viewer with the two read permissions |
-| `apps/api/src/common/exceptions` | n/a / +0 −0 | 1 | noise | core errors (`database-seed.exception.ts`) | #46 | none |
+| `apps/api/src/common/exceptions` | n/a / +0 −0 | 1 | noise | core errors (`database-seed.exception.ts`) | #46 | kept by #46: no host or core equivalent exists, and nothing references it; deleted with the seed review in #84 |
 | `apps/api/src/common/common.module.ts` | 0% / +3 −3 | 1 | noise | host core | #46 | deleted by #48 (its only provider froze the local registry primitive, deleted with the settings module) |
 
 ### API top-level files and the four base `@Cron` tasks
