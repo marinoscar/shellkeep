@@ -82,6 +82,15 @@ const WorkersPage = lazy(() =>
 // Storage (issue #50): the packaged object-storage configuration page.
 const StorageConfigPage = lazy(() => import('@marinoscar/platform-web/storage/ui'));
 
+// Notifications (issue #51): the packaged email, Web Push and broadcasts pages.
+const EmailSettingsPage = lazy(() => import('@marinoscar/platform-web/email/ui'));
+const PushConfigPage = lazy(() =>
+  import('@marinoscar/platform-web/notifications/ui').then((m) => ({ default: m.PushConfigPage })),
+);
+const BroadcastsPage = lazy(() =>
+  import('@marinoscar/platform-web/notifications/ui').then((m) => ({ default: m.BroadcastsPage })),
+);
+
 // Test login page (development only). The platform's test login endpoint
 // (`POST /api/auth/test/login`) has no packaged page; this form posts to it.
 const TestLoginPage = import.meta.env.PROD
@@ -174,7 +183,7 @@ function AppRoutes() {
                   <Route
                     path="/admin/settings"
                     element={
-                      <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read']} fallback={HOME}>
+                      <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read']} fallback={HOME}>
                         <AdminSettingsHubPage />
                       </RequirePermission>
                     }
@@ -213,6 +222,39 @@ function AppRoutes() {
                     element={
                       <RequirePermission permission="storage_config:read" fallback={HOME}>
                         <StorageConfigPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Email (#51): `GET /api/email-settings` enforces
+                      `system_settings:read`; saving and the test send need
+                      `system_settings:write`, gated inside the page. */}
+                  <Route
+                    path="/admin/settings/email"
+                    element={
+                      <RequirePermission permission="system_settings:read" fallback={HOME}>
+                        <EmailSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Web Push (#51): `GET /api/admin/push-config` enforces
+                      `push:read`; key generation, rotation and the test push
+                      need `push:write`, gated inside the page. */}
+                  <Route
+                    path="/admin/settings/push"
+                    element={
+                      <RequirePermission permission="push:read" fallback={HOME}>
+                        <PushConfigPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Broadcasts (#51): the controller admits either scope
+                      (`anyPermissions`); writes need the matching `:write`,
+                      gated inside the page. */}
+                  <Route
+                    path="/admin/settings/broadcasts"
+                    element={
+                      <RequirePermission permissions={['broadcasts:read', 'org_broadcasts:read']} fallback={HOME}>
+                        <BroadcastsPage />
                       </RequirePermission>
                     }
                   />
