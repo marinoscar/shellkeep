@@ -24,10 +24,6 @@ sed 's#/tmp/claude-0/-home-user/de41ec86-cb42-5a40-8317-7f15fd945067/scratchpad/
 
 ## Rollback tag
 
-The rollback point of the whole program is the `MonoRepo` tag, to be placed on `95145d0d850a4a53757b65d289158d58e34fc33d` (the commit these reports measure). The tag push was blocked by the agent session's git proxy, so a maintainer must run:
-
-```bash
-git tag MonoRepo 95145d0 && git push origin MonoRepo
-```
+The rollback point of the whole program is the `MonoRepo` tag, on `95145d0d850a4a53757b65d289158d58e34fc33d` (the commit these reports measure). It is pushed to `origin`; check it with `git ls-remote --tags origin MonoRepo`. The tag is never deleted.
 
 [local-exceptions.md](local-exceptions.md) lists every place ShellKeep deviates from the platform on purpose (shims, declared database deviations, standing constraints) and the issue that removes each one.
