@@ -17,6 +17,7 @@ ShellKeep is a browser-based terminal workspace with persistent tmux-backed sess
 | Write or run tests | [TESTING.md](TESTING.md), [../apps/api/TESTING.md](../apps/api/TESTING.md) |
 | Deploy to a VPS | [../infra/deploy/DEPLOY.md](../infra/deploy/DEPLOY.md), [ssl-nginx-setup.md](ssl-nginx-setup.md), [docker-compose-project-name-fix.md](docker-compose-project-name-fix.md) |
 | Work with Claude Code or OpenCode on this repo | [AI-ASSISTANTS.md](AI-ASSISTANTS.md), [../AGENTS.md](../AGENTS.md) |
+| Baseline an existing database, create the application role | [runbooks/database-baseline.md](runbooks/database-baseline.md), [runbooks/application-role.md](runbooks/application-role.md) |
 | See the original build specs | [specs/README.md](specs/README.md) |
 
 ## Index
@@ -31,6 +32,8 @@ ShellKeep is a browser-based terminal workspace with persistent tmux-backed sess
 | [SCROLLING.md](SCROLLING.md) | Terminal touch scrolling and keyboard inset |
 | [DEVICE-AUTH.md](DEVICE-AUTH.md) | Device authorization (RFC 8628) |
 | [AI-ASSISTANTS.md](AI-ASSISTANTS.md) | Claude Code and OpenCode configuration, size budgets, guards |
+| [runbooks/database-baseline.md](runbooks/database-baseline.md) | Baseline a deployed database onto the platform migration history |
+| [runbooks/application-role.md](runbooks/application-role.md) | The `shellkeep_app` database role |
 | [specs/README.md](specs/README.md) | Foundation implementation specs |
 | [ssl-nginx-setup.md](ssl-nginx-setup.md) | SSL and Nginx reverse proxy notes |
 | [docker-compose-project-name-fix.md](docker-compose-project-name-fix.md) | Compose project name note |

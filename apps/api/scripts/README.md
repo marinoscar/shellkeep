@@ -187,7 +187,7 @@ npm run prisma:migrate
 ### Related Files
 
 - `package.json` - Defines npm scripts using this helper
-- `prisma/schema.prisma` - Prisma schema (uses `env("DATABASE_URL")`)
+- `prisma/fragments/` - the app's Prisma models; `prisma/schema/` is generated from them and the platform fragments by `npm run db:compose`
 - `src/config/configuration.ts` - Runtime configuration (constructs DATABASE_URL for the app)
 - `infra/compose/.env.example` - Environment variables template
 - `infra/compose/base.compose.yml` - Docker Compose configuration

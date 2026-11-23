@@ -7,6 +7,7 @@ import fastifyCookie from '@fastify/cookie';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { DefaultOrgResolver } from '../../src/prisma/default-org.resolver';
 import { prismaMock } from '../mocks/prisma.mock';
 
 export interface TestContext {
@@ -46,6 +47,8 @@ export async function createTestApp(
     })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
+      .overrideProvider(DefaultOrgResolver)
+      .useValue({ resolve: async () => 'org-default' })
       .compile();
   } else {
     // Create test module with real database (for true E2E tests)

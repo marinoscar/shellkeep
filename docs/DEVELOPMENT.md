@@ -565,7 +565,8 @@ const response = await request(app.getHttpServer())
 1. **Update Prisma Schema:**
    ```bash
    cd apps/api
-   # Edit prisma/schema.prisma
+   # Edit the app fragment in prisma/fragments/*.prisma, then compose the schema:
+   npm run db:compose   # writes the generated prisma/schema/ (never edit it)
    ```
 
 2. **Create Migration:**

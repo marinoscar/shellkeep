@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DefaultOrgResolver } from '../prisma/default-org.resolver';
 
 describe('SessionsService', () => {
   let service: SessionsService;
@@ -38,6 +39,7 @@ describe('SessionsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SessionsService,
+        { provide: DefaultOrgResolver, useValue: { resolve: jest.fn().mockResolvedValue('org-default') } },
         {
           provide: PrismaService,
           useValue: {
@@ -178,6 +180,7 @@ describe('SessionsService', () => {
       expect(prisma.terminalSession.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           userId: mockUserId,
+          orgId: 'org-default',
           serverProfileId: mockProfileId,
           tmuxSessionId: expect.stringMatching(/^sk-[a-f0-9]{8}$/),
           status: 'active',

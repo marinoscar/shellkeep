@@ -13,19 +13,21 @@ Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, a
 
 | Deviation id | What differs from the platform | Where | Why | Removed by |
 |---|---|---|---|---|
-| _none yet_ | | | | |
-
-The expected first entry is the domain schema (`server_profiles`, `terminal_sessions`, enums and indexes that platform `0001` does not create), declared by #45.
+| `shellkeep:domain-schema` | ShellKeep's domain tables `server_profiles` and `terminal_sessions`, the enums `AuthMethod` and `SessionStatus` and their indexes and foreign keys, which platform `0001` does not create. Not a change to a platform table. | `apps/api/prisma/platform.lock` (`deviations`), created by migration `20260124223147_add_terminal_domain` | The tables were created by `prisma db push`, so a deployed database has them and the baseline dry run (B3) lists them as undeclared. The statements are the pre-`org_id` shape, so the baseline is run **before** `shellkeep_domain_org_id` is applied and never re-run after it. | Kept while the baseline can still be run on a pre-adoption database; deleted once every deployment has adopted it (after #84) |
 
 ## Code shims (`PLATFORM-ADOPTION-SHIM`)
 
 | Shim | Where | What it does | Removed by |
 |---|---|---|---|
-| _none yet_ | | | |
+| `DefaultOrgResolver` | `apps/api/src/prisma/default-org.resolver.ts`, used by `ServerProfilesService.create`, `SessionsService.create` and `ObjectsService` (storage objects, whose platform model requires `org_id`) | Reads the default organization's id once and caches it, so every new row is stamped with it while ShellKeep is single-organization | #47 (identity: the request's organization via `@CurrentOrg()` / `resolveOrgId`); the storage use ends with #52 |
 
 ## Standing constraints
 
-None. The `MonoRepo` rollback tag exists on `95145d0d850a4a53757b65d289158d58e34fc33d`.
+| Constraint | Detail | Removed by |
+|---|---|---|
+| `server_profiles` and `terminal_sessions` carry `org_id` but are not under row-level security | Single organization only: the tables are not isolated per organization, and the API still connects as the bootstrap superuser (the `shellkeep_app` role exists but is not switched, #52). Every row's `org_id` is the default organization | A future multi-organization epic |
+
+The `MonoRepo` rollback tag exists on `95145d0d850a4a53757b65d289158d58e34fc33d`.
 
 ## Drift allowlist
 

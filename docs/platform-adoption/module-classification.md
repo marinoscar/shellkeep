@@ -200,7 +200,7 @@ The 14 base models are the 14 of EAB `0001_initial`. `DeviceCode` and `StorageOb
 | Migration | Drift | Category | Target | Issue | Note |
 |---|---|---|---|---|---|
 | `20260124223146_initial` | identical (byte for byte) to platform `0001_initial` | noise | `@marinoscar/platform-db` migration `0001_initial` | #45 | Recorded in the `platform.lock` baseline; never edited |
-| `20260322203853_add_server_profile_color` | app-only (`ALTER TABLE "server_profiles" ADD COLUMN "color"`) | domain | domain migration set | #45 | No migration creates `server_profiles` or `terminal_sessions`: the two tables exist only in `schema.prisma`. #45 must create them in a domain migration that is a no-op on a database that already has them, before this column migration is replayed |
+| `20260322203853_add_server_profile_color` | app-only (`ALTER TABLE "server_profiles" ADD COLUMN "color"`) | domain | domain migration set | #45 | No migration created `server_profiles` or `terminal_sessions` (they came from `prisma db push`). #45 added `20260124223147_add_terminal_domain`, which sorts before this migration; on an existing database it is only marked applied (`migrate resolve --applied`) |
 | `apps/api/prisma/seed.ts` | modified (+167 −15) | backport | platform seed plus an app seed | #45, #47 | The added content is the `servers:*`/`sessions:*` permissions and their role grants; they come from `APP_PERMISSIONS` (see the workaround table) |
 | `apps/api/prisma/tsconfig.json` | modified (+5 −15) | noise | platform-db tooling | #45 | none |
 
