@@ -53,8 +53,8 @@ export default () => {
 
   // Storage: the deployment's upload bounds. WHERE bytes go (provider, bucket, region,
   // endpoint, keys) is runtime configuration at `/admin/settings/storage` since #50, so
-  // `STORAGE_PROVIDER`, `S3_*`, `AWS_*` and `STORAGE_PART_SIZE` are gone; adding any of them
-  // back would restore a second source of truth. The part size is the slice's default
+  // the old provider, S3 and AWS variables are gone; adding any of them back would restore a
+  // second source of truth. The part size is the slice's default
   // (10 MiB, `StorageModule.forRoot({ partSizeBytes })`).
   storage: {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10737418240', 10), // 10GB default

@@ -11,7 +11,7 @@
 // The provider is runtime configuration: `/admin/settings/storage` (the
 // `storage` system namespace plus the encrypted credential store). There is no
 // environment-variable path. `npm run storage:import-env` copies the previous
-// build's `STORAGE_PROVIDER` / `S3_*` / `AWS_*` variables once.
+// build's storage variables once.
 //
 // Imports below run first, in this order: the settings registry (the `storage`
 // namespace must be registered before `SettingsModule.forRoot()` composes its
