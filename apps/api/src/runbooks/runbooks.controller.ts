@@ -174,6 +174,21 @@ export class RunbooksController {
     await this.runbooks.archive(principal, id);
   }
 
+  @Delete(':id/permanent')
+  @Auth({ permissions: [PERMISSIONS.RUNBOOKS_WRITE] })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'Permanently delete a runbook with its versions, runs and grants (requires runbooks:write and the owner role: the creator or an admin of the owning group)',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Deleted' })
+  @ApiResponse({ status: 404, description: 'Not found, or the caller is not its owner' })
+  @ApiResponse({ status: 409, description: 'RUNBOOK_HAS_ACTIVE_RUNS' })
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
+    await this.runbooks.remove(principal, id);
+  }
+
   @Post(':id/restore')
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_WRITE] })
   @HttpCode(HttpStatus.OK)
