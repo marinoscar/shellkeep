@@ -4,6 +4,7 @@ import {
   ArrowBack as ArrowBackIcon,
   AutoAwesomeOutlined as AssistantIcon,
   Close as CloseIcon,
+  FolderOpenOutlined as FilesIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useShellContextPaneVisible, useShellMainVariant } from '@marinoscar/platform-web/shell/headless';
@@ -32,6 +33,10 @@ import { AI_EXPLAIN_ACTION, matchesAiExplainShortcut } from '../lib/terminal/aiE
 import { EXPLAIN_SELECTION_MAX } from '../components/terminal/ai/ExplainPanel';
 import { ExplainMenuButton } from '../components/terminal/ai/ExplainMenuButton';
 import type { ExplainTrigger } from '../components/terminal/ai/ExplainPanel';
+import { FileBrowserPanel } from '../components/terminal/files/FileBrowserPanel';
+import type { TerminalFileLinksConfig } from '../components/terminal/files/useTerminalFileLinks';
+import type { FileBrowserReveal } from '../components/files/browser/FileBrowser';
+import { revealOf } from '../lib/files/browser';
 import { RenameSessionDialog } from '../components/terminal/workspace/RenameSessionDialog';
 import { useWorkspaceLayout } from '../components/terminal/workspace/useWorkspaceLayout';
 import {
@@ -94,6 +99,20 @@ export default function TerminalWorkspacePage() {
   const [aiOpen, setAiOpen] = useState(false);
   // Bumped by the AI assist shortcut and the key bar's AI key: the prompt takes focus (#57).
   const [aiFocus, setAiFocus] = useState(0);
+  // The Files panel (#156): the files API's rule is the terminal's (`sessions:write`). It
+  // shares the side area with the AI panel by taking turns: opening one closes the other.
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [filesReveal, setFilesReveal] = useState<FileBrowserReveal | null>(null);
+  const revealSeq = useRef(0);
+  useEffect(() => {
+    if (aiOpen) setFilesOpen(false);
+  }, [aiOpen]);
+  const toggleFiles = useCallback(() => {
+    // The toolbar opens the panel following the terminal, not at an earlier reveal.
+    setFilesReveal(null);
+    setFilesOpen((open) => !open);
+    setAiOpen(false);
+  }, []);
 
   const { layout, commit, current } = useWorkspaceLayout(routeId, user?.id ?? null);
   const [sessions, setSessions] = useState<Record<string, TerminalSession>>({});
@@ -320,6 +339,26 @@ export default function TerminalWorkspacePage() {
     [canWrite, sessions],
   );
 
+  // "Show in file browser" from a file link (#155): the panel opens at the file's folder
+  // with the file selected. A link in a pane on another server switches to that pane first.
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
+  const showInFileBrowser = useCallback<NonNullable<TerminalFileLinksConfig['onShowInFileBrowser']>>(
+    (target) => {
+      const now = current();
+      const profileOf = (sessionId: string) =>
+        sessionsRef.current[sessionId]?.serverProfileId ?? sessionsRef.current[sessionId]?.serverProfile.id;
+      if (now && profileOf(now.active) !== target.profileId) {
+        const owner = now.tabs.find((sessionId) => profileOf(sessionId) === target.profileId);
+        if (owner) commit(activateTab(now, owner));
+      }
+      setFilesReveal({ ...revealOf(target.path, target.type), seq: ++revealSeq.current });
+      setAiOpen(false);
+      setFilesOpen(true);
+    },
+    [commit, current],
+  );
+
   const renderPane = useCallback(
     (sessionId: string) => (
       <WorkspacePane
@@ -329,11 +368,23 @@ export default function TerminalWorkspacePage() {
         isReservedKey={isReservedKey}
         onExplainSelection={aiAvailable ? onExplainPaneSelection : undefined}
         fileLinksProfileId={fileLinksProfileIdOf(sessionId)}
+        onShowInFileBrowser={canWrite ? showInFileBrowser : undefined}
         registerView={registerView}
         onStatus={onPaneStatus}
       />
     ),
-    [showScrollButtons, preferences, isReservedKey, aiAvailable, onExplainPaneSelection, fileLinksProfileIdOf, registerView, onPaneStatus],
+    [
+      showScrollButtons,
+      preferences,
+      isReservedKey,
+      aiAvailable,
+      onExplainPaneSelection,
+      fileLinksProfileIdOf,
+      canWrite,
+      showInFileBrowser,
+      registerView,
+      onPaneStatus,
+    ],
   );
 
   const tabs = useMemo(
@@ -356,6 +407,7 @@ export default function TerminalWorkspacePage() {
     .map((t) => ({ id: t, label: sessions[t]?.name ?? t }));
   const sessionName = (sessionId: string) => sessions[sessionId]?.name ?? '';
 
+  const filesAvailable = canWrite && Boolean(activeProfileId);
   const activeStatus = status[activeId] ?? {};
   const activeProfile = activeProfileId ? profiles[activeProfileId] : undefined;
   const hostKey: HostKeyStatus | null =
@@ -443,6 +495,18 @@ export default function TerminalWorkspacePage() {
                   AI
                 </Button>
               )}
+              {filesAvailable && (
+                <Button
+                  size="small"
+                  variant={filesOpen ? 'contained' : 'outlined'}
+                  startIcon={<FilesIcon fontSize="small" />}
+                  aria-pressed={filesOpen}
+                  onClick={toggleFiles}
+                  sx={{ minHeight: 32, ml: 0.5 }}
+                >
+                  Files
+                </Button>
+              )}
               {aiAvailable && (
                 <ExplainMenuButton
                   disabled={!activeId}
@@ -522,6 +586,16 @@ export default function TerminalWorkspacePage() {
                 insertSuggestedCommand(getView(), command);
                 if (!isWide) setAiOpen(false);
               }}
+            />
+          )}
+          {filesAvailable && activeProfileId && (
+            <FileBrowserPanel
+              open={filesOpen}
+              onClose={() => setFilesOpen(false)}
+              variant={isWide ? 'side' : 'sheet'}
+              profileId={activeProfileId}
+              sessionId={activeId}
+              reveal={filesReveal}
             />
           )}
         </Box>

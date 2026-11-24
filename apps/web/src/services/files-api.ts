@@ -21,6 +21,30 @@ export interface RemoteFileStat {
   isText: boolean;
 }
 
+/** One entry of `GET /server-profiles/:id/files` (#153). */
+export interface RemoteDirEntry {
+  name: string;
+  type: 'file' | 'dir' | 'symlink' | 'other';
+  size: number;
+  /** ISO 8601. */
+  mtime: string;
+  /** Permission bits as octal, e.g. `0644`. */
+  mode: string;
+  /** A symlink's target, else `null`. */
+  symlinkTarget: string | null;
+  /** What a symlink resolves to (`null` when broken); `null` for a non-link. */
+  targetType: 'file' | 'dir' | 'symlink' | 'other' | null;
+}
+
+/** `GET /server-profiles/:id/files`: a directory, directories first, then by name. */
+export interface RemoteDirListing {
+  /** The absolute path the API resolved (`.` with a session is its working directory). */
+  path: string;
+  entries: RemoteDirEntry[];
+  /** The directory held more entries than the API lists. */
+  truncated: boolean;
+}
+
 /** `GET /server-profiles/:id/files/content`: one window of a text file. */
 export interface RemoteFileContent {
   text: string;
@@ -55,6 +79,11 @@ function query(params: Record<string, string | number | undefined>): string {
 
 function base(profileId: string): string {
   return `/server-profiles/${encodeURIComponent(profileId)}/files`;
+}
+
+/** Lists a directory; `.` with `sessionId` is the session's working directory, `~` is home. */
+export function listRemoteDirectory(ref: RemoteFileRef): Promise<RemoteDirListing> {
+  return api.get<RemoteDirListing>(`${base(ref.profileId)}?${query({ path: ref.path, sessionId: ref.sessionId })}`);
 }
 
 export function statRemoteFile(ref: RemoteFileRef): Promise<RemoteFileStat> {

@@ -74,3 +74,19 @@ Download-only and binary files get a card with a Download button.
 **Dependencies** added to `apps/web`: `@codemirror/lang-json`, `@codemirror/legacy-modes`, `marked`, `dompurify`.
 
 **From the terminal.** Paths in terminal output open this viewer, download through a token, or copy, after a lazy `stat`: [terminal.md section 5.6](terminal.md#56-file-links-in-terminal-output).
+
+## File browser
+
+Issue #156. Code: `apps/web/src/components/files/browser/` (`FileBrowser`, `useDirectoryListing`), `apps/web/src/lib/files/browser.ts`, `apps/web/src/components/terminal/files/FileBrowserPanel.tsx`. It lists folders with `GET /server-profiles/:id/files` and opens files with `openFile`.
+
+**Where.** In the terminal workspace a Files toolbar button toggles a panel for the active session's server: docked right of the panes on `md` and up, a bottom sheet below, decided by `useTerminalLayout` like the AI panel. The Files and AI panels take turns in the side area (opening one closes the other) rather than sharing it with tabs: each keeps its own width, the terminal keeps enough room on a laptop, and on a phone both are bottom sheets, which cannot stack anyway. On the Servers page the detail drawer has a Files tab next to Details, the same component without a session, rooted at `~`. Both are shown only with `sessions:write` and, on the server page, connect rights on the profile: the files API's own rule. The API stays the gate.
+
+**Contents.** Breadcrumbs, an editable path (Enter goes; a relative path is taken from the current folder), Up, Refresh, hidden files (dotfiles hidden by default), a name filter, and sort by name, size or modified time, folders always first. Each row shows a type icon, a human-readable size and a relative modified time; a symlink shows its target and acts as what it points to.
+
+**Follow terminal directory.** With a session the browser lists `.` and `sessionId`, which the API resolves against the pane's working directory (tmux `#{pane_current_path}`). It is on by default, refreshes when the window or the browser gains focus (at most every 2 seconds) and on Refresh, and turns off as soon as the user navigates.
+
+**Actions.** Clicking a file opens the viewer (`openFile`, with the session when there is one); clicking a folder navigates. The row menu (kebab, right-click, the context-menu key or Shift+F10) offers Open, Download (a token, then the browser's native download) and Copy path. "Download as archive" for a folder is hidden until #158. Keyboard: arrows, Home and End move between rows (one tab stop), Enter opens, Backspace goes up. Each row is named by its name, type, size and modified time.
+
+**Guardrails.** The size badges are hints from the default caps (`DEFAULT_FILES_SYSTEM_SETTINGS`, 2 MB and 200 MB), since non-admins cannot read the `files` settings: "Large" above the full-view cap (the viewer pages it), "Download only" above the paged cap. The viewer asks the API for the real answer. Listing errors are explained by code: `SFTP_UNAVAILABLE`, `FILE_PERMISSION_DENIED`, `FILE_NOT_FOUND`, `FILE_NOT_A_DIRECTORY`, timeouts and rate limits, each with Retry. A listing the API truncated (5000 entries) says so; the browser renders 500 rows at a time.
+
+**From the terminal.** The file link menu's "Show in file browser" ([terminal.md section 5.6](terminal.md#56-file-links-in-terminal-output)) opens the panel at the file's folder with the file selected (a folder link opens the folder), switching first to a pane on that link's server. Follow is off for a reveal; the toolbar button opens the panel following the terminal again.
