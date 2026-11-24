@@ -44,6 +44,12 @@ const ALLOWED_READS: Readonly<Record<string, string>> = {
   // The terminal workspace's own phone/wide decision (#77): one pane and an
   // overflow menu below `sm`, the docked AI panel at `md`.
   'components/terminal/useTerminalLayout.ts': WHY.terminal,
+  // Runbooks (#65): the run view's matrix becomes a card list and its log drawer a
+  // full-screen sheet; the builder's step editor becomes a full-screen dialog; the
+  // launcher goes full-screen.
+  'pages/runbooks/RunDetailPage.tsx': WHY.page,
+  'pages/runbooks/RunbookBuilderPage.tsx': WHY.page,
+  'features/runbooks/components/RunLauncherDialog.tsx': WHY.dialog,
 };
 
 /**

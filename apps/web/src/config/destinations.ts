@@ -22,6 +22,8 @@
  *
  *   - Sessions: `sessions:read` (`terminal/sessions` controller, `GET /api/sessions`).
  *   - Servers: `servers:read` (`server-profiles` controller, `GET /api/server-profiles`).
+ *   - Runbooks and Runs: `runbooks:read` (`runbooks` controller, `GET /api/runbooks`, and the
+ *     run engine's `GET /api/runbook-runs`, #65).
  *   - Console: ANY OF `system_settings:read` and `users:read`. `/admin/settings`
  *     fronts pages from several controllers; a viewer entitled to one of them
  *     still reaches the hub, and the per-card gates decide what it shows.
@@ -32,6 +34,8 @@ import TerminalIcon from '@mui/icons-material/Terminal';
 import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
+import HistoryIcon from '@mui/icons-material/History';
 import {
   isDestinationVisible,
   owns,
@@ -40,11 +44,9 @@ import {
 import type { ShellDestination } from '@marinoscar/platform-web/shell/headless';
 import { USER_HUB_PATH } from './userSettingsSections';
 import { SessionSwitcherPane } from '../components/terminal/workspace/SessionSwitcherPane';
+import { useRunbooksBadge } from '../features/runbooks/hooks/useRunbooksBadge';
 
-/**
- * Every destination key. `runbooks` and `runs` are reserved for #65 (they need
- * the runbooks API of #61, not merged yet); no destination declares them today.
- */
+/** Every destination key. */
 export type DestinationKey = 'home' | 'sessions' | 'servers' | 'runbooks' | 'runs' | 'console' | 'ai';
 
 /** A navigation destination: the shell's `ShellDestination` over this app's keys. */
@@ -70,14 +72,16 @@ export { isDestinationVisible };
  * inside the destination that owns its hub (the `settings-card-routes`
  * conformance suite), and the viewer's own corner belongs with Home.
  *
- * `runbooks` and `runs` own nothing until #65 routes them.
+ * `runbooks` owns the list, the builder, a runbook's page, the launcher deep
+ * links and the approvals inbox (`/runbooks/approvals`); `runs` owns the runs
+ * list and the live run view (#65).
  */
 export const DESTINATION_ROUTES: Readonly<Record<DestinationKey, readonly string[]>> = {
   home: ['/', USER_HUB_PATH],
   sessions: ['/sessions', '/terminal'],
   servers: ['/servers'],
-  runbooks: [],
-  runs: [],
+  runbooks: ['/runbooks'],
+  runs: ['/runs'],
   console: ['/admin'],
   // The AI Playground (#55) owns `/ai` only: the user's AI Keys page lives at
   // `/settings/ai` (Home) and the admin AI pages at `/admin/settings/ai` (Console).
@@ -129,10 +133,26 @@ export const DESTINATIONS: readonly Destination[] = [
     path: '/servers',
     permission: 'servers:read',
   },
-  // #65 APPENDS `runbooks` (Runbooks, `/runbooks`, `runbooks:read`) and `runs`
-  // (Runs, `/runs`, `runbooks:read`) HERE, before `console`, once #61 ships the
-  // runbooks API and its permissions. With six destinations the phone bar shows
-  // Home, Sessions, Servers and More, and More holds Runbooks, Runs and Console.
+  // #65: Runbooks and Runs, before `console`. With these the phone bar shows
+  // Home, Sessions, Servers and More, and More holds Runbooks, Runs, Console
+  // and the AI Playground. The Runbooks badge counts pending approvals.
+  {
+    key: 'runbooks',
+    label: 'Runbooks',
+    compactLabel: 'Runbooks',
+    Icon: PlaylistPlayIcon,
+    path: '/runbooks',
+    permission: 'runbooks:read',
+    badge: useRunbooksBadge,
+  },
+  {
+    key: 'runs',
+    label: 'Runs',
+    compactLabel: 'Runs',
+    Icon: HistoryIcon,
+    path: '/runs',
+    permission: 'runbooks:read',
+  },
   {
     key: 'console',
     label: 'Console',

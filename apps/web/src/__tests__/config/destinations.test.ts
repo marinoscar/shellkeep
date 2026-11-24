@@ -32,11 +32,14 @@ const holds =
     granted.includes(permission);
 
 describe('DESTINATIONS', () => {
-  it('declares Home, Sessions, Servers, the pinned Console and the AI Playground, in that order', () => {
+  it('declares Home, Sessions, Servers, Runbooks, Runs, the pinned Console and the AI Playground, in that order', () => {
     expect(DESTINATIONS.map((d) => [d.key, d.label, d.compactLabel, d.path])).toEqual([
       ['home', 'Home', 'Home', '/'],
       ['sessions', 'Sessions', 'Sessions', '/sessions'],
       ['servers', 'Servers', 'Servers', '/servers'],
+      // #65: before Console.
+      ['runbooks', 'Runbooks', 'Runbooks', '/runbooks'],
+      ['runs', 'Runs', 'Runs', '/runs'],
       ['console', 'Console', 'Console', '/admin/settings'],
       // #55: appended, so the existing destinations keep their positions.
       ['ai', 'AI Playground', 'AI', '/ai'],
@@ -49,6 +52,8 @@ describe('DESTINATIONS', () => {
       ['home', null, null],
       ['sessions', 'sessions:read', null],
       ['servers', 'servers:read', null],
+      ['runbooks', 'runbooks:read', null],
+      ['runs', 'runbooks:read', null],
       ['console', null, ['system_settings:read', 'users:read']],
       ['ai', 'ai:use', null],
     ]);
@@ -57,12 +62,13 @@ describe('DESTINATIONS', () => {
     for (const d of DESTINATIONS) expect(d).not.toHaveProperty('role');
   });
 
-  it('declares no Runbooks or Runs until #61 ships their API (#65 appends them)', () => {
-    const keys = DESTINATIONS.map((d) => d.key);
-    expect(keys).not.toContain('runbooks');
-    expect(keys).not.toContain('runs');
-    expect(DESTINATION_ROUTES.runbooks).toEqual([]);
-    expect(DESTINATION_ROUTES.runs).toEqual([]);
+  it('routes Runbooks and Runs (#65), and badges Runbooks with the pending approvals', () => {
+    expect(DESTINATION_ROUTES.runbooks).toEqual(['/runbooks']);
+    expect(DESTINATION_ROUTES.runs).toEqual(['/runs']);
+    expect(resolveActiveDestination('/runbooks/approvals')).toBe('runbooks');
+    expect(resolveActiveDestination('/runbooks/abc/edit')).toBe('runbooks');
+    expect(resolveActiveDestination('/runs/abc')).toBe('runs');
+    expect(DESTINATIONS.find((d) => d.key === 'runbooks')?.badge).toBeTypeOf('function');
   });
 
   it('shows a viewer only what their permissions reach', () => {
@@ -77,6 +83,7 @@ describe('DESTINATIONS', () => {
       'console',
     ]);
     expect(visible(['system_settings:read'])).toEqual(['home', 'console']);
+    expect(visible(['runbooks:read'])).toEqual(['home', 'runbooks', 'runs']);
   });
 
   it('shows the AI Playground only with ai:use and AI switched on (#55)', () => {
