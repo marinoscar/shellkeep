@@ -22,7 +22,6 @@ import { HostKeyError } from '../../ssh/host-key.error';
 import { hostKeyErrorToHttp } from '../../ssh/host-key-http';
 import { SessionsService } from '../../terminal/sessions.service';
 import { FilesRateLimiter } from '../files-rate-limiter';
-import type { FilesSystemSettings } from '../settings/files.system-settings';
 import { SftpService, type SftpSession } from '../sftp.service';
 import {
   HISTORY_FILES,
