@@ -17,10 +17,10 @@ import {
   AddCircleOutlineOutlined as AddCircleIcon,
   DeleteOutlineOutlined as DeleteIcon,
 } from '@mui/icons-material';
-import { KeyShortcut, Keystroke } from '../../../types/terminal';
+import { KeyShortcut, Keystroke } from '../../../../types/terminal';
+import { encodeShortcut, formatEncodedBytes } from '../../../../lib/terminal/encodeKeystroke';
+import { MAX_KEY_SHORTCUTS as MAX_SHORTCUTS } from '../../../../lib/terminal/settings';
 import { KeystrokeEditor } from './KeystrokeEditor';
-
-const MAX_SHORTCUTS = 50;
 
 function defaultKeystroke(): Keystroke {
   return { modifiers: [], key: 'Escape' };
@@ -45,6 +45,11 @@ export interface KeyShortcutsSettingsProps {
   /** True while a save is in flight. */
   isSaving?: boolean;
   disabled?: boolean;
+  /**
+   * The built-in list. When given, "Restore defaults" puts it in the draft
+   * (saved with Save, like any other edit).
+   */
+  defaults?: readonly KeyShortcut[];
 }
 
 /**
@@ -57,6 +62,7 @@ export function KeyShortcutsSettings({
   onSave,
   isSaving = false,
   disabled = false,
+  defaults,
 }: KeyShortcutsSettingsProps) {
   const [draft, setDraft] = useState<KeyShortcut[]>(() => [...savedShortcuts]);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -144,6 +150,14 @@ export function KeyShortcutsSettings({
     setSaveError(null);
   };
 
+  const handleRestoreDefaults = () => {
+    if (!defaults) return;
+    setDraft(defaults.map((shortcut) => ({ ...shortcut, keystrokes: [...shortcut.keystrokes] })));
+    setSaveError(null);
+  };
+
+  const isDefault = defaults !== undefined && JSON.stringify(draft) === JSON.stringify(defaults);
+
   return (
     <Card>
       <CardContent>
@@ -198,6 +212,16 @@ export function KeyShortcutsSettings({
                       disabled={isDisabled}
                     />
                   ))}
+
+                  {/* What the terminal receives, from the same encoder the key bar uses. */}
+                  <Typography
+                    variant="caption"
+                    component="code"
+                    aria-label={`shortcut ${si + 1} bytes`}
+                    sx={{ fontFamily: 'monospace', color: 'text.secondary', wordBreak: 'break-all' }}
+                  >
+                    Sends: {formatEncodedBytes(encodeShortcut(shortcut)) || '(nothing)'}
+                  </Typography>
 
                   {shortcut.keystrokes.length < 3 && (
                     <Box>
@@ -262,7 +286,17 @@ export function KeyShortcutsSettings({
         )}
 
         {/* Save / Reset actions */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1, mt: 3 }}>
+          {defaults && (
+            <Button
+              variant="text"
+              onClick={handleRestoreDefaults}
+              disabled={isDisabled || isDefault}
+              sx={{ mr: 'auto' }}
+            >
+              Restore defaults
+            </Button>
+          )}
           <Button
             variant="text"
             onClick={handleReset}
