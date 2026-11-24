@@ -17,12 +17,17 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
   Add as AddIcon,
   Edit as EditIcon,
   NetworkCheck as TestIcon,
+  Share as ShareIcon,
+  Person as PersonIcon,
+  Groups as GroupsIcon,
 } from '@mui/icons-material';
 import type { HostKeyRefusal, ServerProfile, ServerProfileFormData, TestConnectionResult } from '../../types';
 import { useServerProfiles } from '../../hooks/useServerProfiles';
@@ -30,6 +35,8 @@ import { factsSummary, hostKeyRefusalFromTest } from '../../lib/terminal/host-ke
 import { ServerProfileForm } from './ServerProfileForm';
 import { HostKeyDialog } from './HostKeyDialog';
 import { HostKeyStatus } from './HostKeyStatus';
+import { ShareResourceDialog } from '../common/ShareResourceDialog';
+import type { ServerProfilesFilter } from '../../services/terminal-api';
 
 /** The host-key prompt a test connection opened (#60). */
 interface TestPrompt {
@@ -42,6 +49,29 @@ interface ServerProfileListProps {
   onTestResult?: (result: TestConnectionResult) => void;
   onDeleteSuccess?: () => void;
   onError?: (message: string) => void;
+}
+
+/** The owner chip of a row (#71): "You" for a profile the viewer owns outright, else the user or the group. */
+function OwnerChip({ profile }: { profile: ServerProfile }) {
+  const owner = profile.owner;
+  if (!owner) return null;
+  const mine = owner.kind === 'user' && profile.access?.shared === false;
+  const label = mine ? 'You' : (owner.name ?? (owner.kind === 'group' ? 'A group' : 'Someone'));
+  return (
+    <Chip
+      size="small"
+      variant={mine ? 'outlined' : 'filled'}
+      icon={owner.kind === 'group' ? <GroupsIcon /> : <PersonIcon />}
+      label={label}
+      data-testid="owner-chip"
+      aria-label={`Owner: ${label}`}
+    />
+  );
+}
+
+/** What the caller may do with a row: every action when the API sent no `access` (a hand-built fixture). */
+function can(profile: ServerProfile, action: keyof NonNullable<ServerProfile['access']>['can']): boolean {
+  return profile.access ? profile.access.can[action] : true;
 }
 
 const AUTH_METHOD_LABELS: Record<string, string> = {
@@ -76,6 +106,8 @@ export function ServerProfileList({
   );
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testPrompt, setTestPrompt] = useState<TestPrompt | null>(null);
+  const [filter, setFilter] = useState<ServerProfilesFilter>('all');
+  const [sharing, setSharing] = useState<ServerProfile | null>(null);
 
   const reload = useCallback(
     () =>
@@ -83,8 +115,9 @@ export function ServerProfileList({
         page: currentPage + 1,
         pageSize: rowsPerPage,
         search: search || undefined,
+        filter: filter === 'all' ? undefined : filter,
       }),
-    [currentPage, rowsPerPage, search, fetchProfiles],
+    [currentPage, rowsPerPage, search, filter, fetchProfiles],
   );
 
   useEffect(() => {
@@ -93,6 +126,12 @@ export function ServerProfileList({
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
+    setCurrentPage(0);
+  };
+
+  const handleFilterChange = (_: unknown, value: ServerProfilesFilter | null) => {
+    if (!value) return;
+    setFilter(value);
     setCurrentPage(0);
   };
 
@@ -183,6 +222,17 @@ export function ServerProfileList({
           onChange={(e) => handleSearchChange(e.target.value)}
           sx={{ flexGrow: 1 }}
         />
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={filter}
+          onChange={handleFilterChange}
+          aria-label="Which servers to show"
+        >
+          <ToggleButton value="all">All</ToggleButton>
+          <ToggleButton value="mine">Mine</ToggleButton>
+          <ToggleButton value="shared">Shared with me</ToggleButton>
+        </ToggleButtonGroup>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -209,7 +259,9 @@ export function ServerProfileList({
           }}>
             {search
               ? 'No servers found matching your search'
-              : 'No server profiles yet. Click "Add Server" to create one.'}
+              : filter === 'shared'
+                ? 'Nothing is shared with you yet.'
+                : 'No server profiles yet. Click "Add Server" to create one.'}
           </Typography>
         </Box>
       ) : (
@@ -219,6 +271,7 @@ export function ServerProfileList({
               <TableHead>
                 <TableRow>
                   <TableCell>Name</TableCell>
+                  <TableCell>Owner</TableCell>
                   <TableCell>Host</TableCell>
                   <TableCell>Username</TableCell>
                   <TableCell>Auth Method</TableCell>
@@ -237,6 +290,9 @@ export function ServerProfileList({
                         color={profile.color === 'default' || !profile.color ? 'primary' : profile.color}
                         variant="filled"
                       />
+                    </TableCell>
+                    <TableCell>
+                      <OwnerChip profile={profile} />
                     </TableCell>
                     <TableCell>
                       {profile.hostname}:{profile.port}
@@ -275,39 +331,58 @@ export function ServerProfileList({
                       )}
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Edit">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEdit(profile)}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Test Connection" describeChild>
-                        <span>
+                      {can(profile, 'write') && (
+                        <Tooltip title="Edit">
                           <IconButton
                             size="small"
-                            aria-label="Test connection"
-                            onClick={() => void handleTest(profile)}
-                            disabled={testingId === profile.id}
+                            aria-label="Edit"
+                            onClick={() => handleEdit(profile)}
                           >
-                            {testingId === profile.id ? (
-                              <CircularProgress size={20} />
-                            ) : (
-                              <TestIcon />
-                            )}
+                            <EditIcon />
                           </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleDelete(profile.id)}
-                          color="error"
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
+                        </Tooltip>
+                      )}
+                      {can(profile, 'test') && (
+                        <Tooltip title="Test Connection" describeChild>
+                          <span>
+                            <IconButton
+                              size="small"
+                              aria-label="Test connection"
+                              onClick={() => void handleTest(profile)}
+                              disabled={testingId === profile.id}
+                            >
+                              {testingId === profile.id ? (
+                                <CircularProgress size={20} />
+                              ) : (
+                                <TestIcon />
+                              )}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
+                      {can(profile, 'share') && (
+                        <Tooltip title="Share">
+                          <IconButton
+                            size="small"
+                            aria-label="Share"
+                            onClick={() => setSharing(profile)}
+                          >
+                            <ShareIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {can(profile, 'delete') && (
+                        <Tooltip title="Delete">
+                          <IconButton
+                            size="small"
+                            aria-label="Delete"
+                            onClick={() => handleDelete(profile.id)}
+                            color="error"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -333,6 +408,17 @@ export function ServerProfileList({
         profile={editingProfile}
         onProfileChanged={() => void reload()}
       />
+
+      {sharing && (
+        <ShareResourceDialog
+          open
+          onClose={() => setSharing(null)}
+          resourceType="server_profile"
+          resourceId={sharing.id}
+          title={sharing.name}
+          onChanged={() => void reload()}
+        />
+      )}
 
       <HostKeyDialog
         refusal={testPrompt?.refusal ?? null}

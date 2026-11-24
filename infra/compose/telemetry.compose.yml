@@ -1,4 +1,5 @@
-# PLATFORM-ADOPTION-SHIM(#73): copied from @marinoscar/platform-infra 0.1.0-next.39; replaced by platform-infra sync
+# GENERATED from @marinoscar/platform-infra@0.1.0-next.39 (telemetry) — do not edit; extend through infra/otel/app-collector.yaml or a compose overlay
+# Source of truth: @marinoscar/platform-infra/telemetry/compose/telemetry.compose.yml; re-materialise with `npx platform-infra sync`
 # =============================================================================
 # Docker Compose - Telemetry Stack (OpenTelemetry Collector + GreptimeDB)
 # =============================================================================
@@ -22,7 +23,7 @@
 #   - GREPTIME_READER_USER  read-only: explorer, AI assistant, BI tools
 #   - GREPTIME_ADMIN_USER   DDL: used only to set retention (TTL)
 #
-# Passwords have NO compose-level default, unlike the former overlay: a
+# Passwords have NO compose-level default, unlike the old Uptrace overlay: a
 # missing GREPTIME_*_PASSWORD fails `docker compose` with a message naming the
 # key, rather than silently booting a telemetry store with a well-known
 # password. .env.example (and therefore the CLI's `init`) supplies development

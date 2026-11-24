@@ -12,6 +12,9 @@ describe('SessionsController', () => {
   const userId = 'user-uuid';
   const orgId = 'org-uuid';
   const sessionId = 'session-uuid';
+  const principal = {
+    kind: 'user', userId, email: 'person-a@example.test', credential: 'session', roles: [], permissions: ['sessions:write'], activeOrgId: orgId,
+  } as any;
 
   const mockSession = {
     id: sessionId,
@@ -99,16 +102,16 @@ describe('SessionsController', () => {
       const dto = { name: 'New Terminal', serverProfileId: 'profile-uuid' } as any;
       mockSessionsService.create.mockResolvedValue(mockSession as any);
 
-      const result = await controller.create(userId, orgId, dto);
+      const result = await controller.create(principal, dto);
 
       expect(result).toEqual(mockSession);
-      expect(mockSessionsService.create).toHaveBeenCalledWith({ userId, orgId }, dto);
+      expect(mockSessionsService.create).toHaveBeenCalledWith(principal, dto);
     });
 
     it('should propagate service errors on create', async () => {
       mockSessionsService.create.mockRejectedValue(new Error('SSH connection failed'));
 
-      await expect(controller.create(userId, orgId, {} as any)).rejects.toThrow('SSH connection failed');
+      await expect(controller.create(principal, {} as any)).rejects.toThrow('SSH connection failed');
     });
   });
 

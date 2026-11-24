@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { UserCredentialsModule } from '@marinoscar/platform-api/credentials';
 import { AuthModule } from '@marinoscar/platform-api/identity';
 import { PrismaModule } from '../prisma/prisma.module';
+import { sharingModule } from '../platform/sharing/sharing.config';
 import { ServerProfilesModule } from '../server-profiles/server-profiles.module';
 import { SshModule } from '../ssh/ssh.module';
 import { SessionsController } from './sessions.controller';
@@ -38,6 +39,8 @@ import { LegacySecretsDoctorCheck } from './doctor/legacy-secrets.doctor-check';
     UserCredentialsModule,
     // `TerminalWebhooksService`: the session events (#54).
     TerminalWebhooksModule,
+    // `AccessPolicy`: a session is created only on a server the caller may `connect` to (#71).
+    sharingModule,
   ],
   controllers: [SessionsController],
   providers: [

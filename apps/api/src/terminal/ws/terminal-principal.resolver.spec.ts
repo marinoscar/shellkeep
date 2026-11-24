@@ -1,7 +1,7 @@
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { TerminalPrincipalResolver } from './terminal-principal.resolver';
-import { createMockUserWithRelations } from '../../../test/fixtures/test-data.factory';
+import { PAT_SOCKET_TTL_MS, TerminalPrincipalResolver } from './terminal-principal.resolver';
+import { MOCK_DEFAULT_ORG_ID, createMockUserWithRelations } from '../../../test/fixtures/test-data.factory';
 
 const SECRET = 'a-test-secret-with-at-least-32-characters!!';
 
@@ -9,6 +9,7 @@ describe('TerminalPrincipalResolver', () => {
   const jwt = new JwtService({ secret: SECRET });
   const config = { get: (key: string) => (key === 'jwt.secret' ? SECRET : undefined) } as unknown as ConfigService;
   let auth: { validateJwtPayload: jest.Mock };
+  let pat: { resolveToken: jest.Mock };
   let resolver: TerminalPrincipalResolver;
 
   const sign = (claims: object = {}, options: object = { expiresIn: 60 }) =>
@@ -20,7 +21,15 @@ describe('TerminalPrincipalResolver', () => {
         .fn()
         .mockResolvedValue(createMockUserWithRelations({ id: 'user-1', roleName: 'contributor' })),
     };
-    resolver = new TerminalPrincipalResolver(config, jwt, auth as never);
+    pat = {
+      resolveToken: jest
+        .fn()
+        .mockResolvedValue({
+          user: { ...createMockUserWithRelations({ id: 'user-1', roleName: 'contributor' }), tokenKind: 'pat' },
+          tokenId: 'pat-1',
+        }),
+    };
+    resolver = new TerminalPrincipalResolver(config, jwt, auth as never, pat as never);
   });
 
   it('resolves a Contributor token to the user, the organization, the permissions and the expiry', async () => {
@@ -32,7 +41,7 @@ describe('TerminalPrincipalResolver', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.principal.userId).toBe('user-1');
-    expect(result.principal.orgId).toBe('org-default');
+    expect(result.principal.orgId).toBe(MOCK_DEFAULT_ORG_ID);
     expect(result.principal.permissions).toEqual(expect.arrayContaining(['sessions:read', 'sessions:write']));
     expect(result.principal.expiresAtMs).toBe(exp * 1000);
   });
@@ -84,8 +93,72 @@ describe('TerminalPrincipalResolver', () => {
     expect(await resolver.resolve(unsigned)).toEqual({ ok: false, reason: 'invalid_token' });
   });
 
-  it('refuses a personal access token (not a JWT)', async () => {
-    expect(await resolver.resolve('pat_0123456789abcdef')).toEqual({ ok: false, reason: 'invalid_token' });
+  describe('a personal access token (the shellkeep CLI, #72)', () => {
+    const PAT = 'pat_0123456789abcdef0123456789abcdef';
+
+    it('is verified by the identity slice and never treated as a JWT', async () => {
+      const verify = jest.spyOn(jwt, 'verifyAsync');
+
+      await resolver.resolve(PAT);
+
+      expect(pat.resolveToken).toHaveBeenCalledWith(PAT);
+      expect(verify).not.toHaveBeenCalled();
+      expect(auth.validateJwtPayload).not.toHaveBeenCalled();
+      verify.mockRestore();
+    });
+
+    it('resolves to the same principal a JWT of that user gets, expiring after the socket window', async () => {
+      const before = Date.now();
+
+      const result = await resolver.resolve(PAT);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.principal.userId).toBe('user-1');
+      expect(result.principal.orgId).toBe(MOCK_DEFAULT_ORG_ID);
+      expect(result.principal.permissions).toEqual(expect.arrayContaining(['sessions:read', 'sessions:write']));
+      expect(result.principal.expiresAtMs).toBeGreaterThanOrEqual(before + PAT_SOCKET_TTL_MS);
+      expect(result.principal.expiresAtMs).toBeLessThanOrEqual(Date.now() + PAT_SOCKET_TTL_MS);
+    });
+
+    it('keeps the role limits: a Viewer PAT has no sessions:write', async () => {
+      pat.resolveToken.mockResolvedValue({
+        user: { ...createMockUserWithRelations({ id: 'user-1', roleName: 'viewer' }), tokenKind: 'pat' },
+        tokenId: 'pat-1',
+      });
+
+      const result = await resolver.resolve(PAT);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.principal.permissions).not.toContain('sessions:write');
+    });
+
+    it('refuses a PAT the slice does not resolve (unknown, revoked, expired, user inactive, org binding)', async () => {
+      pat.resolveToken.mockResolvedValue(null);
+
+      expect(await resolver.resolve(PAT)).toEqual({ ok: false, reason: 'invalid_token' });
+    });
+
+    it('refuses an inactive user and a user with no organization', async () => {
+      pat.resolveToken.mockResolvedValue({
+        user: { ...createMockUserWithRelations({ id: 'user-1', roleName: 'contributor', isActive: false }), tokenKind: 'pat' },
+        tokenId: 'pat-1',
+      });
+      expect(await resolver.resolve(PAT)).toEqual({ ok: false, reason: 'invalid_user' });
+
+      pat.resolveToken.mockResolvedValue({
+        user: { ...createMockUserWithRelations({ id: 'user-1', roleName: 'contributor' }), memberships: [], tokenKind: 'pat' },
+        tokenId: 'pat-1',
+      });
+      expect(await resolver.resolve(PAT)).toEqual({ ok: false, reason: 'invalid_user' });
+    });
+
+    it('still refuses a worker-node token and an OAuth token (neither is a JWT or a PAT)', async () => {
+      expect(await resolver.resolve('nod_0123456789abcdef')).toEqual({ ok: false, reason: 'invalid_token' });
+      expect(await resolver.resolve('oat_0123456789abcdef')).toEqual({ ok: false, reason: 'invalid_token' });
+      expect(pat.resolveToken).not.toHaveBeenCalled();
+    });
   });
 
   it('refuses a user the identity slice no longer resolves (revoked device session, removed member)', async () => {

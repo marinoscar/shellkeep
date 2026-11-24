@@ -20,12 +20,13 @@
 // =============================================================================
 
 import { ForbiddenException, HttpException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { AUDIT_SINK, runInOrg, type AuditSink } from '@marinoscar/platform-api/core';
+import { AUDIT_SINK, runInOrg, type AuditSink, type Principal } from '@marinoscar/platform-api/core';
 import { JobsService, type JobsTx } from '@marinoscar/platform-api/jobs';
 
 import { recordAudit } from '../../common/audit/record-audit';
 import type { OwnerScope } from '../../common/types/owner-scope';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RunbooksService } from '../runbooks.service';
 import { EngineMetricsService } from './engine-metrics.service';
 import {
   CANARY_STEP_INDEX,
@@ -73,14 +74,29 @@ export class RunbookApprovalsService {
     private readonly lifecycle: RunLifecycleService,
     private readonly settings: RunbookSettingsService,
     private readonly metrics: EngineMetricsService,
+    private readonly runbooks: RunbooksService,
     @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
   ) {}
 
-  /** The inbox: `status` defaults to `pending`; newest first. */
-  async list(scope: OwnerScope, query: { status?: string; page: number; pageSize: number }) {
+  private scopeOf(principal: Principal): OwnerScope {
+    if (!principal.activeOrgId) throw new ForbiddenException('No active organization');
+    return { userId: principal.userId, orgId: principal.activeOrgId };
+  }
+
+  /**
+   * The inbox: `status` defaults to `pending`; newest first. Only approvals of runs the caller may see
+   * (they started it, or may read its runbook): a private runbook's approvals are not an inbox leak.
+   */
+  async list(principal: Principal, query: { status?: string; page: number; pageSize: number }) {
+    const scope = this.scopeOf(principal);
     const status = query.status ?? 'pending';
     return runInOrg(this.prisma, scope, async (tx) => {
-      const where = { orgId: scope.orgId, ...(status === 'all' ? {} : { status }) };
+      const readable = await this.runbooks.readableWhere(tx, principal);
+      const where = {
+        orgId: scope.orgId,
+        run: { OR: [{ initiatedBy: principal.userId }, { runbook: readable }] },
+        ...(status === 'all' ? {} : { status }),
+      };
       const [total, rows] = await Promise.all([
         tx.runbookApproval.count({ where }),
         tx.runbookApproval.findMany({
@@ -115,7 +131,8 @@ export class RunbookApprovalsService {
   }
 
   /** A person's decision. */
-  async decide(scope: OwnerScope, approvalId: string, decision: 'approve' | 'reject', comment?: string): Promise<{ id: string; status: string }> {
+  async decide(principal: Principal, approvalId: string, decision: 'approve' | 'reject', comment?: string): Promise<{ id: string; status: string }> {
+    const scope = this.scopeOf(principal);
     const outcome: ApprovalOutcome = decision === 'approve' ? 'approved' : 'rejected';
     const { settings } = { settings: await this.settings.effective(scope.orgId) };
 
@@ -125,7 +142,11 @@ export class RunbookApprovalsService {
       if (approval.status !== 'pending') {
         throw new HttpException({ code: RUNBOOK_RUN_ERROR_CODES.APPROVAL_NOT_PENDING, message: 'This approval was already decided or has expired' }, 409);
       }
-      const run = await tx.runbookRun.findFirst({ where: { id: approval.runId, orgId: scope.orgId }, select: { initiatedBy: true } });
+      const run = await tx.runbookRun.findFirst({ where: { id: approval.runId, orgId: scope.orgId }, select: { initiatedBy: true, runbookId: true } });
+      if (!run) throw new NotFoundException('Approval not found');
+      if (run.initiatedBy !== scope.userId && !(await this.runbooks.can(principal, run.runbookId, 'read'))) {
+        throw new NotFoundException('Approval not found');
+      }
       if (run?.initiatedBy === scope.userId && !settings.approvals.allowSelfApproval) {
         throw new ForbiddenException({
           code: RUNBOOK_RUN_ERROR_CODES.SELF_APPROVAL,
@@ -151,7 +172,8 @@ export class RunbookApprovalsService {
   /**
    * Resumes a paused (canary) run: an approval decision on its gate. The caller checked `runbooks:approve`.
    */
-  async resume(scope: OwnerScope, runId: string): Promise<{ id: string; status: string }> {
+  async resume(principal: Principal, runId: string): Promise<{ id: string; status: string }> {
+    const scope = this.scopeOf(principal);
     const gate = await runInOrg(this.prisma, scope, (tx) =>
       tx.runbookApproval.findUnique({
         where: { runId_stepIndex_scopeKey: { runId, stepIndex: CANARY_STEP_INDEX, scopeKey: 'run' } },
@@ -159,7 +181,7 @@ export class RunbookApprovalsService {
       }),
     );
     if (!gate) throw new HttpException({ code: RUNBOOK_RUN_ERROR_CODES.RUN_STATE, message: 'The run is not waiting at a canary check' }, 409);
-    return this.decide(scope, gate.id, 'approve');
+    return this.decide(principal, gate.id, 'approve');
   }
 
   /** Expires every pending approval past its `expires_at` (one organization). Returns how many. */

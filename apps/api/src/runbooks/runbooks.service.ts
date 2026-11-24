@@ -22,6 +22,7 @@
 
 import {
   ConflictException,
+  ForbiddenException,
   HttpException,
   Inject,
   Injectable,
@@ -30,12 +31,19 @@ import {
   Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { AUDIT_SINK, runInOrg, type AuditSink, type RlsTransactionClient } from '@marinoscar/platform-api/core';
+import { AUDIT_SINK, runInOrg, type AuditSink, type Principal, type RlsTransactionClient } from '@marinoscar/platform-api/core';
 import { AppMetricsService } from '@marinoscar/platform-api/host';
+import {
+  AccessPolicy,
+  PrincipalGroupsProvider,
+  type AccessDecision,
+} from '@marinoscar/platform-api/sharing';
 import { Prisma } from '@prisma/client';
 
+import { RUNBOOK_RESOURCE } from '../app-registrations/sharing';
 import { recordAudit } from '../common/audit/record-audit';
 import type { OwnerScope } from '../common/types/owner-scope';
+import { accessibleListWhere, capabilitiesOf, requireGroupOwnership } from '../platform/sharing/sharing-access';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   CreateRunbookDto,
@@ -66,12 +74,30 @@ export interface RunbookVersionView extends RunbookVersionSummary {
   definition: RunbookDefinition;
 }
 
+/** Who owns a runbook: the user who authored it, or the group it was created for. */
+export interface RunbookOwner {
+  kind: 'user' | 'group';
+  id: string | null;
+  name: string | null;
+}
+
+/** What the caller is to a runbook, and what that lets them do. */
+export interface RunbookAccess {
+  role: string | null;
+  via: string | null;
+  shared: boolean;
+  can: Record<(typeof RUNBOOK_RESPONSE_ACTIONS)[number], boolean>;
+}
+
 export interface RunbookView {
   id: string;
   name: string;
   description: string | null;
   tags: string[];
   ownerUserId: string | null;
+  ownerGroupId: string | null;
+  owner: RunbookOwner;
+  access: RunbookAccess;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -96,8 +122,16 @@ export interface ValidationResult {
   warnings: DefinitionWarning[];
 }
 
+/** The actions a response says the caller may take (the UI hides the rest; the API still decides). */
+const RUNBOOK_RESPONSE_ACTIONS = ['run', 'write', 'share'] as const;
+
+const OWNER_INCLUDE = {
+  owner: { select: { id: true, displayName: true, email: true } },
+  ownerGroup: { select: { id: true, name: true } },
+} satisfies Prisma.RunbookInclude;
+
 type OrgTx = RlsTransactionClient<PrismaService>;
-type RunbookRow = Prisma.RunbookGetPayload<object>;
+type RunbookRow = Prisma.RunbookGetPayload<{ include: typeof OWNER_INCLUDE }>;
 type VersionRow = Prisma.RunbookVersionGetPayload<object>;
 
 const summaryOf = (v: VersionRow): RunbookVersionSummary => ({
@@ -109,12 +143,35 @@ const summaryOf = (v: VersionRow): RunbookVersionSummary => ({
   createdAt: v.createdAt,
 });
 
-const viewOf = (r: RunbookRow, latest: VersionRow | null | undefined): RunbookView => ({
+const ownerOf = (r: RunbookRow): RunbookOwner =>
+  r.ownerGroup
+    ? { kind: 'group', id: r.ownerGroup.id, name: r.ownerGroup.name }
+    : { kind: 'user', id: r.owner?.id ?? null, name: r.owner ? (r.owner.displayName ?? r.owner.email) : null };
+
+const accessOf = (r: RunbookRow, decision: AccessDecision | null, permissions: readonly string[]): RunbookAccess => {
+  const role = decision?.role ?? null;
+  return {
+    role,
+    via: decision?.via ?? null,
+    shared: !(role === 'owner' && !r.ownerGroupId),
+    can: capabilitiesOf(RUNBOOK_RESOURCE, role, RUNBOOK_RESPONSE_ACTIONS, permissions),
+  };
+};
+
+const viewOf = (
+  r: RunbookRow,
+  latest: VersionRow | null | undefined,
+  decision: AccessDecision | null,
+  permissions: readonly string[],
+): RunbookView => ({
   id: r.id,
   name: r.name,
   description: r.description,
   tags: r.tags,
   ownerUserId: r.ownerUserId,
+  ownerGroupId: r.ownerGroupId,
+  owner: ownerOf(r),
+  access: accessOf(r, decision, permissions),
   archivedAt: r.archivedAt,
   createdAt: r.createdAt,
   updatedAt: r.updatedAt,
@@ -139,8 +196,20 @@ export class RunbooksService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
+    private readonly access: AccessPolicy,
+    private readonly principalGroups: PrincipalGroupsProvider,
     @Optional() private readonly metrics?: AppMetricsService,
   ) {}
+
+  /** The caller with their groups read fresh: the principal the guard built may be a few seconds old. */
+  private actor(principal: Principal): Promise<Principal> {
+    return this.principalGroups.enrich(principal);
+  }
+
+  private scopeOf(principal: Principal): OwnerScope {
+    if (!principal.activeOrgId) throw new ForbiddenException('No active organization');
+    return { userId: principal.userId, orgId: principal.activeOrgId };
+  }
 
   // ---------------------------------------------------------------------------
   // Definition validation
@@ -176,24 +245,45 @@ export class RunbooksService {
   // Reads
   // ---------------------------------------------------------------------------
 
-  async list(scope: OwnerScope, query: RunbooksQueryDto): Promise<Page<RunbookView>> {
-    const where: Prisma.RunbookWhereInput = {
-      orgId: scope.orgId,
-      ...(query.includeArchived ? {} : { archivedAt: null }),
-      ...(query.tag ? { tags: { has: query.tag } } : {}),
-      ...(query.q
-        ? {
-            OR: [
-              { name: { contains: query.q, mode: 'insensitive' } },
-              { description: { contains: query.q, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
-    };
+  /**
+   * The runbooks the caller may see: those they authored, those of a group of theirs and those
+   * shared with them or with a group of theirs (`filter`: `all`, `mine`, `shared`).
+   */
+  async list(principal: Principal, query: RunbooksQueryDto): Promise<Page<RunbookView>> {
+    const me = await this.principalGroups.enrich(principal);
+    const scope = this.scopeOf(me);
     return runInOrg(this.prisma, scope, async (tx) => {
+      const visible = await accessibleListWhere({
+        tx,
+        principal: me,
+        type: RUNBOOK_RESOURCE,
+        table: 'runbooks',
+        ownerUserField: 'ownerUserId',
+        ownerGroupField: 'ownerGroupId',
+        filter: query.filter,
+      });
+      const where: Prisma.RunbookWhereInput = {
+        AND: [
+          visible as Prisma.RunbookWhereInput,
+          { orgId: scope.orgId },
+          ...(query.includeArchived ? [] : [{ archivedAt: null }]),
+          ...(query.tag ? [{ tags: { has: query.tag } }] : []),
+          ...(query.q
+            ? [
+                {
+                  OR: [
+                    { name: { contains: query.q, mode: 'insensitive' as const } },
+                    { description: { contains: query.q, mode: 'insensitive' as const } },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      };
       const [rows, total] = await Promise.all([
         tx.runbook.findMany({
           where,
+          include: OWNER_INCLUDE,
           orderBy: [{ name: 'asc' }, { id: 'asc' }],
           skip: (query.page - 1) * query.pageSize,
           take: query.pageSize,
@@ -205,8 +295,16 @@ export class RunbooksService {
         ? await tx.runbookVersion.findMany({ where: { orgId: scope.orgId, id: { in: latestIds } } })
         : [];
       const byId = new Map(versions.map((v) => [v.id, v]));
+      const decisions = await this.access.decideManyIn(
+        tx,
+        me,
+        'read',
+        rows.map((r) => ({ type: RUNBOOK_RESOURCE, id: r.id })),
+      );
       return {
-        items: rows.map((r) => viewOf(r, r.latestVersionId ? byId.get(r.latestVersionId) : null)),
+        items: rows.map((r) =>
+          viewOf(r, r.latestVersionId ? byId.get(r.latestVersionId) : null, decisions.get(`${RUNBOOK_RESOURCE}:${r.id}`) ?? null, me.permissions),
+        ),
         total,
         page: query.page,
         pageSize: query.pageSize,
@@ -214,20 +312,25 @@ export class RunbooksService {
     });
   }
 
-  async findOne(scope: OwnerScope, id: string): Promise<RunbookDetail> {
+  async findOne(principal: Principal, id: string): Promise<RunbookDetail> {
+    const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     return runInOrg(this.prisma, scope, async (tx) => {
-      const row = await tx.runbook.findFirst({ where: { id, orgId: scope.orgId } });
+      const decision = await this.access.requireIn(tx, me, 'read', { type: RUNBOOK_RESOURCE, id });
+      const row = await tx.runbook.findFirst({ where: { id, orgId: scope.orgId }, include: OWNER_INCLUDE });
       if (!row) throw new NotFoundException('Runbook not found');
       const latest = row.latestVersionId
         ? await tx.runbookVersion.findFirst({ where: { id: row.latestVersionId, orgId: scope.orgId } })
         : null;
-      return this.detailOf(row, latest);
+      return this.detailOf(row, latest, decision, principal.permissions);
     });
   }
 
-  async listVersions(scope: OwnerScope, id: string, query: VersionsQueryDto): Promise<Page<RunbookVersionSummary>> {
+  async listVersions(principal: Principal, id: string, query: VersionsQueryDto): Promise<Page<RunbookVersionSummary>> {
+    const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     return runInOrg(this.prisma, scope, async (tx) => {
-      await this.requireRunbook(tx, scope, id);
+      await this.access.requireIn(tx, me, 'read', { type: RUNBOOK_RESOURCE, id });
       const where = { orgId: scope.orgId, runbookId: id };
       const [rows, total] = await Promise.all([
         tx.runbookVersion.findMany({
@@ -242,28 +345,74 @@ export class RunbooksService {
     });
   }
 
-  async getVersion(scope: OwnerScope, id: string, version: number): Promise<RunbookVersionView> {
+  async getVersion(principal: Principal, id: string, version: number): Promise<RunbookVersionView> {
+    const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     return runInOrg(this.prisma, scope, async (tx) => {
+      await this.access.requireIn(tx, me, 'read', { type: RUNBOOK_RESOURCE, id });
       const row = await tx.runbookVersion.findFirst({ where: { orgId: scope.orgId, runbookId: id, version } });
       if (!row) throw new NotFoundException('Runbook version not found');
       return { ...summaryOf(row), definition: row.definition as unknown as RunbookDefinition };
     });
   }
 
+  /**
+   * The decision before a run (the run engine and its enqueue route call it): the caller may `run` the
+   * runbook (404 for a runbook they cannot see, 404 for one they may read but not run, 403 naming
+   * `runbooks:run` when the permission is missing). Which servers it may run ON is decided per target by
+   * the target resolver (`connect`), never here.
+   */
+  async requireRun(principal: Principal, id: string): Promise<void> {
+    await this.access.require(await this.actor(principal), 'run', { type: RUNBOOK_RESOURCE, id });
+  }
+
+  /** 404 unless the caller may read the runbook (the run engine uses it for the runs of that runbook). */
+  async requireRead(principal: Principal, id: string): Promise<void> {
+    await this.access.require(await this.actor(principal), 'read', { type: RUNBOOK_RESOURCE, id });
+  }
+
+  /** Whether the caller may take `action` on the runbook; never throws for a refusal. */
+  async can(principal: Principal, id: string, action: 'read' | 'run'): Promise<boolean> {
+    try {
+      await this.access.require(await this.actor(principal), action, { type: RUNBOOK_RESOURCE, id });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The `where` of the runbooks the caller may read, inside the caller's organization transaction. */
+  async readableWhere(tx: OrgTx, principal: Principal): Promise<Prisma.RunbookWhereInput> {
+    const me = await this.actor(principal);
+    return (await accessibleListWhere({
+      tx,
+      principal: me,
+      type: RUNBOOK_RESOURCE,
+      table: 'runbooks',
+      ownerUserField: 'ownerUserId',
+      ownerGroupField: 'ownerGroupId',
+      filter: 'all',
+    })) as Prisma.RunbookWhereInput;
+  }
+
   // ---------------------------------------------------------------------------
   // Writes
   // ---------------------------------------------------------------------------
 
-  async create(scope: OwnerScope, dto: CreateRunbookDto): Promise<RunbookDetail> {
+  /** Creates a runbook with its first version. `ownerGroupId` makes a group the owner (the author must be its admin or editor). */
+  async create(principal: Principal, dto: CreateRunbookDto): Promise<RunbookDetail> {
+    const scope = this.scopeOf(principal);
+    if (dto.ownerGroupId) await requireGroupOwnership(this.principalGroups, principal, dto.ownerGroupId, 'a runbook');
     const definition = this.parseDefinition(dto.definition);
     const sha = definitionSha256(definition);
 
-    const detail = await this.guardName(() =>
+    const created = await this.guardName(() =>
       runInOrg(this.prisma, scope, async (tx) => {
         const runbook = await tx.runbook.create({
           data: {
             orgId: scope.orgId,
             ownerUserId: scope.userId,
+            ownerGroupId: dto.ownerGroupId ?? null,
             name: dto.name,
             description: dto.description ?? null,
             tags: dedupe(dto.tags ?? []),
@@ -272,14 +421,19 @@ export class RunbooksService {
         const version = await tx.runbookVersion.create({
           data: this.versionData(scope, runbook.id, 1, definition, sha, dto.changelog),
         });
-        const updated = await tx.runbook.update({ where: { id: runbook.id }, data: { latestVersionId: version.id } });
-        return this.detailOf(updated, version);
+        await tx.runbook.update({ where: { id: runbook.id }, data: { latestVersionId: version.id } });
+        return runbook.id;
       }),
     );
 
     this.count('created');
-    await this.audit('runbook.created', scope, detail.id, { name: detail.name, version: 1, definition_sha256: sha });
-    return detail;
+    await this.audit('runbook.created', scope, created, {
+      name: dto.name,
+      version: 1,
+      definition_sha256: sha,
+      ...(dto.ownerGroupId ? { ownerGroupId: dto.ownerGroupId } : {}),
+    });
+    return this.findOne(principal, created);
   }
 
   /**
@@ -288,16 +442,19 @@ export class RunbooksService {
    * a different latest version is 412.
    */
   async replaceDefinition(
-    scope: OwnerScope,
+    principal: Principal,
     id: string,
     expectedVersion: number,
     dto: ReplaceDefinitionDto,
   ): Promise<{ runbook: RunbookDetail; created: boolean }> {
+    const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     const definition = this.parseDefinition(dto.definition);
     const sha = definitionSha256(definition);
 
     const outcome = await this.guardStale(() =>
       runInOrg(this.prisma, scope, async (tx) => {
+        const decision = await this.access.requireIn(tx, me, 'write', { type: RUNBOOK_RESOURCE, id });
         const row = await this.requireRunbook(tx, scope, id);
         if (row.archivedAt) throw this.archived();
         const latest = row.latestVersionId
@@ -307,7 +464,7 @@ export class RunbooksService {
         if (currentVersion !== expectedVersion) throw this.stale(currentVersion);
 
         if (latest && latest.definitionSha256 === sha) {
-          return { runbook: this.detailOf(row, latest), created: false, version: latest.version };
+          return { runbook: this.detailOf(row, latest, decision, principal.permissions), created: false, version: latest.version };
         }
 
         const next = currentVersion + 1;
@@ -320,8 +477,8 @@ export class RunbooksService {
           data: { latestVersionId: version.id },
         });
         if (moved.count !== 1) throw this.stale(next);
-        const updated = await tx.runbook.findFirstOrThrow({ where: { id, orgId: scope.orgId } });
-        return { runbook: this.detailOf(updated, version), created: true, version: next };
+        const updated = await tx.runbook.findFirstOrThrow({ where: { id, orgId: scope.orgId }, include: OWNER_INCLUDE });
+        return { runbook: this.detailOf(updated, version, decision, principal.permissions), created: true, version: next };
       }),
     );
 
@@ -334,12 +491,15 @@ export class RunbooksService {
     return { runbook: outcome.runbook, created: outcome.created };
   }
 
-  async updateMetadata(scope: OwnerScope, id: string, dto: UpdateRunbookMetadataDto): Promise<RunbookView> {
+  async updateMetadata(principal: Principal, id: string, dto: UpdateRunbookMetadataDto): Promise<RunbookView> {
+    const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     return this.guardName(() =>
       runInOrg(this.prisma, scope, async (tx) => {
+        const decision = await this.access.requireIn(tx, me, 'write', { type: RUNBOOK_RESOURCE, id });
         const row = await this.requireRunbook(tx, scope, id);
         if (row.archivedAt) throw this.archived();
-        const updated = await tx.runbook.update({
+        await tx.runbook.update({
           where: { id },
           data: {
             ...(dto.name !== undefined ? { name: dto.name } : {}),
@@ -347,17 +507,21 @@ export class RunbooksService {
             ...(dto.tags !== undefined ? { tags: dedupe(dto.tags) } : {}),
           },
         });
+        const updated = await tx.runbook.findFirstOrThrow({ where: { id, orgId: scope.orgId }, include: OWNER_INCLUDE });
         const latest = updated.latestVersionId
           ? await tx.runbookVersion.findFirst({ where: { id: updated.latestVersionId, orgId: scope.orgId } })
           : null;
-        return viewOf(updated, latest);
+        return viewOf(updated, latest, decision, principal.permissions);
       }),
     );
   }
 
   /** Soft delete. Idempotent: archiving an archived runbook changes nothing. A hard delete is the user-data purge (#69). */
-  async archive(scope: OwnerScope, id: string): Promise<void> {
+  async archive(principal: Principal, id: string): Promise<void> {
+    const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     const changed = await runInOrg(this.prisma, scope, async (tx) => {
+      await this.access.requireIn(tx, me, 'write', { type: RUNBOOK_RESOURCE, id });
       const row = await this.requireRunbook(tx, scope, id);
       if (row.archivedAt) return false;
       await tx.runbook.update({ where: { id }, data: { archivedAt: new Date() } });
@@ -366,16 +530,20 @@ export class RunbooksService {
     if (changed) await this.audit('runbook.archived', scope, id, {});
   }
 
-  async restore(scope: OwnerScope, id: string): Promise<RunbookView> {
+  async restore(principal: Principal, id: string): Promise<RunbookView> {
+    const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     const result = await this.guardName(() =>
       runInOrg(this.prisma, scope, async (tx) => {
+        const decision = await this.access.requireIn(tx, me, 'write', { type: RUNBOOK_RESOURCE, id });
         const row = await this.requireRunbook(tx, scope, id);
         const wasArchived = row.archivedAt !== null;
-        const updated = wasArchived ? await tx.runbook.update({ where: { id }, data: { archivedAt: null } }) : row;
+        if (wasArchived) await tx.runbook.update({ where: { id }, data: { archivedAt: null } });
+        const updated = wasArchived ? await tx.runbook.findFirstOrThrow({ where: { id, orgId: scope.orgId }, include: OWNER_INCLUDE }) : row;
         const latest = updated.latestVersionId
           ? await tx.runbookVersion.findFirst({ where: { id: updated.latestVersionId, orgId: scope.orgId } })
           : null;
-        return { view: viewOf(updated, latest), wasArchived };
+        return { view: viewOf(updated, latest, decision, principal.permissions), wasArchived };
       }),
     );
     if (result.wasArchived) await this.audit('runbook.restored', scope, id, {});
@@ -387,14 +555,19 @@ export class RunbooksService {
   // ---------------------------------------------------------------------------
 
   private async requireRunbook(tx: OrgTx, scope: OwnerScope, id: string): Promise<RunbookRow> {
-    const row = await tx.runbook.findFirst({ where: { id, orgId: scope.orgId } });
+    const row = await tx.runbook.findFirst({ where: { id, orgId: scope.orgId }, include: OWNER_INCLUDE });
     if (!row) throw new NotFoundException('Runbook not found');
     return row;
   }
 
-  private detailOf(row: RunbookRow, latest: VersionRow | null): RunbookDetail {
+  private detailOf(
+    row: RunbookRow,
+    latest: VersionRow | null,
+    decision: AccessDecision | null,
+    permissions: readonly string[],
+  ): RunbookDetail {
     return {
-      ...viewOf(row, null),
+      ...viewOf(row, null, decision, permissions),
       latestVersion: latest ? { ...summaryOf(latest), definition: latest.definition as unknown as RunbookDefinition } : null,
     };
   }

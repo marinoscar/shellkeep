@@ -8,6 +8,10 @@
 //   one organization point at another's runbook.
 // Raw-SQL index (intentional schema drift, never an `@@unique`): `runbooks_org_name_live_uniq_idx`, a unique
 //   `(org_id, lower(name)) WHERE archived_at IS NULL`. Listed in `rawSqlIndexes` in prisma/platform.lock.
+// Sharing (#71): `ownerGroupId` is the OPTIONAL owning group, a COMPOSITE foreign key (org_id, owner_group_id)
+//   -> groups (id, org_id) so a group of another organization cannot own a runbook. NULL skips the check
+//   (MATCH SIMPLE). `ownerUserId` stays the author; a runbook with no `ownerGroupId` is owned by that user,
+//   and one whose author was deleted is owned by nobody (only the org-wide permissions reach it).
 // `runbook_versions` is IMMUTABLE: no code path updates or deletes a row, except the cascade on runbook purge.
 // `latestVersionId` is a plain column (no foreign key: the two tables point at each other).
 
@@ -15,6 +19,7 @@ model Runbook {
   id              String    @id @default(uuid()) @db.Uuid
   orgId           String    @map("org_id") @db.Uuid
   ownerUserId     String?   @map("owner_user_id") @db.Uuid
+  ownerGroupId    String?   @map("owner_group_id") @db.Uuid
   name            String    @db.VarChar(120)
   description     String?   @db.Text
   tags            String[]
@@ -26,12 +31,14 @@ model Runbook {
   // Relations
   organization Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   owner        User?           @relation("RunbookOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  ownerGroup   Group?          @relation("RunbookOwnerGroup", fields: [ownerGroupId, orgId], references: [id, orgId], onDelete: NoAction)
   versions     RunbookVersion[]
   runs         RunbookRun[]
 
   @@unique([id, orgId])
   @@index([orgId])
   @@index([ownerUserId])
+  @@index([orgId, ownerGroupId])
   @@map("runbooks")
 }
 
@@ -297,4 +304,8 @@ extend model Organization {
   runbookRunLogChunks      RunbookRunLogChunk[]
   runbookCommandExecutions RunbookCommandExecution[]
   runbookApprovals         RunbookApproval[]
+}
+
+extend model Group {
+  ownedRunbooks Runbook[] @relation("RunbookOwnerGroup")
 }

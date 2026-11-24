@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { OrgCredentialsModule } from '@marinoscar/platform-api/credentials';
 
+import { sharingModule } from '../platform/sharing/sharing.config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ServerProfilesModule } from '../server-profiles/server-profiles.module';
 import { SshModule } from '../ssh/ssh.module';
@@ -38,7 +39,7 @@ import { TargetResolverService } from './target-resolver.service';
  * `runbooks.registrations.ts` (before the registries freeze).
  */
 @Module({
-  imports: [PrismaModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule],
+  imports: [PrismaModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule],
   controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController],
   providers: [
     RunbooksService,

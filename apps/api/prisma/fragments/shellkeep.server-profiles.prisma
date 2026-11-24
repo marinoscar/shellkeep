@@ -4,6 +4,13 @@
 // Purge: Cascade on user delete (a deleted user takes their profiles with them).
 // No RLS: this table carries org_id but is not under row-level security; see
 //   docs/platform-adoption/local-exceptions.md (standing constraints).
+// Sharing (#71): `ownerGroupId` is the OPTIONAL owning group (a group-owned profile). `user_id` stays the
+//   user who created the profile and holds its SSH credentials in the credential store; it is NOT NULL.
+//   The pair (org_id, owner_group_id) is a COMPOSITE foreign key to groups (id, org_id): a foreign-key
+//   check bypasses row-level security, so a plain key could point at another organization's group. NULL
+//   `owner_group_id` skips the check (MATCH SIMPLE). ON DELETE NO ACTION (checked at the end of the
+//   statement, so deleting an organization still cascades): SET NULL would null `org_id` too, so the app
+//   refuses to delete a group that owns a profile (409 GROUP_OWNS_RESOURCES) instead.
 // SSH credential columns (`encrypted_*`) are LEGACY since #48: they hold AES-256-GCM ciphertext under the
 //   legacy key, are never read, and stay until a later migration drops them (#84). The secrets live in
 //   the platform credential store (purpose `ssh`, names `profile.<profileId>.<field>`).
@@ -36,16 +43,19 @@ model ServerProfile {
   aiOutputSharing     Boolean    @default(true) @map("ai_output_sharing")
   tags                String[]
   color               String     @default("default")
+  ownerGroupId        String?    @map("owner_group_id") @db.Uuid
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization      @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  ownerGroup   Group?            @relation("ServerProfileOwnerGroup", fields: [ownerGroupId, orgId], references: [id, orgId], onDelete: NoAction)
   sessions     TerminalSession[]
 
   @@index([userId])
   @@index([orgId, userId])
+  @@index([orgId, ownerGroupId])
   @@map("server_profiles")
 }
 
@@ -55,4 +65,8 @@ extend model User {
 
 extend model Organization {
   serverProfiles ServerProfile[]
+}
+
+extend model Group {
+  ownedServerProfiles ServerProfile[] @relation("ServerProfileOwnerGroup")
 }

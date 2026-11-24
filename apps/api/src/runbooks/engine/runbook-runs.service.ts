@@ -12,8 +12,8 @@
 // notice through the `runbooks.cancel` message and a 2-second poll.
 // =============================================================================
 
-import { HttpException, Inject, Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { AUDIT_SINK, runInOrg, type AuditSink } from '@marinoscar/platform-api/core';
+import { ForbiddenException, HttpException, Inject, Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { AUDIT_SINK, runInOrg, type AuditSink, type Principal } from '@marinoscar/platform-api/core';
 import { OrgCredentialsService } from '@marinoscar/platform-api/credentials';
 import { JobsService, type JobsTx } from '@marinoscar/platform-api/jobs';
 import type { Prisma } from '@prisma/client';
@@ -50,6 +50,32 @@ export class RunbookRunsService {
     @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
   ) {}
 
+  private scopeOf(principal: Principal): OwnerScope {
+    if (!principal.activeOrgId) throw new ForbiddenException('No active organization');
+    return { userId: principal.userId, orgId: principal.activeOrgId };
+  }
+
+  /**
+   * The run, when the caller may see it: they started it, or they may read its runbook (a runbook is private
+   * by default, sharing grants access). A run the caller cannot see is a 404, never a 403.
+   */
+  private async visibleRun(principal: Principal, id: string, action: 'read' | 'run' = 'read') {
+    const scope = this.scopeOf(principal);
+    const run = await runInOrg(this.prisma, scope, (tx) =>
+      tx.runbookRun.findFirst({ where: { id, orgId: scope.orgId }, select: { id: true, runbookId: true, initiatedBy: true } }),
+    );
+    if (!run) throw new NotFoundException('Run not found');
+    if (run.initiatedBy !== principal.userId && !(await this.runbooks.can(principal, run.runbookId, action))) {
+      throw new NotFoundException('Run not found');
+    }
+    return run;
+  }
+
+  /** Throws 404 unless the caller may read the run. */
+  async requireVisible(principal: Principal, id: string): Promise<void> {
+    await this.visibleRun(principal, id);
+  }
+
   private async requireEnabled(orgId: string): Promise<void> {
     if (!(await this.settings.effective(orgId)).enabled) {
       throw new HttpException({ code: RUNBOOK_RUN_ERROR_CODES.DISABLED, message: 'Runbooks are switched off' }, 503);
@@ -57,16 +83,21 @@ export class RunbookRunsService {
   }
 
   /** Creates a queued run and its start job. */
-  async create(scope: OwnerScope, runbookId: string, dto: CreateRunDto, trigger: 'manual' | 'api' | 'schedule' = 'manual'): Promise<{ runId: string }> {
+  async create(principal: Principal, runbookId: string, dto: CreateRunDto, trigger: 'manual' | 'api' | 'schedule' = 'manual'): Promise<{ runId: string }> {
+    const scope = this.scopeOf(principal);
     await this.requireEnabled(scope.orgId);
-    const runbook = await this.runbooks.findOne(scope, runbookId); // 404 for a runbook the caller cannot see
-    if (runbook.archivedAt) throw new HttpException({ code: 'RUNBOOK_ARCHIVED', message: 'The runbook is archived' }, 409);
+    await this.runbooks.requireRun(principal, runbookId); // 404 for a runbook the caller cannot see, 404 for one they may not run
 
-    const version = await runInOrg(this.prisma, scope, (tx) =>
-      tx.runbookVersion.findFirst({
-        where: { runbookId, orgId: scope.orgId, ...(dto.version !== undefined ? { version: dto.version } : { id: runbook.latestVersion?.id ?? '' }) },
-      }),
-    );
+    const { runbook, version } = await runInOrg(this.prisma, scope, async (tx) => {
+      const row = await tx.runbook.findFirst({ where: { id: runbookId, orgId: scope.orgId } });
+      if (!row) return { runbook: null, version: null };
+      const found = await tx.runbookVersion.findFirst({
+        where: { runbookId, orgId: scope.orgId, ...(dto.version !== undefined ? { version: dto.version } : { id: row.latestVersionId ?? '' }) },
+      });
+      return { runbook: row, version: found };
+    });
+    if (!runbook) throw new NotFoundException('Runbook not found');
+    if (runbook.archivedAt) throw new HttpException({ code: 'RUNBOOK_ARCHIVED', message: 'The runbook is archived' }, 409);
     if (!version) throw new NotFoundException('Runbook version not found');
     const definition = version.definition as unknown as RunbookDefinition;
 
@@ -125,10 +156,13 @@ export class RunbookRunsService {
     return { runId };
   }
 
-  async list(scope: OwnerScope, query: RunsQueryDto) {
+  async list(principal: Principal, query: RunsQueryDto) {
+    const scope = this.scopeOf(principal);
     return runInOrg(this.prisma, scope, async (tx) => {
+      const readable = await this.runbooks.readableWhere(tx, principal);
       const where: Prisma.RunbookRunWhereInput = {
         orgId: scope.orgId,
+        OR: [{ initiatedBy: principal.userId }, { runbook: readable }],
         ...(query.runbookId ? { runbookId: query.runbookId } : {}),
         ...(query.status ? { status: query.status } : {}),
         ...(query.trigger ? { trigger: query.trigger } : {}),
@@ -157,7 +191,9 @@ export class RunbookRunsService {
   }
 
   /** The run, its targets, the steps matrix and counts. Parameters are the stored non-secret values. */
-  async get(scope: OwnerScope, id: string) {
+  async get(principal: Principal, id: string) {
+    await this.visibleRun(principal, id);
+    const scope = this.scopeOf(principal);
     return runInOrg(this.prisma, scope, async (tx) => {
       const run = await tx.runbookRun.findFirst({
         where: { id, orgId: scope.orgId },
@@ -190,7 +226,9 @@ export class RunbookRunsService {
   }
 
   /** The id of a step row, for the log routes. */
-  async stepRowId(scope: OwnerScope, runId: string, targetId: string, stepIndex: number): Promise<string> {
+  async stepRowId(principal: Principal, runId: string, targetId: string, stepIndex: number): Promise<string> {
+    await this.visibleRun(principal, runId);
+    const scope = this.scopeOf(principal);
     const row = await runInOrg(this.prisma, scope, (tx) =>
       tx.runbookRunStep.findFirst({ where: { runId, runTargetId: targetId, stepIndex, orgId: scope.orgId }, select: { id: true } }),
     );
@@ -198,12 +236,9 @@ export class RunbookRunsService {
     return row.id;
   }
 
-  async requireRun(scope: OwnerScope, id: string): Promise<void> {
-    const row = await runInOrg(this.prisma, scope, (tx) => tx.runbookRun.findFirst({ where: { id, orgId: scope.orgId }, select: { id: true } }));
-    if (!row) throw new NotFoundException('Run not found');
-  }
-
-  async cancel(scope: OwnerScope, id: string): Promise<{ id: string; status: string }> {
+  async cancel(principal: Principal, id: string): Promise<{ id: string; status: string }> {
+    await this.visibleRun(principal, id, 'run');
+    const scope = this.scopeOf(principal);
     const now = new Date();
     const result = await runInOrg(this.prisma, scope, async (tx) => {
       const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM runbook_runs WHERE id = ${id}::uuid AND org_id = ${scope.orgId}::uuid FOR UPDATE`;
@@ -228,7 +263,9 @@ export class RunbookRunsService {
     return { id, status: result.finished?.status ?? 'cancelling' };
   }
 
-  async cancelTarget(scope: OwnerScope, runId: string, targetId: string): Promise<{ id: string; status: string }> {
+  async cancelTarget(principal: Principal, runId: string, targetId: string): Promise<{ id: string; status: string }> {
+    await this.visibleRun(principal, runId, 'run');
+    const scope = this.scopeOf(principal);
     const now = new Date();
     const result = await runInOrg(this.prisma, scope, async (tx) => {
       const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM runbook_runs WHERE id = ${runId}::uuid AND org_id = ${scope.orgId}::uuid FOR UPDATE`;
@@ -263,7 +300,8 @@ export class RunbookRunsService {
   }
 
   /** A new run with the same version, parameters and strategy, on the failed servers (or all of them). */
-  async retry(scope: OwnerScope, id: string, only: 'failed' | 'all'): Promise<{ runId: string }> {
+  async retry(principal: Principal, id: string, only: 'failed' | 'all'): Promise<{ runId: string }> {
+    const scope = this.scopeOf(principal);
     await this.requireEnabled(scope.orgId);
     const source = await runInOrg(this.prisma, scope, async (tx) => {
       const run = await tx.runbookRun.findFirst({ where: { id, orgId: scope.orgId } });
@@ -274,6 +312,7 @@ export class RunbookRunsService {
       });
       return { run, serverIds: targets.map((t) => t.serverProfileId!).filter(Boolean) };
     });
+    await this.runbooks.requireRun(principal, source.run.runbookId);
     if (!source.run.finishedAt) throw new HttpException({ code: RUNBOOK_RUN_ERROR_CODES.RUN_STATE, message: 'Only a finished run can be retried' }, 409);
     if (source.serverIds.length === 0) {
       throw new UnprocessableEntityException({ code: RUNBOOK_RUN_ERROR_CODES.NO_TARGETS, message: 'There is nothing to retry' });

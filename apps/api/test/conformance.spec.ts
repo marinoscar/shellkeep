@@ -141,6 +141,10 @@ runPlatformConformance({
           file: 'runbooks/engine/runbook-runs.service.ts',
           why: '`SELECT id FROM runbook_runs WHERE id = $1::uuid AND org_id = $2::uuid FOR UPDATE`: the run lock of cancel, with bound ids, inside the organization transaction',
         },
+        {
+          file: 'platform/sharing/sharing-access.ts',
+          why: 'The sharing slice\'s EXISTS form of `accessibleWhere` (more than 1,000 shared records): SELECT r.id FROM <a fixed table> r WHERE <the slice\'s own parameterised fragment>; the table is a plain-identifier constant of the caller, never request input (#71)',
+        },
       ],
       registerIn: 'src/app-registrations/user-owned-models.ts',
     },

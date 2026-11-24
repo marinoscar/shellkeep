@@ -11,9 +11,14 @@
 //   SHELLKEEP_EMAIL_TEMPLATES          registered by the notification manifest
 //   RUNBOOK_EMAIL_TEMPLATES            the three runbook templates, registered only by
 //                                      `registerRunbookNotifications()` (#61)
+//   SHARING_EMAIL_TEMPLATES            `group-invitation` and `shared-with-you` (#71): the words are the
+//                                      sharing slice's, the layout and escaping are the email slice's
 // =============================================================================
 
-import type { EmailTemplateEntry } from '@marinoscar/platform-api/email';
+import type { EmailTemplate, EmailTemplateEntry } from '@marinoscar/platform-api/email';
+
+import { groupInvitationEmail, type GroupInvitationEmailData } from './group-invitation.email';
+import { sharedWithYouEmail, type SharedWithYouEmailData } from './shared-with-you.email';
 
 import {
   runbookApprovalRequestedEmail,
@@ -36,3 +41,19 @@ export const RUNBOOK_EMAIL_TEMPLATES: readonly EmailTemplateEntry[] = [
   { name: 'runbook-run-failed', render: runbookRunFailedEmail, registrant: SHELLKEEP_EMAIL_REGISTRANT },
   { name: 'runbook-approval-requested', render: runbookApprovalRequestedEmail, registrant: SHELLKEEP_EMAIL_REGISTRANT },
 ];
+
+declare module '@marinoscar/platform-api/email' {
+  interface EmailTemplateDataMap {
+    'group-invitation': GroupInvitationEmailData;
+    'shared-with-you': SharedWithYouEmailData;
+  }
+}
+
+/** The sharing slice's two templates (#71), registered with their events by the notification manifest. */
+export const SHARING_EMAIL_TEMPLATES: readonly EmailTemplateEntry[] = [
+  { name: 'group-invitation', render: groupInvitationEmail as EmailTemplate<never>, registrant: 'sharing' },
+  { name: 'shared-with-you', render: sharedWithYouEmail as EmailTemplate<never>, registrant: 'sharing' },
+];
+
+export { groupInvitationEmail, sharedWithYouEmail };
+export type { GroupInvitationEmailData, SharedWithYouEmailData };

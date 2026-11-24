@@ -15,7 +15,7 @@ ShellKeep is a browser-based terminal workspace with persistent tmux-backed sess
 | Understand auth, RBAC and SSH credential handling | [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) |
 | Authorize a CLI or device | [DEVICE-AUTH.md](DEVICE-AUTH.md) |
 | Write or run tests | [TESTING.md](TESTING.md), [../apps/api/TESTING.md](../apps/api/TESTING.md) |
-| Deploy to a VPS | [../infra/deploy/DEPLOY.md](../infra/deploy/DEPLOY.md), [ssl-nginx-setup.md](ssl-nginx-setup.md), [docker-compose-project-name-fix.md](docker-compose-project-name-fix.md) |
+| Deploy to a VPS with the `shellkeep` CLI (install, update, adopting an old install) | [../apps/cli/README.md](../apps/cli/README.md#deploying-to-a-server), [ssl-nginx-setup.md](ssl-nginx-setup.md), [docker-compose-project-name-fix.md](docker-compose-project-name-fix.md) |
 | Work with Claude Code or OpenCode on this repo | [AI-ASSISTANTS.md](AI-ASSISTANTS.md), [../AGENTS.md](../AGENTS.md) |
 | Baseline an existing database, create the application role | [runbooks/database-baseline.md](runbooks/database-baseline.md), [runbooks/application-role.md](runbooks/application-role.md) |
 | Move the SSH secrets of a deployed database into the credential store | [runbooks/ssh-secret-reencryption.md](runbooks/ssh-secret-reencryption.md) |

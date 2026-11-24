@@ -11,6 +11,7 @@
   "scripts": {
     "api": "npm -w apps/api",
     "web": "npm -w apps/web",
+    "cli": "npm -w apps/cli",
     "api:dev": "npm -w apps/api run start:dev",
     "web:dev": "npm -w apps/web run dev",
     "api:test": "npm -w apps/api test",
@@ -23,7 +24,9 @@
     "check:platform-imports": "eslint --max-warnings=0 --config eslint.platform-imports.config.mjs \"apps/{api,web}/src/**/*.{ts,tsx}\"",
     "check:platform-pin": "node scripts/check-platform-pin.mjs",
     "check:single-instance": "node scripts/check-single-instance.mjs",
-    "test:scripts": "node --test scripts/__tests__/*.test.mjs"
+    "test:scripts": "node --test scripts/__tests__/*.test.mjs",
+    "platform:infra:sync": "platform-infra sync",
+    "test:infra": "npm run test:run --workspace=cli -- src/infra-conformance.test.ts"
   },
   "overrides": {
     "@nestjs/common": "^11.1.12",
@@ -36,6 +39,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@marinoscar/platform-contract": "0.1.0-next.39",
+    "@marinoscar/platform-infra": "0.1.0-next.39",
     "@stoplight/spectral-cli": "^6.17.1",
     "eslint": "^10.15.0",
     "eslint-plugin-react-hooks": "^7.1.1",

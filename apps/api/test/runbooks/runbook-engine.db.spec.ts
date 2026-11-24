@@ -23,13 +23,16 @@ const SENTINEL = ['sentinel', 'token', Math.random().toString(36).slice(2, 12)].
 
 const cmd = (id: string, command: string, over: Record<string, unknown> = {}) => ({ id, name: id, kind: 'command', command, ...over });
 const scope = (h: Harness, userId = h.userA) => ({ userId, orgId: ORG_A });
+/** The caller as the controllers hand it over. */
+const who = (h: Harness, userId = h.userA) =>
+  ({ userId, activeOrgId: ORG_A, permissions: ['runbooks:read', 'runbooks:run', 'runbooks:approve'] }) as never;
 
 describeWithDb('Runbook engine (real Postgres, real shell)', () => {
   let h: Harness;
   let servers: string[];
 
   async function start(runbookId: string, serverIds: string[], extra: Record<string, unknown> = {}): Promise<string> {
-    const { runId } = await h.runs.create(scope(h), runbookId, { params: {}, secretRefs: {}, targets: { serverIds }, ...extra } as never);
+    const { runId } = await h.runs.create(who(h), runbookId, { params: {}, secretRefs: {}, targets: { serverIds }, ...extra } as never);
     return runId;
   }
 
@@ -103,7 +106,7 @@ describeWithDb('Runbook engine (real Postgres, real shell)', () => {
     const spies = (['log', 'warn', 'error', 'debug', 'verbose'] as const).map((m) => jest.spyOn(Logger.prototype, m).mockImplementation((...args: unknown[]) => void logged.push(JSON.stringify(args))));
     const before = h.fixture.execs.length;
     const stdinsBefore = h.fixture.stdins.length;
-    const { runId } = await h.runs.create(scope(h), runbookId, { params: { NAME: 'web' }, secretRefs: { TOKEN: 'deploy-token' }, targets: { serverIds: [servers[0]!] } } as never);
+    const { runId } = await h.runs.create(who(h), runbookId, { params: { NAME: 'web' }, secretRefs: { TOKEN: 'deploy-token' }, targets: { serverIds: [servers[0]!] } } as never);
     await h.drain();
     spies.forEach((s) => s.mockRestore());
 
@@ -135,10 +138,10 @@ describeWithDb('Runbook engine (real Postgres, real shell)', () => {
       parameters: [{ name: 'MODE', type: 'enum', options: ['a', 'b'], required: true }, { name: 'KEY', type: 'secret', required: false }],
       steps: [cmd('c', 'true')],
     } as never);
-    await expect(h.runs.create(scope(h), runbookId, { params: { MODE: 'z' }, secretRefs: {} } as never)).rejects.toMatchObject({
+    await expect(h.runs.create(who(h), runbookId, { params: { MODE: 'z' }, secretRefs: {} } as never)).rejects.toMatchObject({
       response: { code: 'RUNBOOK_PARAMS_INVALID' },
     });
-    await expect(h.runs.create(scope(h), runbookId, { params: { MODE: 'a' }, secretRefs: { KEY: 'missing-secret' } } as never)).rejects.toMatchObject({
+    await expect(h.runs.create(who(h), runbookId, { params: { MODE: 'a' }, secretRefs: { KEY: 'missing-secret' } } as never)).rejects.toMatchObject({
       response: { code: 'RUNBOOK_SECRET_REF_UNKNOWN' },
     });
   });
@@ -162,7 +165,7 @@ describeWithDb('Runbook engine (real Postgres, real shell)', () => {
     });
     while (h.fixture.running() < 1) await new Promise((r) => setTimeout(r, 50));
     const cancelledAt = Date.now();
-    await h.runs.cancel(scope(h), runId);
+    await h.runs.cancel(who(h), runId);
     await draining;
     expect(Date.now() - cancelledAt).toBeLessThan(15_000);
     const { run, steps } = await h.snapshot(runId);
@@ -225,9 +228,9 @@ describeWithDb('Runbook engine (real Postgres, real shell)', () => {
 
     it('refuses self-approval by default, then approve resumes every target from the next step', async () => {
       const { runId, approvalId } = await parked('gate-approve');
-      await expect(h.approvals.decide(scope(h, h.userA), approvalId, 'approve')).rejects.toMatchObject({ response: { code: 'RUNBOOK_SELF_APPROVAL' }, status: 403 });
-      await h.approvals.decide(scope(h, h.userB), approvalId, 'approve', 'looks fine');
-      await expect(h.approvals.decide(scope(h, h.userB), approvalId, 'approve')).rejects.toMatchObject({ response: { code: 'RUNBOOK_APPROVAL_NOT_PENDING' } });
+      await expect(h.approvals.decide(who(h, h.userA), approvalId, 'approve')).rejects.toMatchObject({ response: { code: 'RUNBOOK_SELF_APPROVAL' }, status: 403 });
+      await h.approvals.decide(who(h, h.userB), approvalId, 'approve', 'looks fine');
+      await expect(h.approvals.decide(who(h, h.userB), approvalId, 'approve')).rejects.toMatchObject({ response: { code: 'RUNBOOK_APPROVAL_NOT_PENDING' } });
       await h.drain();
       const { run, steps } = await h.snapshot(runId);
       expect(run.status).toBe('succeeded');
@@ -240,7 +243,7 @@ describeWithDb('Runbook engine (real Postgres, real shell)', () => {
       const { runId, approvalId } = await parked('gate-self');
       h.settings.current = { ...h.settings.current, approvals: { ...h.settings.current.approvals, allowSelfApproval: true } };
       try {
-        await h.approvals.decide(scope(h, h.userA), approvalId, 'approve');
+        await h.approvals.decide(who(h, h.userA), approvalId, 'approve');
       } finally {
         h.settings.current = { ...h.settings.current, approvals: { ...h.settings.current.approvals, allowSelfApproval: false } };
       }
@@ -250,7 +253,7 @@ describeWithDb('Runbook engine (real Postgres, real shell)', () => {
 
     it('reject fails the targets with APPROVAL_REJECTED', async () => {
       const { runId, approvalId } = await parked('gate-reject');
-      await h.approvals.decide(scope(h, h.userB), approvalId, 'reject', 'no');
+      await h.approvals.decide(who(h, h.userB), approvalId, 'reject', 'no');
       await h.drain();
       const { run } = await h.snapshot(runId);
       expect(run.targets.map((t) => t.errorCode)).toEqual(['APPROVAL_REJECTED', 'APPROVAL_REJECTED', 'APPROVAL_REJECTED']);
@@ -278,8 +281,8 @@ describeWithDb('Runbook engine (real Postgres, real shell)', () => {
     expect(snap.run.targets.map((t) => t.status)).toEqual(['succeeded', 'pending', 'pending']);
     const gate = await runInOrg(h.prisma, { orgId: ORG_A }, (tx) => tx.runbookApproval.findFirstOrThrow({ where: { runId } }));
     expect(gate).toMatchObject({ kind: 'gate', scope: 'run', status: 'pending' });
-    await expect(h.approvals.resume(scope(h, h.userA), runId)).rejects.toMatchObject({ response: { code: 'RUNBOOK_SELF_APPROVAL' } });
-    await h.approvals.resume(scope(h, h.userB), runId);
+    await expect(h.approvals.resume(who(h, h.userA), runId)).rejects.toMatchObject({ response: { code: 'RUNBOOK_SELF_APPROVAL' } });
+    await h.approvals.resume(who(h, h.userB), runId);
     await h.drain();
     snap = await h.snapshot(runId);
     expect(snap.run.status).toBe('succeeded');
@@ -343,6 +346,6 @@ describeWithDb('Runbook engine (real Postgres, real shell)', () => {
     }));
     expect(count).toEqual({ runs: 0, targets: 0, steps: 0, approvals: 0, executions: 0 });
     const some = await runInOrg(h.prisma, { orgId: ORG_A }, (tx) => tx.runbookRun.findFirstOrThrow());
-    await expect(h.runs.get({ userId: h.userA, orgId: other }, some.id)).rejects.toMatchObject({ status: 404 });
+    await expect(h.runs.get({ userId: h.userA, activeOrgId: other, permissions: [] } as never, some.id)).rejects.toMatchObject({ status: 404 });
   });
 });

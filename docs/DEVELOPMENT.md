@@ -56,13 +56,22 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
    ```bash
    cd infra/compose
    cp .env.example .env
-   # Edit .env with your Google OAuth credentials and other settings
+   # Edit .env with your Google OAuth credentials and other settings.
+   # ShellKeep publishes port 8323 (NGINX_PORT, from app.env.example), but the
+   # platform's template still says 3535, so also set:
+   #   APP_URL=http://localhost:8323
+   #   GOOGLE_CALLBACK_URL=http://localhost:8323/api/auth/google/callback
    ```
 
 3. **Start development environment**
    ```bash
    cd infra/compose
-   docker compose -f base.compose.yml -f dev.compose.yml up
+   # devdb adds a local PostgreSQL (POSTGRES_HOST=db) and creates the ordinary
+   # application role, so row-level security applies. Leave devdb.compose.yml out
+   # to use an external PostgreSQL reachable on the devnet network.
+   docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml up
+   # Telemetry (collector + GreptimeDB; the explorer is /admin/settings/telemetry):
+   # add -f telemetry.compose.yml
    ```
 
 4. **IMPORTANT: Run database seeds**
@@ -91,6 +100,34 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
    - Frontend: http://localhost:8323
    - API: http://localhost:8323/api
    - Swagger: http://localhost:8323/api/docs
+
+### The generated infrastructure files
+
+`infra/` is rendered by `npm run platform:infra:sync` from `@marinoscar/platform-infra` and checked in CI with `npm run platform:infra:sync -- --check` (the lock is `infra/platform-infra.lock.json`, which records the identity: `cliName: shellkeep`, `envPrefix: SHELLKEEP_`, `serviceName: shellkeep-api`). **Never hand-edit a generated file** (header `GENERATED from @marinoscar/platform-infra`): ShellKeep's differences live only in the app-owned files, which the sync creates once and never overwrites. After a platform version bump, run the sync and commit the result.
+
+| Generated (never edit) | App-owned (edit these) |
+|---|---|
+| `infra/compose/{base,dev,devdb,prod,vps,vps.telemetry,telemetry,worker,worker.build,test}.compose.yml` | `infra/compose/app.*.compose.yml` (overlays, appended last; none needed today) |
+| `infra/compose/postgres-init/10-application-role.sh` (mode 0755) | `infra/compose/postgres-init/20-*.sh` (extra first-start steps) |
+| `infra/compose/.env.example`, `.env.worker.example` | `infra/compose/app.env.example` (ShellKeep variables, appended to `.env.example`) |
+| `infra/nginx/{nginx.conf,csp.conf,csp.dev.conf}`, `infra/nginx/platform/*` | `infra/nginx/app.d/` (`locations/`, `http/`, `server/`, `csp/`, `permissions-policy.conf`) |
+| `infra/otel/otel-collector-config.yaml` | `infra/otel/app-collector.yaml` |
+| `infra/platform-infra.lock.json` | none; `shellkeep deploy` (`apps/cli`, #72) deploys the generated files, and the legacy `infra/deploy/` scripts are gone |
+
+ShellKeep's `app.d/locations/`:
+
+- `terminal-ws.conf`: `/api/terminal/ws` with a 3600 s timeout (the platform's `/api` location reads for 60 s).
+- `runbook-streams.conf`: the runbook log SSE streams through `platform/sse-proxy.conf` (path to confirm when #62 merges).
+- `ai-terminal-streams.conf`: the terminal AI assistant's stream prefix `/api/ai/terminal/`. The generic AI response stream and the telemetry assistant stream are already in the platform's `nginx.conf`.
+- `terminal-uploads.conf`: the terminal toolbar's multipart `POST /api/storage/objects` (100 MiB; nginx's default is 1 MiB).
+
+A new SSE route is one location including `/etc/nginx/platform/sse-proxy.conf`; a location that sets its own `add_header` must `include /etc/nginx/platform/security-headers.conf`. nginx reads its configuration at start: after changing an `app.d/` file run `docker compose ... up -d --force-recreate nginx`.
+
+**Ports and URLs.** `APP_URL` and `APP_BIND_PORT` are platform variables with the platform defaults 3535. A ShellKeep `.env` sets `APP_URL=http://localhost:8323` (and `GOOGLE_CALLBACK_URL` to match) for development; on a VPS it sets `APP_BIND_PORT=8323` (the `vps` overlay binds `127.0.0.1:APP_BIND_PORT`). The dev and devdb stacks publish `NGINX_PORT`, which `app.env.example` sets to 8323.
+
+**Images.** Both Dockerfiles build from the repository root (`context: ../..`, `dockerfile: apps/<app>/Dockerfile`), keep the sources at `/app/apps/<app>`, and the web image listens on 5173 like the dev server, because the generated `nginx.conf` proxies to `web:5173` in every mode.
+
+**Checks.** `npm run test:infra` renders `docker compose config` for dev, devdb, prod, vps and test with the overlays and runs `nginx -t` over `app.d/` with both CSP files (a missing docker or nginx is a named skip). The e2e WebSocket idle check: `cd tests/e2e && npx playwright test specs/terminal-ws.spec.ts` against a running stack.
 
 ### First Login
 

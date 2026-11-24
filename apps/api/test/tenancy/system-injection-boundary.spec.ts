@@ -46,6 +46,8 @@ const SYSTEM_ALLOWLIST: Record<string, string> = {
     "webhooks and retention: the webhooks slice's WEBHOOKS_SYSTEM_PRISMA port (#54): a system-scope endpoint and its deliveries have no organization, so only the bypass client sees them; the delivery purge crosses organizations",
   'runbooks/engine/logs-compact.handler.ts':
     "the runbook reconcile job (#62), under the registered reason `runbooks-reconcile`: it FINDS lost executors, stuck runs, expired approvals and orphan log chunks across organizations; every change is made inside the owning organization's scope",
+  'platform/sharing/sharing-data.adapter.ts':
+    "purge, doctor, retention, link-resolution and invite-claim: the sharing slice's SHARING_DATA port (#71): the user-purge rule, the `sharing.groups.orphaned` Doctor check, the grants prune job and the two cross-organization lookups of an invite and a link token (links are disabled for both resource types)",
   'platform/ai/ai-host.module.ts':
     "purge and admin-aggregate: the AI slice's AI_SYSTEM_PRISMA port (#55): the ai_runs and ai_usage_events retention purges, the deployment-wide usage report and the catalogue sync's organization-less usage row",
 };

@@ -147,7 +147,14 @@ export async function createHarness(label: string): Promise<Harness> {
   const events = new RunEventsService(bus);
   const coordinator = new RunCoordinatorService(jobs, settingsService);
   const lifecycle = new RunLifecycleService(events, emitter, notifications as never, prisma, metrics);
-  const approvals = new RunbookApprovalsService(prisma, jobs, coordinator, lifecycle, settingsService, metrics, audit);
+  // The sharing decisions are #71's (their own specs): here every caller may read and run every runbook.
+  const runbooksFake = {
+    requireRun: async () => undefined,
+    requireRead: async () => undefined,
+    can: async () => true,
+    readableWhere: async () => ({}),
+  };
+  const approvals = new RunbookApprovalsService(prisma, jobs, coordinator, lifecycle, settingsService, metrics, runbooksFake as never, audit);
   const storageProvider = {
     upload: async (key: string, stream: Readable) => {
       const parts: Buffer[] = [];
@@ -162,24 +169,19 @@ export async function createHarness(label: string): Promise<Harness> {
     getSecret: async (_org: string, _purpose: string, name: string) => secrets.get(name) ?? null,
     describe: async (_org: string, _purpose: string, name: string) => (secrets.has(name) ? { name } : null),
   };
-  const resolver = new TargetResolverService(prisma, { resolveSystem: async () => settings.current } as never);
+  // The resolver's sharing decisions are #71's: here the initiator owns (and may connect to) every profile.
+  const allowAll = { decideMany: async (_p: unknown, _action: string, refs: Array<{ type: string; id: string }>) => new Map(refs.map((r) => [`${r.type}:${r.id}`, { allowed: true }])) };
+  const resolver = new TargetResolverService(prisma, { resolveSystem: async () => settings.current } as never, allowAll as never, { enrich: async (p: unknown) => p } as never);
   const access = {
     load: async (userId: string, orgId: string): Promise<Initiator> => ({ principal: { userId, permissions: ['runbooks:run'] } as never, scope: { userId, orgId } }),
     canRun: () => true,
-    resolveTargets: (initiator: Initiator, selector: never, limit?: number) => resolver.resolve(initiator.scope, selector, limit === undefined ? {} : { limit }),
+    resolveTargets: (initiator: Initiator, selector: never, limit?: number) => resolver.resolve({ userId: initiator.scope.userId, activeOrgId: initiator.scope.orgId, permissions: [] } as never, selector, limit === undefined ? {} : { limit }),
     decryptProfile: async (_initiator: Initiator, id: string) => {
       const row = await prisma.serverProfile.findFirstOrThrow({ where: { id } });
       return { ...row, authMethod: 'password', password: fixture.password, privateKey: null, passphrase: null };
     },
     requireRun: async () => undefined,
   } as unknown as EngineAccessService;
-  const runbooksFake = {
-    findOne: async (scope: { orgId: string; userId: string }, id: string) =>
-      runInOrg(prisma, scope, async (tx) => {
-        const row = await tx.runbook.findFirstOrThrow({ where: { id } });
-        return { archivedAt: row.archivedAt, latestVersion: row.latestVersionId ? { id: row.latestVersionId } : null };
-      }),
-  };
   const runs = new RunbookRunsService(prisma, jobs, runbooksFake as never, credentials as never, settingsService, coordinator, lifecycle, audit);
   const factory = new SshConnectionFactory(prisma, audit, { getNamespace: async () => ({ hostKeyPolicy: 'strict' }) } as never);
   const fileSource = { open: async () => { const next = files.next; if (!next) throw new Error('no file'); if (next instanceof Error) throw next; return next; } } as unknown as RunFileSource;

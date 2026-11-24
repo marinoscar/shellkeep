@@ -7,9 +7,10 @@
 // still use the server's credential. A permission revoked after the run was queued therefore stops the
 // next target (`PERMISSION_REVOKED`), it does not ride on a decision made hours earlier.
 //
-// THIS ONE FILE is the engine's seam to the access model. The sharing work (#71) changes the callees
-// (`requireRun`, `TargetResolverService.resolve(principal)`, `getDecryptedProfile(id, principal, 'run')`):
-// when it lands, only the four calls below change.
+// THIS ONE FILE is the engine's seam to the access model (sharing, #71): `RunbooksService.requireRun`
+// (the initiator may still run the runbook), `TargetResolverService.resolve` (a server they cannot
+// `connect` to is a per-target `forbidden`), and `ServerProfilesService.getDecryptedProfile(id, principal,
+// 'run')` (the credential read of a run, audited when it is a grantee's).
 // =============================================================================
 
 import { Injectable } from '@nestjs/common';
@@ -43,7 +44,8 @@ export class EngineAccessService {
   async load(userId: string, orgId: string): Promise<Initiator | null> {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, include: PRINCIPAL_USER_INCLUDE });
     if (!user || !user.isActive) return null;
-    const principal = principalFactory.forUser({ ...user, activeOrgId: orgId }, 'session');
+    const built = principalFactory.forUser({ ...user, activeOrgId: orgId }, 'session');
+    const principal = { ...built, activeOrgId: orgId } as UserPrincipal;
     return { principal, scope: { userId, orgId } };
   }
 
@@ -52,16 +54,16 @@ export class EngineAccessService {
   }
 
   /** Throws (404/403) when the initiator may not run this runbook. */
-  async requireRun(initiator: Initiator, runbookId: string): Promise<void> {
-    await this.runbooks.findOne(initiator.scope, runbookId);
+  requireRun(initiator: Initiator, runbookId: string): Promise<void> {
+    return this.runbooks.requireRun(initiator.principal, runbookId);
   }
 
   resolveTargets(initiator: Initiator, selector: Partial<TargetSelector>, limit?: number): Promise<ResolvedTargets> {
-    return this.resolver.resolve(initiator.scope, selector, limit === undefined ? {} : { limit });
+    return this.resolver.resolve(initiator.principal, selector, limit === undefined ? {} : { limit });
   }
 
   /** The decrypted profile for a run; throws when the initiator may not use it. */
   decryptProfile(initiator: Initiator, serverProfileId: string): Promise<DecryptedProfile> {
-    return this.profiles.getDecryptedProfile(serverProfileId, initiator.scope);
+    return this.profiles.getDecryptedProfile(serverProfileId, initiator.principal, 'run');
   }
 }

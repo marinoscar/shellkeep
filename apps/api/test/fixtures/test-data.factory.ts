@@ -403,8 +403,11 @@ export interface MockUserWithRelations {
   userSettings?: any;
 }
 
-/** The default organization every mocked membership belongs to. */
-export const MOCK_DEFAULT_ORG_ID = 'org-default';
+/**
+ * The default organization every mocked membership belongs to. A UUID: `runInOrg` refuses any other
+ * id, and the sharing-aware server profile and runbook services run every read inside it (#71).
+ */
+export const MOCK_DEFAULT_ORG_ID = '8f1d5e0a-1b2c-4d3e-9f4a-5b6c7d8e9f01';
 
 function roleRecord(name: string, scope: 'system' | 'org'): MockRoleRecord {
   const id = randomUUID();

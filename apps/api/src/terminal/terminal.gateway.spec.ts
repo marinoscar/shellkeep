@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter } from 'events';
+import { NotFoundException } from '@nestjs/common';
 import { HostKeyError } from '../ssh/host-key.error';
 import { TerminalGateway } from './terminal.gateway';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
@@ -43,7 +44,7 @@ function emitBinaryMessage(ws: any, data: Buffer): void {
 describe('TerminalGateway', () => {
   let gateway: TerminalGateway;
   let principals: { resolve: jest.Mock };
-  let serverProfilesService: jest.Mocked<Pick<ServerProfilesService, 'getDecryptedProfile'>>;
+  let serverProfilesService: jest.Mocked<Pick<ServerProfilesService, 'getDecryptedProfile' | 'assertCanConnect'>>;
   let sessionsService: jest.Mocked<Pick<SessionsService, 'findOne' | 'updateStatus'>>;
   let sessionManager: jest.Mocked<
     Pick<SessionManagerService, 'isSessionRunning' | 'startSession' | 'attachWebSocket' | 'sendInput' | 'resizeSession'>
@@ -94,6 +95,8 @@ describe('TerminalGateway', () => {
 
     serverProfilesService = {
       getDecryptedProfile: jest.fn(),
+      // The caller may connect (a refusal is a NotFoundException).
+      assertCanConnect: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     sessionsService = {
@@ -241,6 +244,80 @@ describe('TerminalGateway', () => {
       );
     });
 
+    // The CLI's `sessions attach` (#72) authenticates with the personal access token `shellkeep login`
+    // stored. The gateway hands the token to the resolver as it is (the resolver tells a PAT from a JWT),
+    // and every later rule applies to a PAT socket exactly as to a JWT one.
+    describe('a personal access token (the shellkeep CLI)', () => {
+      const PAT = 'pat_0123456789abcdef0123456789abcdef';
+
+      it('authenticates with auth_ok and attaches a session like a JWT socket', async () => {
+        const ws = createMockWebSocket();
+        principals.resolve.mockResolvedValue(principalFor());
+        sessionsService.findOne.mockResolvedValue(mockSession as any);
+        sessionManager.isSessionRunning.mockReturnValue(true);
+        sessionManager.attachWebSocket.mockReturnValue(true);
+
+        gateway.handleConnection(ws);
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+        emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
+        for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+
+        expect(principals.resolve).toHaveBeenCalledWith(PAT);
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'auth_ok' }));
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'session_ready', sessionId: SESSION_ID }));
+        expect(sessionsService.findOne).toHaveBeenCalledWith(SESSION_ID, SCOPE);
+      });
+
+      it('refuses a PAT the identity slice rejects (revoked, expired, unknown) with auth_fail and a close', async () => {
+        const ws = createMockWebSocket();
+        principals.resolve.mockResolvedValue({ ok: false, reason: 'invalid_token' });
+
+        gateway.handleConnection(ws);
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'auth_fail', reason: 'Invalid token' }));
+        expect(ws.close).toHaveBeenCalled();
+      });
+
+      it('refuses a PAT of a principal without sessions:write as forbidden (a Viewer may not type into a session)', async () => {
+        const ws = createMockWebSocket();
+        principals.resolve.mockResolvedValue(principalFor({ permissions: ['sessions:read'], roles: ['viewer'] }));
+
+        gateway.handleConnection(ws);
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'auth_fail', reason: 'forbidden' }));
+        expect(ws.close).toHaveBeenCalled();
+      });
+
+      it('re-validates the PAT when the client re-sends auth, and a revoked one then closes the socket', async () => {
+        const ws = createMockWebSocket();
+        principals.resolve.mockResolvedValueOnce(principalFor());
+        gateway.handleConnection(ws);
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        principals.resolve.mockResolvedValueOnce(principalFor());
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'auth_refreshed' }));
+
+        principals.resolve.mockResolvedValueOnce({ ok: false, reason: 'invalid_token' });
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(ws.close).toHaveBeenCalled();
+      });
+    });
+
     it('should send auth_fail and close socket when token is invalid', async () => {
       const ws = createMockWebSocket();
       principals.resolve.mockResolvedValue({ ok: false, reason: 'invalid_token' });
@@ -365,6 +442,7 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
       ws.send.mockClear();
     }
 
@@ -375,6 +453,7 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'auth_fail', reason: 'Not authenticated' }),
@@ -394,6 +473,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       const sentCalls: string[] = ws.send.mock.calls.map((c: any[]) => c[0]);
       const sessionErrorCall = sentCalls.find((c) => c.includes('session_error'));
@@ -414,6 +494,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'session_error', error: 'Session is terminated', code: 'TERMINATED' }),
@@ -433,11 +514,41 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.startSession).not.toHaveBeenCalled();
       expect(sessionManager.attachWebSocket).toHaveBeenCalledWith(SESSION_ID, ws);
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'session_ready', sessionId: SESSION_ID }),
+      );
+    });
+
+    it('answers NOT_FOUND, starts nothing and attaches nothing when the share behind the session was revoked', async () => {
+      const ws = createMockWebSocket();
+      gateway.handleConnection(ws);
+      await authenticateWs(ws);
+
+      sessionsService.findOne.mockResolvedValue(mockSession as any);
+      // The session is already running (an earlier attach), but its server is no longer shared with this user.
+      sessionManager.isSessionRunning.mockReturnValue(true);
+      serverProfilesService.assertCanConnect.mockRejectedValue(new NotFoundException('not found'));
+
+      emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(serverProfilesService.assertCanConnect).toHaveBeenCalledWith(
+        mockSession.serverProfileId,
+        expect.objectContaining({ userId: SCOPE.userId, activeOrgId: SCOPE.orgId }),
+      );
+      expect(sessionManager.startSession).not.toHaveBeenCalled();
+      expect(sessionManager.attachWebSocket).not.toHaveBeenCalled();
+      expect(serverProfilesService.getDecryptedProfile).not.toHaveBeenCalled();
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({ type: 'session_error', error: 'Session not found', code: 'NOT_FOUND' }),
       );
     });
 
@@ -459,10 +570,12 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(serverProfilesService.getDecryptedProfile).toHaveBeenCalledWith(
         mockSession.serverProfileId,
-        SCOPE,
+        expect.objectContaining({ userId: SCOPE.userId, activeOrgId: SCOPE.orgId, permissions: expect.arrayContaining(['sessions:write']) }),
+        'connect',
       );
       expect(sessionManager.startSession).toHaveBeenCalledWith(
         SESSION_ID,
@@ -490,6 +603,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'session_error', error: 'Failed to attach', code: 'ATTACH_FAILED' }),
@@ -511,6 +625,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'session_error', error: 'SSH refused', code: 'CONNECTION_FAILED' }),
@@ -564,6 +679,7 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       ws.send.mockClear();
 
@@ -571,6 +687,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       ws.send.mockClear();
     }
@@ -583,6 +700,7 @@ describe('TerminalGateway', () => {
       const inputData = Buffer.from('ls -la\n');
       emitBinaryMessage(ws, inputData);
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.sendInput).toHaveBeenCalledWith(SESSION_ID, inputData);
     });
@@ -593,6 +711,7 @@ describe('TerminalGateway', () => {
 
       emitBinaryMessage(ws, Buffer.from('ls\n'));
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.sendInput).not.toHaveBeenCalled();
     });
@@ -605,9 +724,11 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       emitBinaryMessage(ws, Buffer.from('ls\n'));
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.sendInput).not.toHaveBeenCalled();
     });
@@ -627,11 +748,13 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
     }
 
     it('should call resizeSession with new dimensions', async () => {
@@ -641,6 +764,7 @@ describe('TerminalGateway', () => {
 
       emitMessage(ws, { type: 'resize', cols: 120, rows: 40 });
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.resizeSession).toHaveBeenCalledWith(SESSION_ID, 120, 40);
     });
@@ -651,6 +775,7 @@ describe('TerminalGateway', () => {
 
       emitMessage(ws, { type: 'resize', cols: 120, rows: 40 });
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.resizeSession).not.toHaveBeenCalled();
     });
@@ -663,9 +788,11 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       emitMessage(ws, { type: 'resize', cols: 120, rows: 40 });
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.resizeSession).not.toHaveBeenCalled();
     });
@@ -683,6 +810,7 @@ describe('TerminalGateway', () => {
       // Emit a non-JSON buffer that looks like JSON (starts with '{') but is malformed
       ws.emit('message', Buffer.from('{not valid json'), false);
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       // Gateway should swallow the parse error gracefully
       expect(ws.close).not.toHaveBeenCalled();
@@ -701,6 +829,7 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       // Make findOne throw to simulate an unexpected error inside handleConnect
       sessionsService.findOne.mockRejectedValue(new Error('DB timeout'));
@@ -709,6 +838,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       // The gateway catches and sends session_error, does not re-throw
       const calls: string[] = ws.send.mock.calls.map((c: any[]) => c[0]);

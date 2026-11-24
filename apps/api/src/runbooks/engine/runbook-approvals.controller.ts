@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Auth, CurrentOrg, CurrentUser } from '@marinoscar/platform-api/identity';
+import type { Principal } from '@marinoscar/platform-api/core';
+import { Auth, CurrentPrincipal } from '@marinoscar/platform-api/identity';
 
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { ApprovalDecisionDto, ApprovalsQueryDto } from './dto/run.dto';
@@ -15,8 +16,8 @@ export class RunbookApprovalsController {
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_READ] })
   @ApiResponse({ status: 200, description: 'Paginated approvals' })
   @ApiOperation({ summary: 'The approval inbox; `status=pending` by default. Deciding needs runbooks:approve (requires runbooks:read)' })
-  list(@CurrentUser('id') userId: string, @CurrentOrg() orgId: string, @Query() query: ApprovalsQueryDto) {
-    return this.approvals.list({ userId, orgId }, query);
+  list(@CurrentPrincipal() principal: Principal, @Query() query: ApprovalsQueryDto) {
+    return this.approvals.list(principal, query);
   }
 
   @Post(':id/decision')
@@ -29,10 +30,9 @@ export class RunbookApprovalsController {
   @ApiResponse({ status: 409, description: 'RUNBOOK_APPROVAL_NOT_PENDING' })
   decide(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
     @Body() dto: ApprovalDecisionDto,
   ) {
-    return this.approvals.decide({ userId, orgId }, id, dto.decision, dto.comment);
+    return this.approvals.decide(principal, id, dto.decision, dto.comment);
   }
 }

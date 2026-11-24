@@ -22,6 +22,7 @@ import { dbBackupModule } from './platform/db-backup/db-backup.config';
 import { AiModule } from './platform/ai/ai.config';
 import { alertsModule } from './platform/alerts/alerts.config';
 import { webhooksModule } from './platform/webhooks/webhooks.config';
+import { sharingModule } from './platform/sharing/sharing.config';
 import { jobsModule, nodeCredentialModule, nodesModule } from './platform/jobs/jobs.config';
 import {
   ProfileImageModule,
@@ -126,6 +127,10 @@ import configuration from './config/configuration';
     // `/api/admin/ai/*`, the `ai.*` job types and the key stores. No provider key in the environment.
     // Feature modules import this same `AiModule`, never the platform's.
     AiModule,
+    // Sharing (#71): groups, members and invites (`/api/groups`), grants (`/api/grants`) and the
+    // "shared with me" list over `server_profile` and `runbook` (`app-registrations/sharing.ts`).
+    // Links are disabled per resource type. After notifications and the jobs queue it depends on.
+    sharingModule,
     ServerProfilesModule,
     TerminalModule,
     // Runbooks (#61): versioned procedure definitions, target preview and secret parameters.

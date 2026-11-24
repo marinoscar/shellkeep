@@ -22,8 +22,8 @@ Items marked **verify** depend on the tool version you run. Check them against t
 |---|---|---|---|
 | `AGENTS.md` | OpenCode; Claude Code via `CLAUDE.md` | Shared rules: structure, every MANDATORY section, commands | 24 KB (24576 bytes) |
 | `CLAUDE.md` | Claude Code | `@AGENTS.md` import, then Claude-only content: docs table, delegation rules, cloud-session exception | none |
-| `apps/api/AGENTS.md`, `apps/web/AGENTS.md` | OpenCode when working in that folder | Area rules | 6 KB (6144 bytes) each |
-| `apps/api/CLAUDE.md`, `apps/web/CLAUDE.md` | Claude Code | Exactly `@AGENTS.md` | n/a |
+| `apps/api/AGENTS.md`, `apps/web/AGENTS.md`, `apps/cli/AGENTS.md` | OpenCode when working in that folder | Area rules | 6 KB (6144 bytes) each |
+| `apps/api/CLAUDE.md`, `apps/web/CLAUDE.md`, `apps/cli/CLAUDE.md` | Claude Code | Exactly `@AGENTS.md` | n/a |
 | `.claude/agents/*.md` | Claude Code | Subagents: `name`, `description`, optional `model` | none |
 | `.opencode/agents/*.md` | OpenCode | Subagents: `description`, `mode`, `temperature`, `steps`, `permission` | 6 KB each |
 | `.claude/skills/<name>/SKILL.md` | Claude Code; OpenCode also reads it | On-demand recipes (`add-job-type`, `add-settings-page`, `add-notification`, `platform-migration`) | 10 KB each |
