@@ -112,7 +112,7 @@ export function VersionHistoryDrawer({ open, onClose, runbookId }: VersionHistor
         </List>
         {body && (
           <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="subtitle2" sx={{ my: 1 }}>
+            <Typography variant="subtitle2" component="h3" sx={{ my: 1 }}>
               {body.title}
             </Typography>
             <Box component="pre" data-testid="version-body" sx={{ flex: 1, overflow: 'auto', m: 0, p: 1, fontFamily: 'monospace', fontSize: 12, border: 1, borderColor: 'divider', borderRadius: 1 }}>

@@ -232,7 +232,7 @@ export function LogDrawer({ open, onClose, runId, target, stepIndex, onStepChang
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }} role="region" aria-label="Step log">
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', p: 2, pb: 1 }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="h6" component="h2" noWrap>
+          <Typography id="step-log-title" variant="h6" component="h2" noWrap>
             {target?.serverName ?? 'Log'}
           </Typography>
           {step && (
@@ -322,7 +322,7 @@ export function LogDrawer({ open, onClose, runId, target, stepIndex, onStepChang
 
   if (fullScreen) {
     return (
-      <Dialog open={open} onClose={onClose} fullScreen aria-label="Step log">
+      <Dialog open={open} onClose={onClose} fullScreen aria-labelledby="step-log-title">
         {content}
       </Dialog>
     );

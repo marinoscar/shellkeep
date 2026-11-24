@@ -127,7 +127,18 @@ export const getRun = (id: string): Promise<RunDetail> => api.get(`/runbook-runs
 /** The redacted log of one step as text. */
 export async function getStepLog(runId: string, targetId: string, stepIndex: number): Promise<string> {
   const blob = await api.getBlob(`/runbook-runs/${runId}/targets/${targetId}/steps/${stepIndex}/log`);
-  return blob.text();
+  return blobText(blob);
+}
+
+/** A blob's text; through `FileReader` where `Blob.text` is missing (older engines, jsdom). */
+function blobText(blob: Blob): Promise<string> {
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read the log'));
+    reader.readAsText(blob);
+  });
 }
 
 export const cancelRun = (id: string): Promise<{ id: string; status: string }> => api.post(`/runbook-runs/${id}/cancel`);

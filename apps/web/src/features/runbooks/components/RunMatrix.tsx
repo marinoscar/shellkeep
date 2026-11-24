@@ -145,14 +145,14 @@ export function RunMatrix({ targets, onCellClick, height = 'min(70vh, 720px)' }:
             role="columnheader"
             sx={{ position: 'sticky', left: 0, zIndex: 3, bgcolor: 'background.paper', display: 'flex', alignItems: 'center', px: 1.5, borderRight: 1, borderColor: 'divider' }}
           >
-            <Typography variant="subtitle2">Server</Typography>
+            <Typography variant="subtitle2" component="span">Server</Typography>
           </Box>
           {steps.map((step) => {
             const { Icon, label } = stepKindMeta(step.kind);
             return (
               <Box key={step.stepIndex} role="columnheader" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1.5, minWidth: 0 }}>
                 <Icon fontSize="small" sx={{ color: 'text.secondary' }} aria-label={label} />
-                <Typography variant="subtitle2" noWrap title={step.name}>
+                <Typography variant="subtitle2" component="span" noWrap title={step.name}>
                   {step.stepIndex + 1}. {step.name}
                 </Typography>
               </Box>

@@ -31,7 +31,7 @@ export function RunCardList({ targets, onOpen }: { targets: readonly RunTargetRo
           <CardActionArea onClick={() => onOpen(target, focusStep(target))} aria-label={`${target.serverName}: ${statusMeta(target.status).label}. Open log`}>
             <CardContent sx={{ py: 1.5 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Typography variant="subtitle2" noWrap sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2" component="span" noWrap sx={{ minWidth: 0 }}>
                   {target.serverName}
                 </Typography>
                 <StatusChip status={target.status} />
