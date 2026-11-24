@@ -34,6 +34,7 @@ import { ServerProfilesModule } from './server-profiles/server-profiles.module';
 import { TerminalModule } from './terminal/terminal.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { TerminalAiModule } from './terminal-ai/terminal-ai.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 import configuration from './config/configuration';
 
@@ -140,6 +141,8 @@ import configuration from './config/configuration';
     // Runbooks (#61): versioned procedure definitions, target preview and secret parameters.
     RunbooksModule,
     TerminalAiModule,
+    // The Home dashboard (#78): `GET /api/dashboard/summary`, one bounded read over what the caller may see.
+    DashboardModule,
   ],
   providers: [
     // Global validation pipe (Zod)
