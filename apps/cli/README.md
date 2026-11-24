@@ -113,9 +113,29 @@ shellkeep deploy update                               # every later deploy
 shellkeep deploy status                               # 0 healthy, 1 unhealthy, 2 nothing installed
 ```
 
-ShellKeep serves behind the shared host proxy on loopback port **8323**: the stack binds `127.0.0.1:$APP_BIND_PORT`, and the platform's default for that variable is 3535, so pass `--port 8323` or answer `APP_BIND_PORT=8323` (`--answer APP_BIND_PORT=8323`). The deployment lives in `/opt/infra/apps/shellkeep` (`--root` or `--name` choose another).
+ShellKeep serves behind the shared host proxy on loopback port **8323**: the stack binds `127.0.0.1:$APP_BIND_PORT`. The platform's own default for `--port` is 3535, so `shellkeep` adds `--port 8323` to `deploy install`, `deploy doctor` and `deploy status` when you pass none (`src/extensions/default-port.ts`, applied in `src/run.ts`); `--port N` and `--port=N` win. `deploy update` takes no `--port`: it keeps the `APP_BIND_PORT` the deployment's `.env` records. `install --reinstall` and `--resume` also keep the recorded port. The deployment lives in `/opt/infra/apps/shellkeep` (`--root` or `--name` choose another).
 
-The exit codes that matter for scripting: `0` success; `1` a step failed, or `status` found it unhealthy; `2` usage error or nothing installed where asked; `6` a required `doctor` check failed before anything was changed.
+The VPS stack does not run the platform's `stack-agent` container: `vps.compose.yml` builds it from `apps/stack-agent/`, which this repository does not have, so `infra/compose/app.vps.no-stack-agent.compose.yml` switches it off (`src/infra-conformance.test.ts` pins that). The API still needs `STACK_AGENT_TOKEN` set, which the deploy generates; nothing listens for it, so the admin UI's telemetry redeploy action has no agent to call.
+
+Step by step (a fresh server, the database role, updating, certificates, the layout and uninstalling): [docs/deployment/vps.md](../../docs/deployment/vps.md).
+
+To build the CLI on a fresh Ubuntu or Debian server, run `bootstrap-vps.sh` (`curl -fsSLo bootstrap-vps.sh https://raw.githubusercontent.com/marinoscar/shellkeep/main/apps/cli/bootstrap-vps.sh && bash bootstrap-vps.sh`). It installs `gh` and Node when missing, builds the CLI from `/opt/infra/cli/shellkeep` with `install.sh`, creates `/opt/infra/apps`, then runs `deploy doctor`. Options `--repo` (default `marinoscar/shellkeep`), `--ref`, `--yes`, `--no-tui`, `--update` (pull and rebuild the CLI) and `--dry-run`.
+
+### Command reference
+
+| Command | Does |
+|---|---|
+| `deploy doctor [--domain d]` | Read-only prerequisite checks, plus the ShellKeep checks below |
+| `deploy install [--domain d]` | First install: clone, wizard, role, build, migrate, seed, start, proxy and certificate, renewal, verify. `--non-interactive --answers-file f` for unattended; `--skip-proxy` for no proxy and no certificate |
+| `deploy update [--check [--json]]` | Move to the latest revision. `--check` (ShellKeep's) only reports `current`, `latest`, `commitsBehind`, `commits` and `checkedAt`, and changes nothing. `--no-version-bump` for a server that cannot push |
+| `deploy status [--json]` | Health and migration state |
+| `deploy list`, `deploy about [--json]` | The deployments on this server; the record in `deploy-info/info.json` |
+| `deploy certs [--renew]` | Report, or renew inside the 30-day window |
+| `deploy uninstall [--dry-run] --confirm <name>` | Remove a deployment. `--confirm` (ShellKeep's) takes the deployment's own name and is required for a real run; `.env` is first copied to `<apps-root>/<name>.env.<timestamp>.bak` (mode 0600), because it holds `SECRETS_ENCRYPTION_KEY` |
+
+`--check` and `--confirm` are handled before the platform parses the command (`src/extensions/deploy-args.ts`), so they do not appear in `deploy --help`.
+
+The exit codes: `0` success; `1` a step failed, or `status` found it unhealthy; `2` usage error, nothing installed where asked, or `uninstall` without `--confirm`; `3` the server answered with a non-2xx status; `4` it could not be reached; `5` the credential is missing or was rejected (log in again); `6` a required `doctor` check failed before anything was changed. `update --check` exits 0 whether or not an update is waiting, 2 when no deployment is found, 1 when git fails.
 
 ### Checks ShellKeep adds to `doctor`
 
@@ -131,15 +151,34 @@ The VPS host proxy must not buffer or time out the routes the inner nginx alread
 
 ### Adopting an existing install
 
-Servers deployed before the CLI used `infra/deploy/install-shellkeep.sh` and `update.sh` (removed; the old runbook's prose lives here now). They leave `/opt/infra/apps/shellkeep` with a `repo/` checkout, a `.env`, a generated `compose.yml` and `shellkeep.conf`, and no state file. The CLI adopts that layout:
+Servers deployed before the CLI used `infra/deploy/install-shellkeep.sh` and `update.sh` (removed; the old runbook's prose lives here now). They leave `/opt/infra/apps/shellkeep` with a `repo/` checkout, a `.env`, a generated `compose.yml` and a proxy vhost `/opt/infra/proxy/nginx/conf.d/shellkeep.conf`, and no state file. Adoption is **`deploy update`**, not `deploy install`: `install` refuses a directory that already holds a deployment ("A deployment already exists"), while `update` rebuilds the missing record from the checkout and the `.env` and then deploys.
+
+Take a database backup first and read the cutover runbook (issue #84); do not skip either on a server with data.
 
 1. Install the CLI on the server (as root: `curl ... | sudo bash`).
-2. Keep the existing `.env`. Add `APP_BIND_PORT=8323` (the loopback port the scripts bound), and `SSH_EGRESS_TEST_HOST=` if you want that check.
+2. Keep the existing `.env`. Check that it has `APP_BIND_PORT=8323` (the loopback port the scripts bound; the adopted record falls back to 3535 when the file names none), and add `SSH_EGRESS_TEST_HOST=` if you want that check. Keep its `SECRETS_ENCRYPTION_KEY` (see the warning below).
 3. `shellkeep deploy list` shows the deployment as `inferred` (reconstructed from `.env`, with port 8323) and writes nothing.
-4. `shellkeep deploy install --root /opt/infra/apps/shellkeep --domain <domain> --port 8323` points the pipeline at the existing `repo/` checkout and `.env`; it writes `.appctl-deploy.json`. That file name is fixed by the platform and is expected here.
-5. Later deploys are `shellkeep deploy update`. The old `compose.yml` and `shellkeep.conf` are no longer used; the pipeline runs the compose files under `repo/infra/compose/` and publishes the proxy vhost itself.
+4. Run the update against the existing layout:
 
-This procedure reads the layout the scripts left and was exercised against a fixture of it (`src/deploy-adoption.test.ts`: discovery, the port read from `.env`, nothing written by looking), not against a live stack. The full cutover (backup, rehearsal, compose project names that must keep their volumes, rollback) is the cutover runbook, issue #84; do not skip it on a server with data.
+   ```bash
+   shellkeep deploy update --root /opt/infra/apps/shellkeep --no-version-bump
+   ```
+
+   It writes `.appctl-deploy.json` (a name fixed by the platform), runs the compose files under `repo/infra/compose/` and publishes the new vhost `conf.d/<domain>.conf` (the domain comes from `APP_URL`). Add the flags below as the situation needs.
+5. Remove the old vhost, **after** the update succeeded: `rm /opt/infra/proxy/nginx/conf.d/shellkeep.conf`, then reload the proxy (`docker exec <proxy-container> nginx -s reload`, or `nginx -s reload` for a host nginx). The engine only ever writes and removes `<domain>.conf`; it does not know the old file. Both vhosts have the same `server_name`, nginx keeps the first one it reads (`shellkeep.conf` sorts before `<domain>.conf`) and ignores the other with only a warning, so until the old file is gone the new vhost, its stream paths and its renewals have no effect, silently. Removing it after the update (not before) keeps the site served by the old vhost, on the same port 8323, until the new one is validated by `nginx -t` and in place; if the update fails, nothing was lost.
+6. Later deploys are `shellkeep deploy update`. The old `compose.yml` is no longer used.
+
+Flags that adoption usually needs:
+
+- **`--no-version-bump`** when the server cannot push to the repository. Without it the update bumps the patch version in `apps/api`, `apps/web` and `packages/shared`, commits and pushes the bump, which a server without push access to the repository cannot do.
+- **Database role consent.** The platform wants the API to connect as an ordinary role that owns the tables (row-level security does not apply to a superuser). If `.env` names a superuser login, the update asks to create the role (`<app>_app`, or `--app-db-user`). Unattended, pass the consents: `--provision-app-role` (create the role), `--transfer-ownership` (move ownership of the existing database's objects to it) and `--admin-user <login>` for the administrative login that does it, with its password in the environment variable `SHELLKEEP_DB_ADMIN_PASSWORD` (never a flag). `--skip-role-provisioning` creates no role and requires `POSTGRES_USER` to be an ordinary role already; `--allow-superuser` keeps a superuser login and turns tenant isolation off.
+- **`--non-interactive`** never prompts and fails listing anything unresolved, so supply what the prompts would: `--answer KEY=value` (repeat) or `--answers-file`. It needs `--answer SECRETS_ENCRYPTION_KEY=<the value already in .env>`.
+
+> **Warning: `SECRETS_ENCRYPTION_KEY` decrypts every stored SSH credential** (server-profile passwords and keys, and every other credential kept in the encrypted store). Replace it, or let a deploy generate a new one, and all of them become permanently unreadable, with no error until someone connects. Copy the existing value from `.env` into the answer, and keep it in a place that survives the server. A blank answer never overwrites the value on disk.
+
+The terminal WebSocket through the host proxy also needs a platform change (marinoscar/EnterpriseAppBase#1222, fix in progress): until it ships, `/api/terminal/ws` does not work through the host proxy even though the deploy itself succeeds.
+
+This procedure reads the layout the scripts left and was exercised against a fixture of it (`src/deploy-adoption.test.ts`: discovery, the port read from `.env`, `install` refusing the layout, `update` taking it, nothing written by looking), not against a live stack. The cutover runbook is issue #84.
 
 **Rolling back to the scripts.** Revert the CLI change and restore `infra/deploy/*.sh` from that commit; a server deployed with the CLI keeps running. To return to the scripts, run `update.sh` from the restored checkout: it ignores `.appctl-deploy.json`.
 

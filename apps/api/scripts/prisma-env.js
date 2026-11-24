@@ -30,15 +30,16 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 /**
- * Constructs PostgreSQL connection URL from individual environment variables
+ * Builds the PostgreSQL connection URL from the individual POSTGRES_*
+ * variables, ignoring any DATABASE_URL already set.
  */
-function constructDatabaseUrl() {
-  const host = process.env.POSTGRES_HOST || 'localhost';
-  const port = process.env.POSTGRES_PORT || '5432';
-  const user = process.env.POSTGRES_USER || 'postgres';
-  const password = process.env.POSTGRES_PASSWORD || 'postgres';
-  const dbName = process.env.POSTGRES_DB || 'appdb';
-  const ssl = process.env.POSTGRES_SSL === 'true';
+function buildDatabaseUrl(env = process.env) {
+  const host = env.POSTGRES_HOST || 'localhost';
+  const port = env.POSTGRES_PORT || '5432';
+  const user = env.POSTGRES_USER || 'postgres';
+  const password = env.POSTGRES_PASSWORD || 'postgres';
+  const dbName = env.POSTGRES_DB || 'appdb';
+  const ssl = env.POSTGRES_SSL === 'true';
 
   // Construct URL-safe password (encode special characters)
   const encodedPassword = encodeURIComponent(password);
@@ -47,6 +48,15 @@ function constructDatabaseUrl() {
   const sslParam = ssl ? '?sslmode=require' : '';
 
   return `postgresql://${encodeURIComponent(user)}:${encodedPassword}@${host}:${port}/${dbName}${sslParam}`;
+}
+
+/**
+ * The URL prisma.config.ts uses: an already-set DATABASE_URL wins, otherwise
+ * it is built from POSTGRES_*. This lets a bare `npx prisma ...` (which skips
+ * this wrapper, e.g. the platform CLI's migration probe) still find the database.
+ */
+function constructDatabaseUrl(env = process.env) {
+  return env.DATABASE_URL || buildDatabaseUrl(env);
 }
 
 /**
@@ -64,7 +74,7 @@ function main() {
   }
 
   // Construct DATABASE_URL
-  const databaseUrl = constructDatabaseUrl();
+  const databaseUrl = buildDatabaseUrl();
 
   // Set up environment for Prisma CLI
   const env = {
@@ -95,4 +105,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { constructDatabaseUrl };
+module.exports = { constructDatabaseUrl, buildDatabaseUrl };

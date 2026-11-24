@@ -3,6 +3,10 @@ import { CLI_NAME } from '@shellkeep/shared';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { runAttachBridge } from './commands/sessions-attach.js';
+import { planDeployArgs } from './extensions/deploy-args.js';
+import { DeploymentResolutionError, resolveDeployment } from './extensions/deployment.js';
+import { checkForUpdate, renderUpdateCheck, type GitRunner } from './extensions/update-check.js';
+import { withDefaultPort } from './extensions/default-port.js';
 import { takePendingAttach } from './tui/pending-attach.js';
 
 // =============================================================================
@@ -35,7 +39,12 @@ export function describeError(error: unknown): string {
 
 /** Where one invocation writes; the defaults are the process's. */
 export interface RunAppOptions {
+  stdout?: { write(text: string): unknown } | undefined;
   stderr?: { write(text: string): unknown } | undefined;
+  /** The git seam of `deploy update --check`. */
+  runGit?: GitRunner | undefined;
+  cwd?: string | undefined;
+  now?: (() => Date) | undefined;
   /** Builds the CLI; tests substitute a fake to observe what it is handed. */
   createCli?: typeof createCli | undefined;
 }
@@ -48,7 +57,35 @@ export interface RunAppOptions {
  * @returns the exit code.
  */
 export async function runApp(argv: string[], options: RunAppOptions = {}): Promise<number> {
+  const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
+
+  // `deploy install|doctor|status` bind loopback 8323 unless --port says otherwise (#149).
+  // `deploy uninstall` is guarded: typed name, `.env` backup (#150).
+  const plan = planDeployArgs(withDefaultPort(argv), { cli: CLI_NAME, cwd: options.cwd ?? process.cwd(), now: options.now });
+  if (plan.kind === 'refuse') {
+    stderr.write(`${plan.message}\n`);
+    return EXIT.USAGE;
+  }
+  if (plan.kind === 'update-check') {
+    // Read-only: nothing is checked out, built or written (#150).
+    const cwd = options.cwd ?? process.cwd();
+    try {
+      const deployment = resolveDeployment({ ...plan.selector, cwd });
+      const check = await checkForUpdate({
+        deployRoot: deployment.deployRoot,
+        ref: plan.ref,
+        runGit: options.runGit,
+        now: options.now,
+      });
+      stdout.write(plan.json ? `${JSON.stringify(check, null, 2)}\n` : `${renderUpdateCheck(check).join('\n')}\n`);
+      return EXIT.OK;
+    } catch (error) {
+      stderr.write(`${CLI_NAME}: ${(error as Error).message}\n`);
+      return error instanceof DeploymentResolutionError ? EXIT.USAGE : EXIT.FAILURE;
+    }
+  }
+  for (const note of plan.notes) stderr.write(`${note}\n`);
 
   let cli: ReturnType<typeof createCli>;
   try {
@@ -58,7 +95,17 @@ export async function runApp(argv: string[], options: RunAppOptions = {}): Promi
     return exitCodeFor(error);
   }
 
-  const code = await cli.run(argv);
+  for (const step of plan.before) {
+    try {
+      const line = step();
+      if (line !== undefined) stderr.write(`${line}\n`);
+    } catch (error) {
+      stderr.write(`${CLI_NAME}: ${(error as Error).message}\n`);
+      return EXIT.FAILURE;
+    }
+  }
+
+  const code = await cli.run(plan.argv);
 
   const pending = takePendingAttach();
   if (pending !== undefined && code === EXIT.OK) {

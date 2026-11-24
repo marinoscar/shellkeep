@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { screen, waitFor, waitForElementToBeRemoved, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { axe } from 'vitest-axe';
@@ -173,13 +173,16 @@ describe('RunbookBuilderPage', () => {
     expect(within(dialog).getByRole('button', { name: 'Load into builder' })).toBeDisabled();
     await userEvent.type(within(dialog).getByRole('textbox', { name: /What should the runbook do/ }), 'Clean the cache');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Draft' }));
-    expect(await within(dialog).findByText('Recursive delete')).toBeInTheDocument();
+    expect(await within(dialog).findByText('Recursive delete', undefined, { timeout: 5000 })).toBeInTheDocument();
     expect(within(dialog).getByText(/risk medium/)).toBeInTheDocument();
     expect(bodies).toEqual([{ prompt: 'Clean the cache' }]);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Load into builder' }));
-    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Command' })).toHaveValue('rm -rf /var/cache/x'));
+    // The open modal marks the page aria-hidden until its close transition ends,
+    // which can outlast waitFor's 1s default on a slow runner. Wait for removal first.
+    await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Draft with AI' }), { timeout: 5000 });
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Command' })).toHaveValue('rm -rf /var/cache/x'), { timeout: 5000 });
     expect(saves).toBe(0);
-  });
+  }, 20000);
 
   it('hides Draft with AI while AI is off or the viewer lacks ai:use', async () => {
     aiOn.value = false;
