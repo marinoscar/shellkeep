@@ -1,15 +1,19 @@
 /**
- * The signed-in user's terminal preferences and key shortcuts (issues #48,
- * #80), on the settings slice's packaged `useUserSettings`
+ * The signed-in user's terminal preferences and key layout (issues #48, #80,
+ * #165, #169), on the settings slice's packaged `useUserSettings`
  * (`@marinoscar/platform-web/settings/headless`).
  *
  * The API returns the `terminal` and `shortcuts` namespaces only when they are
  * stored; this hook always hands out the resolved values
- * (`resolveTerminalSettings`, `resolveKeyShortcuts`: the defaults for an absent
- * namespace or field, and the legacy `terminal.keyShortcuts` through the shim),
- * so the terminal, the key bar and the scroll buttons never depend on whether a
- * row was written. A save sends the whole namespace with the loaded version as
- * `If-Match`; a 409 refetches and rejects.
+ * (`resolveTerminalSettings`, `resolveKeyLayout`, `resolveKeyOptions`: the
+ * defaults for an absent namespace or field, and a v1 shortcut list, also the
+ * legacy `terminal.keyShortcuts`, converted to a layout). Since #169 nothing
+ * writes the v1 `shortcuts.keyShortcuts` list: a key save carries only
+ * `layout` and `options`, and the API keeps the stored list (the rollback
+ * source of the v2 migration). So the terminal, the key row and the scroll
+ * buttons never depend on whether a row was written. A save sends the whole
+ * `terminal` namespace, or the changed `shortcuts` fields, with the loaded
+ * version as `If-Match`; a 409 refetches and rejects.
  *
  * Every instance shares what it loads or saves (`lib/terminal/settingsSync.ts`),
  * so a change made on the Terminal settings page or by a toolbar toggle reaches
@@ -24,20 +28,16 @@ import {
 import { platformApi } from '../services/api';
 import {
   DEFAULT_TERMINAL_SETTINGS,
-  normalizeKeyShortcuts,
   resolveKeyLayout,
   resolveKeyOptions,
-  resolveKeyShortcuts,
   resolveTerminalSettings,
   terminalPatch,
   type ResolvedTerminalSettings,
 } from '../lib/terminal/settings';
-import { layoutFromLegacyShortcuts } from '../lib/terminal/keys/legacyAdapter';
 import type { KeyLayout, KeyOptions } from '../lib/terminal/keys/keyModel';
 import { publishTerminalSettings, subscribeTerminalSettings } from '../lib/terminal/settingsSync';
 import type {
   ActionShortcuts,
-  KeyShortcut,
   TerminalUserSettingsDocument,
   TerminalUserSettingsUpdate,
 } from '../types/terminal';
@@ -49,7 +49,6 @@ export type ResolvedTerminalUserSettingsDocument = Omit<
 > & {
   terminal: ResolvedTerminalSettings;
   shortcuts: {
-    keyShortcuts: KeyShortcut[];
     actions?: ActionShortcuts;
     /** The v2 layout and options, resolved (#165). */
     layout: KeyLayout;
@@ -57,10 +56,16 @@ export type ResolvedTerminalUserSettingsDocument = Omit<
   };
 };
 
-/** A change to the terminal preferences and/or the shortcut list. */
+/** A change to the key layout and/or its options (#169). */
+export interface KeyLayoutChange {
+  layout?: KeyLayout;
+  options?: KeyOptions;
+}
+
+/** A change to the terminal preferences and/or the keys. */
 export interface TerminalSettingsChange {
   terminal?: Partial<ResolvedTerminalSettings>;
-  shortcuts?: { keyShortcuts: KeyShortcut[]; layout?: KeyLayout; options?: KeyOptions };
+  shortcuts?: KeyLayoutChange;
 }
 
 export interface UseTerminalSettingsResult {
@@ -68,8 +73,6 @@ export interface UseTerminalSettingsResult {
   settings: ResolvedTerminalUserSettingsDocument | null;
   /** The resolved terminal preferences, or `null` until loaded. */
   terminal: ResolvedTerminalSettings | null;
-  /** The resolved key shortcuts, or `null` until loaded. */
-  keyShortcuts: KeyShortcut[] | null;
   /** The v2 key layout (#165), resolved: stored, else the v1 list converted, else the defaults. */
   keyLayout: KeyLayout | null;
   /** The key bar options (#165), resolved. */
@@ -81,14 +84,12 @@ export interface UseTerminalSettingsResult {
   error: string | null;
   /** Saves `changes` over the current terminal preferences. */
   updateTerminal: (changes: Partial<ResolvedTerminalSettings>) => Promise<void>;
-  /** Replaces the key shortcut list (stored in the `shortcuts` namespace). */
-  updateShortcuts: (keyShortcuts: readonly KeyShortcut[]) => Promise<void>;
   /**
    * Saves the key layout and/or options (#169): the PATCH carries only `layout`
    * and `options` under `shortcuts`, never `keyShortcuts` (the API keeps the
    * stored v1 list and the rebound actions).
    */
-  updateKeys: (change: { layout?: KeyLayout; options?: KeyOptions }) => Promise<void>;
+  updateKeys: (change: KeyLayoutChange) => Promise<void>;
   /** Saves both namespaces of `change` in one write. */
   updateSettings: (change: TerminalSettingsChange) => Promise<void>;
   /** Reloads the document. */
@@ -136,26 +137,23 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
     () => (stored ? resolveTerminalSettings(stored.terminal) : null),
     [stored],
   );
-  const keyShortcuts = useMemo(() => (stored ? resolveKeyShortcuts(stored) : null), [stored]);
-
   const keyLayout = useMemo(() => (stored ? resolveKeyLayout(stored) : null), [stored]);
   const keyOptions = useMemo(() => (stored ? resolveKeyOptions(stored) : null), [stored]);
 
   const settings = useMemo<ResolvedTerminalUserSettingsDocument | null>(
     () =>
-      stored && terminal && keyShortcuts && keyLayout && keyOptions
+      stored && terminal && keyLayout && keyOptions
         ? {
             ...stored,
             terminal,
             shortcuts: {
-              keyShortcuts,
               layout: keyLayout,
               options: keyOptions,
               ...(stored.shortcuts?.actions ? { actions: stored.shortcuts.actions } : {}),
             },
           }
         : null,
-    [stored, terminal, keyShortcuts, keyLayout, keyOptions],
+    [stored, terminal, keyLayout, keyOptions],
   );
 
   const updateSettings = useCallback(
@@ -165,23 +163,15 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
         body.terminal = terminalPatch(terminal ?? DEFAULT_TERMINAL_SETTINGS, change.terminal);
       }
       if (change.shortcuts) {
-        // Writing the list must not drop the rebound app actions stored beside it.
-        const keyShortcuts = normalizeKeyShortcuts(change.shortcuts.keyShortcuts);
-        // A stored v2 layout would otherwise outlive the list the bar is fed from:
-        // the legacy editor's list becomes the layout too (#165), until #169.
-        const layout =
-          change.shortcuts.layout ?? (stored?.shortcuts?.layout ? layoutFromLegacyShortcuts(keyShortcuts) : undefined);
-        const options = change.shortcuts.options ?? stored?.shortcuts?.options;
-        body.shortcuts = {
-          keyShortcuts,
-          ...(stored?.shortcuts?.actions ? { actions: stored.shortcuts.actions } : {}),
-          ...(layout ? { layout } : {}),
-          ...(options ? { options } : {}),
-        };
+        // Only what changed: the namespace merge keeps `keyShortcuts` and the rebound actions.
+        const shortcuts: KeyLayoutChange = {};
+        if (change.shortcuts.layout) shortcuts.layout = change.shortcuts.layout;
+        if (change.shortcuts.options) shortcuts.options = change.shortcuts.options;
+        body.shortcuts = shortcuts;
       }
       await patch(body);
     },
-    [patch, terminal, stored],
+    [patch, terminal],
   );
 
   const updateTerminal = useCallback(
@@ -189,26 +179,14 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
     [updateSettings],
   );
 
-  const updateShortcuts = useCallback(
-    (list: readonly KeyShortcut[]) => updateSettings({ shortcuts: { keyShortcuts: [...list] } }),
-    [updateSettings],
-  );
-
   const updateKeys = useCallback(
-    async (change: { layout?: KeyLayout; options?: KeyOptions }) => {
-      const shortcuts: { layout?: KeyLayout; options?: KeyOptions } = {};
-      if (change.layout) shortcuts.layout = change.layout;
-      if (change.options) shortcuts.options = change.options;
-      // The namespace's merge keeps every field the patch leaves out.
-      await patch({ shortcuts });
-    },
-    [patch],
+    (change: KeyLayoutChange) => updateSettings({ shortcuts: change }),
+    [updateSettings],
   );
 
   return {
     settings,
     terminal,
-    keyShortcuts,
     keyLayout,
     keyOptions,
     actionShortcuts: stored?.shortcuts?.actions ?? {},
@@ -216,7 +194,6 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
     isSaving,
     error,
     updateTerminal,
-    updateShortcuts,
     updateKeys,
     updateSettings,
     refresh,

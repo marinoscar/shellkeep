@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { mockUserSettings } from '../mocks/data';
 import { useTerminalSettings } from '../../hooks/useTerminalSettings';
-import { DEFAULT_KEY_SHORTCUTS, DEFAULT_TERMINAL_SETTINGS } from '../../lib/terminal/settings';
+import { DEFAULT_TERMINAL_SETTINGS } from '../../lib/terminal/settings';
 import type { KeyShortcut } from '../../types/terminal';
 import { DEFAULT_KEY_LAYOUT, DEFAULT_KEY_OPTIONS } from '../../lib/terminal/keys/keyModel';
 import { fromLegacyShortcuts, layoutFromLegacyShortcuts } from '../../lib/terminal/keys/legacyAdapter';
@@ -21,11 +21,12 @@ describe('useTerminalSettings', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.terminal).toEqual(DEFAULT_TERMINAL_SETTINGS);
-    expect(result.current.keyShortcuts).toEqual(DEFAULT_KEY_SHORTCUTS);
-    expect(result.current.settings?.shortcuts.keyShortcuts).toHaveLength(9);
+    expect(result.current.keyLayout).toEqual(DEFAULT_KEY_LAYOUT);
+    // The v1 list is not handed out any more (#169).
+    expect(result.current.settings?.shortcuts).not.toHaveProperty('keyShortcuts');
   });
 
-  it('reads the shortcuts namespace', async () => {
+  it('converts a stored v1 list into a layout', async () => {
     server.use(
       http.get('*/api/user-settings', () =>
         HttpResponse.json({
@@ -36,7 +37,7 @@ describe('useTerminalSettings', () => {
     const { result } = renderHook(() => useTerminalSettings());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.keyShortcuts).toEqual([custom]);
+    expect(result.current.keyLayout).toEqual(layoutFromLegacyShortcuts([custom]));
   });
 
   it('reads a legacy terminal.keyShortcuts payload through the shim (#80)', async () => {
@@ -51,7 +52,7 @@ describe('useTerminalSettings', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.terminal).toEqual({ ...DEFAULT_TERMINAL_SETTINGS, showScrollButtons: false });
-    expect(result.current.keyShortcuts).toEqual([custom]);
+    expect(result.current.keyLayout).toEqual(layoutFromLegacyShortcuts([custom]));
   });
 
   it('saves the whole namespace with If-Match and adopts the answer', async () => {
@@ -78,27 +79,6 @@ describe('useTerminalSettings', () => {
     expect(result.current.terminal?.showScrollButtons).toBe(false);
   });
 
-  it('saves the shortcut list to the shortcuts namespace', async () => {
-    let body: unknown = null;
-    server.use(
-      http.patch('*/api/user-settings', async ({ request }) => {
-        body = await request.json();
-        return HttpResponse.json({
-          data: { ...mockUserSettings, ...(body as object), version: mockUserSettings.version + 1 },
-        });
-      }),
-    );
-    const { result } = renderHook(() => useTerminalSettings());
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    await act(async () => {
-      await result.current.updateShortcuts([custom]);
-    });
-
-    expect(body).toEqual({ shortcuts: { keyShortcuts: [custom] } });
-    expect(result.current.keyShortcuts).toEqual([custom]);
-  });
-
   it('returns the resolved v2 layout and options beside the legacy list (#165)', async () => {
     const { result } = renderHook(() => useTerminalSettings());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -108,38 +88,16 @@ describe('useTerminalSettings', () => {
     expect(result.current.settings?.shortcuts.layout).toEqual(DEFAULT_KEY_LAYOUT);
   });
 
-  it('feeds the bar from a stored layout and rewrites it when the legacy editor saves', async () => {
-    let body: unknown = null;
+  it('reads a stored layout as it is, whatever the v1 list holds', async () => {
+    const layout = fromLegacyShortcuts([custom]);
     server.use(
       http.get('*/api/user-settings', () =>
-        HttpResponse.json({
-          data: {
-            ...mockUserSettings,
-            shortcuts: { keyShortcuts: [custom], layout: fromLegacyShortcuts([custom]) },
-          },
-        }),
+        HttpResponse.json({ data: { ...mockUserSettings, shortcuts: { keyShortcuts: [], layout } } }),
       ),
-      http.patch('*/api/user-settings', async ({ request }) => {
-        body = await request.json();
-        return HttpResponse.json({
-          data: { ...mockUserSettings, ...(body as object), version: mockUserSettings.version + 1 },
-        });
-      }),
     );
     const { result } = renderHook(() => useTerminalSettings());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.keyShortcuts).toEqual([custom]);
-
-    const other: KeyShortcut = { ...custom, id: '22222222-2222-4222-8222-222222222202', label: 'Ctrl+T' };
-    await act(async () => {
-      await result.current.updateShortcuts([custom, other]);
-    });
-
-    expect(body).toEqual({
-      shortcuts: { keyShortcuts: [custom, other], layout: layoutFromLegacyShortcuts([custom, other]) },
-    });
-    // the bar is fed from the layout: the default keys, then the user's own
-    expect(result.current.keyShortcuts.slice(-2)).toEqual([custom, other]);
+    expect(result.current.keyLayout).toEqual(layout);
   });
 
   it('saves the key layout and options without keyShortcuts (#169)', async () => {
@@ -203,7 +161,7 @@ describe('useTerminalSettings', () => {
 
     await expect(
       act(async () => {
-        await result.current.updateShortcuts([custom]);
+        await result.current.updateKeys({ layout: DEFAULT_KEY_LAYOUT });
       }),
     ).rejects.toThrow(/updated elsewhere/i);
   });
