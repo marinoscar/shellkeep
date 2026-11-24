@@ -148,7 +148,7 @@ Three features reach a model only through `TerminalContextService.forAi` (consen
 
 ### 3.5a Remote files
 
-A file on a server is listed, inspected, read as a text window or downloaded over SFTP (`apps/api/src/files/`, routes under `server-profiles/:id/files`). Access is the terminal rule: `sessions:write` plus the `connect` access check on every request. Downloads use a single-use, 60-second token. The admin Files card sets the size caps and rate limits. Audit event `server_profile.file_download`. [specs/files.md](specs/files.md).
+A file on a server is listed, inspected, read as a text window, downloaded or uploaded over SFTP (`apps/api/src/files/`, routes under `server-profiles/:id/files`). Access is the terminal rule: `sessions:write` plus the `connect` access check on every request. Downloads use a single-use, 60-second token; an upload streams the raw request body to a temp name and renames it. The admin Files card sets the size caps and rate limits. Audit events `server_profile.file_download` and `server_profile.file_upload`. [specs/files.md](specs/files.md).
 
 ### 3.6 Fleet Runbooks
 

@@ -1,12 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
+import type { Readable } from 'node:stream';
+import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Principal } from '@marinoscar/platform-api/core';
 import { Auth, CurrentPrincipal } from '@marinoscar/platform-api/identity';
 
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { HostKeyError } from '../ssh/host-key.error';
 import { hostKeyErrorToHttp } from '../ssh/host-key-http';
-import { DownloadTokenBodyDto, FilesContentQueryDto, FilesPathQueryDto, FilesStatQueryDto } from './dto/files.dto';
+import { DownloadTokenBodyDto, FilesContentQueryDto, FilesPathQueryDto, FilesStatQueryDto, UploadQueryDto } from './dto/files.dto';
 import { FilesService } from './files.service';
 
 const ACCESS =
@@ -81,5 +83,48 @@ export class FilesController {
   @ApiResponse({ status: 429, description: 'FILES_RATE_LIMITED' })
   downloadToken(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal, @Body() body: DownloadTokenBodyDto) {
     return guarded(id, () => this.files.issueDownloadToken(id, principal, body));
+  }
+
+  @Post('upload')
+  @Auth({ permissions: [PERMISSIONS.SESSIONS_WRITE] })
+  @ApiOperation({
+    summary: 'Upload one file into a folder on the server, streamed over SFTP',
+    description:
+      `${ACCESS} The body is the file's raw bytes (\`Content-Type: application/octet-stream\`), never buffered: it streams to a ` +
+      'temporary name in the target folder and is renamed onto `name` when complete. `path` is the target folder, `name` one file name ' +
+      '(no `/`, NUL, control characters, `.` or `..`; at most 200 bytes). The size is capped by `files.uploadMaxBytes` (the Content-Length ' +
+      'is checked up front and the bytes are counted while streaming; an overflow removes the temp file). An existing target is a ' +
+      '409 FILE_EXISTS (with its size and mtime) unless `overwrite=true`. A client abort or error removes the temp file. Rate limited per user ' +
+      '(the download budget and concurrency).',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiConsumes('application/octet-stream')
+  @ApiBody({ description: 'The raw file bytes', schema: { type: 'string', format: 'binary' } })
+  @ApiResponse({ status: 201, description: '`{ path, name, size, overwritten }`' })
+  @ApiResponse({ status: 400, description: 'FILE_NAME_INVALID, FILE_NOT_A_DIRECTORY, FILE_NOT_A_FILE (a folder has that name)' })
+  @ApiResponse({ status: 404, description: 'Server, session or folder not found, or no right to connect' })
+  @ApiResponse({ status: 409, description: 'FILE_EXISTS (`details` carry the existing size and mtime)' })
+  @ApiResponse({ status: 413, description: 'FILE_TOO_LARGE' })
+  @ApiResponse({ status: 415, description: 'The body is not application/octet-stream' })
+  @ApiResponse({ status: 429, description: 'FILES_RATE_LIMITED' })
+  upload(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentPrincipal() principal: Principal,
+    @Query() query: UploadQueryDto,
+    @Req() req: FastifyRequest,
+  ) {
+    const declared = req.headers['content-length'];
+    const contentLength = declared !== undefined && /^\d+$/.test(declared) ? Number(declared) : null;
+    return guarded(id, () =>
+      this.files.upload(id, principal, {
+        path: query.path,
+        name: query.name,
+        overwrite: query.overwrite,
+        sessionId: query.sessionId,
+        contentType: req.headers['content-type'],
+        contentLength,
+        body: req.raw as Readable,
+      }),
+    );
   }
 }

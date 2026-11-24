@@ -16,6 +16,7 @@ const stub = {
   stat: jest.fn().mockResolvedValue({}),
   content: jest.fn().mockResolvedValue({ text: '', offset: 0, length: 0, size: 0, eof: true }),
   issueDownloadToken: jest.fn().mockResolvedValue({ token: 't', expiresAt: new Date().toISOString() }),
+  upload: jest.fn().mockRejectedValue(new NotFoundException('x')),
   openDownload: jest.fn().mockRejectedValue(new NotFoundException('x')),
 };
 
@@ -35,6 +36,7 @@ describe('files routes RBAC', () => {
     ['list', (a) => a.get(`/api/server-profiles/${ID}/files`)],
     ['stat', (a) => a.get(`/api/server-profiles/${ID}/files/stat?path=~`)],
     ['content', (a) => a.get(`/api/server-profiles/${ID}/files/content?path=a`)],
+    ['upload', (a) => a.post(`/api/server-profiles/${ID}/files/upload?path=~&name=a.txt`)],
     ['download-token', (a) => a.post(`/api/server-profiles/${ID}/files/download-token`).send({ path: 'a' })],
   ];
 

@@ -38,4 +38,16 @@ describe('FilesRateLimiter', () => {
     expect(() => limiter.acquireStream('u1', 2)).not.toThrow();
     expect(() => limiter.acquireStream('u1', 2)).toThrow();
   });
+
+  it('counts uploads and downloads in separate slots and budgets', () => {
+    limiter.acquireStream('u1', 1, 'download');
+    expect(() => limiter.acquireStream('u1', 1, 'download')).toThrow();
+    const up = limiter.acquireStream('u1', 1, 'upload');
+    expect(() => limiter.acquireStream('u1', 1, 'upload')).toThrow(expect.objectContaining({ status: 429 }));
+    up();
+    expect(() => limiter.acquireStream('u1', 1, 'upload')).not.toThrow();
+    limiter.hit('u1', 'upload', 1);
+    expect(() => limiter.hit('u1', 'upload', 1)).toThrow();
+    expect(() => limiter.hit('u1', 'download', 1)).not.toThrow();
+  });
 });

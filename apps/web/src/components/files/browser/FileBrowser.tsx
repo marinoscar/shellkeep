@@ -17,6 +17,11 @@
  * - Size badges are hints from the API's default caps (a non-admin cannot read
  *   the files settings); the viewer asks the API for the real answer.
  *
+ * - Upload (issue #157): the Upload button and drag-and-drop onto the folder
+ *   list send files into the folder shown, through `useFileUploads` (queue,
+ *   progress, Cancel, the size cap, Replace or Skip on a 409). Offered only to a
+ *   holder of `sessions:write`, like the rest of the files UI.
+ *
  * It reads no breakpoint: its container decides the size.
  */
 import {
@@ -28,6 +33,8 @@ import {
   type FocusEvent,
   type FormEvent,
   type KeyboardEvent,
+  type ChangeEvent,
+  type DragEvent,
   type MouseEvent,
 } from 'react';
 import {
@@ -68,12 +75,15 @@ import {
   LinkOffOutlined as BrokenLinkIcon,
   MoreVert as MoreIcon,
   Refresh as RefreshIcon,
+  UploadFileOutlined as UploadIcon,
   ReceiptLongOutlined as LogIcon,
   Visibility as ShowHiddenIcon,
   VisibilityOff as HideHiddenIcon,
   VisibilityOutlined as OpenIcon,
   HelpOutlineOutlined as OtherIcon,
 } from '@mui/icons-material';
+import { usePermissions } from '@marinoscar/platform-web/identity/headless';
+import { TERMINAL_WRITE_PERMISSION } from '../../terminal/TerminalAccessGate';
 import { useOpenFile } from '../viewer/FileViewerProvider';
 import { downloadRemoteFile, type RemoteDirEntry } from '../../../services/files-api';
 import {
@@ -91,7 +101,10 @@ import {
 } from '../../../lib/files/browser';
 import { formatSize } from '../../../lib/files/viewer/text';
 import { relativeTime } from '../../../lib/servers/relativeTime';
+import { DEFAULT_FILES_SYSTEM_SETTINGS } from '../../../lib/files/system-settings';
+import { UploadPanel } from './UploadPanel';
 import { useDirectoryListing } from './useDirectoryListing';
+import { useFileUploads } from './useFileUploads';
 
 /** Rows rendered before "Show more" (a listing holds up to 5000). */
 export const FILE_BROWSER_PAGE_ROWS = 500;
@@ -187,6 +200,69 @@ export function FileBrowser({
   const currentDir = requestPath.startsWith('/') ? requestPath : listedDir;
   const [pathInput, setPathInput] = useState(currentDir);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // Uploads go into the folder that is listed (an absolute path), never a half-loaded one. The cap is
+  // the API's default: a non-admin cannot read the files settings, and the API enforces the real one.
+  const { hasPermission } = usePermissions();
+  const canUpload = hasPermission(TERMINAL_WRITE_PERMISSION);
+  const uploadDir = error ? '' : listedDir;
+  const listedDirRef = useRef(listedDir);
+  listedDirRef.current = listedDir;
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  const uploads = useFileUploads({
+    profileId,
+    sessionId,
+    maxBytes: DEFAULT_FILES_SYSTEM_SETTINGS.uploadMaxBytes,
+    onIdle: (dirs) => {
+      if (dirs.includes(listedDirRef.current)) refreshRef.current();
+    },
+  });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
+  const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
+  const onDragEnter = (event: DragEvent) => {
+    if (!canUpload || !hasFiles(event)) return;
+    event.preventDefault();
+    dragDepth.current += 1;
+    setDragging(true);
+  };
+  const onDragOver = (event: DragEvent) => {
+    if (!canUpload || !hasFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = uploadDir ? 'copy' : 'none';
+  };
+  const onDragLeave = (event: DragEvent) => {
+    if (!canUpload || !hasFiles(event)) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragging(false);
+  };
+  const onDrop = (event: DragEvent) => {
+    if (!canUpload || !hasFiles(event)) return;
+    event.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    if (!uploadDir) {
+      setNotice({ message: 'Wait for the folder to load before uploading', severity: 'error' });
+      return;
+    }
+    const dropped = Array.from(event.dataTransfer.files);
+    // A dropped folder arrives as a pseudo-file; only files are uploaded.
+    const folders = new Set<string>();
+    Array.from(event.dataTransfer.items ?? []).forEach((item) => {
+      const entry = (item as DataTransferItem & { webkitGetAsEntry?: () => { isDirectory: boolean; name: string } | null }).webkitGetAsEntry?.();
+      if (entry?.isDirectory) folders.add(entry.name);
+    });
+    const files = dropped.filter((file) => !folders.has(file.name));
+    if (folders.size > 0) setNotice({ message: 'Folders are not uploaded; drop files instead', severity: 'error' });
+    uploads.enqueue(files, uploadDir);
+  };
+  const onFilesChosen = (event: ChangeEvent<HTMLInputElement>) => {
+    const chosen = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (uploadDir) uploads.enqueue(chosen, uploadDir);
+  };
   const rowRefs = useRef(new Map<string, HTMLElement>());
 
   // The path field shows where the listing is, unless the user is typing.
@@ -359,7 +435,11 @@ export function FileBrowser({
       aria-label={ariaLabel}
       data-testid="file-browser"
       onFocus={onRootFocus}
-      sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%', minWidth: 0 }}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%', minWidth: 0, position: 'relative' }}
     >
       {/* Location: Up, the editable path, Refresh, then the breadcrumbs. */}
       <Box sx={{ display: 'grid', gap: 1, px: 1.5, pt: 1.5, pb: 1, borderBottom: 1, borderColor: 'divider' }}>
@@ -386,6 +466,27 @@ export function FileBrowser({
               <RefreshIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+          {canUpload && (
+            <>
+              <Tooltip title="Upload files to this folder">
+                <span>
+                  <IconButton size="small" aria-label="Upload files" disabled={!uploadDir} onClick={() => fileInputRef.current?.click()}>
+                    <UploadIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              {/* The system file picker (a camera roll or Files app on a phone); several files at once. */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                hidden
+                aria-label="Choose files to upload"
+                data-testid="upload-input"
+                onChange={onFilesChosen}
+              />
+            </>
+          )}
         </Box>
         {crumbs.length > 0 && (
           <Breadcrumbs maxItems={5} itemsAfterCollapse={3} aria-label="Current folder" sx={{ typography: 'caption', minWidth: 0 }}>
@@ -491,6 +592,7 @@ export function FileBrowser({
       <Box
         role="list"
         aria-label={listedDir ? `Files in ${listedDir}` : 'Files'}
+        aria-describedby={canUpload ? 'file-browser-drop-hint' : undefined}
         onKeyDown={onListKeyDown}
         sx={{ flex: 1, minHeight: 0, overflowY: 'auto', pb: 1 }}
       >
@@ -604,6 +706,45 @@ export function FileBrowser({
           </Box>
         )}
       </Box>
+
+      {canUpload && (
+        <>
+          <Box id="file-browser-drop-hint" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+            Drop files here to upload them to this folder.
+          </Box>
+          {dragging && (
+            <Box
+              role="status"
+              data-testid="upload-drop-zone"
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 2,
+                display: 'grid',
+                placeItems: 'center',
+                textAlign: 'center',
+                p: 2,
+                border: 2,
+                borderStyle: 'dashed',
+                borderColor: 'primary.main',
+                bgcolor: 'action.hover',
+                backdropFilter: 'blur(2px)',
+                pointerEvents: 'none',
+              }}
+            >
+              <Typography variant="body2">{uploadDir ? `Drop files to upload to ${uploadDir}` : 'Wait for the folder to load'}</Typography>
+            </Box>
+          )}
+          <UploadPanel
+            items={uploads.items}
+            announcement={uploads.announcement}
+            conflict={uploads.conflict}
+            onCancel={uploads.cancel}
+            onClearFinished={uploads.clearFinished}
+            onResolveConflict={uploads.resolveConflict}
+          />
+        </>
+      )}
 
       <Menu
         open={Boolean(menu)}

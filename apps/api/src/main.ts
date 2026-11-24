@@ -12,6 +12,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
+import { registerFileUploadBodyParser } from './files/upload-body-parser';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { verifyEncryptionKeyAtStartup } from '@marinoscar/platform-api/core';
 import { registerRequestSpanAttributes } from '@marinoscar/platform-api/otel-core';
@@ -101,6 +102,8 @@ async function bootstrap() {
   // only for a storage driver with no presigned URLs) receives its body as the unread request
   // stream. A no-op for every other route. Before `listen()`.
   registerStoragePartBodyParser(app.getHttpAdapter().getInstance());
+  // The raw octet-stream body of a file upload to a server (`POST /api/server-profiles/:id/files/upload`).
+  registerFileUploadBodyParser(app.getHttpAdapter().getInstance());
 
   // Global prefix for all routes
   app.setGlobalPrefix('api');

@@ -19,6 +19,7 @@ SFTP over `SshConnectionFactory` (host key verified before any credential). One 
 | `GET .../files/content?path=&offset=&length=` | `{ text, offset, length, size, eof }` |
 | `POST .../files/download-token` `{ path }` | `{ token, expiresAt }` |
 | `GET files/download/:token` | the bytes: `Content-Length`, `Content-Disposition: attachment; filename*=UTF-8''...`, never buffered |
+| `POST .../files/upload?path=&name=&overwrite=` | `{ path, name, size, overwritten }` (201); the body is the raw file, see [Upload](#upload) |
 
 `sessionId` (optional, on list, stat, content and the token body) resolves a relative path against that session's tmux `#{pane_current_path}` (`SessionHistoryService.currentPath`), and `~` against the login home (`realpath('.')`). The session must be the caller's and on that profile. Without it a relative path is relative to home.
 
@@ -32,15 +33,35 @@ The token is random (256 bits), stored only as a SHA-256 in memory (the API is a
 
 ## Settings (`files`, admin)
 
-`fullViewMaxBytes` 2 MB, `pagedViewMaxBytes` 200 MB, `downloadMaxBytes` 2 GB, `uploadMaxBytes` 100 MB (for #157), `sftpTimeoutSeconds` 30, and per user `contentRequestsPerMinute` 120, `downloadsPerMinute` 20, `maxConcurrentDownloads` 3. Read on every request. The sizes must satisfy `fullViewMaxBytes <= pagedViewMaxBytes <= downloadMaxBytes`: the stored and PUT schemas carry the rule, and the platform validates a PATCH's merged value against the stored schema, so all three paths answer 400 naming the field out of order.
+`fullViewMaxBytes` 2 MB, `pagedViewMaxBytes` 200 MB, `downloadMaxBytes` 2 GB, `uploadMaxBytes` 100 MB (uploads, [Upload](#upload)), `sftpTimeoutSeconds` 30, and per user `contentRequestsPerMinute` 120, `downloadsPerMinute` 20, `maxConcurrentDownloads` 3. Read on every request. The sizes must satisfy `fullViewMaxBytes <= pagedViewMaxBytes <= downloadMaxBytes`: the stored and PUT schemas carry the rule, and the platform validates a PATCH's merged value against the stored schema, so all three paths answer 400 naming the field out of order.
 
 ## Error codes
 
-`FILE_PATH_INVALID` 400, `FILE_RANGE_INVALID` 400, `FILE_NOT_A_FILE` 400, `FILE_NOT_A_DIRECTORY` 400, `FILE_NOT_FOUND` 404, `FILE_DOWNLOAD_NOT_FOUND` 404, `FILE_PERMISSION_DENIED` 403, `FILE_CHANGED` 409, `FILE_TOO_LARGE` 413, `FILE_IS_BINARY` 415, `FILES_RATE_LIMITED` 429, `SFTP_UNAVAILABLE` 502, `SFTP_FAILED` 502, `SFTP_TIMEOUT` 504, plus the host-key 409s of the other SSH routes.
+`FILE_PATH_INVALID` 400, `FILE_RANGE_INVALID` 400, `FILE_NOT_A_FILE` 400, `FILE_NOT_A_DIRECTORY` 400, `FILE_NAME_INVALID` 400, `FILE_NOT_FOUND` 404, `FILE_DOWNLOAD_NOT_FOUND` 404, `FILE_PERMISSION_DENIED` 403, `FILE_EXISTS` 409, `FILE_CHANGED` 409, `FILE_TOO_LARGE` 413, `FILE_IS_BINARY` 415, `FILES_RATE_LIMITED` 429, `SFTP_UNAVAILABLE` 502, `SFTP_FAILED` 502, `SFTP_TIMEOUT` 504, plus the host-key 409s of the other SSH routes.
 
 ## Never
 
 File content is never logged, traced or sent to AI. Spans carry the profile id, never the path.
+
+## Upload
+
+Issue #157. `POST server-profiles/:id/files/upload?path=<target folder>&name=<file name>&overwrite=false[&sessionId=]`, body `application/octet-stream` (the file's bytes; not multipart). Code: `FilesService.upload`, `SftpSession` write calls, `upload-body-parser.ts` (the Fastify parser that hands the request through unread, for this route only; registered in `main.ts`), `upload-name.ts`.
+
+**Streaming.** The request body is read as a stream and written with SFTP WRITE requests (up to 16 in flight, so speed is not one round trip per chunk) to a temporary file in the target folder named `.<name>.shellkeep-upload-<12 hex>`, opened exclusively (`wx`). When the body ends the handle is closed and the temp file is renamed onto `name`; a reader never sees a half-written file, and memory use is bounded by the write window, not the file. The SFTP connection has an idle deadline (`sftpTimeoutSeconds` without a chunk or an acknowledgement), not a total one, so a slow, long upload is fine.
+
+**Cap.** `uploadMaxBytes` is read on every request. `Content-Length`, when sent, is checked before any connection is opened; the bytes are also counted while streaming. Over the cap the upload stops and the temp file is removed: `FILE_TOO_LARGE` (413), nothing left behind.
+
+**Existing target.** Without `overwrite=true` an existing file (or link) of that name is `FILE_EXISTS` (409) with `details` `{ name, path, size, mtime }`, so the UI can ask. The check is repeated at rename time (the standard SFTP RENAME never replaces), so a file created while streaming is the same 409. With `overwrite=true` the temp file replaces it: atomically with OpenSSH's `posix-rename` extension when the server offers it, else by removing the target and then renaming (a short window with no file). A folder with that name is `FILE_NOT_A_FILE` (400) either way.
+
+**Cleanup.** Any error, a client abort, a refused cap or a timeout closes the handle and removes the temp file (best effort: if the SSH connection itself is gone the temp file stays; it is dot-named and carries a recognisable suffix).
+
+**Name.** `name` is one path segment: not empty, not `.` or `..`, no `/`, NUL or other control characters, at most 200 UTF-8 bytes (`FILE_NAME_INVALID`, 400). `path` goes only to SFTP calls (resolved like every files path: absolute, `~`, or relative to the session's directory or home).
+
+**Access and limits.** The same as the other routes: `sessions:write` plus the connect rule, a 404 otherwise, checked before the media type, name or size are looked at. Uploads count against the per-user `downloadsPerMinute` (a separate counter) and `maxConcurrentDownloads` (a separate slot count), so there is no new setting. A body that is not `application/octet-stream` is 415.
+
+**Audit.** Every completed upload is `server_profile.file_upload` (`path`, `size`, `hostname`). File content is never logged, traced or audited, and spans carry the profile id only.
+
+**Web.** See [File browser](#file-browser): the Upload button and drag-and-drop.
 
 ## Viewer
 
@@ -90,3 +111,5 @@ Issue #156. Code: `apps/web/src/components/files/browser/` (`FileBrowser`, `useD
 **Guardrails.** The size badges are hints from the default caps (`DEFAULT_FILES_SYSTEM_SETTINGS`, 2 MB and 200 MB), since non-admins cannot read the `files` settings: "Large" above the full-view cap (the viewer pages it), "Download only" above the paged cap. The viewer asks the API for the real answer. Listing errors are explained by code: `SFTP_UNAVAILABLE`, `FILE_PERMISSION_DENIED`, `FILE_NOT_FOUND`, `FILE_NOT_A_DIRECTORY`, timeouts and rate limits, each with Retry. A listing the API truncated (5000 entries) says so; the browser renders 500 rows at a time.
 
 **From the terminal.** The file link menu's "Show in file browser" ([terminal.md section 5.6](terminal.md#56-file-links-in-terminal-output)) opens the panel at the file's folder with the file selected (a folder link opens the folder), switching first to a pane on that link's server. Follow is off for a reveal; the toolbar button opens the panel following the terminal again.
+
+**Upload.** Issue #157. An Upload button (toolbar, next to Refresh, opens the system file picker: several files, and on a phone the Files app or camera roll) and drag-and-drop onto the browser send files into the folder listed (`useFileUploads`, `UploadPanel`, `uploadRemoteFile` in `services/files-api.ts`). Only holders of `sessions:write` see it; it is disabled while a folder is loading or failed. Files queue and send one or two at a time over `XMLHttpRequest` (for upload progress) with a per-file progress bar and a Cancel button (an `AbortController`; the API removes the partial file). A file over the 100 MB default cap (`DEFAULT_FILES_SYSTEM_SETTINGS.uploadMaxBytes`; the real cap is the API's) is refused with a message before anything is sent. A 409 opens a Replace or Skip dialog with "Apply to all" for the rest of the batch. When the queue drains the listing refreshes. A dropped folder is skipped with a notice. Accessibility: the button is labelled, the list is described by a hint that files can be dropped, a status region names the drop target while dragging and announces each file's start, completion, skip, cancel and failure, and each progress bar is a labelled `progressbar`. No breakpoint is read.
