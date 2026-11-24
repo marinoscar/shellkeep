@@ -100,6 +100,19 @@ export interface SharedOwner {
   name: string | null;
 }
 
+/** The health column of the Servers page (#79). */
+export type ServerHealth = 'reachable' | 'unreachable' | 'unknown';
+
+/** The host-key column of the Servers page (#60, #79). */
+export type ServerHostKeyState = 'trusted' | 'untrusted' | 'mismatch';
+
+/** `PATCH /server-profiles/bulk-tags` (#79): the ids in each outcome. */
+export interface BulkTagsResult {
+  updated: string[];
+  unchanged: string[];
+  denied: string[];
+}
+
 /** What the caller is to a server profile, and what that lets them do (#71). */
 export interface ServerProfileAccess {
   /** `owner`, or the role a share or the owning group gives them (`viewer`, `operator`, `editor`). */
@@ -142,6 +155,15 @@ export interface ServerProfile {
   facts?: ServerFacts | null;
   /** When the facts were probed (ISO), or `null`. */
   factsProbedAt?: string | null;
+  /** The last connection test's outcome (#79); absent in a hand-built fixture means `unknown`. */
+  health?: ServerHealth;
+  /** `mismatch` while the last test was refused for a changed key (#79). */
+  hostKeyState?: ServerHostKeyState;
+  /** When the last connection test ran (ISO), or `null` before the first. */
+  lastTestAt?: string | null;
+  lastTestOk?: boolean | null;
+  /** When the CALLER last used this server (ISO), or `null`. */
+  lastSessionAt?: string | null;
   tags: string[];
   color: ServerProfileColor;
   /** `false`: no terminal output of this server ever reaches an AI feature (#56). Treat absent as `true`. */
