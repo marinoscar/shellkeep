@@ -31,6 +31,7 @@ import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/
 import { webhooksUserSettingsSections } from '@marinoscar/platform-web/webhooks/ui';
 import { groupsSettingsPage } from '@marinoscar/platform-web/sharing/ui';
 import { dataExportSettingsPage } from '@marinoscar/platform-web/exports/ui';
+import { gettingStartedSettingsPage } from '@marinoscar/platform-web/onboarding/ui';
 import {
   TERMINAL_SETTINGS_DESCRIPTION,
   TERMINAL_SETTINGS_TITLE,
@@ -71,6 +72,11 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
         Icon: NotificationsIcon,
         path: '/settings/notifications',
       },
+      // #70, appended: the onboarding slice's Getting started page
+      // (`/settings/getting-started`), as data. No permission, like its
+      // siblings: `GET /api/onboarding` requires `user_settings:read`, which
+      // every role holds.
+      { ...gettingStartedSettingsPage.card, Icon: gettingStartedSettingsPage.Icon },
     ],
   },
   {

@@ -6,11 +6,15 @@ import {
   NotificationBell,
   NotificationPermissionBanner,
 } from '@marinoscar/platform-web/notifications/ui';
+import { OnboardingProvider } from '@marinoscar/platform-web/onboarding/headless';
+import { GettingStartedMenuItem, WelcomeDialog } from '@marinoscar/platform-web/onboarding/ui';
 import { ShellAppBar, ShellLayout, ShellUserMenu } from '@marinoscar/platform-web/shell/ui';
 import type { ShellUserMenuItem } from '@marinoscar/platform-web/shell/ui';
 import { APP_NAME, APP_VERSION } from '../../config/app';
 import { SHELLKEEP_NAVIGATION } from '../../config/shell';
 import { USER_HUB_PATH, USER_HUB_TITLE } from '../../config/userSettingsSections';
+import { OnboardingBanner } from '../onboarding/OnboardingBanner';
+import { adminWelcomePane, userWelcomePane } from '../onboarding/welcomePanes';
 
 /**
  * The app shell (issue #76): a thin binding of the platform's `ShellLayout`
@@ -30,10 +34,18 @@ import { USER_HUB_PATH, USER_HUB_TITLE } from '../../config/userSettingsSections
  *   - the navigation (`config/shell.ts`) and the brand;
  *   - the AppBar's `actions`: the notification bell (#51), in both treatments,
  *     where on a compact settings screen it is the only way into the centre;
- *   - the user menu: the destinations, a Settings row (Settings is reached
- *     from here, not from the rail) and a version line in its footer;
+ *   - the user menu: the destinations, the onboarding slice's "Getting started"
+ *     row, a Settings row (Settings is reached from here, not from the rail)
+ *     and a version line in its footer;
  *   - the `banners` above the page, each rendering nothing on an ordinary day;
- *   - no `overlays` yet (the onboarding welcome arrives with its slice).
+ *   - the `overlays`: the onboarding slice's one-time welcome dialog (#70),
+ *     with ShellKeep's panes.
+ *
+ * ONBOARDING (#70): one `OnboardingProvider` around the WHOLE shell, so the
+ * routed pages (`/settings/getting-started`, `/admin/settings/setup`), the
+ * banner, the menu row and the welcome read one `GET /api/onboarding`. Here,
+ * not in `App.tsx`: every call it makes is authenticated, and the shell exists
+ * exactly for a signed-in user.
  */
 export function Layout() {
   // #51: mounted HERE, once, and not inside the banners: a full-bleed page
@@ -44,25 +56,33 @@ export function Layout() {
   const pushSync = usePushSubscriptionSync();
 
   return (
-    <ShellLayout
-      navigation={SHELLKEEP_NAVIGATION}
-      brand={APP_NAME}
-      appBar={
-        <ShellAppBar
-          navigation={SHELLKEEP_NAVIGATION}
-          brand={APP_NAME}
-          actions={<NotificationBell />}
-          userMenu={
-            <ShellUserMenu
-              navigation={SHELLKEEP_NAVIGATION}
-              extraItems={USER_MENU_ITEMS}
-              footer={<VersionLine />}
-            />
-          }
-        />
-      }
-      banners={<ShellBanners pushSync={pushSync} />}
-    />
+    <OnboardingProvider appName={APP_NAME}>
+      <ShellLayout
+        navigation={SHELLKEEP_NAVIGATION}
+        brand={APP_NAME}
+        appBar={
+          <ShellAppBar
+            navigation={SHELLKEEP_NAVIGATION}
+            brand={APP_NAME}
+            actions={<NotificationBell />}
+            userMenu={
+              <ShellUserMenu
+                navigation={SHELLKEEP_NAVIGATION}
+                // #70: clears the stored welcome and dismissals so the dialog and
+                // the checklists return. Renders nothing before the state loads.
+                items={(close) => <GettingStartedMenuItem onDone={close} />}
+                extraItems={USER_MENU_ITEMS}
+                footer={<VersionLine />}
+              />
+            }
+          />
+        }
+        banners={<ShellBanners pushSync={pushSync} />}
+        // #70: portalled, so its place here is about lifetime, not layout. It
+        // opens while `onboarding.welcomeSeenAt` is unset; every way out sets it.
+        overlays={<WelcomeDialog slots={{ userPane: userWelcomePane, adminPane: adminWelcomePane }} />}
+      />
+    </OnboardingProvider>
   );
 }
 
@@ -101,6 +121,10 @@ function ShellBanners({ pushSync }: { pushSync: ReturnType<typeof usePushSubscri
       {/* An open maintenance window, for an administrator it lets through
           (#46). Renders nothing for everyone else. */}
       <MaintenanceBanner />
+      {/* What is left to set up (#70): the deployment's required steps for an
+          administrator, else the account's. Renders nothing once they are
+          done, once dismissed, and on the checklist page itself. */}
+      <OnboardingBanner />
       {/* Renders nothing unless this device still needs to allow (or
           unblock, or install for) notifications (#51). */}
       <NotificationPermissionBanner
