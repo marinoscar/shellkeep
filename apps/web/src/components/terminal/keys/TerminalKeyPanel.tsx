@@ -9,11 +9,12 @@
  * - `dock` (phones): in the key dock under the accessory row, at the
  *   keyboard's last height, replacing it. The keyboard button brings it back.
  *
- * A tab strip heads the panel: "Keys" today; snippets (#172) and history (#173)
- * append to `KEY_PANEL_TABS`. Customize opens the shortcuts editor. Escape
- * inside the panel closes it.
+ * A tab strip heads the panel: Keys and Snippets (#172); history (#173)
+ * appends to `KEY_PANEL_TABS`. The Snippets tab is drawn only when the host
+ * can insert text (`onInsertSnippet`). Customize opens the shortcuts editor.
+ * Escape inside the panel closes it.
  */
-import { forwardRef, useState, type KeyboardEvent } from 'react';
+import { forwardRef, useEffect, useState, type KeyboardEvent } from 'react';
 import { Box, Button, IconButton, Tab, Tabs, Tooltip } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -23,11 +24,22 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 import { GRID_COLUMNS } from '../../../lib/terminal/keys/keyModel';
 import type { ResolvedGroup } from '../../../lib/terminal/keys/keyRow';
+import type { SnippetInsertResult } from '../../../lib/terminal/snippets/insert';
+import { SnippetsTab } from './snippets/SnippetsTab';
 import { KEY_GAP, TouchKey, useKeyPopup, type TouchKeyHandlers } from './TouchKey';
 
-/** The panel's tabs, in order. Later tabs (snippets, history) append here. */
-export const KEY_PANEL_TABS = [{ id: 'keys', label: 'Keys' }] as const;
+/** The panel's tabs, in order. Later tabs (history) append here. */
+export const KEY_PANEL_TABS = [
+  { id: 'keys', label: 'Keys' },
+  { id: 'snippets', label: 'Snippets' },
+] as const;
 export type KeyPanelTabId = (typeof KEY_PANEL_TABS)[number]['id'];
+
+/** Asks the panel to show a tab (the snippets action key). `n` makes a repeat request count. */
+export interface KeyPanelTabRequest {
+  tab: KeyPanelTabId;
+  n: number;
+}
 
 /**
  * The side panel's width: 320 px (four 44 px targets, their gaps and padding,
@@ -48,13 +60,23 @@ export interface TerminalKeyPanelProps extends TouchKeyHandlers {
   onClose: () => void;
   /** `dock` only: close the panel and bring the phone keyboard back. */
   onShowKeyboard?: () => void;
+  /** Puts snippet text at the terminal's prompt (never runs it). Without it, there is no Snippets tab. */
+  onInsertSnippet?: (text: string, options?: { confirmed?: boolean }) => SnippetInsertResult;
+  /** The Snippets tab is taking text input (the phone keyboard rises over a docked panel). */
+  onTextEntry?: (active: boolean) => void;
+  /** Show this tab now (the snippets action key). */
+  tabRequest?: KeyPanelTabRequest | null;
 }
 
 export const TerminalKeyPanel = forwardRef<HTMLDivElement, TerminalKeyPanelProps>(function TerminalKeyPanel(
-  { id, variant, height, groups, onClose, onShowKeyboard, ...handlers },
+  { id, variant, height, groups, onClose, onShowKeyboard, onInsertSnippet, onTextEntry, tabRequest, ...handlers },
   ref,
 ) {
-  const [tab, setTab] = useState<KeyPanelTabId>('keys');
+  const tabs = KEY_PANEL_TABS.filter((t) => t.id !== 'snippets' || onInsertSnippet);
+  const [tab, setTab] = useState<KeyPanelTabId>(tabRequest?.tab ?? 'keys');
+  useEffect(() => {
+    if (tabRequest) setTab(tabRequest.tab);
+  }, [tabRequest]);
   const popup = useKeyPopup(handlers.onSendChord);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -92,7 +114,7 @@ export const TerminalKeyPanel = forwardRef<HTMLDivElement, TerminalKeyPanelProps
           scrollButtons={false}
           sx={{ flex: 1, minWidth: 0, minHeight: 44 }}
         >
-          {KEY_PANEL_TABS.map((t) => (
+          {tabs.map((t) => (
             <Tab
               key={t.id}
               value={t.id}
@@ -163,6 +185,16 @@ export const TerminalKeyPanel = forwardRef<HTMLDivElement, TerminalKeyPanelProps
           )}
         </Box>
       </Box>
+      {onInsertSnippet && tab === 'snippets' && (
+        <Box
+          role="tabpanel"
+          id={`${id}-tabpanel-snippets`}
+          aria-labelledby={`${id}-tab-snippets`}
+          sx={{ flex: 1, minHeight: 0, p: 1, display: 'flex', flexDirection: 'column' }}
+        >
+          <SnippetsTab onInsert={onInsertSnippet} onTextEntry={onTextEntry} />
+        </Box>
+      )}
       {popup.menu}
     </Box>
   );

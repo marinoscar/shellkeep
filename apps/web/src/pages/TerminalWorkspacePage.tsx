@@ -12,7 +12,8 @@ import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headl
 import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { TerminalToolbar } from '../components/terminal/TerminalToolbar';
 import { TerminalKeyShortcutsBar } from '../components/terminal/TerminalKeyShortcutsBar';
-import { TerminalKeyPanel } from '../components/terminal/keys/TerminalKeyPanel';
+import { TerminalKeyPanel, type KeyPanelTabRequest } from '../components/terminal/keys/TerminalKeyPanel';
+import { insertSnippetText, type SnippetInsertResult } from '../lib/terminal/snippets/insert';
 import { useAttachFile } from '../components/terminal/keys/useAttachFile';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
 import { TERMINAL_WRITE_PERMISSION } from '../components/terminal/TerminalAccessGate';
@@ -408,9 +409,10 @@ export default function TerminalWorkspacePage() {
     if (attachAvailable) out.add('attach-file');
     // The arrow-drag key (#168) sends through the active pane, like every key.
     out.add('arrow-drag');
-    // `snippets` (#172) stays hidden until it exists.
+    // Snippets (#172) are the user's own text, kept by the API under the terminal's rule (`sessions:write`).
+    if (canWrite) out.add('snippets');
     return out;
-  }, [aiAvailable, attachAvailable]);
+  }, [aiAvailable, attachAvailable, canWrite]);
   const keyGroups = useMemo(
     () => (keyLayout ? resolveKeyGroups(keyLayout, availableActions) : null),
     [keyLayout, availableActions],
@@ -429,11 +431,7 @@ export default function TerminalWorkspacePage() {
     keyboardReplaced.current = keyPanelDocked;
   }, [keyPanelDocked]);
 
-  const toggleKeyPanel = useCallback(() => {
-    if (keyPanelOpen) {
-      setKeyPanelOpen(false);
-      return;
-    }
+  const openKeyPanel = useCallback(() => {
     setAiOpen(false);
     setFilesOpen(false);
     if (!keyPanelSide) {
@@ -445,7 +443,40 @@ export default function TerminalWorkspacePage() {
       if (focused instanceof HTMLElement && focused.closest('.xterm')) focused.blur();
     }
     setKeyPanelOpen(true);
-  }, [keyPanelOpen, keyPanelSide, getView]);
+  }, [keyPanelSide, getView]);
+
+  const toggleKeyPanel = useCallback(() => {
+    if (keyPanelOpen) setKeyPanelOpen(false);
+    else openKeyPanel();
+  }, [keyPanelOpen, openKeyPanel]);
+
+  // The snippets key (#172) opens the panel on its Snippets tab (or switches to it when it is open).
+  const [keyPanelTabRequest, setKeyPanelTabRequest] = useState<KeyPanelTabRequest | null>(null);
+  const showSnippets = useCallback(() => {
+    if (!keyPanelOpen) openKeyPanel();
+    setKeyPanelTabRequest((current) => ({ tab: 'snippets', n: (current?.n ?? 0) + 1 }));
+  }, [keyPanelOpen, openKeyPanel]);
+
+  // The Snippets tab's search box and dialogs raise the phone keyboard over a docked panel: that is not the
+  // user going back to the terminal, so the panel stays (see the keyboard-inset effect below).
+  const keyPanelTextEntry = useRef(false);
+  const setKeyPanelTextEntry = useCallback((active: boolean) => {
+    keyPanelTextEntry.current = active;
+  }, []);
+
+  // Puts a snippet at the active pane's prompt (#172): inserted, never run. On a phone the docked panel gives
+  // the keyboard back, so the user can look at the text and press Enter.
+  const insertSnippet = useCallback(
+    (text: string, options?: { confirmed?: boolean }): SnippetInsertResult => {
+      const result = insertSnippetText(getView(), text, options);
+      if (result === 'inserted' && keyPanelDocked) {
+        keyboardReplaced.current = false;
+        setKeyPanelOpen(false);
+      }
+      return result;
+    },
+    [getView, keyPanelDocked],
+  );
 
   const closeKeyPanel = useCallback(() => {
     setKeyPanelOpen(false);
@@ -477,15 +508,16 @@ export default function TerminalWorkspacePage() {
   useEffect(() => {
     const previous = previousInset.current;
     previousInset.current = keyboardInset;
-    if (keyPanelDocked && previous === 0 && keyboardInset > 0) setKeyPanelOpen(false);
+    if (keyPanelDocked && previous === 0 && keyboardInset > 0 && !keyPanelTextEntry.current) setKeyPanelOpen(false);
   }, [keyboardInset, keyPanelDocked]);
 
   const handleKeyAction = useCallback(
     (action: KeyActionId) => {
       if (action === 'ai') openAssistant();
       else if (action === 'attach-file') attach.pick();
+      else if (action === 'snippets') showSnippets();
     },
-    [openAssistant, attach],
+    [openAssistant, attach, showSnippets],
   );
 
   const keyHandlers = {
@@ -760,6 +792,9 @@ export default function TerminalWorkspacePage() {
               variant="side"
               groups={keyGroups}
               onClose={closeKeyPanel}
+              onInsertSnippet={canWrite ? insertSnippet : undefined}
+              onTextEntry={setKeyPanelTextEntry}
+              tabRequest={keyPanelTabRequest}
               {...keyHandlers}
             />
           )}
@@ -822,6 +857,9 @@ export default function TerminalWorkspacePage() {
               groups={keyGroups}
               onClose={closeKeyPanel}
               onShowKeyboard={showKeyboard}
+              onInsertSnippet={canWrite ? insertSnippet : undefined}
+              onTextEntry={setKeyPanelTextEntry}
+              tabRequest={keyPanelTabRequest}
               {...keyHandlers}
             />
           )}
