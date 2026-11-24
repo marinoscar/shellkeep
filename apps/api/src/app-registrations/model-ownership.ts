@@ -39,6 +39,12 @@ export const APP_MODEL_OWNERSHIP: readonly Def[] = [
     rationale: 'A session summary belongs to the user who asked for it; org_id records the organization, it is not an isolation key.',
   },
   {
+    model: 'Snippet',
+    kind: 'user',
+    orgReference: 'orgId',
+    rationale: 'A snippet belongs to the user who saved it and is never shared; org_id records the organization, it is not an isolation key.',
+  },
+  {
     model: 'Runbook',
     kind: 'org',
     orgField: 'orgId',
