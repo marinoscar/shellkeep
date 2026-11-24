@@ -160,6 +160,8 @@ describe('Layout (the platform shell binding)', () => {
     restore = installWidth(1280);
     renderShell('/', viewer);
     expect(screen.getByText('ShellKeep')).toBeInTheDocument();
+    // #148: the Option A mark sits beside the name, hidden from assistive tech.
+    expect(screen.getByTestId('brand-mark')).toHaveAttribute('aria-hidden', 'true');
     expect(document.querySelector('main')).toHaveAttribute('data-main-variant', 'padded');
   });
 });

@@ -11,6 +11,7 @@ import { Box, Typography } from '@mui/material';
 import { LoginPage as PackagedLoginPage } from '@marinoscar/platform-web/identity/ui';
 import type { LoginPageSlots } from '@marinoscar/platform-web/identity/ui';
 import { APP_NAME } from '../config/app';
+import { BrandMark } from '../components/common/BrandMark';
 
 function AppLogo() {
   return (
@@ -18,13 +19,7 @@ function AppLogo() {
       sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}
       data-testid="login-logo"
     >
-      <Box
-        component="img"
-        src="/pwa-192x192.png"
-        alt=""
-        aria-hidden="true"
-        sx={{ width: 56, height: 56, borderRadius: 2 }}
-      />
+      <BrandMark size={56} />
       <Typography
         variant="subtitle1"
         component="p"

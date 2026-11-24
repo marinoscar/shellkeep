@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
@@ -93,7 +93,10 @@ describe('identity routing (#47)', () => {
   it('sends a signed-out visitor to the branded packaged login page', async () => {
     signIn(null);
     renderAt('/sessions');
-    expect(await screen.findByTestId('login-logo', {}, { timeout: 5000 })).toHaveTextContent('ShellKeep');
+    const logo = await screen.findByTestId('login-logo', {}, { timeout: 5000 });
+    expect(logo).toHaveTextContent('ShellKeep');
+    // #148: the Option A mark, decorative beside the name.
+    expect(within(logo).getByTestId('brand-mark')).toHaveAttribute('aria-hidden', 'true');
     expect(screen.getByText('Welcome')).toBeInTheDocument();
   });
 
