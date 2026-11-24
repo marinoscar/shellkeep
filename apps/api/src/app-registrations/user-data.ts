@@ -171,7 +171,7 @@ export const APP_FACTORY_RESET_STEPS: readonly FactoryResetStepDef[] = [
     id: 'shellkeep.terminal.disconnect',
     phase: 'before-users',
     description: 'Marks every active terminal session terminated; no SSH connection is opened.',
-    summary: 'Live terminal connections are closed; tmux sessions already running on your servers are not killed.',
+    summary: 'Live terminal connections are closed right after the reset completes; tmux sessions already running on your servers are not killed.',
     async run(tx) {
       const { count } = await tx.terminalSession.updateMany({
         where: { status: 'active' },

@@ -38,7 +38,7 @@ describeWithDb('admin.factory_reset over ShellKeep data (real Postgres, RLS on)'
     const steps = new Map(factoryResetStepRegistry.list().map((step) => [step.id, step]));
     expect(steps.get('shellkeep.terminal.disconnect')).toMatchObject({
       phase: 'before-users',
-      summary: 'Live terminal connections are closed; tmux sessions already running on your servers are not killed.',
+      summary: 'Live terminal connections are closed right after the reset completes; tmux sessions already running on your servers are not killed.',
     });
     expect(steps.get('shellkeep.servers.reset')).toMatchObject({ phase: 'before-users' });
   });

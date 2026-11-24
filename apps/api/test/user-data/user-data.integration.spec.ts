@@ -146,7 +146,7 @@ describe('ShellKeep user-data routes', () => {
       const summary = await request(server()).get('/api/admin/factory-reset/summary').set(authHeader(admin.accessToken)).expect(200);
       expect(summary.body.data.deleted).toEqual(
         expect.arrayContaining([
-          'Live terminal connections are closed; tmux sessions already running on your servers are not killed.',
+          'Live terminal connections are closed right after the reset completes; tmux sessions already running on your servers are not killed.',
           'Every server profile and its saved credentials',
         ]),
       );
