@@ -250,3 +250,68 @@ export async function uploadRemoteFile(request: UploadRemoteFileRequest): Promis
     body?.details,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Folder archives (issue #158)
+// ---------------------------------------------------------------------------
+
+export type FolderArchiveStatus = 'pending' | 'running' | 'ready' | 'failed' | 'expired';
+
+/** `POST /server-profiles/:id/files/archive` (202). */
+export interface FolderArchiveRequested {
+  archiveId: string;
+  jobId: string;
+  status: 'pending';
+}
+
+/** `GET /files/archives/:archiveId`. */
+export interface FolderArchive {
+  archiveId: string;
+  serverProfileId: string | null;
+  path: string;
+  status: FolderArchiveStatus;
+  sizeBytes: number | null;
+  /** A non-fatal note, e.g. a file changed while it was read. */
+  warning: string | null;
+  errorCode: string | null;
+  /** Why it failed, for the person. */
+  errorMessage: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  expiresAt: string;
+}
+
+/** `GET /files/archives/:archiveId/download`: a presigned link, valid 15 minutes. */
+export interface FolderArchiveDownload {
+  url: string;
+  filename: string;
+  expiresAt: string;
+}
+
+/** Queues the job that archives a folder (the path must be a directory). */
+export function requestFolderArchive(ref: RemoteFileRef): Promise<FolderArchiveRequested> {
+  return api.post<FolderArchiveRequested>(`${base(ref.profileId)}/archive`, {
+    path: ref.path,
+    ...(ref.sessionId ? { sessionId: ref.sessionId } : {}),
+  });
+}
+
+export function getFolderArchive(archiveId: string): Promise<FolderArchive> {
+  return api.get<FolderArchive>(`/files/archives/${encodeURIComponent(archiveId)}`);
+}
+
+/** Asks for the signed link and starts the browser's native download. */
+export async function downloadFolderArchive(archiveId: string): Promise<void> {
+  const link = await api.get<FolderArchiveDownload>(`/files/archives/${encodeURIComponent(archiveId)}/download`);
+  const anchor = document.createElement('a');
+  anchor.href = link.url;
+  anchor.download = link.filename;
+  anchor.rel = 'noopener';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+  }
+}

@@ -11,7 +11,7 @@
  * - Hidden files (off by default), a filter, sort by name, size or modified.
  * - A file opens in the viewer (`useOpenFile`), a folder navigates; each row's
  *   menu (the kebab, a right-click, the context-menu key or Shift+F10) offers
- *   Open, Download and Copy path.
+ *   Open, Download (a folder: Download as archive) and Copy path.
  * - Keyboard: arrows, Home and End move between rows, Enter opens, Backspace
  *   goes up.
  * - Size badges are hints from the API's default caps (a non-admin cannot read
@@ -21,6 +21,10 @@
  *   list send files into the folder shown, through `useFileUploads` (queue,
  *   progress, Cancel, the size cap, Replace or Skip on a 409). Offered only to a
  *   holder of `sessions:write`, like the rest of the files UI.
+ *
+ * - Folder archives (issue #158): a folder row's menu offers Download as archive, which queues the
+ *   `files.archive` job, shows a pending state with polling (`useFolderArchives`, `ArchivePanel`) and
+ *   then a Download button, or the failure reason. Hidden without `sessions:write`.
  *
  * It reads no breakpoint: its container decides the size.
  */
@@ -75,6 +79,7 @@ import {
   LinkOffOutlined as BrokenLinkIcon,
   MoreVert as MoreIcon,
   Refresh as RefreshIcon,
+  FolderZipOutlined as FolderArchiveIcon,
   UploadFileOutlined as UploadIcon,
   ReceiptLongOutlined as LogIcon,
   Visibility as ShowHiddenIcon,
@@ -102,9 +107,11 @@ import {
 import { formatSize } from '../../../lib/files/viewer/text';
 import { relativeTime } from '../../../lib/servers/relativeTime';
 import { DEFAULT_FILES_SYSTEM_SETTINGS } from '../../../lib/files/system-settings';
+import { ArchivePanel } from './ArchivePanel';
 import { UploadPanel } from './UploadPanel';
 import { useDirectoryListing } from './useDirectoryListing';
 import { useFileUploads } from './useFileUploads';
+import { useFolderArchives } from './useFolderArchives';
 
 /** Rows rendered before "Show more" (a listing holds up to 5000). */
 export const FILE_BROWSER_PAGE_ROWS = 500;
@@ -218,6 +225,8 @@ export function FileBrowser({
       if (dirs.includes(listedDirRef.current)) refreshRef.current();
     },
   });
+  // Folder archives (#158): a job builds the tar.gz; the panel polls it and offers the download.
+  const archives = useFolderArchives({ profileId, sessionId });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
@@ -358,6 +367,17 @@ export function FileBrowser({
           severity: 'error',
         }),
     );
+  };
+
+  const archiveFolder = (entry: RemoteDirEntry) => {
+    setSelected(entry.name);
+    void archives.start(pathOf(entry), entry.name);
+  };
+
+  const downloadArchive = (id: string) => {
+    void archives.download(id).then((problem) => {
+      if (problem) setNotice({ message: `Could not download: ${problem}`, severity: 'error' });
+    });
   };
 
   const copyPath = (entry: RemoteDirEntry) => {
@@ -746,6 +766,16 @@ export function FileBrowser({
         </>
       )}
 
+      {canUpload && (
+        <ArchivePanel
+          items={archives.items}
+          announcement={archives.announcement}
+          onDownload={downloadArchive}
+          onDismiss={archives.dismiss}
+          onClearFinished={archives.clearFinished}
+        />
+      )}
+
       <Menu
         open={Boolean(menu)}
         onClose={() => setMenu(null)}
@@ -776,7 +806,19 @@ export function FileBrowser({
             <ListItemText>Download</ListItemText>
           </MenuItem>
         )}
-        {/* TODO(#158): "Download as archive" for a folder, once the archive job lands. */}
+        {menuIsDir && canUpload && (
+          <MenuItem
+            onClick={() => {
+              setMenu(null);
+              if (menuEntry) archiveFolder(menuEntry);
+            }}
+          >
+            <ListItemIcon>
+              <FolderArchiveIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Download as archive</ListItemText>
+          </MenuItem>
+        )}
         <MenuItem
           onClick={() => {
             setMenu(null);
