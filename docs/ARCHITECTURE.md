@@ -128,10 +128,9 @@ The Enterprise Application Foundation is a production-grade web application temp
                                      │    OBSERVABILITY STACK         │
                                      │                                │
                                      │  • OTEL Collector              │
-                                     │  • Uptrace (Traces/Metrics)    │
-                                     │  • ClickHouse (Storage)        │
+                                     │  • GreptimeDB (Telemetry store)│
                                      │                                │
-                                     │        Port 14318 (UI)         │
+                                     │  In-app explorer (admin UI)    │
                                      └────────────────────────────────┘
 ```
 
@@ -231,7 +230,7 @@ All components served from the same base URL via Nginx reverse proxy:
 | **Containerization** | Docker | Application packaging |
 | **Orchestration** | Docker Compose | Local development environment |
 | **Reverse Proxy** | Nginx | Routing, SSL termination, headers |
-| **Observability** | OpenTelemetry + Uptrace | Traces, metrics, logs |
+| **Observability** | OpenTelemetry + GreptimeDB | Traces, metrics, logs |
 | **Logging** | Pino | Structured JSON logging |
 
 ### 4.4 Testing
@@ -316,13 +315,13 @@ EnterpriseAppBase/
 │   │   ├── base.compose.yml          # Core services
 │   │   ├── dev.compose.yml           # Development overrides
 │   │   ├── prod.compose.yml          # Production overrides
-│   │   ├── otel.compose.yml          # Observability stack
+│   │   ├── telemetry.compose.yml     # Telemetry stack (collector + GreptimeDB)
 │   │   └── .env.example              # Environment template
 │   ├── nginx/
 │   │   └── nginx.conf                # Reverse proxy config
 │   └── otel/
 │       ├── otel-collector-config.yaml
-│       └── uptrace.yml
+│       └── app-collector.yaml
 │
 ├── .claude/                          # AI agent configuration
 │   └── agents/
@@ -932,11 +931,10 @@ services:
   web:          # React frontend (port 5173)
   db:           # PostgreSQL (port 5432)
 
-# Observability (otel.compose.yml)
+# Telemetry (telemetry.compose.yml)
 services:
   otel-collector:  # OpenTelemetry Collector
-  uptrace:         # Trace/metric visualization (port 14318)
-  clickhouse:      # Uptrace storage backend
+  greptimedb:      # Telemetry store, read by the in-app explorer
 ```
 
 ### 10.2 Network Topology
@@ -960,8 +958,8 @@ services:
 │       │              │                                     │
 │       │              ▼                                     │
 │       │         ┌─────────┐    ┌─────────┐                 │
-│       │         │ uptrace │───▶│clickhse │                 │
-│       │         │ :14318  │    │         │                 │
+│       │         │greptime │                                │
+│       │         │  db     │                                │
 │       │         └─────────┘    └─────────┘                 │
 └───────┼─────────────────────────────────────────────────────┘
         │
@@ -1013,9 +1011,9 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 
 | Signal | Collection | Storage | Purpose |
 |--------|------------|---------|---------|
-| **Traces** | OTEL SDK auto-instrumentation | Uptrace/ClickHouse | Request flow tracking |
-| **Metrics** | OTEL SDK | Uptrace/ClickHouse | Performance monitoring |
-| **Logs** | Pino structured logs | Uptrace/ClickHouse | Debugging, audit |
+| **Traces** | OTEL SDK auto-instrumentation | GreptimeDB | Request flow tracking |
+| **Metrics** | OTEL SDK | GreptimeDB | Performance monitoring |
+| **Logs** | Pino structured logs | GreptimeDB | Debugging, audit |
 
 ### 11.2 Trace Propagation
 
@@ -1582,7 +1580,7 @@ cd apps/web && npm run typecheck
 |---------|-----|
 | Application | http://localhost:8323 |
 | Swagger UI | http://localhost:8323/api/docs |
-| Uptrace | http://localhost:14318 |
+| GreptimeDB dashboard | http://localhost:14000/dashboard |
 | PostgreSQL | localhost:5432 |
 
 #### Key Commands
@@ -1592,7 +1590,7 @@ cd apps/web && npm run typecheck
 cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up
 
 # Start with observability
-cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f otel.compose.yml up
+cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f telemetry.compose.yml up
 
 # Run migrations
 cd apps/api && npm run prisma:migrate:dev -- --name <name>

@@ -464,7 +464,7 @@ Logs include OpenTelemetry trace context:
 - `requestId`: Application-level request tracking
 
 This enables:
-1. Viewing logs for a specific trace in Uptrace
+1. Viewing logs for a specific trace in the telemetry explorer
 2. Jumping from logs to traces
 3. Cross-service request tracking
 

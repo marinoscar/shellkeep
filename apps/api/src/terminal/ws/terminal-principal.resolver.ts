@@ -23,7 +23,7 @@ export interface TerminalPrincipal {
 
 export type TerminalPrincipalResult =
   | { readonly ok: true; readonly principal: TerminalPrincipal }
-  | { readonly ok: false; readonly reason: 'invalid_token' | 'invalid_user' };
+  | { readonly ok: false; readonly reason: 'invalid_token' | 'expired' | 'invalid_user' };
 
 /**
  * Resolves an access token presented on the terminal WebSocket to a principal.
@@ -68,8 +68,10 @@ export class TerminalPrincipalResolver {
         secret: this.secret,
         algorithms: ['HS256'],
       });
-    } catch {
-      return { ok: false, reason: 'invalid_token' };
+    } catch (error) {
+      // An expired but otherwise valid token is told apart from a malformed or forged one (a
+      // bounded metric reason); the client sees the same refusal either way.
+      return { ok: false, reason: (error as { name?: unknown } | null)?.name === 'TokenExpiredError' ? 'expired' : 'invalid_token' };
     }
     if (typeof payload.exp !== 'number') {
       // A token with no expiry would keep a terminal open forever.
