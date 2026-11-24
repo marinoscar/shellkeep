@@ -55,6 +55,15 @@
  *     verifying and deleting a backup and saving the schedule need
  *     `db_backup:write`, restoring needs `db_backup:restore`; the packaged
  *     page disables each control, the card gate is about reachability.
+ *   - Alerts (#54): `/api/admin/alerts`, `alerts:read` (the alerts slice's
+ *     controller, `ALERT_PERMISSIONS`); creating and editing rules,
+ *     acknowledging and resolving incidents need `alerts:write`, gated inside
+ *     the packaged page. No `feature`: node rules work while telemetry is off.
+ *   - Webhooks (#54): `Webhooks` (`/admin/settings/webhooks`,
+ *     `system_webhooks:read`, the deployment's endpoints) and
+ *     `Organization webhooks` (`/admin/settings/organization-webhooks`,
+ *     `org_webhooks:read`, the organization's own, copied without the
+ *     package's `orgs` feature, which ShellKeep does not register); the matching `:write` is gated inside the page.
  *
  * The composition root: the `Terminal` card is the terminal domain's
  * (`components/terminal/settings/TerminalSystemSettingsPage.tsx`), declared
@@ -73,6 +82,8 @@ import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
 import { dbBackupAdminSections } from '@marinoscar/platform-web/db-backup/ui';
 import { jobsAdminSections } from '@marinoscar/platform-web/jobs/ui';
+import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
+import { alertsAdminCards } from '@marinoscar/platform-web/alerts/ui';
 import {
   TERMINAL_SYSTEM_SETTINGS_DESCRIPTION,
   TERMINAL_SYSTEM_SETTINGS_TITLE,
@@ -92,6 +103,9 @@ export const EMAIL_PATH = '/admin/settings/email';
 export const PUSH_PATH = '/admin/settings/push';
 /** The route of the Broadcasts page (the packaged `BroadcastsPage`). */
 export const BROADCASTS_PATH = '/admin/settings/broadcasts';
+
+/** The route of the Alerts page (the packaged `AlertsPage`). */
+export const ALERTS_PATH = '/admin/settings/alerts';
 
 /** The admin settings sections, in hub order. */
 export const ADMIN_SECTIONS: SettingsSectionDef[] = [
@@ -168,7 +182,8 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
   },
   {
     label: 'Observability',
-    cards: [{ ...doctorSettingsPage.card, Icon: doctorSettingsPage.Icon }],
+    // #54, appended after Doctor: the alerts slice's `Alerts` card as data.
+    cards: [{ ...doctorSettingsPage.card, Icon: doctorSettingsPage.Icon }, ...alertsAdminCards],
   },
   {
     label: 'Operations',
@@ -192,6 +207,22 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
       // #52: appended. The packaged card (`Database Backup`,
       // `/admin/settings/db-backup`, `db_backup:read`), as data.
       ...dbBackupAdminSections.operations,
+      // #54: appended. The webhooks slice's cards as data: `Webhooks`
+      // (`system_webhooks:read`, the deployment's endpoints) and
+      // `Organization webhooks` (`org_webhooks:read`, the organization's own).
+      // Both cards are copied field by field; the organization card: the package marks it
+      // `feature: 'orgs'`, a key ShellKeep does not register (single
+      // organization, like the identity access card above), so it is gated by
+      // its permission alone, which only `org_admin` holds.
+      ...[...webhooksAdminSections.operations, ...webhooksAdminSections.organizations].map(
+        ({ title, description, Icon, path, permission }) => ({
+          title,
+          description,
+          Icon,
+          path,
+          permission,
+        }),
+      ),
     ],
   },
 ];

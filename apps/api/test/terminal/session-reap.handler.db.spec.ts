@@ -18,6 +18,7 @@ import { NotificationsService } from '@marinoscar/platform-api/notifications';
 
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { SessionReapHandler, TERMINAL_SESSION_REAP_TYPE } from '../../src/terminal/jobs/session-reap.handler';
+import { TerminalWebhooksService } from '../../src/terminal/webhooks/terminal-webhooks.service';
 
 const RUN = randomBytes(4).toString('hex');
 const MINUTE = 60_000;
@@ -64,6 +65,7 @@ describe('SessionReapHandler (real database)', () => {
         { provide: JobHandlerRegistry, useValue: { register: (h: unknown) => registered.push(h) } },
         { provide: SystemSettingsService, useValue: { getNamespace: async () => thresholds } },
         { provide: NotificationsService, useValue: { notify } },
+        { provide: TerminalWebhooksService, useValue: { sessionTerminated: jest.fn(async () => undefined) } },
       ],
     }).compile();
     prisma = module.get(PrismaService);

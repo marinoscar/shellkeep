@@ -22,13 +22,21 @@ import {
   registerEmailTemplates,
   registerPlatformEmailTemplates,
 } from '@marinoscar/platform-api/email';
+import { ALERTS_NOTIFICATIONS, registerAlertsEmailTemplates } from '@marinoscar/platform-api/alerts';
 import {
   BROADCASTS_NOTIFICATIONS,
   NODES_NOTIFICATIONS,
   OPS_NOTIFICATIONS,
+  isRegisteredNotificationChannel,
+  registerNotificationChannel,
   registerNotifications,
   registerPlatformNotificationChannels,
 } from '@marinoscar/platform-api/notifications';
+import {
+  WEBHOOKS_NOTIFICATIONS,
+  WEBHOOK_NOTIFICATION_CHANNEL,
+  registerWebhooksEmailTemplates,
+} from '@marinoscar/platform-api/webhooks';
 
 import { SHELLKEEP_EMAIL_TEMPLATES } from '../email-templates';
 import { DB_BACKUP_NOTIFICATIONS } from '../platform/db-backup/db-backup.notifications';
@@ -45,12 +53,23 @@ export function registerShellkeepNotifications(): void {
 
   // 1. Channels: email, browser (the bell) and push. No app channel.
   registerPlatformNotificationChannels();
+  // The webhooks slice's `webhook` channel (#54): a member's notifications, forwarded to their own
+  // webhook endpoints that subscribe to `notification.<eventKey>`. ShellKeep's own events do not
+  // opt in (`withWebhookChannel`): the terminal's webhooks are the events of
+  // `terminal/webhooks/terminal.webhook-events.ts`. The id belongs to the slice (a second channel
+  // of the same id is `DUPLICATE_ID`); `WebhooksModule.forRoot` registers its sender.
+  if (!isRegisteredNotificationChannel(WEBHOOK_NOTIFICATION_CHANNEL.id)) {
+    registerNotificationChannel(WEBHOOK_NOTIFICATION_CHANNEL);
+  }
 
   // 2. Email templates. The render context first, with the options `EmailModule.forRoot`
   //    receives, so a template rendered before Nest composes anything names the product.
   configureEmailRendering(EMAIL_MODULE_OPTIONS);
   registerPlatformEmailTemplates();
   registerEmailTemplates(SHELLKEEP_EMAIL_TEMPLATES);
+  // The alerts slice's two emails (#54) and the webhooks slice's one (`webhooks.endpoint_disabled`, #54).
+  registerAlertsEmailTemplates();
+  registerWebhooksEmailTemplates();
 
   // 3. Notifications, in the order the preferences matrix shows them.
   registerNotifications([
@@ -61,6 +80,10 @@ export function registerShellkeepNotifications(): void {
     ...TERMINAL_NOTIFICATIONS,
     // Database backup (#52): `db_backup.backup_failed` and the mandatory `db_backup.restore_completed`.
     ...DB_BACKUP_NOTIFICATIONS,
+    // Alerts (#54): `alerts.alert_fired` and `alerts.alert_resolved`, to the holders of `alerts:read`.
+    ...ALERTS_NOTIFICATIONS,
+    // Webhooks (#54): `webhooks.endpoint_disabled`, to the owner of an endpoint the slice switched off.
+    ...WEBHOOKS_NOTIFICATIONS,
   ]);
   // The runbook events are NOT here: `registerRunbookNotifications()` (#61).
 }

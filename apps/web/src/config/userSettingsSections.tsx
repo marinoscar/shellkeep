@@ -9,7 +9,7 @@
  * (Settings UI Pattern, AGENTS.md). Append new cards; never insert between
  * existing ones.
  *
- * NO CARD DECLARES A `permission`: the API grants `user_settings:read` and
+ * NO CARD DECLARES A `permission`, except `Webhooks` (#54): the API grants `user_settings:read` and
  * `user_settings:write` to every role, so a gate here would invent an
  * authorization rule the API does not enforce.
  *
@@ -25,6 +25,7 @@ import TerminalIcon from '@mui/icons-material/Terminal';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
+import { webhooksUserSettingsSections } from '@marinoscar/platform-web/webhooks/ui';
 import {
   TERMINAL_SETTINGS_DESCRIPTION,
   TERMINAL_SETTINGS_TITLE,
@@ -86,6 +87,15 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
       Icon,
       path,
     })),
+  },
+  {
+    // #54, appended: the caller's own outbound webhook endpoints, the
+    // webhooks slice's card as data. `webhooks:read` is the exact string
+    // `/api/webhooks` enforces (an org permission every org role holds by
+    // default but a deployment can withhold); writes (`webhooks:write`) are
+    // gated inside the packaged page.
+    label: 'Integrations',
+    cards: [...webhooksUserSettingsSections.integrations],
   },
 ];
 
