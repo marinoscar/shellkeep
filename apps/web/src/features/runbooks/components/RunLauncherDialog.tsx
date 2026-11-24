@@ -9,9 +9,10 @@
  *   `/runbooks/run?targets=<serverId>,<serverId>`      the person picks the runbook first.
  * Both open this dialog over the page (`pages/runbooks/RunLauncherPage.tsx`).
  *
- * #67 (dry run, destructive confirmation, two-person rule) slots in at the `TODO(#67)` marks:
- * nothing is sent for them until the API accepts the fields, because the run body is not strict
- * and an ignored `dryRun` would run for real.
+ * #67: "Dry run" posts `dryRun: true` (probes only, no confirmation). A destructive runbook
+ * (its `risk`, or a `428 RUNBOOK_CONFIRMATION_REQUIRED`) needs the person to type its exact name
+ * and the number of servers it resolves to; the run is resent with `confirm`. When the two-person
+ * rule applies the button reads "Request approval" and the run waits for someone else.
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -46,7 +47,9 @@ import {
   startRun,
 } from '../api/runbooksApi';
 import type {
+  ConfirmationRequired,
   DefinitionIssue,
+  RunbookRisk,
   RunbookDefinition,
   RunbookListItem,
   RunbookSecret,
@@ -58,6 +61,7 @@ import { errorMessage } from '../hooks/useAsync';
 import { ParamsForm, initialParamValues, toRunParams, validateParams, type ParamValues } from './ParamsForm';
 import { StrategyFields } from './StrategyFields';
 import { TargetPicker, isEmptyTargets, toTargetValue, type TargetValue } from './TargetPicker';
+import { RiskChip } from './RiskChip';
 
 export interface RunLauncherDialogProps {
   open: boolean;
@@ -102,7 +106,11 @@ export function RunLauncherDialog({ open, onClose, runbookId: fixedRunbookId, in
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<'run' | 'dry' | null>(null);
+  const [risk, setRisk] = useState<RunbookRisk | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmationRequired | null>(null);
+  const [typedName, setTypedName] = useState('');
+  const [typedCount, setTypedCount] = useState('');
 
   useEffect(() => {
     setRunbookId(fixedRunbookId);
@@ -127,6 +135,10 @@ export function RunLauncherDialog({ open, onClose, runbookId: fixedRunbookId, in
         if (cancelled) return;
         const latest = detail.latestVersion;
         setRunbookName(detail.name);
+        setRisk(detail.risk ?? latest?.risk ?? null);
+        setConfirmation(null);
+        setTypedName('');
+        setTypedCount('');
         setVersions(history.items);
         setVersion(latest?.version ?? null);
         setDefinition(latest?.definition ?? null);
@@ -158,6 +170,7 @@ export function RunLauncherDialog({ open, onClose, runbookId: fixedRunbookId, in
     try {
       const view = await getVersion(runbookId, next);
       setDefinition(view.definition);
+      if (view.risk) setRisk(view.risk);
       setParams(initialParamValues(view.definition.parameters));
       setSecretRefs({});
     } catch (err) {
@@ -169,26 +182,38 @@ export function RunLauncherDialog({ open, onClose, runbookId: fixedRunbookId, in
   const serverCount = preview?.servers.length ?? 0;
   const summary = useMemo(() => launchSummary(serverCount, concurrency), [serverCount, concurrency]);
 
-  const submit = async () => {
+  const destructive = Boolean(risk?.destructive || confirmation);
+  /** The count the person must type: what the API resolved, else the live preview. */
+  const expectedCount = confirmation?.targetCount ?? serverCount;
+  const confirmed = !destructive || (typedName === (confirmation?.runbookName ?? runbookName) && typedCount.trim() !== '' && Number(typedCount) === expectedCount);
+
+  const submit = async (mode: 'run' | 'dry') => {
     if (!runbookId || !definition) return;
     const clientErrors = validateParams(definition.parameters, params, secretRefs);
     setErrors(clientErrors);
     if (Object.keys(clientErrors).length > 0) return;
-    setSubmitting(true);
+    setSubmitting(mode);
     setSubmitError(null);
     try {
       const overrides = Object.fromEntries(Object.entries(strategy).filter(([, v]) => v !== undefined)) as Partial<RunStrategy>;
-      const { runId } = await startRun(runbookId, {
+      const result = await startRun(runbookId, {
         ...(version ? { version } : {}),
         params: toRunParams(definition.parameters, params),
         ...(Object.keys(secretRefs).length > 0 ? { secretRefs } : {}),
         targets,
         ...(Object.keys(overrides).length > 0 ? { strategy: overrides } : {}),
-        // TODO(#67): `dryRun` and the destructive confirmation go here once the API accepts them.
+        ...(mode === 'dry' ? { dryRun: true } : {}),
+        ...(mode === 'run' && destructive ? { confirm: { runbookName: typedName, targetCount: Number(typedCount) } } : {}),
       });
       onClose();
-      navigate(`/runs/${runId}`);
+      navigate(`/runs/${result.runId}`);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 428 && err.details) {
+        // A destructive runbook: show the confirmation, then the person resends.
+        setConfirmation(err.details as ConfirmationRequired);
+        setTypedCount('');
+        return;
+      }
       if (err instanceof ApiError && Array.isArray((err.details as { issues?: unknown })?.issues)) {
         const issues = (err.details as { issues: DefinitionIssue[] }).issues;
         const mapped: Record<string, string> = {};
@@ -200,7 +225,7 @@ export function RunLauncherDialog({ open, onClose, runbookId: fixedRunbookId, in
       }
       setSubmitError(errorMessage(err, 'The run could not start'));
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
     }
   };
 
@@ -280,8 +305,59 @@ export function RunLauncherDialog({ open, onClose, runbookId: fixedRunbookId, in
                 </AccordionDetails>
               </Accordion>
 
-              {/* TODO(#67): the dry-run switch and the destructive confirmation (type the runbook name)
-                  render here once the safety API is on main. */}
+              {destructive && (
+                <Box
+                  component="section"
+                  aria-labelledby="launcher-confirm"
+                  data-testid="destructive-confirm"
+                  sx={{ border: 1, borderColor: 'error.main', borderRadius: 1, p: 2 }}
+                >
+                  <Typography id="launcher-confirm" variant="subtitle2" component="h3" sx={{ color: 'error.main', mb: 1 }}>
+                    This runbook is destructive
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+                    {(confirmation?.findings ?? risk?.findings ?? [])
+                      .filter((f) => f.destructive || f.risk !== 'low')
+                      .map((f) => (
+                        <Box key={`${f.stepId}-${f.stepIndex}`} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="caption">Step {f.stepIndex + 1}</Typography>
+                          <RiskChip finding={f} />
+                        </Box>
+                      ))}
+                  </Box>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    It will run on
+                  </Typography>
+                  <Typography variant="h3" component="p" data-testid="confirm-count" sx={{ fontWeight: 700, lineHeight: 1, mb: 1 }}>
+                    {expectedCount} {expectedCount === 1 ? 'server' : 'servers'}
+                  </Typography>
+                  {confirmation?.requiresApproval && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Someone else with the approve permission must approve this run before it starts.
+                    </Alert>
+                  )}
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <TextField
+                      size="small"
+                      label="Type the runbook name to confirm"
+                      value={typedName}
+                      onChange={(e) => setTypedName(e.target.value)}
+                      helperText={confirmation?.runbookName ?? runbookName}
+                      autoComplete="off"
+                      fullWidth
+                    />
+                    <TextField
+                      size="small"
+                      label="Type the number to confirm"
+                      value={typedCount}
+                      onChange={(e) => setTypedCount(e.target.value.replace(/\D/g, ''))}
+                      slotProps={{ htmlInput: { inputMode: 'numeric' } }}
+                      autoComplete="off"
+                      sx={{ minWidth: { sm: 200 } }}
+                    />
+                  </Stack>
+                </Box>
+              )}
             </>
           )}
           {submitError && <Alert severity="error">{submitError}</Alert>}
@@ -291,14 +367,22 @@ export function RunLauncherDialog({ open, onClose, runbookId: fixedRunbookId, in
         <Typography variant="body2" data-testid="launch-summary" sx={{ color: 'text.secondary' }}>
           {ready ? summary : ''}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end', ml: 'auto' }}>
           <Button onClick={onClose}>Cancel</Button>
           <Button
-            variant="contained"
-            onClick={() => void submit()}
-            disabled={!ready || submitting || isEmptyTargets(targets) || serverCount === 0}
+            variant="outlined"
+            onClick={() => void submit('dry')}
+            disabled={!ready || submitting !== null || isEmptyTargets(targets) || serverCount === 0}
           >
-            {submitting ? 'Starting…' : 'Run'}
+            {submitting === 'dry' ? 'Starting…' : 'Dry run'}
+          </Button>
+          <Button
+            variant="contained"
+            color={destructive ? 'error' : 'primary'}
+            onClick={() => void submit('run')}
+            disabled={!ready || submitting !== null || isEmptyTargets(targets) || serverCount === 0 || !confirmed}
+          >
+            {submitting === 'run' ? 'Starting…' : confirmation?.requiresApproval ? 'Request approval' : 'Run'}
           </Button>
         </Box>
       </DialogActions>
