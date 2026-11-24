@@ -1466,6 +1466,50 @@ Server profiles and runbooks are private to their owner until shared (#71). The 
 
 **Audit events.** The slice audits shares, revocations and group membership. ShellKeep adds `server_profile.connect_as_grantee` (actor, profile id, `ownerUserId`, `ownerGroupId`, `purpose`: `connect`, `test`, `history` or `run`; never a secret) whenever a credential is read for a caller who did not save it. Metric: `app.sharing.access_decisions` (`resource_type`, `outcome`, `via`).
 
+### Dashboard
+
+The Home page's one read (#78). `GET /api/dashboard/summary` requires `sessions:read`; it is read-only and bounded (a fixed number of counts plus the five most recent rows, no N+1).
+
+```json
+{
+  "data": {
+    "servers": { "total": 14, "reachable": 0, "unreachable": 0, "unknown": 14, "hostKeyUntrusted": 3 },
+    "sessions": {
+      "active": 5, "attached": 2, "detached": 3,
+      "recent": [{ "id": "…", "name": "deploy-hotfix", "status": "active", "serverProfileId": "…", "serverName": "server-a", "lastActivityAt": "…", "createdAt": "…" }]
+    },
+    "runs": null
+  }
+}
+```
+
+- **Scope.** `servers` counts the profiles the caller may see (own, owned by a group of theirs, shared with them; the sharing slice's `accessibleWhere`) and is `null` without `servers:read`. `sessions` covers the caller's own non-terminated sessions in the request's organization; `recent` is newest activity first, at most five, and carries the server's name, never its hostname.
+- **Reachability.** Counted from stored connection-test results only, and the dashboard never opens SSH. No result is stored yet, so every visible server is `unknown`; `hostKeyUntrusted` counts servers with no trusted fingerprint (#60).
+- **Runs.** `null` without `runbooks:read`, and `null` until the runbook engine (#62) binds `DASHBOARD_RUNS_SOURCE` (`apps/api/src/dashboard/dashboard-runs.source.ts`), after which it is `{ running, failedLast24h, recent: [{ id, runbookId, runbookName, status, targets: { total, succeeded, failed, running }, startedAt }] }`.
+- The response is validated against `dashboardSummarySchema` (`apps/api/src/dashboard/dashboard.schema.ts`). One span per request, `dashboard.summary`; no hostname in a log or span.
+
+---
+
+### Data export
+
+Every signed-in user can download their own data (#68). The exports slice (`@marinoscar/platform-api/exports`) provides the routes; the work runs as the server-only job `export.run` and the file expires through `export.purge` (7 days). **No credential ever leaves the server**: no SSH password, private key, passphrase or credential ciphertext (`encryptedPassword`, `encryptedPrivateKey`, `encryptedPassphrase` included), and no tmux scrollback or log content. Another user's export is **404, never 403**.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /api/exports/sources` | any signed-in user | The sources the caller may use, with their formats and request fields; each source is listed only to a caller holding its permission |
+| `POST /api/exports` | the source's permission | `{ source, format, request? }`; `202` with a `pending` export. `400` for an unknown source or format or a request the source refuses; `429` at three exports in flight |
+| `GET /api/exports` | any signed-in user | The caller's own exports, newest first |
+| `GET /api/exports/:id` | any signed-in user | One export; when `ready` it carries a 5-minute signed URL with `Content-Disposition: attachment` |
+
+| Source | Permission | Request | Contents |
+|---|---|---|---|
+| `user-data` | `user_settings:read` | none | The caller's whole record, one dataset per user-owned model (server profiles without any credential, terminal sessions, runbooks the caller authored with their versions, settings, tokens' metadata) |
+| `server-profiles` | `servers:read` | `{ includeShared?: boolean }` | Name, host, port, user, auth method, tags, color, host key fingerprint, timestamps. `includeShared` adds profiles other people shared with the caller (decided by the sharing slice), with the same columns |
+| `terminal-sessions` | `sessions:read` | `{ from, to, status? }` (`YYYY-MM-DD`, both days inclusive, in the caller's time zone, by creation day) | Metadata only: name, status, tmux session name, size, server profile id, timestamps |
+| `runbook-runs` | `runbooks:read` | `{ from, to, runbookId? }` | Run, target and step status, timings, exit codes and artifact object ids (the run tables arrive with #62; until then the file has no dataset). Log contents are never exported |
+
+Formats: `json`, `csv` (a zip of one CSV per dataset) and `xlsx`. Audit: `export:create` after the job commits. Metrics: `app.exports`, `app.export.duration`, `app.export.size` (no user id label). Notifications: `export.ready` and `export.failed` (a fixed message).
+
 ---
 
 ### Health

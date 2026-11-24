@@ -131,6 +131,12 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           'approval gate) with parameters and target selectors: create, version with `If-Match`, archive, validate, ' +
           'preview targets, and manage write-only secret parameters. Gated on `runbooks:read` and `runbooks:write`.',
       },
+      {
+        name: 'Dashboard',
+        description:
+          'The Home page summary: fleet health (counts over the server profiles the caller may see), the caller\'s ' +
+          'active sessions and recent runbook runs. Counts plus the five most recent rows; read-only.',
+      },
     ],
   },
   {
@@ -222,6 +228,20 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           '`sharing:write` and `sharing:admin`; a record you may not share is 404. Link shares are disabled for ' +
           'both types (422 `ROLE_NOT_GRANTABLE`). `/api/grants/shared-with-me` lists what is shared with you. ' +
           'A grant carries a role, never a credential.',
+      },
+    ],
+  },
+  {
+    name: 'Data export',
+    tags: [
+      {
+        name: 'Exports',
+        description:
+          'Download your own data (#68): the sources the caller may use (`user-data`, `server-profiles`, ' +
+          '`terminal-sessions`, `runbook-runs`, each behind its own permission), queueing an export as a ' +
+          'background job and a 5-minute signed download of a ready file (json, csv zip or xlsx). No export ' +
+          'ever holds an SSH password, private key, passphrase or credential ciphertext, nor terminal ' +
+          'content. Someone else\'s export is 404, never 403.',
       },
     ],
   },

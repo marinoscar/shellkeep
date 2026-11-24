@@ -8,7 +8,7 @@ const cards = USER_SETTINGS_SECTIONS.flatMap((s) => s.cards);
 const routes = parseAppRoutes(readFileSync(join(__dirname, '..', '..', 'App.tsx'), 'utf8'));
 
 describe('USER_SETTINGS_SECTIONS', () => {
-  it('declares the Profile, Appearance, Notifications, Terminal, Keyboard shortcuts, Access Tokens, AI Keys, Webhooks and Groups cards', () => {
+  it('declares the Profile, Appearance, Notifications, Terminal, Keyboard shortcuts, Access Tokens, AI Keys, Webhooks, Groups and Download your data cards', () => {
     expect(cards.map((c) => [c.title, c.path])).toEqual([
       ['Profile', '/settings/profile'],
       ['Appearance', '/settings/appearance'],
@@ -25,6 +25,8 @@ describe('USER_SETTINGS_SECTIONS', () => {
       ['Webhooks', '/settings/webhooks'],
       // #71: the sharing slice's Sharing card, appended.
       ['Groups', '/settings/groups'],
+      // #68: the exports slice's card, appended in its own group.
+      ['Download your data', '/settings/data-export'],
     ]);
   });
 

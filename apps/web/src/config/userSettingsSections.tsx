@@ -30,6 +30,7 @@ import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import { webhooksUserSettingsSections } from '@marinoscar/platform-web/webhooks/ui';
 import { groupsSettingsPage } from '@marinoscar/platform-web/sharing/ui';
+import { dataExportSettingsPage } from '@marinoscar/platform-web/exports/ui';
 import {
   TERMINAL_SETTINGS_DESCRIPTION,
   TERMINAL_SETTINGS_TITLE,
@@ -137,6 +138,14 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
     // group detail page (`/settings/groups/:id`) is a child route of this card, not a card.
     label: 'Sharing',
     cards: [{ ...groupsSettingsPage.card, Icon: groupsSettingsPage.Icon }],
+  },
+  {
+    // #68, appended: the exports slice's "Download your data" card, as data. No permission: the API grants
+    // the `user-data` source to every role (`user_settings:read`), and the page shows only the sources
+    // `GET /api/exports/sources` returns for the caller (the server profiles, terminal sessions and runbook
+    // runs ones each need their own permission there). No credential is ever in an export.
+    label: 'Your data',
+    cards: [{ ...dataExportSettingsPage.card, Icon: dataExportSettingsPage.Icon }],
   },
 ];
 
