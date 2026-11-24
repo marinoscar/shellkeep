@@ -34,6 +34,8 @@ export const RUNBOOK_RUN_FINISHED_INTERNAL_EVENT = 'runbooks.run.finished';
 
 /** The approval step index of a canary pause (a real step index is never negative). */
 export const CANARY_STEP_INDEX = -1;
+/** The approval step index of the two-person approval of a destructive run (#67). */
+export const DESTRUCTIVE_RUN_STEP_INDEX = -2;
 
 /** How long a cancel takes to reach a running segment at most (a poll; the bus message is faster). */
 export const CANCEL_POLL_MS = 2_000;
@@ -61,6 +63,8 @@ export const FAILURE_CODES = {
   UNSUPPORTED_OPTION: 'UNSUPPORTED_OPTION',
   DEST_EXISTS: 'DEST_EXISTS',
   STEP_KIND_NOT_AVAILABLE: 'STEP_KIND_NOT_AVAILABLE',
+  /** A dry run found a precondition that would make the real step fail (#67). */
+  DRY_RUN_PRECONDITION: 'DRY_RUN_PRECONDITION',
   EXECUTOR_LOST: 'EXECUTOR_LOST',
   APPROVAL_REJECTED: 'APPROVAL_REJECTED',
   APPROVAL_EXPIRED: 'APPROVAL_EXPIRED',

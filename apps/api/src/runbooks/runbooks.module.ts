@@ -26,6 +26,9 @@ import { RunbookRunsService } from './engine/runbook-runs.service';
 import { RunbookSettingsService } from './engine/runbook-settings.service';
 import { SshExecutor } from './engine/ssh-executor';
 import { TargetRunHandler } from './engine/target-run.handler';
+import { RunbookAuditController } from './safety/runbook-audit.controller';
+import { RunbookAuditService } from './safety/runbook-audit.service';
+import { RunbookRiskService } from './safety/runbook-risk.service';
 import { RunbookSecretsController } from './runbook-secrets.controller';
 import { RunbooksController } from './runbooks.controller';
 import { RunbooksService } from './runbooks.service';
@@ -42,10 +45,12 @@ import { UserDataHostModule } from '../platform/user-data/user-data-host.module'
  */
 @Module({
   imports: [PrismaModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule, UserDataHostModule],
-  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController],
+  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController],
   providers: [
     RunbooksService,
     TargetResolverService,
+    RunbookRiskService,
+    RunbookAuditService,
     // The engine
     RunbookSettingsService,
     EngineMetricsService,

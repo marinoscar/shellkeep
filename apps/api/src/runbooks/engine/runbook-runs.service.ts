@@ -22,12 +22,26 @@ import { recordAudit } from '../../common/audit/record-audit';
 import type { OwnerScope } from '../../common/types/owner-scope';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RunbooksService } from '../runbooks.service';
+import { RunbookRiskService, type DefinitionRisk } from '../safety/runbook-risk.service';
+import { TargetResolverService } from '../target-resolver.service';
 import { RUNBOOK_SECRET_PURPOSE } from '../runbooks.credentials';
 import { runStrategySchema, type RunbookDefinition, targetSelectorSchema } from '../schema/runbook-definition.schema';
 import type { CreateRunDto, RunsQueryDto } from './dto/run.dto';
-import { FAILURE_CODES, RUNBOOK_JOB_REASON, RUNBOOK_RUN_START_TYPE, RUNBOOK_RUN_SUBJECT } from './engine.constants';
+
+type RunConfirm = NonNullable<CreateRunDto['confirm']>;
+
+/** What starting a run answers: `awaitingApproval` is a destructive run parked behind its second person. */
+export interface LaunchResult {
+  runId: string;
+  status: 'queued';
+  dryRun: boolean;
+  awaitingApproval: boolean;
+  approvalId: string | null;
+}
+import { DESTRUCTIVE_RUN_STEP_INDEX, FAILURE_CODES, RUNBOOK_JOB_REASON, RUNBOOK_RUN_START_TYPE, RUNBOOK_RUN_SUBJECT } from './engine.constants';
+import { EngineMetricsService } from './engine-metrics.service';
 import { RUNBOOK_RUN_ERROR_CODES } from './engine.error-codes';
-import { RunCoordinatorService, type AdvanceOutcome } from './run-coordinator.service';
+import { RunCoordinatorService, emptyOutcome, type AdvanceOutcome } from './run-coordinator.service';
 import { RunLifecycleService } from './run-lifecycle.service';
 import { checkRunParams } from './run-params';
 import { RunbookSettingsService } from './runbook-settings.service';
@@ -48,6 +62,9 @@ export class RunbookRunsService {
     private readonly coordinator: RunCoordinatorService,
     private readonly lifecycle: RunLifecycleService,
     @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
+    private readonly risk: RunbookRiskService,
+    private readonly resolver: TargetResolverService,
+    private readonly metrics: EngineMetricsService,
   ) {}
 
   private scopeOf(principal: Principal): OwnerScope {
@@ -83,7 +100,7 @@ export class RunbookRunsService {
   }
 
   /** Creates a queued run and its start job. */
-  async create(principal: Principal, runbookId: string, dto: CreateRunDto, trigger: 'manual' | 'api' | 'schedule' = 'manual'): Promise<{ runId: string }> {
+  async create(principal: Principal, runbookId: string, dto: CreateRunDto, trigger: 'manual' | 'api' | 'schedule' = 'manual'): Promise<LaunchResult> {
     const scope = this.scopeOf(principal);
     await this.requireEnabled(scope.orgId);
     await this.runbooks.requireRun(principal, runbookId); // 404 for a runbook the caller cannot see, 404 for one they may not run
@@ -122,38 +139,175 @@ export class RunbookRunsService {
     }
 
     const effective = await this.settings.effective(scope.orgId);
+    const dryRun = dto.dryRun === true;
     const merged = runStrategySchema.parse({ ...definition.strategy, ...(dto.strategy ?? {}) });
-    const strategy = { ...merged, concurrency: Math.min(merged.concurrency, effective.maxConcurrency) };
+    const strategy = {
+      ...merged,
+      concurrency: Math.min(merged.concurrency, effective.maxConcurrency),
+      // A dry run creates no approvals: no canary pause.
+      ...(dryRun ? { pauseAfterFirstBatch: false } : {}),
+    };
     const selector = targetSelectorSchema.parse({ ...definition.defaultTargets, ...(dto.targets ?? {}) });
 
-    const runId = await runInOrg(this.prisma, scope, async (tx) => {
+    return this.launch(principal, scope, {
+      runbook: { id: runbook.id, name: runbook.name },
+      version: version.version,
+      definition,
+      dryRun,
+      confirm: dto.confirm,
+      trigger,
+      params: checked.values,
+      secretRefs: checked.secretRefs,
+      selector,
+      strategy,
+      requireApproval: !effective.approvals.allowSelfApproval,
+      approvalExpirySec: effective.approvals.defaultExpirySec,
+    });
+  }
+
+  /**
+   * Writes the run and either enqueues its start job or, for a destructive run under the two-person rule,
+   * parks it `queued` behind a `destructive_run` approval (no start job until a different person approves).
+   * A destructive launch (not a dry run) must carry `confirm`: the runbook's exact name and the number of
+   * servers the selector resolves to now, so a wrong tag cannot silently widen the blast radius.
+   */
+  private async launch(
+    principal: Principal,
+    scope: OwnerScope,
+    input: {
+      runbook: { id: string; name: string };
+      version: number;
+      definition: RunbookDefinition;
+      dryRun: boolean;
+      confirm: RunConfirm | undefined;
+      trigger: 'manual' | 'api' | 'schedule';
+      params: unknown;
+      secretRefs: unknown;
+      selector: unknown;
+      strategy: unknown;
+      retryOfRunId?: string;
+      requireApproval: boolean;
+      approvalExpirySec: number;
+    },
+  ): Promise<LaunchResult> {
+    const assessment = this.risk.assessDefinition(input.definition);
+    const destructive = !input.dryRun && assessment.destructive;
+    const awaitingApproval = destructive && input.requireApproval;
+
+    if (destructive) await this.requireConfirmation(principal, input.runbook.name, assessment, input.confirm, input.selector, input.requireApproval);
+
+    const reasons = [...new Set(assessment.findings.filter((f) => f.destructive).flatMap((f) => f.reasons))];
+    const approvalMessage = `Destructive run of "${input.runbook.name}": ${reasons.join('; ')}`.slice(0, 2000);
+
+    const created = await runInOrg(this.prisma, scope, async (tx) => {
       const run = await tx.runbookRun.create({
         data: {
           orgId: scope.orgId,
-          runbookId,
-          version: version.version,
+          runbookId: input.runbook.id,
+          version: input.version,
           status: 'queued',
-          trigger,
+          trigger: input.trigger,
           initiatedBy: scope.userId,
-          params: checked.values as Prisma.InputJsonValue,
-          secretRefs: checked.secretRefs as Prisma.InputJsonValue,
-          targetSelector: selector as unknown as Prisma.InputJsonValue,
-          strategy: strategy as unknown as Prisma.InputJsonValue,
+          ...(input.retryOfRunId ? { retryOfRunId: input.retryOfRunId } : {}),
+          dryRun: input.dryRun,
+          destructive,
+          params: input.params as Prisma.InputJsonValue,
+          secretRefs: input.secretRefs as Prisma.InputJsonValue,
+          targetSelector: input.selector as Prisma.InputJsonValue,
+          strategy: input.strategy as Prisma.InputJsonValue,
         },
         select: { id: true },
       });
-      await this.jobs.enqueueWithin(tx as unknown as JobsTx, {
-        type: RUNBOOK_RUN_START_TYPE,
-        reason: RUNBOOK_JOB_REASON,
-        orgId: scope.orgId,
-        subjectType: RUNBOOK_RUN_SUBJECT,
-        subjectId: run.id,
-        payload: { runId: run.id },
-      });
-      return run.id;
+      let approvalId: string | null = null;
+      if (awaitingApproval) {
+        const approval = await tx.runbookApproval.create({
+          data: {
+            orgId: scope.orgId,
+            runId: run.id,
+            runTargetId: null,
+            scopeKey: 'run',
+            scope: 'run',
+            kind: 'destructive_run',
+            stepIndex: DESTRUCTIVE_RUN_STEP_INDEX,
+            stepName: 'Destructive run',
+            message: approvalMessage,
+            expiresAt: new Date(Date.now() + input.approvalExpirySec * 1000),
+          },
+          select: { id: true },
+        });
+        approvalId = approval.id;
+      } else {
+        await this.jobs.enqueueWithin(tx as unknown as JobsTx, {
+          type: RUNBOOK_RUN_START_TYPE,
+          reason: RUNBOOK_JOB_REASON,
+          orgId: scope.orgId,
+          subjectType: RUNBOOK_RUN_SUBJECT,
+          subjectId: run.id,
+          payload: { runId: run.id },
+        });
+      }
+      return { runId: run.id, approvalId };
     });
-    await this.audit('runbook_run.created', scope, runId, { runbookId, version: version.version, trigger });
-    return { runId };
+
+    await this.audit('runbook_run.created', scope, created.runId, {
+      runbookId: input.runbook.id,
+      version: input.version,
+      trigger: input.trigger,
+      dryRun: input.dryRun,
+      destructive,
+      ...(input.retryOfRunId ? { retryOf: input.retryOfRunId } : {}),
+    });
+    if (input.dryRun) this.metrics.dryRun();
+    if (destructive) {
+      this.metrics.destructiveRun('confirmed');
+      await this.audit('runbook_run.destructive_confirmed', scope, created.runId, {
+        runbookId: input.runbook.id,
+        version: input.version,
+        findings: assessment.findings.filter((f) => f.destructive).length,
+        requiresApproval: awaitingApproval,
+      });
+    }
+    if (created.approvalId) {
+      const outcome = emptyOutcome(created.runId);
+      outcome.events.push({ type: 'approval', runId: created.runId, approvalId: created.approvalId, status: 'pending', scope: 'run', kind: 'destructive_run' });
+      outcome.approvals.push({
+        approvalId: created.approvalId,
+        runId: created.runId,
+        orgId: scope.orgId,
+        runbookId: input.runbook.id,
+        version: input.version,
+        stepName: 'Destructive run',
+        targetsTotal: input.confirm?.targetCount ?? 0,
+        kind: 'destructive_run',
+      });
+      await this.lifecycle.afterCommit(outcome);
+    }
+    return { runId: created.runId, status: 'queued', dryRun: input.dryRun, awaitingApproval, approvalId: created.approvalId };
+  }
+
+  /** 428 unless `confirm` names the runbook exactly and the count of servers the selector resolves to now. */
+  private async requireConfirmation(
+    principal: Principal,
+    runbookName: string,
+    assessment: DefinitionRisk,
+    confirm: RunConfirm | undefined,
+    selector: unknown,
+    requiresApproval: boolean,
+  ): Promise<void> {
+    const resolved = await this.resolver.resolve(principal, selector as never);
+    const targetCount = resolved.targets.length;
+    if (confirm && confirm.runbookName === runbookName && confirm.targetCount === targetCount) return;
+    this.metrics.destructiveRun('blocked');
+    throw new HttpException(
+      {
+        code: RUNBOOK_RUN_ERROR_CODES.CONFIRMATION_REQUIRED,
+        message: confirm
+          ? 'The confirmation does not match: type the exact runbook name and the number of servers this run will change'
+          : 'This runbook has a destructive step: confirm the runbook name and the number of servers before it runs',
+        details: { runbookName, targetCount, requiresApproval, findings: assessment.findings.filter((f) => f.destructive) },
+      },
+      428,
+    );
   }
 
   async list(principal: Principal, query: RunsQueryDto) {
@@ -176,7 +330,7 @@ export class RunbookRunsService {
           skip: (query.page - 1) * query.pageSize,
           take: query.pageSize,
           select: {
-            id: true, runbookId: true, version: true, status: true, trigger: true, initiatedBy: true,
+            id: true, runbookId: true, version: true, status: true, trigger: true, initiatedBy: true, dryRun: true, destructive: true, errorCode: true,
             createdAt: true, startedAt: true, finishedAt: true, runbook: { select: { name: true } },
           },
         }),
@@ -209,6 +363,11 @@ export class RunbookRunsService {
           durationMs: true, errorCode: true, logBytes: true, logTruncated: true, startedAt: true, finishedAt: true,
         },
       });
+      const approvals = await tx.runbookApproval.findMany({
+        where: { runId: id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, kind: true, scope: true, status: true, stepIndex: true, stepName: true, expiresAt: true, decidedBy: true, decidedAt: true },
+      });
       const counts: Record<string, number> = {};
       for (const t of targets) counts[t.status] = (counts[t.status] ?? 0) + 1;
       const stepsByTarget = new Map<string, typeof steps>();
@@ -220,6 +379,8 @@ export class RunbookRunsService {
         // The NAMES of the secrets, never a value.
         secretRefs,
         counts: { total: targets.length, ...counts },
+        // The run's approvals (the canary pause, step gates and, for a destructive run, `destructive_run`).
+        approvals,
         targets: targets.map((t) => ({ ...t, steps: stepsByTarget.get(t.id) ?? [] })),
       };
     });
@@ -246,6 +407,24 @@ export class RunbookRunsService {
       const run = await tx.runbookRun.findUniqueOrThrow({ where: { id }, select: { status: true, finishedAt: true } });
       if (run.finishedAt || !CANCELLABLE.includes(run.status)) {
         throw new HttpException({ code: RUNBOOK_RUN_ERROR_CODES.RUN_STATE, message: `A ${run.status} run cannot be cancelled` }, 409);
+      }
+      // A destructive run still waiting for its second person has no start job and no targets: nothing
+      // would ever settle a `cancelling` run, so it is cancelled outright and its approval closed.
+      if (run.status === 'queued') {
+        const parked = await tx.runbookApproval.findFirst({ where: { runId: id, kind: 'destructive_run', status: 'pending' }, select: { id: true } });
+        if (parked) {
+          assertTransition('run', 'queued', 'cancelled');
+          await tx.runbookApproval.update({ where: { id: parked.id }, data: { status: 'expired', decidedAt: now, comment: 'The run was cancelled before this was decided' } });
+          const row = await tx.runbookRun.update({
+            where: { id },
+            data: { status: 'cancelled', cancelRequestedAt: now, finishedAt: now, errorCode: FAILURE_CODES.CANCELLED },
+            select: { trigger: true, initiatedBy: true, runbookId: true, version: true, dryRun: true },
+          });
+          const parkedOutcome = emptyOutcome(id);
+          parkedOutcome.events.push({ type: 'run', runId: id, status: 'cancelled', finishedAt: now.toISOString() });
+          parkedOutcome.finished = { runId: id, orgId: scope.orgId, status: 'cancelled', targetsTotal: 0, targetsSucceeded: 0, targetsFailed: 0, ...row };
+          return parkedOutcome;
+        }
       }
       assertTransition('run', run.status, 'cancelling');
       await tx.runbookRun.update({ where: { id }, data: { status: 'cancelling', cancelRequestedAt: now } });
@@ -299,12 +478,16 @@ export class RunbookRunsService {
     return { id: targetId, status: 'cancelling' };
   }
 
-  /** A new run with the same version, parameters and strategy, on the failed servers (or all of them). */
-  async retry(principal: Principal, id: string, only: 'failed' | 'all'): Promise<{ runId: string }> {
+  /**
+   * A new run with the same version, parameters and strategy, on the failed servers (or all of them). A
+   * retry of a dry run is a dry run; a retry of a destructive runbook carries the same confirmation and
+   * the same two-person rule as the launch it repeats.
+   */
+  async retry(principal: Principal, id: string, only: 'failed' | 'all', confirm?: RunConfirm): Promise<LaunchResult> {
     const scope = this.scopeOf(principal);
     await this.requireEnabled(scope.orgId);
     const source = await runInOrg(this.prisma, scope, async (tx) => {
-      const run = await tx.runbookRun.findFirst({ where: { id, orgId: scope.orgId } });
+      const run = await tx.runbookRun.findFirst({ where: { id, orgId: scope.orgId }, include: { runbook: { select: { name: true } }, runbookVersion: true } });
       if (!run) throw new NotFoundException('Run not found');
       const targets = await tx.runbookRunTarget.findMany({
         where: { runId: id, serverProfileId: { not: null }, ...(only === 'failed' ? { status: { in: ['failed', 'cancelled'] } } : { status: { not: 'skipped' } }) },
@@ -317,36 +500,23 @@ export class RunbookRunsService {
     if (source.serverIds.length === 0) {
       throw new UnprocessableEntityException({ code: RUNBOOK_RUN_ERROR_CODES.NO_TARGETS, message: 'There is nothing to retry' });
     }
+    const effective = await this.settings.effective(scope.orgId);
 
-    const runId = await runInOrg(this.prisma, scope, async (tx) => {
-      const run = await tx.runbookRun.create({
-        data: {
-          orgId: scope.orgId,
-          runbookId: source.run.runbookId,
-          version: source.run.version,
-          status: 'queued',
-          trigger: 'manual',
-          initiatedBy: scope.userId,
-          retryOfRunId: source.run.id,
-          params: source.run.params as Prisma.InputJsonValue,
-          secretRefs: source.run.secretRefs as Prisma.InputJsonValue,
-          targetSelector: { serverIds: source.serverIds, tags: { any: [], all: [] }, groupIds: [], exclude: [] },
-          strategy: source.run.strategy as Prisma.InputJsonValue,
-        },
-        select: { id: true },
-      });
-      await this.jobs.enqueueWithin(tx as unknown as JobsTx, {
-        type: RUNBOOK_RUN_START_TYPE,
-        reason: RUNBOOK_JOB_REASON,
-        orgId: scope.orgId,
-        subjectType: RUNBOOK_RUN_SUBJECT,
-        subjectId: run.id,
-        payload: { runId: run.id },
-      });
-      return run.id;
+    return this.launch(principal, scope, {
+      runbook: { id: source.run.runbookId, name: source.run.runbook.name },
+      version: source.run.version,
+      definition: source.run.runbookVersion.definition as unknown as RunbookDefinition,
+      dryRun: source.run.dryRun,
+      confirm,
+      trigger: 'manual',
+      params: source.run.params,
+      secretRefs: source.run.secretRefs,
+      selector: { serverIds: source.serverIds, tags: { any: [], all: [] }, groupIds: [], exclude: [] },
+      strategy: source.run.strategy,
+      retryOfRunId: source.run.id,
+      requireApproval: !effective.approvals.allowSelfApproval,
+      approvalExpirySec: effective.approvals.defaultExpirySec,
     });
-    await this.audit('runbook_run.created', scope, runId, { retryOf: id, only });
-    return { runId };
   }
 
   private async audit(action: string, scope: OwnerScope, runId: string, meta: Record<string, unknown>): Promise<void> {

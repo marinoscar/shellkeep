@@ -129,6 +129,8 @@ describe('ServerProfilesService', () => {
               updateMany: jest.fn().mockResolvedValue({ count: 1 }),
               delete: jest.fn(),
             },
+            // The caller's last session per profile (#79): none unless a case says so.
+            terminalSession: { groupBy: jest.fn().mockResolvedValue([]) },
           },
         },
       ],
@@ -193,6 +195,7 @@ describe('ServerProfilesService', () => {
                 OR: [
                   { name: { contains: 'prod', mode: 'insensitive' } },
                   { hostname: { contains: 'prod', mode: 'insensitive' } },
+                  { username: { contains: 'prod', mode: 'insensitive' } },
                 ],
               },
             ],
@@ -795,6 +798,28 @@ describe('ServerProfilesService', () => {
       await expect(service.testConnection(mockProfileId, principal)).resolves.toEqual({
         success: false,
         error: 'All configured authentication methods failed',
+      });
+    });
+
+    it.each([
+      ['a success', () => ssh.open.mockResolvedValue({ end: jest.fn() }), { lastTestOk: true, lastTestCode: null }],
+      ['a failure', () => ssh.open.mockRejectedValue(new Error('refused')), { lastTestOk: false, lastTestCode: null }],
+      [
+        'a host-key refusal (proves nothing about reachability)',
+        () =>
+          ssh.open.mockRejectedValue(
+            new HostKeyError('HOST_KEY_MISMATCH', { fingerprint: 'SHA256:x', algorithm: 'ssh-ed25519' }, FP, mockProfileId),
+          ),
+        { lastTestOk: null, lastTestCode: 'HOST_KEY_MISMATCH' },
+      ],
+    ] as const)('stores the outcome of %s (#79)', async (_label, arrange, expected) => {
+      find(row);
+      facts.tryProbeClient.mockResolvedValue(null);
+      arrange();
+      await service.testConnection(mockProfileId, principal);
+      expect(prisma.serverProfile.updateMany).toHaveBeenCalledWith({
+        where: { id: mockProfileId, orgId: mockOrgId },
+        data: { lastTestAt: expect.any(Date), ...expected },
       });
     });
 

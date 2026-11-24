@@ -54,7 +54,7 @@ const jobScope = new JobScope(stubPrisma);
 
 const startHandler = () => new RunStartHandler(registry, stubPrisma, jobScope, none, none, none, none);
 const targetHandler = () =>
-  new TargetRunHandler(registry, stubPrisma, jobScope, none, none, none, none, none, none, none, none, none, none, none);
+  new TargetRunHandler(registry, stubPrisma, jobScope, none, none, none, none, none, none, none, none, none, none, none, none);
 const advanceHandler = () => new RunAdvanceHandler(registry, jobScope, { advance: async () => ({ runId: RUN, events: [], cancelRequests: [], finished: null, approvals: [], dispatched: 0 }) } as never, { afterCommit: async () => undefined } as never);
 const compactHandler = () => new LogsCompactHandler(registry, stubPrisma, { runAsSystem: async () => ({ candidates: [], activeIds: new Set(), stuckRuns: [], approvalOrgs: [], orphans: [] }) } as never, none, none, none, none, none);
 

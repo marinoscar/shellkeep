@@ -105,6 +105,8 @@ function createProfileTable() {
         return rows.splice(index, 1)[0];
       },
     },
+    // The caller's last session per profile (#79): none here.
+    terminalSession: { groupBy: async () => [] },
   };
 }
 

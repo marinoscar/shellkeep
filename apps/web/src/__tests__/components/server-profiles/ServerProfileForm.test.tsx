@@ -161,7 +161,7 @@ describe('ServerProfileForm', () => {
       expect(screen.getByLabelText(/^username/i)).toHaveValue('deploy');
     });
 
-    it('should populate tags as comma-separated string', () => {
+    it('should show the profile tags as chips (#79)', () => {
       render(
         <ServerProfileForm
           open={true}
@@ -171,7 +171,31 @@ describe('ServerProfileForm', () => {
         />
       );
 
-      expect(screen.getByLabelText(/tags/i)).toHaveValue('dev, linux');
+      expect(screen.getByRole('button', { name: 'dev' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'linux' })).toBeInTheDocument();
+    });
+
+    it('offers the tags already in use (#79)', async () => {
+      const user = userEvent.setup();
+      render(
+        <ServerProfileForm
+          open={true}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          tagOptions={['prod', 'staging']}
+        />
+      );
+
+      await user.click(screen.getByLabelText(/tags/i));
+      await user.click(await screen.findByRole('option', { name: 'staging' }));
+      await user.type(screen.getByLabelText(/^name/i), 'Tagged');
+      await user.type(screen.getByLabelText(/^hostname/i), 'server-a.example.test');
+      await user.type(screen.getByLabelText(/^username/i), 'root');
+      await user.click(screen.getByRole('button', { name: /^create$/i }));
+
+      await waitFor(() => {
+        expect(mockOnSave).toHaveBeenCalledWith(expect.objectContaining({ tags: ['staging'] }));
+      });
     });
 
     it('should render "Update" button in edit mode', () => {
@@ -214,7 +238,7 @@ describe('ServerProfileForm', () => {
       );
 
       // Open the auth method select (MUI Select renders as combobox role)
-      const authSelect = screen.getByRole('combobox');
+      const authSelect = screen.getAllByRole('combobox')[0]; // the first: the tags field is a combobox too (#79)
       await user.click(authSelect);
 
       // Select SSH Key option
@@ -241,7 +265,7 @@ describe('ServerProfileForm', () => {
       // Password field visible initially
       expect(screen.getByLabelText(/^password/i)).toBeInTheDocument();
 
-      const authSelect = screen.getByRole('combobox');
+      const authSelect = screen.getAllByRole('combobox')[0]; // the first: the tags field is a combobox too (#79)
       await user.click(authSelect);
 
       const sshKeyOption = await screen.findByRole('option', { name: /ssh key/i });
@@ -263,7 +287,7 @@ describe('ServerProfileForm', () => {
         />
       );
 
-      const authSelect = screen.getByRole('combobox');
+      const authSelect = screen.getAllByRole('combobox')[0]; // the first: the tags field is a combobox too (#79)
       await user.click(authSelect);
 
       const agentOption = await screen.findByRole('option', { name: /ssh agent/i });
