@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
-import { Box, Collapse, Divider, IconButton, Tooltip, Typography } from '@mui/material';
-import { GridViewOutlined as PanelIcon } from '@mui/icons-material';
+import { Box, Chip, Collapse, Divider, IconButton, Tooltip, Typography } from '@mui/material';
+import { GridViewOutlined as PanelIcon, KeyboardOutlined as KeysIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import type { Chord, KeyModifier } from '../../lib/terminal/keys/keyModel';
 import { ALL_OFF, type ModifierSnapshot } from '../../lib/terminal/keys/modifierState';
@@ -42,6 +42,15 @@ export interface TerminalKeyShortcutsBarProps {
   onTogglePanel?: () => void;
   /** The panel's element id, for the toggle's `aria-controls`. */
   panelId?: string;
+  /**
+   * A hardware keyboard is in use and the user asked to hide the row with one
+   * (#170, `shortcuts.options.autoHideWithHardwareKeyboard`): only a small
+   * "Keys" pill is drawn, pinned at the right beside the panel toggle, which
+   * stays reachable.
+   */
+  collapsed?: boolean;
+  /** A tap on the "Keys" pill: show the whole row again. */
+  onExpand?: () => void;
 }
 
 /**
@@ -50,7 +59,8 @@ export interface TerminalKeyShortcutsBarProps {
  * order with a thin divider between them, and the full key panel's toggle
  * pinned at the right end, outside the scroller, so it never scrolls away. The
  * row's height is fixed (44 px keys), so it sits steadily on the keyboard
- * (`useKeyboardInset`, `keyDockOffset`).
+ * (`useKeyboardInset`, `keyDockOffset`). With a hardware keyboard and the
+ * auto-hide option (#170) it collapses to a "Keys" pill next to the toggle.
  */
 export function TerminalKeyShortcutsBar({
   open,
@@ -65,6 +75,8 @@ export function TerminalKeyShortcutsBar({
   panelOpen = false,
   onTogglePanel,
   panelId,
+  collapsed = false,
+  onExpand,
 }: TerminalKeyShortcutsBarProps) {
   const popup = useKeyPopup(onSendChord);
   const handlers = { onKey, onAction, onToggleModifier, onSendChord, modifierState, haptics, beginHold };
@@ -74,53 +86,80 @@ export function TerminalKeyShortcutsBar({
     <Collapse in={open} unmountOnExit>
       <Box
         data-testid="terminal-key-row"
-        sx={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid', borderColor: 'divider' }}
+        data-collapsed={collapsed ? 'true' : undefined}
+        sx={{
+          display: 'flex',
+          alignItems: 'stretch',
+          justifyContent: collapsed ? 'flex-end' : undefined,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+        }}
       >
-        <Box
-          role="toolbar"
-          aria-label="Terminal keys"
-          data-testid="terminal-key-row-scroller"
-          sx={{
-            position: 'relative',
-            flex: 1,
-            minWidth: 0,
-            display: 'flex',
-            alignItems: 'center',
-            overflowX: 'auto',
-            gap: KEY_GAP,
-            px: 1,
-            py: 0.5,
-            WebkitOverflowScrolling: 'touch',
-            scrollbarWidth: 'none',
-            '&::-webkit-scrollbar': { display: 'none' },
-          }}
-        >
-          {empty ? (
-            <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', py: 0.5 }}>
-              No shortcuts configured. Add some in{' '}
-              <Link to="/settings/shortcuts" style={{ color: 'inherit' }}>
-                Settings
-              </Link>
-              .
-            </Typography>
-          ) : (
-            (groups ?? []).map((group, i) => (
-              <Fragment key={group.index}>
-                {i > 0 && (
-                  <Divider
-                    orientation="vertical"
-                    flexItem
-                    data-testid="key-group-divider"
-                    sx={{ my: 1, flexShrink: 0 }}
-                  />
-                )}
-                {group.keys.map((item) => (
-                  <TouchKey key={item.uid} item={item} layout="row" onLongPress={popup.opener(item)} {...handlers} />
-                ))}
-              </Fragment>
-            ))
-          )}
-        </Box>
+        {!collapsed && (
+          <Box
+            role="toolbar"
+            aria-label="Terminal keys"
+            data-testid="terminal-key-row-scroller"
+            sx={{
+              position: 'relative',
+              flex: 1,
+              minWidth: 0,
+              display: 'flex',
+              alignItems: 'center',
+              overflowX: 'auto',
+              gap: KEY_GAP,
+              px: 1,
+              py: 0.5,
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
+            }}
+          >
+            {empty ? (
+              <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', py: 0.5 }}>
+                No shortcuts configured. Add some in{' '}
+                <Link to="/settings/shortcuts" style={{ color: 'inherit' }}>
+                  Settings
+                </Link>
+                .
+              </Typography>
+            ) : (
+              (groups ?? []).map((group, i) => (
+                <Fragment key={group.index}>
+                  {i > 0 && (
+                    <Divider
+                      orientation="vertical"
+                      flexItem
+                      data-testid="key-group-divider"
+                      sx={{ my: 1, flexShrink: 0 }}
+                    />
+                  )}
+                  {group.keys.map((item) => (
+                    <TouchKey key={item.uid} item={item} layout="row" onLongPress={popup.opener(item)} {...handlers} />
+                  ))}
+                </Fragment>
+              ))
+            )}
+          </Box>
+        )}
+        {collapsed && (
+          <Box sx={{ flexShrink: 0, display: 'flex', alignItems: 'center', px: 0.5 }}>
+            <Chip
+              icon={<KeysIcon fontSize="small" />}
+              label="Keys"
+              size="small"
+              variant="outlined"
+              clickable
+              aria-label="Show key row"
+              aria-expanded={false}
+              data-testid="terminal-key-row-pill"
+              // Keep the terminal's focus (and the hardware keyboard's target).
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={onExpand}
+              sx={{ minHeight: 32 }}
+            />
+          </Box>
+        )}
         {onTogglePanel && (
           <Box
             sx={{
