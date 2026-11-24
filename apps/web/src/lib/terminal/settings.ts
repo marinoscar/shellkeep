@@ -28,7 +28,7 @@ import type {
   TerminalUserSettingsDocument,
 } from '../../types/terminal';
 import { DEFAULT_KEY_LAYOUT, DEFAULT_KEY_OPTIONS, type KeyLayout, type KeyOptions } from './keys/keyModel';
-import { fromLegacyShortcuts, toLegacyBarKeys } from './keys/legacyAdapter';
+import { layoutFromLegacyShortcuts, toLegacyBarKeys } from './keys/legacyAdapter';
 
 /** The terminal preferences with every field resolved. */
 export interface ResolvedTerminalSettings {
@@ -164,7 +164,7 @@ export function resolveKeyLayout(
 ): KeyLayout {
   if (document?.shortcuts?.layout) return document.shortcuts.layout;
   const legacy = document?.shortcuts?.keyShortcuts ?? document?.terminal?.keyShortcuts;
-  return legacy ? fromLegacyShortcuts(legacy) : (DEFAULT_KEY_LAYOUT as KeyLayout);
+  return legacy ? layoutFromLegacyShortcuts(legacy) : (DEFAULT_KEY_LAYOUT as KeyLayout);
 }
 
 /** The key bar options: the stored ones, else `DEFAULT_KEY_OPTIONS`. */

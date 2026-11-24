@@ -12,7 +12,7 @@ import {
 } from './settings';
 import type { KeyShortcut } from '../../types/terminal';
 import { DEFAULT_KEY_LAYOUT, DEFAULT_KEY_OPTIONS } from './keys/keyModel';
-import { fromLegacyShortcuts } from './keys/legacyAdapter';
+import { fromLegacyShortcuts, layoutFromLegacyShortcuts } from './keys/legacyAdapter';
 
 const custom: KeyShortcut = {
   id: '22222222-2222-4222-8222-222222222201',
@@ -132,9 +132,9 @@ describe('the v2 key layout (#165)', () => {
 
   it('converts a stored v1 list (also the legacy terminal one) and keeps the bar on it', () => {
     const doc = { shortcuts: { keyShortcuts: [custom] } };
-    expect(resolveKeyLayout(doc)).toEqual(fromLegacyShortcuts([custom]));
+    expect(resolveKeyLayout(doc)).toEqual(layoutFromLegacyShortcuts([custom]));
     expect(resolveKeyLayout({ terminal: { showScrollButtons: true, keyShortcuts: [custom] } })).toEqual(
-      fromLegacyShortcuts([custom]),
+      layoutFromLegacyShortcuts([custom]),
     );
     expect(resolveKeyShortcuts(doc)).toEqual([custom]);
   });

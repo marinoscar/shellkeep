@@ -6,6 +6,7 @@ import { TerminalKeyShortcutsBar } from './TerminalKeyShortcutsBar';
 import type { KeyShortcut } from '../../types';
 import { ALL_OFF } from '../../lib/terminal/keys/modifierState';
 import { LONG_PRESS_MS } from './useLongPress';
+import { layoutFromLegacyShortcuts, toBarModifierKeys, toLegacyBarKeys } from '../../lib/terminal/keys/legacyAdapter';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -201,6 +202,14 @@ describe('TerminalKeyShortcutsBar', () => {
     it('draws no toggles without onToggleModifier', () => {
       render(<TerminalKeyShortcutsBar open shortcuts={[shortcut1]} onSend={vi.fn()} modifierKeys={['ctrl']} />);
       expect(screen.queryByRole('button', { name: 'Ctrl' })).not.toBeInTheDocument();
+    });
+
+    it('shows the Ctrl and Alt toggles for a user migrated from v1 shortcuts', () => {
+      const layout = layoutFromLegacyShortcuts([shortcut1]);
+      renderBar({ shortcuts: toLegacyBarKeys(layout), modifierKeys: toBarModifierKeys(layout) });
+      expect(key('Ctrl')).toHaveAttribute('aria-pressed', 'false');
+      expect(key('Alt')).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.queryByRole('button', { name: 'Shift' })).not.toBeInTheDocument();
     });
 
     it('draws the toggles in order, off, with aria-pressed false and no description', () => {
