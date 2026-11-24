@@ -161,7 +161,7 @@ Drift comes from the apps view.
 | `apps/web/src/pages/HomePage.tsx` | 0% / +33 −10 | 1 | domain | keep (dashboard, redone in #78) | #78 | none |
 | `apps/web/src/pages/ServerProfilesPage.tsx` | n/a / +0 −0 | 1 | domain | keep (redone in #79) | #79 | none |
 | `apps/web/src/pages/SessionsPage.tsx` | n/a / +0 −0 | 1 | domain | keep | — | none |
-| `apps/web/src/pages/TerminalPage.tsx` | n/a / +0 −0 | 1 | domain | keep (workspace redone in #77) | #77 | routed at `/sessions/:id` since #76, full-bleed (`useShellMainVariant`); workspace redone in #77 |
+| `apps/web/src/pages/TerminalPage.tsx` | n/a / +0 −0 | 1 | domain | keep (workspace redone in #77) | #77 | deleted by #77: `/sessions/:id` is `TerminalWorkspacePage.tsx` (tabs, splits, the session switcher, the status bar, the AI panel shell); its toolbar actions live in `components/terminal/useTerminalActions.ts` |
 | `apps/web/src/pages/TerminalFullPage.tsx` | n/a / +0 −0 | 1 | domain | keep (workspace redone in #77) | #77 | deleted by #76 (`/terminal/:id` redirects to `/sessions/:id`, the full-bleed `TerminalPage` inside the shell) |
 | `apps/web/src/components/PWAUpdatePrompt.tsx` | n/a / +0 −0 | 1 | noise | host web (`UpdatePrompt`) | #46 | deleted by #46 (the packaged `UpdatePrompt`, which also registers the service worker, and `InstallPrompt` are mounted in `App.tsx`) |
 
