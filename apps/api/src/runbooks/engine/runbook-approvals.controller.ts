@@ -14,7 +14,7 @@ export class RunbookApprovalsController {
 
   @Get()
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_READ] })
-  @ApiResponse({ status: 200, description: 'Paginated approvals' })
+  @ApiResponse({ status: 200, description: 'Paginated approvals with `allowSelfApproval`; `{ count }` only with `count=true`' })
   @ApiOperation({ summary: 'The approval inbox; `status=pending` by default. Deciding needs runbooks:approve (requires runbooks:read)' })
   list(@CurrentPrincipal() principal: Principal, @Query() query: ApprovalsQueryDto) {
     return this.approvals.list(principal, query);

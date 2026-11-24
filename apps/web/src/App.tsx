@@ -48,6 +48,17 @@ const SessionsPage = lazy(() => import('./pages/SessionsPage'));
 // The session workspace at `/sessions/:id` (#77): tabs, splits and the
 // switcher, full-bleed inside the shell (#76).
 const TerminalWorkspacePage = lazy(() => import('./pages/TerminalWorkspacePage'));
+// Runbooks (issue #65): the list, the builder, a runbook's page and its launcher
+// deep links, the approvals inbox, the runs list and the live run view.
+const RunbooksPage = lazy(() => import('./pages/runbooks/RunbooksPage'));
+const RunbookBuilderPage = lazy(() => import('./pages/runbooks/RunbookBuilderPage'));
+const RunbookDetailPage = lazy(() => import('./pages/runbooks/RunbookDetailPage'));
+const RunLauncherPage = lazy(() => import('./pages/runbooks/RunLauncherPage'));
+const ApprovalsPage = lazy(() => import('./pages/runbooks/ApprovalsPage'));
+const RunsPage = lazy(() => import('./pages/runbooks/RunsPage'));
+const RunDetailPage = lazy(() => import('./pages/runbooks/RunDetailPage'));
+// #67: the org-wide runbook command log, linked per server from the run matrix.
+const RunbookCommandsPage = lazy(() => import('./pages/runbooks/RunbookCommandsPage'));
 // Settings (issue #48): the packaged hub over `config/userSettingsSections.tsx`,
 // the packaged Profile and Appearance pages, and the terminal domain's page.
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
@@ -263,6 +274,91 @@ function AppRoutes() {
                   element={
                     <RequirePermission permission="servers:read" fallback={HOME}>
                       <ServerProfilesPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Runbooks (#65): reads need `runbooks:read` (the runbooks and run
+                    controllers), the builder `runbooks:write`, the launcher deep links
+                    `runbooks:run`. Deciding an approval (`runbooks:approve`) is gated
+                    inside the inbox. `/runbooks/:id/run?targets=<ids>` is the Servers
+                    page's "Run runbook on selected" (#79). */}
+                <Route
+                  path="/runbooks"
+                  element={
+                    <RequirePermission permission="runbooks:read" fallback={HOME}>
+                      <RunbooksPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/runbooks/new"
+                  element={
+                    <RequirePermission permission="runbooks:write" fallback={HOME}>
+                      <RunbookBuilderPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/runbooks/approvals"
+                  element={
+                    <RequirePermission permission="runbooks:read" fallback={HOME}>
+                      <ApprovalsPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/runbooks/run"
+                  element={
+                    <RequirePermission permission="runbooks:run" fallback={HOME}>
+                      <RunLauncherPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/runbooks/:id"
+                  element={
+                    <RequirePermission permission="runbooks:read" fallback={HOME}>
+                      <RunbookDetailPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/runbooks/:id/edit"
+                  element={
+                    <RequirePermission permission="runbooks:write" fallback={HOME}>
+                      <RunbookBuilderPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/runbooks/:id/run"
+                  element={
+                    <RequirePermission permission="runbooks:run" fallback={HOME}>
+                      <RunLauncherPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/runs"
+                  element={
+                    <RequirePermission permission="runbooks:read" fallback={HOME}>
+                      <RunsPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/runs/commands"
+                  element={
+                    <RequirePermission permission="runbooks:read" fallback={HOME}>
+                      <RunbookCommandsPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/runs/:id"
+                  element={
+                    <RequirePermission permission="runbooks:read" fallback={HOME}>
+                      <RunDetailPage />
                     </RequirePermission>
                   }
                 />

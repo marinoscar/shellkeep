@@ -70,6 +70,19 @@ export interface ApprovalView {
   initiatedBy: string | null;
   /** What an AI approval asks for (#64): the redacted command and reason, or the plan; `null` for the other kinds. */
   payload: unknown;
+  /** Who started the run, for the "requested by" line (#65); `null` once the user is gone. */
+  initiatedByName: string | null;
+  /** The server of a target-scope approval (its name at run time); `null` for a run-scope one. */
+  targetName: string | null;
+}
+
+/** A page of the inbox, with the organization's self-approval rule so the UI can explain a disabled button. */
+export interface ApprovalsPage {
+  items: ApprovalView[];
+  total: number;
+  page: number;
+  pageSize: number;
+  allowSelfApproval: boolean;
 }
 
 @Injectable()
@@ -96,9 +109,13 @@ export class RunbookApprovalsService {
    * The inbox: `status` defaults to `pending`; newest first. Only approvals of runs the caller may see
    * (they started it, or may read its runbook): a private runbook's approvals are not an inbox leak.
    */
-  async list(principal: Principal, query: { status?: string; page: number; pageSize: number }) {
+  async list(
+    principal: Principal,
+    query: { status?: string; page: number; pageSize: number; count?: boolean },
+  ): Promise<ApprovalsPage | { count: number }> {
     const scope = this.scopeOf(principal);
     const status = query.status ?? 'pending';
+    const allowSelfApproval = query.count ? false : (await this.settings.effective(scope.orgId)).approvals.allowSelfApproval;
     return runInOrg(this.prisma, scope, async (tx) => {
       const readable = await this.runbooks.readableWhere(tx, principal);
       const where = {
@@ -106,6 +123,7 @@ export class RunbookApprovalsService {
         run: { OR: [{ initiatedBy: principal.userId }, { runbook: readable }] },
         ...(status === 'all' ? {} : { status }),
       };
+      if (query.count) return { count: await tx.runbookApproval.count({ where }) };
       const [total, rows] = await Promise.all([
         tx.runbookApproval.count({ where }),
         tx.runbookApproval.findMany({
@@ -113,7 +131,17 @@ export class RunbookApprovalsService {
           orderBy: { createdAt: 'desc' },
           skip: (query.page - 1) * query.pageSize,
           take: query.pageSize,
-          include: { run: { select: { version: true, initiatedBy: true, runbook: { select: { name: true } } } } },
+          include: {
+            run: {
+              select: {
+                version: true,
+                initiatedBy: true,
+                initiator: { select: { displayName: true, email: true } },
+                runbook: { select: { name: true } },
+              },
+            },
+            target: { select: { serverName: true } },
+          },
         }),
       ]);
       const items: ApprovalView[] = rows.map((r) => ({
@@ -135,8 +163,10 @@ export class RunbookApprovalsService {
         runbookVersion: r.run.version,
         initiatedBy: r.run.initiatedBy,
         payload: r.payload ?? null,
+        initiatedByName: r.run.initiator?.displayName ?? r.run.initiator?.email ?? null,
+        targetName: r.target?.serverName ?? null,
       }));
-      return { items, total, page: query.page, pageSize: query.pageSize };
+      return { items, total, page: query.page, pageSize: query.pageSize, allowSelfApproval };
     });
   }
 
