@@ -1,5 +1,6 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef, useState, useMemo } from 'react';
-import { Box, useTheme } from '@mui/material';
+import { Box, Chip, useTheme } from '@mui/material';
+import { ManageSearchOutlined as ExplainIcon } from '@mui/icons-material';
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTouchScroll } from '../../hooks/useTouchScroll';
 import { TerminalScrollButtons } from './TerminalScrollButtons';
@@ -48,10 +49,12 @@ interface TerminalViewProps {
   preferences?: ResolvedTerminalSettings;
   /** Keys the page handles itself (the AI assist shortcut); they never reach the PTY (#57). */
   isReservedKey?: (event: KeyboardEvent) => boolean;
+  /** Explain the selected text (#58). Omit when AI is unavailable: no chip is drawn. */
+  onExplainSelection?: () => void;
 }
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
-  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS, isReservedKey }, ref) {
+  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS, isReservedKey, onExplainSelection }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appMode = useTheme().palette.mode;
   const appearance = useMemo(() => ({ preferences, appMode, isReservedKey }), [preferences, appMode, isReservedKey]);
@@ -68,6 +71,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
     latencyMs = null,
     size = null,
     bellCount = 0,
+    hasSelection = false,
   } = useTerminal(sessionId, containerRef, appearance);
   useTouchScroll(containerRef);
 
@@ -147,6 +151,21 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
             animation: 'terminalBell 200ms ease-out',
             '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
           }}
+        />
+      )}
+      {/* The selection's Explain action (#58): a floating chip, only while text is selected. */}
+      {onExplainSelection && hasSelection && (
+        <Chip
+          label="Explain"
+          size="small"
+          color="secondary"
+          icon={<ExplainIcon />}
+          clickable
+          aria-label="Explain selection"
+          // Keep the click from taking focus, which would clear the selection before it is read.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onExplainSelection}
+          sx={{ position: 'absolute', top: 8, right: 16, zIndex: 2, boxShadow: 2 }}
         />
       )}
       <TerminalScrollButtons containerRef={containerRef} visible={showScrollButtons} />

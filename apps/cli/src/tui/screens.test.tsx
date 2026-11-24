@@ -1,4 +1,5 @@
-import { renderTuiScreen, stripAnsi } from '@marinoscar/platform-cli/tui/testing';
+import { DashboardSource } from '@marinoscar/platform-cli/tui';
+import { fakeEmitterFeed, renderTuiScreen, stripAnsi } from '@marinoscar/platform-cli/tui/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ServerRow } from '../commands/servers-list.js';
@@ -6,7 +7,11 @@ import type { ServerTestReport } from '../commands/servers-test.js';
 import type { SessionRow } from '../commands/sessions-list.js';
 
 import { takePendingAttach } from './pending-attach.js';
-import { serversScreen, sessionsScreen } from './screens.js';
+import type { RunRow } from '../commands/runbook-model.js';
+
+import { runsScreen, serversScreen, sessionsScreen } from './screens.js';
+import { type RunsPoll, fetchRuns, runsReducer } from './runs.feed.js';
+import { createRunsScreen } from './runs.screen.js';
 import { createServersScreen } from './servers.screen.js';
 import { createSessionsScreen } from './sessions.screen.js';
 
@@ -161,5 +166,85 @@ describe('the Sessions screen', () => {
 
     expect(takePendingAttach()).toBe('a1');
     screen.unmount();
+  });
+});
+
+describe('the Runs screen', () => {
+  const poll = (...runs: Array<[string, string, string]>): RunsPoll => ({
+    kind: 'ok',
+    at: '2026-10-01T00:00:00.000Z',
+    runs: runs.map(([id, runbook, status]) => ({ id, runbook, status, trigger: 'manual', createdAt: '2026-10-01T00:00:00.000Z', finishedAt: null })),
+  });
+  const detail = (id: string): RunRow => ({
+    id,
+    runbookId: null,
+    runbook: 'Patch hosts',
+    status: 'running',
+    finished: false,
+    succeeded: false,
+    startedAt: null,
+    finishedAt: null,
+    counts: { total: 1, running: 1 },
+    targets: [{ id: 't1', serverId: 's1', server: 'alpha', status: 'running', errorCode: null, steps: [{ index: 0, name: 'update', status: 'running', exitCode: null, durationMs: null }] }],
+  });
+
+  it('is registered after the other screens', () => {
+    expect(runsScreen.route).toBe('runs');
+    expect(runsScreen.order).toBeGreaterThan(sessionsScreen.order ?? 0);
+    expect(typeof runsScreen.load).toBe('function');
+  });
+
+  it('shows the polled runs and updates when a new poll arrives', async () => {
+    const feed = fakeEmitterFeed<RunsPoll>();
+    const dashboard = new DashboardSource(runsReducer, feed);
+    const Screen = createRunsScreen(() => ({ dashboard, detail: async (id) => detail(id) }));
+    const screen = await renderTuiScreen(Screen);
+
+    feed.event(poll(['r1', 'Patch hosts', 'running']));
+    await screen.waitForFrame((text) => stripAnsi(text).includes('Patch hosts  running'));
+
+    feed.event(poll(['r1', 'Patch hosts', 'succeeded'], ['r2', 'Rotate logs', 'queued']));
+    const frame = await screen.waitForFrame((text) => stripAnsi(text).includes('Rotate logs'));
+    expect(stripAnsi(frame)).toContain('Patch hosts  succeeded');
+    screen.unmount();
+  });
+
+  it('opens a run as a servers x steps matrix on enter and closes it on esc', async () => {
+    const feed = fakeEmitterFeed<RunsPoll>();
+    const read = vi.fn(async (id: string) => detail(id));
+    const Screen = createRunsScreen(() => ({ dashboard: new DashboardSource(runsReducer, feed), detail: read }));
+    const screen = await renderTuiScreen(Screen);
+    feed.event(poll(['r1', 'Patch hosts', 'running']));
+    await screen.waitForFrame((text) => stripAnsi(text).includes('Patch hosts'));
+
+    await screen.press('enter');
+    const frame = await screen.waitForFrame((text) => stripAnsi(text).includes('1:update'));
+    expect(read).toHaveBeenCalledWith('r1');
+    expect(stripAnsi(frame)).toMatch(/alpha\s+running\s+running/);
+
+    await screen.press('esc');
+    await screen.waitForFrame((text) => stripAnsi(text).includes('enter open'));
+    screen.unmount();
+  });
+
+  it('says so when the account may not read runs', async () => {
+    const feed = fakeEmitterFeed<RunsPoll>();
+    const Screen = createRunsScreen(() => ({ dashboard: new DashboardSource(runsReducer, feed), detail: vi.fn() }));
+    const screen = await renderTuiScreen(Screen);
+    feed.event({ kind: 'forbidden', at: 'now', message: 'Your account does not have the runbooks:read permission.' });
+    await screen.waitForFrame((text) => stripAnsi(text).includes('runbooks:read'));
+    screen.unmount();
+  });
+
+  it('polls the run list route and maps a 403 to a forbidden poll', async () => {
+    const calls: unknown[] = [];
+    const deps = {
+      client: () => ({ get: async (path: string, options: unknown) => (calls.push([path, options]), { items: [{ id: 'r1', runbookName: 'Patch hosts', status: 'running', trigger: 'api' }] }) }) as never,
+      stdout: { write: () => true },
+      stderr: { write: () => true },
+    };
+    const result = await fetchRuns(deps, () => new Date('2026-10-01T00:00:00Z'))(new AbortController().signal);
+    expect(result).toMatchObject({ kind: 'ok', runs: [{ id: 'r1', runbook: 'Patch hosts', status: 'running', trigger: 'api' }] });
+    expect((calls[0] as [string, { query: unknown }])[0]).toBe('/runbook-runs');
   });
 });
