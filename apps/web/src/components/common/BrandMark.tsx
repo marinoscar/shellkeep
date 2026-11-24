@@ -1,5 +1,5 @@
 /**
- * The ShellKeep mark (Option A, #148): a terminal prompt in a rounded
+ * The ShellKeep mark (Option A, #148): a shell prompt (`>_`) in a rounded
  * rectangle, stroked in the theme's primary colour (the brand accent), so it
  * follows light and dark. Decorative: the product name always sits beside it.
  */
