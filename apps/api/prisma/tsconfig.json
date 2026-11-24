@@ -18,6 +18,7 @@
   },
   "include": [
     "seed.ts",
-    "seed-app.ts"
+    "seed-app.ts",
+    "settings-migrations/**/*.ts"
   ]
 }
