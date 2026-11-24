@@ -11,6 +11,7 @@ import { dockerNetworkCheck } from './extensions/docker-network.check.js';
 import { SHELLKEEP_ENV_SPEC } from './extensions/env-spec.js';
 import { sshEgressCheck } from './extensions/ssh-egress.check.js';
 import { tmuxCheck } from './extensions/tmux.check.js';
+import { serversScreen, sessionsScreen } from './tui/screens.js';
 
 // =============================================================================
 // ShellKeep's CLI, composed on the platform engine  (issue #72)
@@ -131,6 +132,7 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   },
   version: readVersion(),
   extraCommands: [serversCommand(), sessionsCommand()],
+  tuiScreens: [serversScreen, sessionsScreen],
   nodeExecutors: [],
   envSpecFragments: [SHELLKEEP_ENV_SPEC],
   envAnnotations: {
