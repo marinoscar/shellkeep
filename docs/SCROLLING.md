@@ -35,14 +35,9 @@ Because xterm.js intercepts scroll at the JavaScript level, any CSS that prevent
 
 The scroll chain in ShellKeep spans multiple React components. The following constraints must be preserved.
 
-#### Layout.tsx (outer shell)
+#### The platform shell (`Layout.tsx`, since #76)
 
-- Outer container: `height: 100vh, overflow: hidden`
-  Constrains the entire application to the viewport height and prevents a browser-level scrollbar from appearing.
-- Inner flex row: `flexGrow: 1, minHeight: 0`
-  The `minHeight: 0` is critical. Without it, flex children refuse to shrink below their content size. This causes the main content area's `overflow: auto` to never activate, since the container always grows to fit its children.
-- Main content area: `overflow: auto`
-  Enables page-level scrolling for non-terminal pages such as the home page and session list.
+`components/common/Layout.tsx` binds the platform's `ShellLayout` (`@marinoscar/platform-web/shell/ui`), which owns the viewport height: its root is a column with `min-height: 100dvh` (`100vh` fallback), the AppBar on top, then the rail (at `sm` and up) and `<main>`, and the bottom bar below `sm`. Ordinary pages scroll with the document. `<main>` keeps `pb: { xs: 10, sm: 3 }` in both variants, so a page always clears the phone bottom bar (gate 3 of the five breakpoint gates; never change it from the app).
 
 #### TerminalView.tsx (xterm container)
 
@@ -51,10 +46,13 @@ The scroll chain in ShellKeep spans multiple React components. The following con
 - `.xterm`: `height: 100%, padding: 4px, boxSizing: border-box`
   The `border-box` sizing prevents the padding from pushing the element beyond the parent's height boundary.
 
-#### TerminalPage.tsx (terminal page wrapper)
+#### TerminalPage.tsx (terminal page wrapper, `/sessions/:id`)
 
-- Outer: `height: calc(100vh - 64px), m: -3, overflow: hidden`
-  Fills the viewport below the AppBar and prevents page-level scroll on the terminal page.
+- `useShellMainVariant('full-bleed')`: `<main>` drops its side and top padding and the banners, and becomes a flex column.
+- Outer: `flex: 1, minHeight: 0, position: relative`
+  Takes exactly the space `<main>` leaves under the AppBar (and above the phone bottom bar). Nothing inside it is in flow, so the terminal can never size the page from its own rows and the document never scrolls.
+- Inner: `position: absolute, inset: 0`, a flex column with `overflow: hidden` and `paddingBottom` set to the keyboard inset (`useKeyboardInset`)
+  Fills the outer box; the toolbar and the key-shortcut bar sit on top, the terminal below.
 - Terminal wrapper: `flexGrow: 1, minHeight: 0`
   Must not include `overflow: hidden`. This lets xterm.js manage its own internal scroll.
 
