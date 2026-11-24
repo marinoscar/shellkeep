@@ -1401,7 +1401,7 @@ Versioned, reusable multi-step procedures (#61). Definitions can hold sensitive 
 
 | Route | Permission | Notes |
 |-------|------------|-------|
-| `GET /api/runbooks` | `runbooks:read` | Paginated (`page`, `pageSize`); filters `q` (name or description), `tag`, `includeArchived`, and `filter` (`all` default, `mine`, `shared`). Lists only the runbooks the caller may see (#71): theirs, their groups' and those shared with them; each item has `owner` and `access` |
+| `GET /api/runbooks` | `runbooks:read` | Paginated (`page`, `pageSize`); filters `q` (name or description), `tag`, `includeArchived`, and `filter` (`all` default, `mine`, `shared`). Lists only the runbooks the caller may see (#71): theirs, their groups' and those shared with them; each item has `owner` and `access`, plus `stepKinds` (the kinds of the latest version's steps, never a command) and `lastRun` (`{ id, status, createdAt, finishedAt }` or `null`; #65) |
 | `GET /api/runbooks/:id` | `runbooks:read` | Latest version embedded; `ETag: "v<version>"` |
 | `POST /api/runbooks` | `runbooks:write` | `{ name, description?, tags?, definition, changelog? }` creates the runbook and version 1 |
 | `PUT /api/runbooks/:id/definition` | `runbooks:write` | `{ definition, changelog? }`; needs `If-Match: "v<n>"` (the ETag of a GET). Creates version n+1 and returns the new `ETag`; a definition identical to the latest (same sha256) is a 200 with `created: false` and no new version |
@@ -1440,7 +1440,7 @@ The execution engine (#62). A run executes one runbook version on a set of serve
 | `POST /api/runbook-runs/:id/targets/:targetId/cancel` | `runbooks:run` | One server |
 | `POST /api/runbook-runs/:id/retry` | `runbooks:run` | `{ only: 'failed' \| 'all' }`; a NEW run with the same version, params, secret references and strategy on those servers; only for a finished run |
 | `POST /api/runbook-runs/:id/resume` | `runbooks:run` + `runbooks:approve` | Releases a run paused after its canary batch (an approval decision) |
-| `GET /api/runbook-approvals` | `runbooks:read` | The inbox; `status=pending` by default (`approved`, `rejected`, `expired`, `all`) |
+| `GET /api/runbook-approvals` | `runbooks:read` | The inbox; `status=pending` by default (`approved`, `rejected`, `expired`, `all`). Each item names the run, `targetName` (the server, `null` for a run-scope approval) and `initiatedByName`; the page carries `allowSelfApproval` (the organization's effective rule, so the UI can explain a disabled button). `count=true` answers `{ count }` only (the Runbooks badge, #65) |
 | `POST /api/runbook-approvals/:id/decision` | `runbooks:approve` | `{ decision: 'approve' \| 'reject', comment? }`. `403 RUNBOOK_SELF_APPROVAL` for the person who started the run unless `runbooks.approvals.allowSelfApproval`; `409 RUNBOOK_APPROVAL_NOT_PENDING` |
 
 **Run statuses:** `queued resolving running paused cancelling succeeded failed partially_failed aborted cancelled`. **Target:** `pending queued running waiting succeeded failed skipped cancelled`. **Step:** `pending running waiting_approval succeeded failed skipped timed_out cancelled`. Every status column has a CHECK constraint; the transitions are `engine/state-machine.ts`.

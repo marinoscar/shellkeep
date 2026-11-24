@@ -44,6 +44,11 @@ export const approvalsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(['pending', 'approved', 'rejected', 'expired', 'all']).default('pending'),
+  /** `true`: answer `{ count }` only (the Runbooks destination's badge, #65). */
+  count: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => value === 'true'),
 });
 
 export const approvalDecisionSchema = z.object({
