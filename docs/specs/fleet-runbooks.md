@@ -4,7 +4,7 @@
 
 ## 1. Purpose
 
-A **runbook** is a reusable, versioned, multi-step procedure that ShellKeep runs over SSH against many servers at once (patch a fleet, rotate a config, collect logs, let an AI agent diagnose a host), with live logs, per-server results, approvals for risky work and a full audit trail. This spec defines the definition model, the run engine, logs and artifacts, safety, the AI step, and the invariants. **Schedules** (running a runbook on a timer) are planned and not yet merged: [#66](https://github.com/marinoscar/shellkeep/issues/66). The tables already carry `trigger = 'schedule'` and the run notification and sharing code treat a run nobody started (a schedule) as having no owner; nothing in this page describes behaviour that is not on `main`.
+A **runbook** is a reusable, versioned, multi-step procedure that ShellKeep runs over SSH against many servers at once (patch a fleet, rotate a config, collect logs, let an AI agent diagnose a host), with live logs, per-server results, approvals for risky work and a full audit trail. This spec defines the definition model, the run engine, logs and artifacts, safety, the AI step, and the invariants. **Schedules** (running a runbook on a cron timer) are [§9](#9-schedules).
 
 ## 2. Model
 
@@ -65,6 +65,7 @@ Target statuses: `pending`, `queued`, `running`, `waiting`, `succeeded`, `failed
 | `runbook.target.run` | runs **one segment** on **one server** over one SSH connection | server-only, `maxAttempts: 1`, max 4 h |
 | `runbook.run.advance` | calls the coordinator for a run; enqueued when a run job settles and by the sweep | deduplicated per run |
 | `runbook.logs.compact` | the reconcile sweep, a system job queued every minute by an enqueue-only cron | idempotent |
+| `runbook.schedules.tick` | fires due schedules ([§9](#9-schedules)), a system job queued every minute by an enqueue-only cron | idempotent per tick |
 | `ai.runbook.agent` | one `ai_task` step on one target | server-only, `maxAttempts: 1` |
 | `runbook.artifacts.bundle`, `runbook.artifacts.purge` | zip a run's logs; retention purge | |
 
@@ -98,7 +99,7 @@ Stored on target and step rows, shown in the UI, never renamed: `PERMISSION_REVO
 - **A new run or target status.** A migration for the CHECK constraint **and** an entry in `state-machine.ts`.
 - **A new system setting.** `runbooks.system-settings.ts` (organization layer tighten-only), the generated defaults catalog (`npm run catalog:settings`).
 - **A new job type.** [add-job-type skill](../../.claude/skills/add-job-type/SKILL.md); SSH jobs stay server-only; add the type to `job-type-snapshot.spec.ts`.
-- **A new notification or webhook.** `notifications-registry/runbooks.notifications.ts` (after-commit, in `RunLifecycleService`); webhook events are registered like `terminal/webhooks/terminal.webhook-events.ts` (none exist for runbooks yet).
+- **A new notification or webhook.** `notifications-registry/runbooks.notifications.ts` (after-commit, in `RunLifecycleService`); webhook events in `runbooks/webhooks/runbooks.webhooks.ts` (permanent keys, strict metadata-only schema).
 
 ## 5. Logs and artifacts
 
@@ -141,11 +142,27 @@ The agent's conversation is kept redacted on the step (`ai_transcript`, cleared 
 
 ## 8. Notifications, webhooks and onboarding
 
-In-app, email and push to the person who started a run: `runbooks.run_finished`, `runbooks.run_failed`; to the holders of `runbooks:approve`: `runbooks.approval_requested`; in-app only to the initiator: `runbooks.dry_run_finished`. Payloads name the runbook, version and counts and link into the app, never a command, output or host. They are sent after commit. ShellKeep registers **no** runbook webhook event; the platform's `notification.<key>` bridge is available only for events that opt in, and these do not. The Getting-started step `shellkeep.first-runbook` counts the caller's runbooks. Metrics: `app.runbooks.*` ([ARCHITECTURE §10](../ARCHITECTURE.md#10-observability)). Export: the caller's runbook definitions are exported; runs, approvals and logs are not.
+In-app, email and push to the person who started a run: `runbooks.run_finished`, `runbooks.run_failed`; to the holders of `runbooks:approve`: `runbooks.approval_requested`; in-app only to the initiator: `runbooks.dry_run_finished`. Payloads name the runbook, version and counts and link into the app, never a command, output or host. They are sent after commit. Two **webhook events** are registered (`runbooks/webhooks/runbooks.webhooks.ts`; keys permanent; audience `org`, each endpoint receives them only while its owner holds `runbooks:read`; raised after commit; strict schemas, metadata only: ids, runbook name, status, counts, times and a link, never a command, output, parameter, secret or host): `runbook.run.completed` (`{ runId, runbookId, runbookName, version, status, trigger, scheduleId?, counts, startedAt, finishedAt, url }`, not raised for a dry run) and `runbook.approval.requested` (`{ approvalId, runId, kind, runbookName, expiresAt, url }`). A schedule the system switches off sends `runbooks.schedule_disabled` in the app. The Getting-started step `shellkeep.first-runbook` counts the caller's runbooks. Metrics: `app.runbooks.*` ([ARCHITECTURE §10](../ARCHITECTURE.md#10-observability)). Export: the caller's runbook definitions are exported; runs, approvals and logs are not.
 
 ## 9. Schedules
 
-Planned ([#66](https://github.com/marinoscar/shellkeep/issues/66), in progress on a separate branch). Not documented here until it merges.
+A schedule (`runbook_schedules`, an org table under forced RLS) runs one runbook on a 5-field cron expression in an IANA time zone, with parameters, secret references, a target selector, an optional strategy override, a `versionPin` (`latest` or one version) and an `overlap` policy (`skip`, `queue`, `allow`). It runs **as the person it runs as** (`run_as_user_id`: its creator, or whoever last changed its targets, parameters, secrets, strategy or pin); that person's permissions are re-checked on every fire. Runs it creates have `trigger = 'schedule'` and `schedule_id`; a run nobody started has no owner for link sharing.
+
+| Route | Permission |
+|---|---|
+| `GET /api/runbooks/:id/schedules`, `.../:scheduleId` | `runbooks:read` |
+| `POST`, `PATCH`, `DELETE /api/runbooks/:id/schedules[/:scheduleId]` | `runbooks:write` and `runbooks:run` |
+| `POST .../:scheduleId/approve` | `runbooks:approve` |
+| `POST .../:scheduleId/run-now` | `runbooks:run` (runs as the caller, does not move `next_run_at`) |
+| `GET /api/runbook-schedules/preview?cron=&timezone=` | `runbooks:read` (the next five fire times) |
+
+**Firing.** An enqueue-only `@Cron` (every minute) queues the system job `runbook.schedules.tick`. The handler finds due schedules across organizations through the bypass client under the registered access reason `runbooks-schedules`, and changes nothing there: each schedule is handled inside its own organization. In order: (1) **claim** the slot by a guarded update of `next_run_at` to the first slot strictly after now (two racing ticks create one run; a missed slot is **not** caught up); (2) **check** as the run-as user (active, holds `runbooks:run` and `servers:read`, may run the runbook; runbook not archived; pinned version exists; a destructive version is approved for that version); (3) apply **overlap** (`skip` creates nothing while the previous run is active); (4) create the run exactly as a manual launch does (`RunbookRunsService.create`, which enqueues `runbook.run.start` in the same transaction). A claimed slot whose run cannot be created is lost, never repeated. A schedule fires within a minute of its time.
+
+**Switched off by the system** (`enabled = false`, `next_run_at = null`, `disabled_reason`, and an in-app `runbooks.schedule_disabled` notification to the run-as user): `PERMISSION_REVOKED`, `APPROVAL_REQUIRED`, `RUNBOOK_ARCHIVED`, `VERSION_MISSING`, `RUN_REJECTED`.
+
+**Destructive runbooks.** A scheduled run has no per-run confirmation and no per-run approval, so both happen once, to the schedule: creating or materially changing one (targets, parameters, secrets, strategy, pin) for a destructive version needs `confirm { runbookName, targetCount }` (`428`), and then a **different** person holding `runbooks:approve` approves it (`403 RUNBOOK_SCHEDULE_SELF_APPROVAL` for the run-as user unless `runbooks.approvals.allowSelfApproval`). Until then it is disabled with `APPROVAL_REQUIRED`. The approval covers **one version** (`approved_version`): a new destructive version under `latest` switches the schedule off at its next slot until re-approved.
+
+Errors: `422 RUNBOOK_SCHEDULE_INVALID` (`details.field`: `cron`, `timezone`, `versionPin`), `409 RUNBOOK_SCHEDULE_APPROVAL_REQUIRED`, `409 RUNBOOK_SCHEDULE_OVERLAP`. Audit events: `runbook_schedule.created`, `.updated`, `.deleted`, `.approved`, `.run_now`. Metric: `app.runbooks.schedule_fires` (`outcome`: `fired`, `skipped_overlap`, `disabled`, `failed`). Deleting a schedule keeps its past runs (their `schedule_id` is cleared). Rollback: disable the schedules first.
 
 ## 10. Invariants
 
@@ -154,12 +171,13 @@ Planned ([#66](https://github.com/marinoscar/shellkeep/issues/66), in progress o
 3. SSH jobs (`runbook.target.run`, `ai.runbook.agent`) are server-only with `maxAttempts: 1`; a dead job is failed by the sweep, never re-run.
 4. Every connection verifies the host key before sending a credential; the initiator's permission and access to each server are re-checked at run start and at every segment.
 5. `advance` is the only place a run moves, inside one organization transaction, with the enqueue in the same transaction; notifications and events leave after commit and never throw.
-6. A destructive run (not a dry run) cannot start without the typed confirmation, and, under the default setting, a second person's approval.
+6. A destructive run (not a dry run) cannot start without the typed confirmation, and, under the default setting, a second person's approval; a destructive schedule needs both once, per version, before it fires.
 7. A dry run changes nothing on a server: probes come from the allowlist.
 8. The AI policy is evaluated before any approval is requested or command sent; deny and destructive refusals cannot be overridden by an allow pattern or by the model.
-9. Run tables are `org` tables under forced RLS with composite keys including `org_id`; the sweep and the purge are the only cross-organization readers, under registered access reasons.
+9. Run tables and `runbook_schedules` are `org` tables under forced RLS with composite keys including `org_id`; the sweep, the purge and the schedule tick are the only cross-organization readers, under registered access reasons.
+9a. A schedule fires at most once per slot and never catches up a missed one; its run-as user's permissions are re-checked at every fire.
 10. Job type strings, step kinds, failure codes, approval kinds and the `runbook`/`runbook_run` resource ids are permanent.
 
 ## 11. Tests
 
-`apps/api/test/runbooks/` (`runbook-engine.db`, `runbook-safety.db`, `runbook-ai.db`, `runbook-artifacts.db`, `runbooks-rls.db`, `runbooks.db`, RBAC and draft integration, `version-immutability`; `runbook-ssh-fixture.ts` is an in-process SSH server), unit specs beside the code (`run-plan`, `state-machine`, `dry-run`, `ssh-executor`, `log-sink`, `agent-policy`, `runbook-risk`, `tar-redact`, the schema), the job-handler conformance specs, and `apps/api/test/docs-consistency.spec.ts` for the step-kind and run-status lists above ([TESTING.md](../TESTING.md)).
+`apps/api/test/runbooks/` (`runbook-engine.db`, `runbook-safety.db`, `runbook-ai.db`, `runbook-schedules.db`, `runbook-artifacts.db`, `runbooks-rls.db`, `runbooks.db`, RBAC and draft integration, `version-immutability`; `runbook-ssh-fixture.ts` is an in-process SSH server), unit specs beside the code (`run-plan`, `state-machine`, `dry-run`, `ssh-executor`, `log-sink`, `agent-policy`, `runbook-risk`, `tar-redact`, the schema), the job-handler conformance specs, and `apps/api/test/docs-consistency.spec.ts` for the step-kind and run-status lists above ([TESTING.md](../TESTING.md)).

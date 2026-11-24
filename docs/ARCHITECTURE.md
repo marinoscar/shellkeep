@@ -89,11 +89,11 @@ Each adopted slice is bound in `apps/api/src/platform/<slice>/` (and `apps/web/s
 | nodes | `platform/jobs/` | Worker-node fleet; no ShellKeep job is node-eligible except `runbook.artifacts.bundle`; the nodes data-plane ports are shims | [nodes](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/nodes/README.md) |
 | storage | `platform/storage/` | Prefixes `session-logs/` (no writer yet) and `runbook-artifacts/`; profile images; terminal image paste | [storage](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/storage/README.md) |
 | email | `platform/email/` | Templates for the reaper and runbook notifications | [email](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/email/README.md) |
-| notifications | `platform/notifications/` | Events `terminal.session_reaped`, `runbooks.run_finished`, `runbooks.run_failed`, `runbooks.approval_requested`, `runbooks.dry_run_finished` | [notifications](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/notifications/README.md) |
+| notifications | `platform/notifications/` | Events `terminal.session_reaped`, `runbooks.run_finished`, `runbooks.run_failed`, `runbooks.approval_requested`, `runbooks.dry_run_finished`, `runbooks.schedule_disabled` | [notifications](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/notifications/README.md) |
 | ai | `platform/ai/` | Features `terminal_assist`, `terminal_explain`, `session_summary`, `runbook_agent`, `runbook_draft`; keys are per user | [ai](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/ai/README.md) |
 | db-backup | `platform/db-backup/` | No `RestoreCarryOver` (nothing outside the database to carry) | [db-backup](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/db-backup/README.md) |
 | telemetry | `platform/telemetry/` | `app.terminal.*`, `app.runbooks.*`, `app.ssh.*`, `app.terminal_ai.*` metrics and a Terminal dashboard group | [telemetry](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/telemetry/README.md) |
-| webhooks | `platform/webhooks/` | Events `terminal.session.created`, `terminal.session.terminated`, `server_profile.host_key_changed` (audience `user`) | [webhooks](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/webhooks/README.md) |
+| webhooks | `platform/webhooks/` | Terminal events `terminal.session.created`, `terminal.session.terminated`, `server_profile.host_key_changed` (audience `user`); runbook events `runbook.run.completed`, `runbook.approval.requested` (audience `org`, metadata only) | [webhooks](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/webhooks/README.md) |
 | alerts | `platform/alerts/` | Rule kinds `terminal_ssh_connect_p95`, `terminal_job_stalled`; four starter rules seeded disabled | [alerts](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/alerts/README.md) |
 | exports | `platform/exports/` | Sources for server profiles, terminal sessions and runbook runs; never a credential, scrollback or log | [exports](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/exports/README.md) |
 | user-data | `platform/user-data/` | Categories `servers`, `sessions`, `runbooks`; delegated purge jobs | [user-data](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/user-data/README.md) |
@@ -147,7 +147,7 @@ Three features reach a model only through `TerminalContextService.forAi` (consen
 
 ### 3.6 Fleet Runbooks
 
-A runbook is an immutable, versioned definition (`runbooks`, `runbook_versions`) of up to 50 steps of seven kinds. A **run** snapshots the resolved servers, then fans out: `runbook.run.start` resolves targets and creates rows, the coordinator enqueues one `runbook.target.run` job per target, and each job runs one segment over one SSH connection until the end or the next pause (an approval gate or an AI step). Logs stream over SSE and are archived to object storage; destructive runs need a typed confirmation and a second person. [specs/fleet-runbooks.md](specs/fleet-runbooks.md).
+A runbook is an immutable, versioned definition (`runbooks`, `runbook_versions`) of up to 50 steps of seven kinds. A **run** snapshots the resolved servers, then fans out: `runbook.run.start` resolves targets and creates rows, the coordinator enqueues one `runbook.target.run` job per target, and each job runs one segment over one SSH connection until the end or the next pause (an approval gate or an AI step). Logs stream over SSE and are archived to object storage; destructive runs need a typed confirmation and a second person. A **schedule** (cron expression and time zone) fires runs through the `runbook.schedules.tick` system job. [specs/fleet-runbooks.md](specs/fleet-runbooks.md).
 
 ### 3.7 Dashboard, CLI and Android
 
@@ -187,7 +187,7 @@ Beyond the table:
 
 ### 5.1 Tables
 
-Platform tables (53 of them: identity, settings, credentials, jobs, nodes, storage, notifications, AI, backups, webhooks, alerts, sharing, OAuth, Android) come from the platform migrations; the installed copies and their hashes are in `apps/api/prisma/platform.lock`, the fragments in `packages/platform-db`. ShellKeep owns twelve:
+Platform tables (53 of them: identity, settings, credentials, jobs, nodes, storage, notifications, AI, backups, webhooks, alerts, sharing, OAuth, Android) come from the platform migrations; the installed copies and their hashes are in `apps/api/prisma/platform.lock`, the fragments in `packages/platform-db`. ShellKeep owns thirteen:
 
 | Table | Owner | `org_id` | RLS | Purge on user delete | Export | Written by |
 |---|---|---|---|---|---|---|
@@ -203,6 +203,7 @@ Platform tables (53 of them: identity, settings, credentials, jobs, nodes, stora
 | `runbook_command_executions` | org | isolation key | forced | with the run | excluded | engine, AI step |
 | `runbook_approvals` | org | isolation key | forced | detach | excluded | engine |
 | `runbook_artifacts` | org | isolation key | forced | with the run; expiry purge | excluded | collect-logs, bundle |
+| `runbook_schedules` | org (`run_as_user_id`, `approved_by` are actors) | isolation key | forced | detach (the next tick disables a schedule whose user is gone) | excluded | schedules |
 
 The two user-owned domain tables carry `org_id` as a reference, not an isolation key. They are **not** under row-level security: enabling it is out of scope of the adoption and is recorded as a standing constraint ([local-exceptions.md](platform-adoption/local-exceptions.md)). Every query of them filters `user_id` and `org_id` through `OwnerScope`. Runbook tables use composite foreign keys that include `org_id` (a foreign-key check bypasses RLS).
 
@@ -218,7 +219,7 @@ Keys carry the organization segment (`buildObjectKey`). ShellKeep's prefixes: `r
 
 ## 6. Background work
 
-Every long-running activity is a registered `JobHandler` enqueued through `JobsService`. ShellKeep's `@Cron` bodies only enqueue (`terminal/tasks/session-cleanup.task.ts` every five minutes, `runbooks/engine/runbook-reconcile.task.ts` every minute). Every `ai.*` job, the SSH jobs and the user-data jobs are **server-only**: none carries `nodeResultSchema` or `persistNodeResult`. A job type string is permanent once rows exist; `apps/api/test/jobs/job-type-snapshot.spec.ts` pins them, and the table below is checked against it.
+Every long-running activity is a registered `JobHandler` enqueued through `JobsService`. ShellKeep's `@Cron` bodies only enqueue (`terminal/tasks/session-cleanup.task.ts` every five minutes, `runbooks/engine/runbook-reconcile.task.ts` and `runbooks/schedules/runbook-schedules.task.ts` every minute). Every `ai.*` job, the SSH jobs and the user-data jobs are **server-only**: none carries `nodeResultSchema` or `persistNodeResult`. A job type string is permanent once rows exist; `apps/api/test/jobs/job-type-snapshot.spec.ts` pins them, and the table below is checked against it.
 
 <!-- job-types:start -->
 | Job type | Label | Owner |
@@ -228,6 +229,7 @@ Every long-running activity is a registered `JobHandler` enqueued through `JobsS
 | `runbook.target.run` | Run a runbook on one server | runbooks |
 | `runbook.run.advance` | Advance a runbook run | runbooks |
 | `runbook.logs.compact` | Reconcile runbook runs and compact their logs | runbooks |
+| `runbook.schedules.tick` | Fire due runbook schedules | runbooks |
 | `runbook.artifacts.bundle` | Bundle the logs of a runbook run | runbooks |
 | `runbook.artifacts.purge` | Purge runbook logs and artifacts | runbooks |
 | `ai.session.summarize` | Summarize terminal session | terminal-ai |
@@ -349,7 +351,7 @@ OpenTelemetry (traces, metrics, logs) behind a runtime export gate, GreptimeDB a
 | Terminal | `app.terminal.sessions`, `app.terminal.ws.connections`, `app.terminal.ws.auth_denied`, `app.terminal.ssh.connect.duration`, `app.terminal.ssh.connections`, `app.terminal.sessions.reaped` |
 | SSH | `app.ssh.host_key_checks` |
 | Terminal AI | `app.terminal_ai.redactions` (kind and count only) |
-| Runbooks | `app.runbooks.definitions_saved`, `.runs_finished`, `.target_duration`, `.commands`, `.approvals`, `.destructive_runs`, `.dry_runs`, `.artifact_bytes`, `.bundle_builds`, `.ai_tool_calls` |
+| Runbooks | `app.runbooks.definitions_saved`, `.runs_finished`, `.target_duration`, `.commands`, `.approvals`, `.destructive_runs`, `.dry_runs`, `.artifact_bytes`, `.bundle_builds`, `.ai_tool_calls`, `.schedule_fires` |
 
 Metric labels are bounded values, never ids; ids live on spans (`terminal.ws.session` carries `session.id` and `org.id`). The four starter alert rules (`shellkeep.ssh_connect_failures`, `.ssh_connect_slow`, `.ws_auth_denied_spike`, `.reaper_stalled`) are seeded disabled and never overwritten. Health: `GET /api/health/live`, `GET /api/health/ready`.
 

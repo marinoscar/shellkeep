@@ -187,7 +187,7 @@ When tmux attaches, the terminal uses the **alternate screen**, which has no scr
 5. No SSH connection skips host-key verification; a changed key is never accepted.
 6. Terminal bytes are relayed, never stored or logged. The only reader of a pane is `SessionHistoryService`.
 7. The `auth_fail`/`session_error` vocabulary above is the contract of the web and CLI clients; a change is a coordinated change of both.
-8. **Known limits (verified in code):** `DELETE /api/sessions/:id` and batch terminate update the row, audit and emit a webhook but do **not** close an already-open SSH stream or kill the remote tmux session; `SessionManagerService.terminateSession` is not called by any route. Revoking a share stops new attaches but not a stream already open. Both are recorded in [local-exceptions.md](../platform-adoption/local-exceptions.md).
+8. **Known limits (verified in code):** ([#142](https://github.com/marinoscar/shellkeep/issues/142), fix in progress) `DELETE /api/sessions/:id` and batch terminate update the row, audit and emit a webhook but do **not** close an already-open SSH stream or kill the remote tmux session; `SessionManagerService.terminateSession` is not called by any route. Revoking a share stops new attaches but not a stream already open. Both are recorded in [local-exceptions.md](../platform-adoption/local-exceptions.md).
 
 ## 8. Tests
 

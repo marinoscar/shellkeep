@@ -111,6 +111,7 @@ All under `/api`. Exact routes: `/api/docs`.
 | `runbooks` | definitions, versions, validate, targets preview, archive and restore | `runbooks:read/write` | [specs/fleet-runbooks.md](specs/fleet-runbooks.md) |
 | `runbook-secrets` | write-only organization secrets | `runbooks:write` | same |
 | `runbooks/:id/runs`, `runbook-runs` | start, list, status, logs, SSE, cancel, retry, resume, audit, `ai/stop`, artifacts | `runbooks:run/read` | same |
+| `runbooks/:id/schedules`, `runbook-schedules/preview` | cron schedules, approve, run now, next-fire preview | `runbooks:read/write/run/approve` | [specs/fleet-runbooks.md §9](specs/fleet-runbooks.md#9-schedules) |
 | `runbook-approvals` | list, decide | `runbooks:read/approve` | same |
 | `public/runbook-runs` | a run's log bundle by link | public (link token) | same |
 | `auth`, `pat`, `users`, `allowlist`, `groups`, `grants`, `public/links` | identity and sharing | platform | [EAB API.md](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/API.md#route-groups) |
