@@ -120,6 +120,9 @@ model User {
   // composed from package:webhooks.prisma
   webhookEndpoints WebhookEndpoint[] @relation("WebhookEndpointOwner")
 
+  // composed from app:shellkeep.files.prisma
+  fileArchives FileArchive[]
+
   // composed from app:shellkeep.runbooks.prisma
   ownedRunbooks     Runbook[]        @relation("RunbookOwner")
   runbookVersions   RunbookVersion[] @relation("RunbookVersionAuthor")
@@ -521,6 +524,9 @@ model Organization {
 
   // composed from package:webhooks.prisma
   webhookEndpoints WebhookEndpoint[]
+
+  // composed from app:shellkeep.files.prisma
+  fileArchives FileArchive[]
 
   // composed from app:shellkeep.runbooks.prisma
   runbooks        Runbook[]

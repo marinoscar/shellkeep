@@ -38,6 +38,7 @@ import './notifications';
 import './webhooks';
 import './alerts';
 import { registerFileErrorCodes } from '../files/files.error-codes';
+import { registerFilesRegistrations } from '../files/files.registrations';
 import { registerSshErrorCodes } from '../ssh/ssh.error-codes';
 import { registerTerminalAiErrorCodes } from '../terminal-ai/terminal-ai.error-codes';
 import { registerRunbookRegistrations } from '../runbooks/runbooks.registrations';
@@ -53,6 +54,8 @@ registerShellkeepCredentialPurposes();
 registerSshErrorCodes();
 // The files API codes: FILE_IS_BINARY, FILE_TOO_LARGE, SFTP_UNAVAILABLE, ... (#153).
 registerFileErrorCodes();
+// The folder archive expiry sweep's system access reason (#158).
+registerFilesRegistrations();
 // The terminal AI safety codes: AI_CONSENT_REQUIRED, AI_OUTPUT_SHARING_DISABLED (#56).
 registerTerminalAiErrorCodes();
 // The runbook error codes and notification events (#61).

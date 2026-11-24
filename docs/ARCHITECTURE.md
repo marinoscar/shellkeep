@@ -148,7 +148,7 @@ Three features reach a model only through `TerminalContextService.forAi` (consen
 
 ### 3.5a Remote files
 
-A file on a server is listed, inspected, read as a text window, downloaded or uploaded over SFTP (`apps/api/src/files/`, routes under `server-profiles/:id/files`). Access is the terminal rule: `sessions:write` plus the `connect` access check on every request. Downloads use a single-use, 60-second token; an upload streams the raw request body to a temp name and renames it. The admin Files card sets the size caps and rate limits. Audit events `server_profile.file_download` and `server_profile.file_upload`. [specs/files.md](specs/files.md).
+A file on a server is listed, inspected, read as a text window, downloaded or uploaded over SFTP (`apps/api/src/files/`, routes under `server-profiles/:id/files`). Access is the terminal rule: `sessions:write` plus the `connect` access check on every request. Downloads use a single-use, 60-second token; an upload streams the raw request body to a temp name and renames it. The admin Files card sets the size caps and rate limits. A folder can be downloaded as a tar.gz built by the server-only `files.archive` job (`file_archives` table, object storage under `file-archives/`, 24 hour expiry). Audit events `server_profile.file_download`, `server_profile.file_upload`, `server_profile.folder_archive` and `server_profile.folder_archive_download`. [specs/files.md](specs/files.md).
 
 ### 3.6 Fleet Runbooks
 
@@ -208,6 +208,7 @@ Platform tables (53 of them: identity, settings, credentials, jobs, nodes, stora
 | `runbook_command_executions` | org | isolation key | forced | with the run | excluded | engine, AI step |
 | `runbook_approvals` | org | isolation key | forced | detach | excluded | engine |
 | `runbook_artifacts` | org | isolation key | forced | with the run; expiry purge | excluded | collect-logs, bundle |
+| `file_archives` | org | `user_id` | forced | `servers.user_data.purge` (objects, then rows); 24 h expiry purge | included (no storage key) | folder archives (#158) |
 | `runbook_schedules` | org (`run_as_user_id`, `approved_by` are actors) | isolation key | forced | detach (the next tick disables a schedule whose user is gone) | excluded | schedules |
 
 The two user-owned domain tables carry `org_id` as a reference, not an isolation key. They are **not** under row-level security: enabling it is out of scope of the adoption and is recorded as a standing constraint ([local-exceptions.md](platform-adoption/local-exceptions.md)). Every query of them filters `user_id` and `org_id` through `OwnerScope`. Runbook tables use composite foreign keys that include `org_id` (a foreign-key check bypasses RLS).
@@ -237,6 +238,8 @@ Every long-running activity is a registered `JobHandler` enqueued through `JobsS
 | `runbook.schedules.tick` | Fire due runbook schedules | runbooks |
 | `runbook.artifacts.bundle` | Bundle the logs of a runbook run | runbooks |
 | `runbook.artifacts.purge` | Purge runbook logs and artifacts | runbooks |
+| `files.archive` | Archive a server folder | files |
+| `files.archive.purge` | Purge expired folder archives | files |
 | `ai.session.summarize` | Summarize terminal session | terminal-ai |
 | `ai.runbook.agent` | Run an AI step of a runbook | runbooks |
 | `servers.user_data.purge` | Server profile deletion | user-data |

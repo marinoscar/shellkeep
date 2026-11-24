@@ -12,6 +12,8 @@
 //
 //   ServerProfile    delete, category `servers`, DELEGATED to `servers.user_data.purge`: the profile's SSH
 //                    secrets are in the credential store, which only `UserCredentialsService` may delete.
+//   FileArchive      delete, category `servers`, DELEGATED to `servers.user_data.purge` (the stored tar.gz is an object
+//                    only that job may delete; it deletes the objects, then the rows).
 //   TerminalSession  delete, category `sessions`, inline (children before parents: sessions go first).
 //   TerminalSessionSummary  delete, category `sessions`, inline: the AI summary of a session (redacted text).
 //   Runbook          delete, category `runbooks`, DELEGATED to `runbooks.user_data.purge`: a runbook only
@@ -90,6 +92,15 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
     model: 'ServerProfile',
     category: SHELLKEEP_USER_DATA_CATEGORY_IDS.SERVERS,
     // The saved credentials (`ssh`, one per secret field) go through `UserCredentialsService` in the job.
+    delegate: { jobType: SERVERS_USER_DATA_PURGE_JOB_TYPE, payload: (userId) => ({ userId }) },
+  },
+  {
+    // A folder archive (#158): the row is the requester's, the tar.gz is an object under `file-archives/`
+    // that only `servers.user_data.purge` can delete (it holds the storage provider), so the model is
+    // DELEGATED to the same job as the profiles (one job per user: the queue dedups the second enqueue)
+    // and the job deletes the objects before the rows.
+    model: 'FileArchive',
+    category: SHELLKEEP_USER_DATA_CATEGORY_IDS.SERVERS,
     delegate: { jobType: SERVERS_USER_DATA_PURGE_JOB_TYPE, payload: (userId) => ({ userId }) },
   },
   {

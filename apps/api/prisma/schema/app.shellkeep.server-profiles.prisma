@@ -61,6 +61,7 @@ model ServerProfile {
   organization Organization      @relation(fields: [orgId], references: [id], onDelete: Restrict)
   ownerGroup   Group?            @relation("ServerProfileOwnerGroup", fields: [ownerGroupId, orgId], references: [id, orgId], onDelete: NoAction)
   sessions     TerminalSession[]
+  fileArchives FileArchive[]
 
   @@index([userId])
   @@index([orgId, userId])

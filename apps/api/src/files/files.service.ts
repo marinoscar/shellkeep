@@ -269,6 +269,31 @@ export class FilesService {
   }
 
   // ---------------------------------------------------------------------------
+  // Folder archives (#158): the request half; the tar runs in the `files.archive` job
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The access check and the directory check of an archive request: the terminal's connect rule (404),
+   * the per-minute budget of downloads, then one SFTP `stat` that must say "directory". Returns the
+   * resolved absolute path, the limits and the server's name; the job re-checks access when it runs.
+   */
+  async prepareArchive(
+    profileId: string,
+    principal: Principal,
+    input: { path: string; sessionId?: string },
+  ): Promise<{ path: string; scope: OwnerScope; settings: FilesSystemSettings; serverName: string; hostname: string }> {
+    const t = await this.target(profileId, principal, input);
+    this.limiter.hit(t.scope.userId, 'download', t.settings.downloadsPerMinute);
+    const path = await this.sftp.withSession(t.profile, t.settings.sftpTimeoutSeconds, 'archive_check', async (sftp) => {
+      const resolved = await this.resolve(sftp, t, input.path);
+      const stats = await sftp.stat(resolved);
+      if (!stats.isDirectory()) throw fileError('FILE_NOT_A_DIRECTORY', 'The path is not a directory');
+      return resolved;
+    });
+    return { path, scope: t.scope, settings: t.settings, serverName: t.profile.name, hostname: t.profile.hostname };
+  }
+
+  // ---------------------------------------------------------------------------
   // Uploads
   // ---------------------------------------------------------------------------
 

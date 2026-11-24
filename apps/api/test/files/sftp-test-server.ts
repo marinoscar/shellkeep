@@ -10,6 +10,7 @@
 
 import { type Stats, closeSync, constants as fsc, existsSync, fstatSync, lstatSync, openSync, readSync, readdirSync, readlinkSync, realpathSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs';
 import type { AddressInfo, Socket } from 'node:net';
+import { spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { Server, utils } from 'ssh2';
 
@@ -23,6 +24,10 @@ export interface SftpTestServer {
   readonly fingerprint: string;
   readonly username: string;
   readonly password: string;
+  /** Every exec command the server received, verbatim. */
+  readonly execs: string[];
+  /** Rewrites an exec command before it runs under `sh -c` (a spec forces an exit status with it). */
+  rewriteExec: ((command: string) => string) | null;
   readonly stats: { bytesRead: number; bytesWritten: number; writeOpens: number; openHandles: number; connections: number; sftpRequests: number };
   /** Delay every READ by this many ms (lets a spec abort mid-stream). */
   readDelayMs: number;
@@ -40,7 +45,7 @@ const attrsOf = (st: Stats) => ({
   mtime: Math.floor(st.mtimeMs / 1000),
 });
 
-export async function startSftpTestServer(options: { root: string; sftpEnabled?: boolean }): Promise<SftpTestServer> {
+export async function startSftpTestServer(options: { root: string; sftpEnabled?: boolean; exec?: boolean }): Promise<SftpTestServer> {
   const username = 'files-user';
   const password = 'FAKE-PASSWORD-sftp-1234';
   const { keys, parsed } = generateHostKey();
@@ -48,6 +53,8 @@ export async function startSftpTestServer(options: { root: string; sftpEnabled?:
   const stats = { bytesRead: 0, bytesWritten: 0, writeOpens: 0, openHandles: 0, connections: 0, sftpRequests: 0 };
   const state = { readDelayMs: 0, writeDelayMs: 0 };
   const sockets = new Set<Socket>();
+  const execs: string[] = [];
+  const hooks: { rewriteExec: ((command: string) => string) | null } = { rewriteExec: null };
   const absolute = (p: string): string => (p === '.' || p === '' ? home : resolve(home, p));
 
   const server = new Server({ hostKeys: [keys.private] }, (client) => {
@@ -59,6 +66,20 @@ export async function startSftpTestServer(options: { root: string; sftpEnabled?:
     client.on('ready', () => {
       client.on('session', (accept) => {
         const session = accept();
+        // `exec: true` runs the command under `sh -c` in the login directory (the archive job's tar).
+        session.on('exec', (acceptExec, rejectExec, info) => {
+          if (!options.exec) return rejectExec();
+          execs.push(info.command);
+          const channel = acceptExec();
+          const child = spawn('sh', ['-c', hooks.rewriteExec ? hooks.rewriteExec(info.command) : info.command], { cwd: home });
+          child.stdout.on('data', (chunk: Buffer) => channel.write(chunk));
+          child.stderr.on('data', (chunk: Buffer) => channel.stderr.write(chunk));
+          child.on('close', (code) => {
+            channel.exit(code ?? 1);
+            channel.end();
+          });
+          channel.on('close', () => child.kill());
+        });
         session.on('sftp', (acceptSftp, rejectSftp) => {
           if (options.sftpEnabled === false) return rejectSftp();
           const sftp = acceptSftp();
@@ -198,6 +219,13 @@ export async function startSftpTestServer(options: { root: string; sftpEnabled?:
     username,
     password,
     stats,
+    execs,
+    get rewriteExec() {
+      return hooks.rewriteExec;
+    },
+    set rewriteExec(value: ((command: string) => string) | null) {
+      hooks.rewriteExec = value;
+    },
     get readDelayMs() {
       return state.readDelayMs;
     },

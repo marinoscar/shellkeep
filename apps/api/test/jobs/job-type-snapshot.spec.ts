@@ -37,6 +37,9 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   // Collected logs (#63): the zip bundle of a run (node-eligible by declaration) and the artifacts retention purge.
   'runbook.artifacts.bundle': 'Bundle the logs of a runbook run',
   'runbook.artifacts.purge': 'Purge runbook logs and artifacts',
+  // Folder archives (#158): tar a server folder over SSH into object storage (server-only, one attempt) and the 24 hour expiry sweep.
+  'files.archive': 'Archive a server folder',
+  'files.archive.purge': 'Purge expired folder archives',
   // The jobs slice: its own housekeeping.
   'job.history.purge': 'Job history purge',
   'audit.events.purge': 'Audit log purge',

@@ -26,6 +26,8 @@ import type { NodeSpanAttributeDefinition } from '@marinoscar/platform-api/nodes
 export const APP_JOB_REASONS: readonly JobReasonDefinition[] = [
   // The runbook engine's run, target, advance and reconcile jobs (#62).
   { id: 'runbook_run', label: 'Runbook run' },
+  // A folder archive requested from the file browser, and its expiry sweep (#158).
+  { id: 'files_archive', label: 'Folder archive' },
 ];
 
 /** This app's own retention policies. */

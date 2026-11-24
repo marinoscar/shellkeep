@@ -28,8 +28,8 @@ describe('ShellKeep object-storage key prefixes (#50)', () => {
     expect(UPLOADS_KEY_PREFIX).toBe('uploads/');
   });
 
-  it('declares exactly the two app prefixes in app-registrations', () => {
-    expect(APP_STORAGE_KEY_PREFIXES.map((def) => def.id)).toEqual(['session-logs', 'runbook-artifacts']);
+  it('declares exactly the three app prefixes in app-registrations', () => {
+    expect(APP_STORAGE_KEY_PREFIXES.map((def) => def.id)).toEqual(['session-logs', 'runbook-artifacts', 'file-archives']);
   });
 
   it('lists the app prefixes among the organization prefixes', () => {

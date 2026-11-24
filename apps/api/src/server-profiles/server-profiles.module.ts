@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { UserCredentialsModule } from '@marinoscar/platform-api/credentials';
+import { StorageModule, StorageProvidersModule } from '../platform/storage/storage.config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { sharingModule } from '../platform/sharing/sharing.config';
 import { TerminalWebhooksModule } from '../terminal/webhooks/terminal-webhooks.module';
@@ -11,7 +12,7 @@ import { ServersUserDataPurgeHandler } from './user-data/servers-purge.handler';
 import { UserDataHostModule } from '../platform/user-data/user-data-host.module';
 
 @Module({
-  imports: [PrismaModule, UserCredentialsModule, SshModule, TerminalWebhooksModule, sharingModule, UserDataHostModule],
+  imports: [PrismaModule, StorageModule, StorageProvidersModule, UserCredentialsModule, SshModule, TerminalWebhooksModule, sharingModule, UserDataHostModule],
   controllers: [ServerProfilesController],
   // `ServerProfilesExportBinding` (#68) lets the `server-profiles` export source read the caller's groups through the slice.
   // `ServersUserDataPurgeHandler` (#69) is the delegated half of the user-data purge: profiles and their saved credentials.
