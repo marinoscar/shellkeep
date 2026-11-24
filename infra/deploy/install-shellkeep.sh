@@ -132,11 +132,20 @@ services:
   # ---------------------------------------------------------------------------
   nginx:
     container_name: shellkeep-nginx
-    image: nginx:alpine
+    image: nginx:1.30-alpine
     ports:
       - "127.0.0.1:8323:80"
+    # The generated infra/nginx files (platform-infra sync) and the app-owned
+    # app.d include points. Directory mounts: a git pull replaces files by path.
     volumes:
       - ./repo/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./repo/infra/nginx/csp.conf:/etc/nginx/csp.conf:ro
+      - ./repo/infra/nginx/platform:/etc/nginx/platform:ro
+      - ./repo/infra/nginx/app.d:/etc/nginx/app.d:ro
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     depends_on:
       - api
       - web
@@ -150,8 +159,8 @@ services:
   api:
     container_name: shellkeep-api
     build:
-      context: ./repo/apps/api
-      dockerfile: Dockerfile
+      context: ./repo
+      dockerfile: apps/api/Dockerfile
       target: production
     env_file:
       - .env
@@ -170,8 +179,8 @@ services:
   web:
     container_name: shellkeep-web
     build:
-      context: ./repo/apps/web
-      dockerfile: Dockerfile
+      context: ./repo
+      dockerfile: apps/web/Dockerfile
       target: production
     restart: unless-stopped
     deploy:
