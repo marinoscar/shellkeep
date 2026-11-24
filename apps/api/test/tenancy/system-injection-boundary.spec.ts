@@ -50,6 +50,8 @@ const SYSTEM_ALLOWLIST: Record<string, string> = {
     "the runbook reconcile job (#62), under the registered reason `runbooks-reconcile`: it FINDS lost executors, stuck runs, expired approvals and orphan log chunks across organizations; every change is made inside the owning organization's scope",
   'runbooks/artifacts/artifacts-purge.handler.ts':
     "the runbook artifacts retention purge (#63), under the registered reason `runbooks-artifacts-purge`: it selects runs past the retention window across organizations and deletes their stored archives, bundle and step logs (the run rows stay)",
+  'files/archive/file-archive-purge.handler.ts':
+    "the folder archive expiry sweep (#158), under the registered reason `files-archive-purge`: it selects archives past their 24 hour life across organizations and deletes their stored objects and rows",
   'platform/sharing/sharing-data.adapter.ts':
     "purge, doctor, retention, link-resolution and invite-claim: the sharing slice's SHARING_DATA port (#71): the user-purge rule, the `sharing.groups.orphaned` Doctor check, the grants prune job and the two cross-organization lookups of an invite and a link token (links are disabled for both resource types)",
   'platform/exports/exports-host.module.ts':

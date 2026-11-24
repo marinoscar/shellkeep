@@ -22,6 +22,7 @@ export const FILE_ERROR_CODES = {
   FILE_CHANGED: { status: 409, description: 'The file changed size after the download token was issued.' },
   FILE_TOO_LARGE: { status: 413, description: 'The file is larger than the configured cap for this operation.' },
   FILE_IS_BINARY: { status: 415, description: 'The file is binary (a NUL byte or invalid UTF-8 in its first 8 KB); download it instead.' },
+  FILE_ARCHIVE_NOT_READY: { status: 409, description: 'The folder archive is still being built, or it failed; there is nothing to download.' },
   FILES_RATE_LIMITED: { status: 429, description: 'Too many file reads or downloads for this user; retry later.' },
   SFTP_UNAVAILABLE: { status: 502, description: 'The server refused the SFTP subsystem (disabled or not installed).' },
   SFTP_TIMEOUT: { status: 504, description: 'The server did not answer the SFTP request in time.' },

@@ -41,6 +41,7 @@ import {
 
 import { SHARING_EMAIL_TEMPLATES, SHELLKEEP_EMAIL_TEMPLATES } from '../email-templates';
 import { DB_BACKUP_NOTIFICATIONS } from '../platform/db-backup/db-backup.notifications';
+import { FILES_NOTIFICATIONS } from '../notifications-registry/files.notifications';
 import { IDENTITY_NOTIFICATIONS } from '../notifications-registry/identity.notifications';
 import { TERMINAL_NOTIFICATIONS } from '../notifications-registry/terminal.notifications';
 import { EMAIL_MODULE_OPTIONS } from '../platform/email/email.options';
@@ -96,6 +97,8 @@ export function registerShellkeepNotifications(): void {
     ...SHARING_NOTIFICATIONS,
     // Data export (#68): `export.ready` and `export.failed`, to the requester, after the export job's write commits.
     ...EXPORTS_NOTIFICATIONS,
+    // Folder archives (#158): `files.archive_ready` and `files.archive_failed`, in-app and push, to the requester.
+    ...FILES_NOTIFICATIONS,
   ]);
   // The runbook events are NOT here: `registerRunbookNotifications()` (#61).
 }
