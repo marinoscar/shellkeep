@@ -73,6 +73,31 @@ It needs an interactive terminal. `SHELLKEEP_DEBUG=1` prints frame sizes and mes
 
 The gateway accepts a `pat_` token as well as an access JWT.
 
+## Runbooks
+
+Runs are queued on the server and executed over SSH by the runbook engine; the CLI starts them and reads their state. Every command has `--json`, which carries a fixed field list (no parameter values, no secret names, no hostnames).
+
+| Command | API | Notes |
+|---|---|---|
+| `runbook list [--tag t] [--search text] [--filter all\|mine\|shared]` | `GET /api/runbooks` | Every page |
+| `runbook run <id> [--targets <ids\|tag:x>] [--param NAME=value] [--secret-ref NAME=secret] [--runbook-version n] [--wait] [--interval s] [--timeout s]` | `POST /api/runbooks/:id/runs` | Queues the run and prints its id (exit 0 means *accepted*). With `--wait` it polls `GET /api/runbook-runs/:id` until the run ends and exits **0 only if the run and every target succeeded**; any other outcome, or `--timeout`, exits 1 (a timed-out run keeps going) |
+| `runbook status <runId>` | `GET /api/runbook-runs/:id` | A servers x steps matrix in plain text. Read only: exit 0 whatever the run's status |
+| `runbook logs <runId> [--target <server>] [--follow]` | step log routes, or the SSE routes with `--follow` | `--target` takes a server id or name. `--follow` streams until the run ends |
+
+`--targets` is a comma-separated list of server profile ids and `tag:<name>` entries (`--targets 2f3c...,tag:staging`). Omit it to use the runbook's own default targets. `--param` values are typed from the runbook's definition (numbers and booleans are sent as such). A secret parameter takes the **name** of a stored runbook secret with `--secret-ref PARAM=name`; `--param` for a secret parameter is refused, so a secret value never appears in argv or shell history.
+
+`--dry-run` is accepted by the parser but not usable yet: the dry-run contract belongs to the runbook safety work (#67), which is not in the run route. Until it is, `runbook run --dry-run` prints an error, exits 2 and starts nothing.
+
+### `runbook logs --follow`
+
+It reads `GET /api/runbook-runs/:id/logs/stream` (the per-server route with `--target`) with a `fetch` reader, because the stream needs `Authorization: Bearer`, which `EventSource` cannot send. Output is already redacted by the server. With several servers each line is prefixed `[server] `; `--json` prints one object per chunk instead.
+
+If the connection drops, it reconnects with `Last-Event-ID` set to the last chunk it printed (`<stepRowId>:<seq>`), so nothing is repeated or lost; it waits 1 s, doubling to 10 s, and gives up with exit 1 after six attempts in a row that deliver nothing. A 4xx answer (not logged in, no access) is not retried. The first connection asks for every chunk the server still holds, so a late `--follow` sees the run so far. A run that has already ended is printed from its stored logs, without a stream. Exit 0 means the stream ran to the end of the run; use `runbook status` or `runbook run --wait` for the run's outcome.
+
+Behind the host proxy the stream route must not be buffered: `/api/runbook-runs` is one of the `proxy.streamPaths` below.
+
+The TUI menu has a **Runs** screen: the latest runs with live status (polled every 3 s), enter opens a run's matrix, `r` refreshes.
+
 ## Deploying to a server
 
 ```bash
@@ -154,4 +179,4 @@ npm run test:run --workspace=cli
 npm run test:infra          # just the infra conformance (compose config per mode, nginx -t)
 ```
 
-The tests include the platform's conformance suites (`cli`, `deployRegistrations`, `tui`), the pinned `--help` of the ShellKeep commands (`UPDATE_HELP_SNAPSHOT=1` rewrites `src/__snapshots__/help-snapshot.json`; review the diff), a fake terminal gateway for `sessions attach`, and the adoption fixture. The version lives only in `apps/cli/package.json`; bump it per [AGENTS.md](AGENTS.md).
+The tests include the platform's conformance suites (`cli`, `deployRegistrations`, `tui`), the pinned `--help` of the ShellKeep commands (`UPDATE_HELP_SNAPSHOT=1` rewrites `src/__snapshots__/help-snapshot.json`; review the diff), a fake terminal gateway for `sessions attach`, a fake runbook API and SSE server for `runbook` (exit codes, reconnect with `Last-Event-ID`), and the adoption fixture. The version lives only in `apps/cli/package.json`; bump it per [AGENTS.md](AGENTS.md).
