@@ -46,6 +46,8 @@ const SYSTEM_ALLOWLIST: Record<string, string> = {
     "webhooks and retention: the webhooks slice's WEBHOOKS_SYSTEM_PRISMA port (#54): a system-scope endpoint and its deliveries have no organization, so only the bypass client sees them; the delivery purge crosses organizations",
   'platform/sharing/sharing-data.adapter.ts':
     "purge, doctor, retention, link-resolution and invite-claim: the sharing slice's SHARING_DATA port (#71): the user-purge rule, the `sharing.groups.orphaned` Doctor check, the grants prune job and the two cross-organization lookups of an invite and a link token (links are disabled for both resource types)",
+  'platform/exports/exports-host.module.ts':
+    "export and purge: the exports slice's EXPORTS_SYSTEM_DATA port (#68): a source reads the requester's own rows across organizations with an explicit owner filter (never an org-wide read), the status and download routes look up the export file's storage object, and the expiry purge deletes export files",
   'platform/ai/ai-host.module.ts':
     "purge and admin-aggregate: the AI slice's AI_SYSTEM_PRISMA port (#55): the ai_runs and ai_usage_events retention purges, the deployment-wide usage report and the catalogue sync's organization-less usage row",
 };
@@ -55,6 +57,8 @@ const SYSTEM_ALLOWLIST: Record<string, string> = {
  * rules. Relative to apps/api/src, forward slashes.
  */
 const ORG_TABLE_ALLOWLIST: Record<string, string> = {
+  'server-profiles/export/server-profiles.export-source.ts':
+    "reads the requester's `group_members` through the export bypass client (EXPORTS_SYSTEM_DATA, reason `export`), filtered on the requester's user id, to decide which shared profiles `accessibleWhere` may list",
   'main.ts': "counts `org_credentials` through the bypass client, runAsSystem('admin-aggregate')",
   'platform/settings/settings-profile-images.adapter.ts':
     "reads one `storage_objects` row through STORAGE_SYSTEM_DATA.asSystem('admin-aggregate')",

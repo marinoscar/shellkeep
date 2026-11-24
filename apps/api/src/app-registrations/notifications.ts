@@ -43,6 +43,7 @@ import { DB_BACKUP_NOTIFICATIONS } from '../platform/db-backup/db-backup.notific
 import { IDENTITY_NOTIFICATIONS } from '../notifications-registry/identity.notifications';
 import { TERMINAL_NOTIFICATIONS } from '../notifications-registry/terminal.notifications';
 import { EMAIL_MODULE_OPTIONS } from '../platform/email/email.options';
+import { EXPORTS_NOTIFICATIONS } from '../platform/exports/exports.notifications';
 import { SHARING_NOTIFICATIONS } from '../platform/sharing/sharing.notifications';
 
 let registered = false;
@@ -89,6 +90,8 @@ export function registerShellkeepNotifications(): void {
     ...WEBHOOKS_NOTIFICATIONS,
     // Sharing (#71): `groups.invitation` and `sharing.shared_with_you`, on the email and browser channels.
     ...SHARING_NOTIFICATIONS,
+    // Data export (#68): `export.ready` and `export.failed`, to the requester, after the export job's write commits.
+    ...EXPORTS_NOTIFICATIONS,
   ]);
   // The runbook events are NOT here: `registerRunbookNotifications()` (#61).
 }
