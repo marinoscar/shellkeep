@@ -196,8 +196,9 @@ export function moveEntryToGroup(
 
 /** The span a key takes by default (its catalog span, or 2 for a multi-chord macro). */
 export function defaultSpan(entry: LayoutEntry): KeySpan {
-  const { span: _ignored, ...bare } = entry as LayoutEntry & { span?: KeySpan };
-  return entrySpan(bare as LayoutEntry);
+  const bare = { ...entry } as LayoutEntry & { span?: KeySpan };
+  delete bare.span;
+  return entrySpan(bare);
 }
 
 /**
@@ -227,6 +228,26 @@ export function toggleSpan(layout: KeyLayout, at: KeyPosition): EditResult {
 export function entryLabel(entry: LayoutEntry): string {
   if (isInlineEntry(entry)) return entry.key.label;
   return getCatalogKey(entry.id)?.label ?? entry.id;
+}
+
+const CATALOG_KEY_NAMES: Record<string, string> = {
+  left: 'Left arrow',
+  right: 'Right arrow',
+  up: 'Up arrow',
+  down: 'Down arrow',
+  pgup: 'Page Up',
+  pgdn: 'Page Down',
+  insert: 'Insert',
+  delete: 'Delete',
+  ai: 'AI assistant',
+  'arrow-drag': 'Arrow drag',
+  'attach-file': 'Attach a file',
+};
+
+/** A key's name for screen readers: `Left arrow` where the label is `←`. */
+export function entryName(entry: LayoutEntry): string {
+  if (isInlineEntry(entry)) return entry.key.label;
+  return CATALOG_KEY_NAMES[entry.id] ?? entryLabel(entry);
 }
 
 /** What a key is, in words, for its accessible description. */
