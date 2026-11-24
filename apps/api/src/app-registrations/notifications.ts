@@ -30,6 +30,7 @@ import {
   isRegisteredNotificationChannel,
   registerNotificationChannel,
   registerNotifications,
+  registerAndroidAppNotificationChannel,
   registerPlatformNotificationChannels,
 } from '@marinoscar/platform-api/notifications';
 import {
@@ -53,8 +54,11 @@ export function registerShellkeepNotifications(): void {
   if (registered) return;
   registered = true;
 
-  // 1. Channels: email, browser (the bell) and push. No app channel.
+  // 1. Channels: email, browser (the bell), push and the Android companion's `android_app` (#74).
   registerPlatformNotificationChannels();
+  // The Android companion's channel (#74): Web Push to the Android app's subscriptions only,
+  // covered by `push`. Its sender comes with AndroidAppModule.
+  registerAndroidAppNotificationChannel();
   // The webhooks slice's `webhook` channel (#54): a member's notifications, forwarded to their own
   // webhook endpoints that subscribe to `notification.<eventKey>`. ShellKeep's own events do not
   // opt in (`withWebhookChannel`): the terminal's webhooks are the events of

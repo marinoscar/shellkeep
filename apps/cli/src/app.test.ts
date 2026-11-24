@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createCli, cliIdentity, envPrefix, configDirName } from '@marinoscar/platform-cli';
+import { androidTuiScreen, deployAndroidEnvVar } from '@marinoscar/platform-cli/android';
 import { parseEnvExample } from '@marinoscar/platform-cli/deploy';
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -116,6 +117,50 @@ describe('the env-spec fragment', () => {
 describe('the commands', () => {
   it('adds servers, sessions and runbook after the platform commands', () => {
     const names = createCli(APP_CLI_OPTIONS).program.commands.map((command) => command.name());
-    expect(names).toEqual(['init', 'login', 'api', 'config', 'node', 'deploy', 'servers', 'sessions', 'runbook']);
+    expect(names).toEqual(['init', 'login', 'api', 'config', 'node', 'deploy', 'servers', 'sessions', 'runbook', 'android']);
+  });
+});
+
+describe('the Android companion (#74)', () => {
+  it('adds the android group with its subcommands', () => {
+    const android = createCli(APP_CLI_OPTIONS).program.commands.find((command) => command.name() === 'android');
+    const subcommands = android?.commands.map((command) => command.name()) ?? [];
+    for (const name of ['doctor', 'keystore', 'version', 'build', 'publish', 'release', 'releases']) {
+      expect(subcommands).toContain(name);
+    }
+  });
+
+  it('adds the Android TUI screen after the app screens', () => {
+    expect(APP_CLI_OPTIONS.tuiScreens?.at(-1)).toBe(androidTuiScreen);
+  });
+
+  it('registers the optional deploy step on the install and update pipelines', () => {
+    const steps = APP_CLI_OPTIONS.deploySteps ?? [];
+    expect(steps.map((step) => step.pipeline).sort()).toEqual(['install', 'update']);
+    expect(steps.map((step) => [step.id, step.after])).toEqual([
+      ['android-release', 'verify'],
+      ['android-release', 'verify'],
+    ]);
+  });
+
+  it('skips the deploy step unless SHELLKEEP_DEPLOY_ANDROID=1', () => {
+    createCli(APP_CLI_OPTIONS);
+    const previous = process.env.SHELLKEEP_DEPLOY_ANDROID;
+    try {
+      delete process.env.SHELLKEEP_DEPLOY_ANDROID;
+      const step = (APP_CLI_OPTIONS.deploySteps ?? [])[0]?.step;
+      expect(step).toBeDefined();
+      expect(step?.skip?.({} as never)).toMatch(/SHELLKEEP_DEPLOY_ANDROID=1/);
+      process.env.SHELLKEEP_DEPLOY_ANDROID = '1';
+      expect(step?.skip?.({} as never)).toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.SHELLKEEP_DEPLOY_ANDROID;
+      else process.env.SHELLKEEP_DEPLOY_ANDROID = previous;
+    }
+  });
+
+  it('opts a deploy in with SHELLKEEP_DEPLOY_ANDROID', () => {
+    createCli(APP_CLI_OPTIONS);
+    expect(deployAndroidEnvVar()).toBe('SHELLKEEP_DEPLOY_ANDROID');
   });
 });
