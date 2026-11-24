@@ -29,7 +29,18 @@ export const APP_JOB_REASONS: readonly JobReasonDefinition[] = [
 ];
 
 /** This app's own retention policies. */
-export const APP_RETENTION_POLICIES: readonly RetentionPolicyDefinition[] = [];
+export const APP_RETENTION_POLICIES: readonly RetentionPolicyDefinition[] = [
+  // Collected logs, run bundles and step logs in object storage (#63): the run rows stay.
+  {
+    key: 'runbookArtifacts',
+    label: 'Runbook logs and artifacts',
+    defaultDays: 30,
+    defaultEnabled: true,
+    minDays: 1,
+    maxDays: 365,
+    purge: { type: 'runbook.artifacts.purge', what: 'runbook artifacts and step logs' },
+  },
+];
 
 /** This app's own relayed node span attributes. */
 export const APP_NODE_SPAN_ATTRIBUTES: readonly NodeSpanAttributeDefinition[] = [];

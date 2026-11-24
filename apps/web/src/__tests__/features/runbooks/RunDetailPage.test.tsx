@@ -47,6 +47,9 @@ function renderPage(width = 1280) {
   );
 }
 
+const { aiOn } = vi.hoisted(() => ({ aiOn: { value: true } }));
+vi.mock('../../../features/runbooks/hooks/useRunbookAiAvailable', () => ({ useRunbookAiAvailable: () => aiOn.value }));
+
 describe('RunDetailPage', () => {
   beforeEach(() => {
     streams.length = 0;
@@ -134,11 +137,51 @@ describe('RunDetailPage', () => {
     expect(written).toBe('history line\r\nfive\r\nsix\r\nseven\r\n');
   });
 
+  it('has an Artifacts tab, with "Share link…" only for the person who started the run', async () => {
+    serveRun(makeRun([makeTarget(0)], { status: 'succeeded', finishedAt: '2026-01-01T00:05:00.000Z' }));
+    server.use(
+      http.get(`*/api/runbook-runs/${RUN_ID}/artifacts`, () =>
+        HttpResponse.json({ data: { items: [], bundle: { status: 'ready', artifactId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', sizeBytes: 10, createdAt: null } } }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('table', { name: /Run matrix/ });
+    await user.click(screen.getByRole('tab', { name: 'Artifacts' }));
+    expect(await screen.findByRole('button', { name: 'Download bundle' })).toBeInTheDocument();
+    // the viewer of the fixture is not granted `sharing:write`: no share button
+    expect(screen.queryByRole('button', { name: /Share link/ })).not.toBeInTheDocument();
+  });
+
   it('has no axe violations', async () => {
     serveRun();
     const { container } = renderPage();
     await screen.findByRole('table', { name: /Run matrix/ });
     const v = (await axe(container)).violations;
     expect(v).toEqual([]);
+  });
+
+  it('offers Stop AI while an ai_task step works, and posts to the stop route', async () => {
+    const run = makeRun([makeTarget(0, 2)], { status: 'running', finishedAt: null });
+    run.targets[0]!.steps[0] = makeStep(run.targets[0]!.id, 0, { kind: 'ai_task', status: 'running', name: 'Fix nginx' });
+    serveRun(run);
+    const stops: string[] = [];
+    server.use(
+      http.post(`*/api/runbook-runs/${RUN_ID}/ai/stop`, ({ request }) => {
+        stops.push(new URL(request.url).pathname);
+        return HttpResponse.json({ data: { id: RUN_ID, stopRequested: true, stoppedSteps: 0 } }, { status: 202 });
+      }),
+    );
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Stop AI' }));
+    await waitFor(() => expect(stops).toEqual([`/api/runbook-runs/${RUN_ID}/ai/stop`]));
+  });
+
+  it('shows no Stop AI when no step is an AI step that is working', async () => {
+    const run = makeRun([makeTarget(0, 2)], { status: 'running', finishedAt: null });
+    serveRun(run);
+    renderPage();
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByRole('button', { name: 'Stop AI' })).not.toBeInTheDocument();
   });
 });

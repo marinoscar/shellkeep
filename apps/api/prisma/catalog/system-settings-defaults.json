@@ -45,6 +45,10 @@
     "aiRuns": {
       "enabled": true,
       "days": 90
+    },
+    "runbookArtifacts": {
+      "enabled": true,
+      "days": 30
     }
   },
   "storage": {

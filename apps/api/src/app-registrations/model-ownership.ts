@@ -92,4 +92,10 @@ export const APP_MODEL_OWNERSHIP: readonly Def[] = [
     orgField: 'orgId',
     rationale: 'A recurring run of an organization-owned runbook (run_as_user_id is only who it acts as): isolated by forced row-level security on org_id.',
   },
+  {
+    model: 'RunbookArtifact',
+    kind: 'org',
+    orgField: 'orgId',
+    rationale: 'A log archive or the zip bundle of a run: isolated by forced row-level security on org_id.',
+  },
 ];

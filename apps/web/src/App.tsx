@@ -15,9 +15,11 @@ import { InstallPrompt, MaintenanceGate, UpdatePrompt } from '@marinoscar/platfo
 import { APP_NAME } from './config/app';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
 import { AppPlatformHostProvider } from './platform/platformHost';
+import { PublicLinkPage } from '@marinoscar/platform-web/sharing/ui';
+import { registerRunbookLinkRenderers } from './features/runbooks/registerLinkRenderers';
+import { platformApi } from './services/api';
 import { JobsNodesProviders } from './platform/jobsAdapters';
 import { appAiAdapters } from './platform/aiAdapters';
-import { platformApi } from './services/api';
 // The deployment feature map (#55): registers `ai` for the cards and the
 // destination that carry `feature: 'ai'`. Imported for its side effect.
 import './platform/settingsFeatures';
@@ -217,6 +219,8 @@ const SHELL_PROVIDERS: readonly ShellProvider[] = [
   JobsNodesShellProvider,
 ];
 
+registerRunbookLinkRenderers();
+
 function AppRoutes() {
   return (
     <ErrorBoundary>
@@ -228,6 +232,8 @@ function AppRoutes() {
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
+            {/* A share link (#63): public, the token is in the URL fragment and goes to the API in a header. */}
+            <Route path="/s" element={<PublicLinkPage apiClient={platformApi} />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             {/* A failed sign-in: the packaged page shows the screen for `?error=<code>`. */}
             <Route path="/auth/error" element={<AuthCallbackPage />} />

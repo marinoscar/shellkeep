@@ -56,7 +56,7 @@ const startHandler = () => new RunStartHandler(registry, stubPrisma, jobScope, n
 const targetHandler = () =>
   new TargetRunHandler(registry, stubPrisma, jobScope, none, none, none, none, none, none, none, none, none, none, none, none);
 const advanceHandler = () => new RunAdvanceHandler(registry, jobScope, { advance: async () => ({ runId: RUN, events: [], cancelRequests: [], finished: null, approvals: [], dispatched: 0 }) } as never, { afterCommit: async () => undefined } as never);
-const compactHandler = () => new LogsCompactHandler(registry, stubPrisma, { runAsSystem: async () => ({ candidates: [], activeIds: new Set(), stuckRuns: [], approvalOrgs: [], orphans: [] }) } as never, none, none, none, none, none);
+const compactHandler = () => new LogsCompactHandler(registry, stubPrisma, { runAsSystem: async () => ({ candidates: [], activeIds: new Set(), waitingAi: [], agentIds: new Set(), stuckRuns: [], approvalOrgs: [], orphans: [] }) } as never, none, none, none, none, none);
 
 describeJobHandlerConformance('runbook.run.start', startHandler, {
   payloads: [{ name: 'a run that does not exist is a no-op', payload: { runId: RUN }, subjectType: 'runbook_run', subjectId: RUN, orgId: ORG, reason: 'runbook_run' }],

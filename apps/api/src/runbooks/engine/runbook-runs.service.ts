@@ -401,12 +401,14 @@ export class RunbookRunsService {
         select: {
           id: true, runTargetId: true, stepIndex: true, stepId: true, kind: true, name: true, status: true, exitCode: true,
           durationMs: true, errorCode: true, logBytes: true, logTruncated: true, startedAt: true, finishedAt: true,
+          // An AI step's closing summary (#64); its stored conversation is never part of a read.
+          aiSummary: true,
         },
       });
       const approvals = await tx.runbookApproval.findMany({
         where: { runId: id },
         orderBy: { createdAt: 'asc' },
-        select: { id: true, kind: true, scope: true, status: true, stepIndex: true, stepName: true, expiresAt: true, decidedBy: true, decidedAt: true },
+        select: { id: true, kind: true, scope: true, status: true, stepIndex: true, stepName: true, expiresAt: true, decidedBy: true, decidedAt: true, runTargetId: true, message: true, payload: true },
       });
       const counts: Record<string, number> = {};
       for (const t of targets) counts[t.status] = (counts[t.status] ?? 0) + 1;
@@ -419,7 +421,7 @@ export class RunbookRunsService {
         // The NAMES of the secrets, never a value.
         secretRefs,
         counts: { total: targets.length, ...counts },
-        // The run's approvals (the canary pause, step gates and, for a destructive run, `destructive_run`).
+        // The run's approvals (the canary pause, step gates, `destructive_run` and, for an AI step, `ai_command` and `ai_plan` with their payload).
         approvals,
         targets: targets.map((t) => ({ ...t, steps: stepsByTarget.get(t.id) ?? [] })),
       };

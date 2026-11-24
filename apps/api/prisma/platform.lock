@@ -284,6 +284,10 @@
     {
       "definition": "CREATE UNIQUE INDEX runbooks_org_name_live_uniq_idx ON public.runbooks USING btree (org_id, lower((name)::text)) WHERE (archived_at IS NULL)",
       "name": "runbooks_org_name_live_uniq_idx"
+    },
+    {
+      "definition": "CREATE UNIQUE INDEX runbook_artifacts_bundle_uniq_idx ON public.runbook_artifacts USING btree (run_id) WHERE (kind = 'bundle'::text)",
+      "name": "runbook_artifacts_bundle_uniq_idx"
     }
   ],
   "rlsPolicies": [
@@ -339,6 +343,12 @@
       "checkSha256": "83e7bb1689b1bd0427e7061bf085f69c35922ba56bedf6275925f52e58cb440b",
       "name": "runbook_schedules_org_isolation",
       "table": "runbook_schedules",
+      "usingSha256": "83e7bb1689b1bd0427e7061bf085f69c35922ba56bedf6275925f52e58cb440b"
+    },
+    {
+      "checkSha256": "83e7bb1689b1bd0427e7061bf085f69c35922ba56bedf6275925f52e58cb440b",
+      "name": "runbook_artifacts_org_isolation",
+      "table": "runbook_artifacts",
       "usingSha256": "83e7bb1689b1bd0427e7061bf085f69c35922ba56bedf6275925f52e58cb440b"
     }
   ]

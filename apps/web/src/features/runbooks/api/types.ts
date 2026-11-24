@@ -145,6 +145,13 @@ export interface DefinitionIssue {
   message: string;
 }
 
+/** `POST /api/ai/runbooks/draft` (#64): a definition to review; never saved. */
+export interface DraftResult {
+  definition: RunbookDefinition;
+  warnings: DefinitionWarning[];
+  risk?: RunbookRisk;
+}
+
 export interface ValidationResult {
   valid: true;
   definition: RunbookDefinition;
@@ -259,6 +266,8 @@ export interface RunStepRow {
   logTruncated: boolean;
   startedAt: string | null;
   finishedAt: string | null;
+  /** The closing text of an AI step (#64). */
+  aiSummary?: string | null;
 }
 
 export interface RunTargetRow {
@@ -284,6 +293,8 @@ export interface RunDetail extends RunSummary {
   secretRefs: Record<string, string>;
   strategy: Partial<RunStrategy>;
   cancelRequestedAt: string | null;
+  /** "Stop AI" was requested (#64). */
+  aiStopRequestedAt?: string | null;
   counts: { total: number } & Partial<Record<TargetStatus, number>>;
   targets: RunTargetRow[];
   /** The run's approvals (#67), a pending `destructive_run` among them while it waits. */
@@ -387,6 +398,8 @@ export interface RunbookApproval {
   stepName: string;
   /** Redacted by the engine before it is stored (a command or plan of an AI step, #64). */
   message: string;
+  /** An AI approval's content (#64): `ai_command` `{ command, reason }`, `ai_plan` `{ summary, commands: [{ command, reason, refused }] }`; redacted. */
+  payload?: unknown;
   status: ApprovalStatus;
   expiresAt: string;
   decidedBy: string | null;
@@ -458,4 +471,42 @@ export interface SchedulePreview {
   cron: string;
   timezone: string;
   next: string[];
+}
+
+/** One log archive a `collect_logs` step stored (#63). */
+export interface RunArtifact {
+  id: string;
+  kind: 'target_archive';
+  runTargetId: string | null;
+  runStepId: string | null;
+  serverName: string | null;
+  stepId: string | null;
+  stepIndex: number | null;
+  fileCount: number;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+export type BundleStatus = 'ready' | 'building' | 'none';
+
+/** `GET /api/runbook-runs/:id/artifacts`. */
+export interface RunArtifacts {
+  items: RunArtifact[];
+  bundle: { status: BundleStatus; artifactId: string | null; sizeBytes: number | null; createdAt: string | null };
+}
+
+/** A presigned download: valid 15 minutes. Never log it. */
+export interface SignedDownload {
+  url: string;
+  expiresAt: string;
+}
+
+/** `GET /api/public/runbook-runs/bundle`. */
+export interface PublicBundle {
+  runbook: string;
+  finishedAt: string | null;
+  sizeBytes: number;
+  url: string;
+  urlExpiresAt: string;
 }

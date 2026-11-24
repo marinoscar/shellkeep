@@ -66,6 +66,7 @@ import { estimateLogCollection, planDryRunStep } from './dry-run';
 import { LogArchiveService } from './log-archive.service';
 import { LogSink, splitUtf8 } from './log-sink';
 import { renderPackageUpdate } from './package-commands';
+import { runCollectLogs, type CollectLogsOutcome } from './steps/collect-logs.step';
 import { RunCoordinatorService, type OrgTx } from './run-coordinator.service';
 import { RunEventsService } from './run-events.service';
 import { RunLifecycleService } from './run-lifecycle.service';
@@ -385,9 +386,81 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
       case 'approval_gate':
         return this.runApprovalGate(seg, index, step, rowId);
       case 'collect_logs':
+        return this.runCollectLogs(seg, index, step, rowId);
       case 'ai_task':
-        return this.failStep(seg, index, rowId, FAILURE_CODES.STEP_KIND_NOT_AVAILABLE, `${step.kind} steps are not available yet`);
+        return this.runAiTask(seg, index, rowId);
     }
+  }
+
+  /** `collect_logs` (#63): the script, redaction, upload and artifact row live in `steps/collect-logs.step.ts`. */
+  private async runCollectLogs(seg: Segment, index: number, step: Extract<RunbookStep, { kind: 'collect_logs' }>, rowId: string): Promise<StepOutcome> {
+    const started = Date.now();
+    await this.setStep(seg, index, rowId, 'pending', 'running', { startedAt: new Date(started) });
+    const sink = this.sinkFor(seg, index, rowId);
+    let outcome: CollectLogsOutcome;
+    try {
+      outcome = await runCollectLogs(
+        {
+          orgId: seg.orgId,
+          runId: seg.runId,
+          targetId: seg.targetId,
+          stepIndex: index,
+          client: seg.client,
+          executor: this.executor,
+          signal: seg.watch.signal,
+          params: seg.params,
+          secrets: seg.secrets,
+          sink,
+          profileId: seg.profileId,
+          stepKind: step.kind,
+          recordExecution: (script) => this.recordExecution(seg, rowId, script),
+          finishExecution: (id, result) => this.finishExecution(seg, id, { ...result }),
+          upload: (key, path, size) => this.archive.uploadFile(key, path, size, 'application/gzip'),
+          insertArtifact: (row) =>
+            this.inOrg(seg.orgId, async (tx) => {
+              await tx.runbookArtifact.create({
+                data: {
+                  orgId: seg.orgId,
+                  runId: seg.runId,
+                  runTargetId: seg.targetId,
+                  runStepId: rowId,
+                  kind: 'target_archive',
+                  storageKey: row.storageKey,
+                  fileCount: row.fileCount,
+                  sizeBytes: BigInt(row.sizeBytes),
+                  sha256: row.sha256,
+                },
+              });
+            }),
+          recordBytes: (bytes) => this.metrics.artifactBytes('target_archive', bytes),
+        },
+        step,
+      );
+    } catch (error) {
+      this.logger.warn(`collect_logs failed: ${errorName(error)}`);
+      sink.system('The log collection failed\n');
+      outcome = { status: 'failed', code: FAILURE_CODES.INTERNAL, exitCode: null };
+    }
+    await sink.close();
+    this.metrics.command('step', outcome.status === 'succeeded' ? 'succeeded' : outcome.status === 'timed_out' ? 'timed_out' : outcome.status === 'cancelled' ? 'cancelled' : 'failed');
+    await this.finishStep(seg, index, rowId, sink, 'running', outcome.status, { ...(outcome.code ? { code: outcome.code } : {}), exitCode: outcome.exitCode, durationMs: Date.now() - started });
+    return { status: outcome.status, ...(outcome.code ? { code: outcome.code } : {}) };
+  }
+
+  /**
+   * An `ai_task` step (#64): the work is the `ai.runbook.agent` job's (`ai/runbook-agent.handler.ts`). This segment
+   * marks the step running, parks the target `waiting` and queues that job, in one transaction; the agent job
+   * queues the next segment when the step ends.
+   */
+  private async runAiTask(seg: Segment, index: number, rowId: string): Promise<StepOutcome> {
+    await this.setStep(seg, index, rowId, 'pending', 'running', { startedAt: new Date() });
+    await this.inOrg(seg.orgId, async (tx) => {
+      assertTransition('target', 'running', 'waiting');
+      await tx.runbookRunTarget.update({ where: { id: seg.targetId }, data: { status: 'waiting' } });
+      await this.coordinator.enqueueAiAgent(tx, { orgId: seg.orgId, runId: seg.runId, targetId: seg.targetId, stepIndex: index, phase: 'start' });
+    });
+    await this.events.publish({ type: 'target', runId: seg.runId, targetId: seg.targetId, status: 'waiting' });
+    return { status: 'waiting_approval' };
   }
 
   /** A step that cannot run: started and failed at once, with one system line saying why. */

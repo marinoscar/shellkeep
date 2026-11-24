@@ -18,6 +18,8 @@ import type {
   RunbookVersionView,
   RunbookView,
   RunDetail,
+  RunArtifacts,
+  SignedDownload,
   RunStatus,
   RunAuditPage,
   RunbookCommandRow,
@@ -27,6 +29,7 @@ import type {
   TargetPreview,
   TargetSelector,
   ValidationResult,
+  DraftResult,
 } from './types';
 
 function query(params: Record<string, string | number | boolean | undefined | null>): string {
@@ -103,6 +106,14 @@ export const getVersion = (id: string, version: number): Promise<RunbookVersionV
 
 export const validateDefinition = (definition: RunbookDefinitionInput): Promise<ValidationResult> =>
   api.post('/runbooks/validate', { definition });
+
+/** Drafts a runbook definition from a prompt (#64). Never saves: the caller loads it into the builder. */
+export const draftRunbook = (prompt: string, targetHint?: { serverIds?: string[]; tags?: string[] }): Promise<DraftResult> =>
+  api.post('/ai/runbooks/draft', { prompt, ...(targetHint ? { targetHint } : {}) });
+
+/** "Stop AI": the AI steps of a run end before their next command (#64). */
+export const stopRunAi = (id: string): Promise<{ id: string; stopRequested: true; stoppedSteps: number }> =>
+  api.post(`/runbook-runs/${id}/ai/stop`);
 
 export const previewTargets = (selector: Partial<TargetSelector>): Promise<TargetPreview> =>
   api.post('/runbooks/targets/preview', { selector });
@@ -231,3 +242,17 @@ export const runScheduleNow = (runbookId: string, scheduleId: string): Promise<S
 /** The next 5 fire times of an expression; rejects with a 422 `RUNBOOK_SCHEDULE_INVALID` for a bad expression or zone. */
 export const previewSchedule = (cron: string, timezone: string): Promise<SchedulePreview> =>
   api.get(`/runbook-schedules/preview${query({ cron, timezone })}`);
+
+// ---------------------------------------------------------------------------
+// Artifacts (#63)
+// ---------------------------------------------------------------------------
+
+export const getRunArtifacts = (runId: string): Promise<RunArtifacts> => api.get(`/runbook-runs/${runId}/artifacts`);
+
+/** Queues the zip bundle of a finished run; `jobId` is null when a bundle already exists. */
+export const requestRunBundle = (runId: string): Promise<{ jobId: string | null; artifactId: string | null }> =>
+  api.post(`/runbook-runs/${runId}/artifacts/bundle`);
+
+/** A signed URL (15 minutes) of one artifact. The caller opens it and drops it: it is never logged or stored. */
+export const getArtifactDownload = (runId: string, artifactId: string): Promise<SignedDownload> =>
+  api.get(`/runbook-runs/${runId}/artifacts/${artifactId}/download`);

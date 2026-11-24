@@ -19,6 +19,18 @@ export const RUNBOOK_SCHEDULE_FIRES_METRIC = 'runbookScheduleFires';
 export const SCHEDULE_FIRE_OUTCOME_VALUES = ['fired', 'skipped_overlap', 'disabled', 'failed'] as const;
 export type ScheduleFireMetricOutcome = (typeof SCHEDULE_FIRE_OUTCOME_VALUES)[number];
 
+export const RUNBOOK_ARTIFACT_BYTES_METRIC = 'runbookArtifactBytes';
+export const RUNBOOK_BUNDLE_BUILDS_METRIC = 'runbookBundleBuilds';
+
+/** What a stored artifact is (#63): a per-server log archive or the zip bundle of a run. */
+export const ARTIFACT_KINDS = ['target_archive', 'bundle'] as const;
+export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
+/** How a bundle build ended (#63). */
+export const BUNDLE_OUTCOMES = ['built', 'empty', 'failed'] as const;
+export type BundleOutcome = (typeof BUNDLE_OUTCOMES)[number];
+const ARTIFACT_BYTES_BUCKETS = [1024, 65_536, 1_048_576, 10_485_760, 104_857_600, 524_288_000, 2_147_483_648];
+export const RUNBOOK_AI_TOOL_CALLS_METRIC = 'runbookAiToolCalls';
+
 /** What happened to a destructive run launch (#67): never a run, org, server or runbook id. */
 export const DESTRUCTIVE_RUN_OUTCOMES = ['confirmed', 'approved', 'rejected', 'blocked'] as const;
 export type DestructiveRunOutcome = (typeof DESTRUCTIVE_RUN_OUTCOMES)[number];
@@ -29,7 +41,9 @@ export const RUN_TRIGGERS = ['manual', 'api', 'schedule'] as const;
 export const TARGET_DURATION_STATUSES = ['succeeded', 'failed', 'cancelled', 'waiting'] as const;
 export const COMMAND_ORIGINS = ['step', 'ai_agent', 'dry_run'] as const;
 export const COMMAND_OUTCOMES = ['succeeded', 'failed', 'timed_out', 'cancelled', 'error'] as const;
-export const APPROVAL_KINDS = ['step', 'gate', 'destructive_run'] as const;
+export const APPROVAL_KINDS = ['step', 'gate', 'destructive_run', 'ai_command', 'ai_plan'] as const;
+export const AI_TOOLS = ['run_command', 'read_file', 'list_dir'] as const;
+export const AI_TOOL_DECISIONS = ['executed', 'refused', 'pending_approval', 'rejected'] as const;
 export const APPROVAL_DECISIONS = ['approved', 'rejected', 'expired'] as const;
 
 const TARGET_DURATION_BUCKETS = [1, 5, 15, 30, 60, 120, 300, 600, 1800, 3600, 14_400];
@@ -110,5 +124,33 @@ export const RUNBOOK_APP_METRICS: readonly AppMetricDef[] = [
     description:
       'Runbook schedules that were due, by outcome: fired (a run was created), skipped_overlap (the previous run was still active), disabled (switched off: permission revoked, approval required) or failed (the run could not be created).',
     attributes: { outcome: { kind: 'enum', values: SCHEDULE_FIRE_OUTCOME_VALUES } },
+  },
+  {
+    key: RUNBOOK_ARTIFACT_BYTES_METRIC,
+    name: 'app.runbooks.artifact_bytes',
+    kind: 'histogram',
+    unit: 'By',
+    description: 'Size of a stored runbook artifact: a per-server log archive (target_archive) or a run bundle (bundle).',
+    buckets: ARTIFACT_BYTES_BUCKETS,
+    attributes: { kind: { kind: 'enum', values: ARTIFACT_KINDS } },
+  },
+  {
+    key: RUNBOOK_BUNDLE_BUILDS_METRIC,
+    name: 'app.runbooks.bundle_builds',
+    kind: 'counter',
+    unit: '{bundle}',
+    description: 'Run bundle builds by outcome: built, empty (nothing to bundle) or failed.',
+    attributes: { outcome: { kind: 'enum', values: BUNDLE_OUTCOMES } },
+  },
+  {
+    key: RUNBOOK_AI_TOOL_CALLS_METRIC,
+    name: 'app.runbooks.ai_tool_calls',
+    kind: 'counter',
+    unit: '{call}',
+    description: 'Tool calls of AI runbook steps, by tool and decision (executed, refused, pending_approval, rejected).',
+    attributes: {
+      tool: { kind: 'enum', values: AI_TOOLS },
+      decision: { kind: 'enum', values: AI_TOOL_DECISIONS },
+    },
   },
 ];

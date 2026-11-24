@@ -14,7 +14,8 @@
 //   target  pending -> queued -> running -> succeeded | failed | cancelled ; running <-> waiting
 //           (an approval gate or an AI task parks the target; a resume queues it again)
 //   step    pending -> running -> succeeded | failed | timed_out | cancelled ; running ->
-//           waiting_approval -> succeeded | failed | cancelled ; pending -> skipped
+//           waiting_approval -> succeeded | failed | cancelled (or back to running: an AI step whose command
+//           was approved) ; pending -> skipped
 // =============================================================================
 
 export const RUN_STATUSES = [
@@ -76,7 +77,8 @@ export const TARGET_TRANSITIONS: Table<TargetStatus> = {
 export const STEP_TRANSITIONS: Table<StepStatus> = {
   pending: ['running', 'skipped', 'cancelled', 'failed'],
   running: ['waiting_approval', 'succeeded', 'failed', 'timed_out', 'cancelled'],
-  waiting_approval: ['succeeded', 'failed', 'cancelled'],
+  // `running` again: an AI step resumes after the approval of one of its commands (#64).
+  waiting_approval: ['running', 'succeeded', 'failed', 'cancelled'],
   succeeded: [],
   failed: [],
   skipped: [],

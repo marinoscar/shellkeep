@@ -12,7 +12,7 @@
 import { registerSystemAccessReason } from '@marinoscar/platform-api/core';
 
 import { registerRunbookNotifications } from '../notifications-registry/runbooks.notifications';
-import { RUNBOOKS_RECONCILE_REASON } from './engine/engine.constants';
+import { RUNBOOKS_ARTIFACTS_PURGE_REASON, RUNBOOKS_RECONCILE_REASON } from './engine/engine.constants';
 import { registerRunbookRunErrorCodes } from './engine/engine.error-codes';
 import { registerRunbookErrorCodes } from './runbooks.error-codes';
 import { RUNBOOKS_SCHEDULES_REASON } from './schedules/schedules.constants';
@@ -36,6 +36,11 @@ export function registerRunbookRegistrations(): void {
     id: RUNBOOKS_SCHEDULES_REASON,
     description:
       'The runbook schedules tick (runbook.schedules.tick) finds the schedules that are due across every organization; each is then claimed and fired inside its own organization.',
+  });
+  registerSystemAccessReason({
+    id: RUNBOOKS_ARTIFACTS_PURGE_REASON,
+    description:
+      'The runbook artifacts purge (runbook.artifacts.purge) finds runs past the retention window across every organization and deletes their stored logs, archives and bundle.',
   });
   registerRunbookNotifications();
 }

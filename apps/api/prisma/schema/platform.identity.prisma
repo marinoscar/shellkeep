@@ -537,6 +537,9 @@ model Organization {
   // composed from app:shellkeep.runbooks.prisma
   runbookSchedules RunbookSchedule[]
 
+  // composed from app:shellkeep.runbooks.prisma
+  runbookArtifacts RunbookArtifact[]
+
   // composed from app:shellkeep.server-profiles.prisma
   serverProfiles ServerProfile[]
 

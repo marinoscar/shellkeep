@@ -226,7 +226,7 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           'role (server profile: `viewer`, `operator`, `editor`; runbook: `viewer`, `runner`, `editor`) and an ' +
           'optional expiry; one role per grantee, revocation is soft. Org permissions `sharing:read`, ' +
           '`sharing:write` and `sharing:admin`; a record you may not share is 404. Link shares are disabled for ' +
-          'both types (422 `ROLE_NOT_GRANTABLE`). `/api/grants/shared-with-me` lists what is shared with you. ' +
+          'both types (422 `ROLE_NOT_GRANTABLE`); the one linkable type is a run\'s log bundle, `runbook_run` (7 days by default, 30 at most). `/api/grants/shared-with-me` lists what is shared with you. ' +
           'A grant carries a role, never a credential.',
       },
     ],

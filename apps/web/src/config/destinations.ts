@@ -91,7 +91,8 @@ export const DESTINATION_ROUTES: Readonly<Record<DestinationKey, readonly string
 /**
  * Routes deliberately owned by NO destination: reached from outside the
  * signed-in shell (the sign-in flow, the OAuth round trip, the failed sign-in
- * screen, device activation and the development test login). On these no
+ * screen, device activation, public share links and the development test
+ * login). On these no
  * destination is active, and that is correct rather than a bug.
  */
 export const UNOWNED_ROUTES: readonly string[] = [
@@ -99,6 +100,7 @@ export const UNOWNED_ROUTES: readonly string[] = [
   '/auth/callback',
   '/auth/error',
   '/activate',
+  '/s',
   '/testing/login',
 ];
 

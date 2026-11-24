@@ -34,6 +34,9 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'runbook.logs.compact': 'Reconcile runbook runs and compact their logs',
   // Schedules (#66): the minute tick that fires due schedules (system job, server-only).
   'runbook.schedules.tick': 'Fire due runbook schedules',
+  // Collected logs (#63): the zip bundle of a run (node-eligible by declaration) and the artifacts retention purge.
+  'runbook.artifacts.bundle': 'Bundle the logs of a runbook run',
+  'runbook.artifacts.purge': 'Purge runbook logs and artifacts',
   // The jobs slice: its own housekeeping.
   'job.history.purge': 'Job history purge',
   'audit.events.purge': 'Audit log purge',
@@ -83,6 +86,8 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'ai.usage.purge': 'AI usage purge',
   // Terminal AI (#59): a session summary, written in the background. Server-only, like every ai.* type.
   'ai.session.summarize': 'Summarize terminal session',
+  // Runbook AI step (#64): one `ai_task` step of a run, on one server. Server-only, like every ai.* type.
+  'ai.runbook.agent': 'Run an AI step of a runbook',
   // The exports slice (#68): the export run (a user's own data, through the bypass client) and the expiry purge of
   // its files. Both are server-only (no nodeResultSchema), and both type strings are permanent.
   'export.run': 'Data export',
