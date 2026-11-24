@@ -268,6 +268,16 @@
       "scope": "org"
     },
     {
+      "name": "system:factory_reset",
+      "description": "Factory reset: delete every other user and all application data, keeping configuration and backups",
+      "scope": "system"
+    },
+    {
+      "name": "orgs:offboard",
+      "description": "Offboard an organization: delete it with all its data, members and invitations",
+      "scope": "system"
+    },
+    {
       "name": "webhooks:read",
       "description": "View your own webhook endpoints and their deliveries",
       "scope": "org"
@@ -398,6 +408,8 @@
       "telemetry:query",
       "organizations:read",
       "organizations:write",
+      "system:factory_reset",
+      "orgs:offboard",
       "system_webhooks:read",
       "system_webhooks:write",
       "alerts:read",

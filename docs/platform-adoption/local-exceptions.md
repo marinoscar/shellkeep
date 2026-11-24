@@ -154,6 +154,19 @@ Web: `platform/notifications.ts` calls `configureNotificationsWeb` before the fi
 | `PrismaSystemService` gained one injection | `platform/exports/exports-host.module.ts` binds `EXPORTS_SYSTEM_DATA` (reasons `export` and `purge`); on the allowlist of `test/tenancy/system-injection-boundary.spec.ts` | Kept |
 | The Servers page Export action | `components/server-profiles/ExportServersButton.tsx` opens the packaged dialog preset to `server-profiles`; if #79 reworks the page, whichever lands second moves the button | #79 |
 
+### User data deletion and factory reset (#69)
+
+`UserDataModule.forRoot` (`platform/user-data/user-data.config.ts`, the bypass client in `user-data-host.module.ts`) is mounted after the exports slice. ShellKeep's decisions are pure data in `app-registrations/user-data.ts`; the manifest registers them after the platform's. The proof is the `userData` conformance suite (`test/user-data/user-data-conformance.spec.ts`), `test/user-data/user-data.integration.spec.ts` (the routes over HTTP) and, on a throwaway database owned by an ordinary role, `test/user-data/user-data-purge.db.spec.ts` and `test/user-data/factory-reset.db.spec.ts`.
+
+| Decision | Detail | Removed by |
+|---|---|---|
+| **`ServerProfile` and `Runbook` are DELEGATED, not deleted inline** | The platform's `keepWhenReferenced` keeps a row with ANY back-relation, and every runbook has versions, so it cannot express "keep a group's runbook". A profile's SSH secrets are in the credential store, which only `UserCredentialsService` may delete. So `servers.user_data.purge` and `runbooks.user_data.purge` (`server-profiles/user-data/`, `runbooks/user-data/`) decide by ownership. The delegates are not run by the factory reset (it deletes rows only), so `shellkeep.servers.reset` deletes the profiles of the administrator, who is never deleted | Kept, unless the platform's hint grows an ownership predicate |
+| The Runbook hint's `summary` is not printed | The platform prints a model's `summary` only on the "kept" lists, which list models a reset keeps; a runbook is deleted, so "Runbooks owned by a group stay with the group." is documentation, not page text. The factory reset step's `summary` does print, in "Deleted" | A platform change that prints summaries of deleted-with-exceptions models |
+| No `storageObjectColumns` | No ShellKeep model has a column naming a `StorageObject` id: `TerminalSession` records no session log yet, and a run step records the KEY of its log (`log_storage_key`), which `runbooks.user_data.purge` deletes itself, bytes before rows. A future session-log writer adds its decision to the registry with it | The session-log writer |
+| Step logs survive a factory reset in the bucket | They have no `storage_objects` row, and the reset's storage step pages those rows. `npm run storage:purge` sweeps the `runbook-artifacts/` prefix afterwards | A platform storage step that also sweeps registered prefixes |
+| Offboarding is not usable | ShellKeep is single-organization (the default organization is never offboardable), and `server_profiles` and `terminal_sessions` reference `organizations` with `Restrict`, so a multi-organization deployment would need a precondition or a step first | Adopting multi-organization mode |
+| `PrismaSystemService` gained one injection | `platform/user-data/user-data-db.adapter.ts` binds `USER_DATA_DB` (reasons `purge` and `admin-aggregate`); on the allowlist of `test/tenancy/system-injection-boundary.spec.ts`. The two delegated handlers use the same port | Kept |
+
 ## App-owned host pieces (not shims)
 
 | Piece | Where | Why it is the app's | Removed by |

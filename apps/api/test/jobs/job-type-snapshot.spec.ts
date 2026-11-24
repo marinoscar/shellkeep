@@ -85,6 +85,14 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   // its files. Both are server-only (no nodeResultSchema), and both type strings are permanent.
   'export.run': 'Data export',
   'export.purge': 'Export expiry',
+  // The user-data slice (#69): the per-user deletion, the admin factory reset and organization offboarding, all
+  // server-only and permanent; and ShellKeep's two delegated halves of the deletion (profiles with their saved
+  // credentials, and runbooks).
+  'user.data.purge': 'User data deletion',
+  'admin.factory_reset': 'Factory reset',
+  'org.offboard': 'Organization offboarding',
+  'servers.user_data.purge': 'Server profile deletion',
+  'runbooks.user_data.purge': 'Runbook deletion',
 };
 
 /**
@@ -133,6 +141,16 @@ describe('job type strings are permanent (#49)', () => {
   it('keeps both export job types server-only: no node result schema, no node persistence (#68)', () => {
     const registry = context.app.get(JobHandlerRegistry);
     for (const type of ['export.run', 'export.purge']) {
+      const handler = registry.get(type);
+      expect(handler).toBeDefined();
+      expect(handler).not.toHaveProperty('nodeResultSchema');
+      expect(handler).not.toHaveProperty('persistNodeResult');
+    }
+  });
+
+  it('keeps the user-data job types server-only: no node result schema, no node persistence (#69)', () => {
+    const registry = context.app.get(JobHandlerRegistry);
+    for (const type of ['user.data.purge', 'admin.factory_reset', 'org.offboard', 'servers.user_data.purge', 'runbooks.user_data.purge']) {
       const handler = registry.get(type);
       expect(handler).toBeDefined();
       expect(handler).not.toHaveProperty('nodeResultSchema');
