@@ -129,6 +129,8 @@ describe('ServerProfilesService', () => {
               updateMany: jest.fn().mockResolvedValue({ count: 1 }),
               delete: jest.fn(),
             },
+            // The caller's last session per profile (#79): none unless a case says so.
+            terminalSession: { groupBy: jest.fn().mockResolvedValue([]) },
           },
         },
       ],
@@ -193,6 +195,7 @@ describe('ServerProfilesService', () => {
                 OR: [
                   { name: { contains: 'prod', mode: 'insensitive' } },
                   { hostname: { contains: 'prod', mode: 'insensitive' } },
+                  { username: { contains: 'prod', mode: 'insensitive' } },
                 ],
               },
             ],
