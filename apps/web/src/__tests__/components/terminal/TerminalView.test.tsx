@@ -70,6 +70,8 @@ describe('TerminalView', () => {
         'test-session-42',
         expect.objectContaining({ current: expect.anything() }),
         expect.objectContaining({ preferences: DEFAULT_TERMINAL_SETTINGS }),
+        // No server given: no file links (#155).
+        { fileLinks: null },
       );
     });
 
@@ -81,6 +83,7 @@ describe('TerminalView', () => {
         's-1',
         expect.anything(),
         expect.objectContaining({ preferences }),
+        expect.anything(),
       );
       expect(screen.getByTestId('terminal-xterm-host')).toHaveStyle({ backgroundColor: '#002b36' });
     });
