@@ -71,6 +71,8 @@ export async function buildBundleZip(inputs: readonly BundleInput[], manifest: (
     out.on('error', reject);
     out.on('close', () => resolve());
   });
+  // A failure that happens after the caller gave up (a destroyed file stream) must not be an unhandled rejection.
+  finished.catch(() => undefined);
   archive.pipe(counted).pipe(out);
 
   const entries: BundleEntry[] = [];

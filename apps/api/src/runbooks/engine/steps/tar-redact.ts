@@ -63,19 +63,25 @@ export function flatEntryName(name: string): string | null {
   return flat === '' ? null : flat;
 }
 
-async function readAll(stream: Readable, limit: number): Promise<Buffer> {
-  const parts: Buffer[] = [];
-  let size = 0;
-  for await (const part of stream) {
-    const buffer = Buffer.isBuffer(part) ? part : Buffer.from(part);
-    size += buffer.length;
-    if (size > limit) {
-      stream.resume();
-      throw new ArchiveTooLargeError('file');
-    }
-    parts.push(buffer);
-  }
-  return Buffer.concat(parts);
+/** Reads one entry into memory, failing as soon as it passes `limit` (events, not an async iterator: its `return()` can wait forever on a half-written entry). */
+function readAll(stream: Readable, limit: number): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    const parts: Buffer[] = [];
+    let size = 0;
+    stream.on('data', (part: Buffer | string) => {
+      const buffer = Buffer.isBuffer(part) ? part : Buffer.from(part);
+      size += buffer.length;
+      if (size > limit) {
+        parts.length = 0;
+        stream.resume();
+        reject(new ArchiveTooLargeError('file'));
+        return;
+      }
+      if (size <= limit) parts.push(buffer);
+    });
+    stream.on('end', () => resolve(Buffer.concat(parts)));
+    stream.on('error', reject);
+  });
 }
 
 /** Unpacks `inputPath`, redacts every file, and writes the new tar.gz to `outputPath`. */
@@ -98,6 +104,7 @@ export async function redactTarGz(inputPath: string, outputPath: string, options
   const input = createReadStream(inputPath);
   const gunzip = createGunzip();
   let unpacked = 0;
+  let tooLarge: ArchiveTooLargeError | null = null;
   const seen = new Set<string>();
   const reading = (async () => {
     try {
@@ -122,6 +129,7 @@ export async function redactTarGz(inputPath: string, outputPath: string, options
       }
       pack.finalize();
     } catch (error) {
+      if (error instanceof ArchiveTooLargeError) tooLarge = error;
       // Stop every stage: a stalled extractor would hold the whole settle forever.
       pack.destroy(error instanceof Error ? error : new Error('unpack failed'));
       input.destroy();
@@ -131,13 +139,24 @@ export async function redactTarGz(inputPath: string, outputPath: string, options
     }
   })();
 
-  const source = pipeline(input, gunzip, extract);
-  const results = await Promise.allSettled([source, reading, written]);
-  const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-  if (failed) {
+  // Read errors of the file or of gzip are not forwarded by `pipe`: they race the unpack, so a damaged
+  // archive fails at once instead of leaving the extractor waiting for bytes that never come.
+  const damaged = new Promise<never>((_resolve, reject) => {
+    input.on('error', reject);
+    gunzip.on('error', reject);
+  });
+  input.pipe(gunzip).pipe(extract);
+  for (const settled of [reading, damaged, written]) settled.catch(() => undefined);
+  try {
+    await Promise.race([reading, damaged]);
+    await written;
+  } catch (error) {
+    pack.destroy();
+    input.destroy();
+    gunzip.destroy();
+    extract.destroy();
     // An ArchiveTooLargeError is the informative one; surface it over a follow-on stream error.
-    const tooLarge = results.find((r): r is PromiseRejectedResult => r.status === 'rejected' && r.reason instanceof ArchiveTooLargeError);
-    throw tooLarge ? tooLarge.reason : failed.reason;
+    throw tooLarge ?? error;
   }
   return { files: entries.length, sizeBytes, sha256: hash.digest('hex'), entries };
 }
