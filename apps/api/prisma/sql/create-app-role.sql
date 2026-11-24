@@ -2,13 +2,13 @@
 -- Create the application database role and hand it the database
 -- =============================================================================
 --
--- ShellKeep's API connects today as the bootstrap superuser, and every table was
--- created by it. Row-level security does not apply to a superuser, so the
--- platform's tenant tables (forced RLS since platform migration 0025) are not
--- isolated until the API connects as an ordinary role that OWNS them. This
--- script creates that role and moves ownership. It does NOT switch the API:
--- that happens with #52, once storage queries go through the platform's
--- runInOrg. Procedure and rehearsal: docs/runbooks/application-role.md.
+-- Row-level security does not apply to a superuser, so the platform's tenant
+-- tables (forced RLS since platform migration 0025) are not isolated until the
+-- API connects as an ordinary role that OWNS them. This script creates that
+-- role and moves ownership (#45). The API connects as it since #52: its login
+-- is POSTGRES_USER / POSTGRES_PASSWORD, and every org-table access goes through
+-- the platform's runInOrg / asSystem. Procedure, switch and rollback:
+-- docs/runbooks/application-role.md.
 --
 -- Run it as a SUPERUSER, connected to the application database, AFTER
 -- `npm run prisma:migrate` (so the tables the migrations create are owned too),
@@ -20,9 +20,16 @@
 --   app           (required) the role name, normally shellkeep_app
 --   app_password  (required when the role does not exist yet) its login password
 --   db            (optional) the database to hand over; must be the one connected to
+--   createdb      (optional, default on) give the role CREATEDB. The in-app restore
+--                 (#52) replays the archive into a scratch database and renames it
+--                 into place, which needs it; the pre-flight guides a manual restore
+--                 otherwise. Pass -v createdb=off for a role that never restores in
+--                 the application (the backup itself needs no such right).
 --
--- The role: LOGIN NOSUPERUSER NOBYPASSRLS. An existing role is checked, not
--- altered: the script refuses one that is SUPERUSER or BYPASSRLS.
+-- The role: LOGIN NOSUPERUSER NOBYPASSRLS [CREATEDB]. An existing role is checked:
+-- the script refuses one that is SUPERUSER or BYPASSRLS, and otherwise changes
+-- only the one attribute above (CREATEDB, granted when createdb is on). It never
+-- grants BYPASSRLS or SUPERUSER, and never CREATEROLE.
 --
 -- What moves to the role: the database, schema public, and every table,
 -- partitioned table, view, materialized view, foreign table, sequence,
@@ -57,6 +64,11 @@ SELECT current_database() AS current_db,
   \set db :current_db
 \endif
 
+\if :{?createdb}
+\else
+  \set createdb on
+\endif
+
 SELECT (:'db' = current_database()) AS db_matches,
        EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app') AS role_exists,
        COALESCE((SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = :'app'), false) AS role_privileged \gset
@@ -86,6 +98,11 @@ SELECT (:'db' = current_database()) AS db_matches,
 \if :role_privileged
   DO $$ BEGIN RAISE EXCEPTION 'create-app-role: refusing a role that is SUPERUSER or BYPASSRLS; row-level security would stay inert'; END $$;
   \quit
+\endif
+
+-- CREATEDB for the in-app restore (see the header). Idempotent.
+\if :createdb
+  ALTER ROLE :"app" CREATEDB;
 \endif
 
 -- --- The transfer ------------------------------------------------------------
