@@ -8,6 +8,7 @@ import {
   listingErrorMessage,
   parentRemotePath,
   remoteBaseName,
+  revealOf,
   sizeBadge,
   visibleEntries,
 } from '../../lib/files/browser';
@@ -36,6 +37,14 @@ describe('file browser paths (#156)', () => {
     expect(parentRemotePath('/var')).toBe('/');
     expect(parentRemotePath('/')).toBe('/');
     expect(remoteBaseName('/var/log/app.log')).toBe('app.log');
+  });
+
+  it('reveals a file in its folder and a folder as itself', () => {
+    expect(revealOf('/srv/app/logs/error.log', 'file')).toEqual({ dir: '/srv/app/logs', select: 'error.log' });
+    expect(revealOf('/etc', 'file')).toEqual({ dir: '/', select: 'etc' });
+    expect(revealOf('/srv/app/logs', 'dir')).toEqual({ dir: '/srv/app/logs' });
+    expect(revealOf('build.log', 'file')).toEqual({ dir: '.', select: 'build.log' });
+    expect(revealOf('out/build.log', 'file')).toEqual({ dir: 'out', select: 'build.log' });
   });
 
   it('splits a path into breadcrumbs with absolute paths', () => {
