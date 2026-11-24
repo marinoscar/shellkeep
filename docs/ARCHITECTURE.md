@@ -1,1636 +1,368 @@
-# System Architecture
+# Architecture
 
-**Enterprise Application Foundation**
-**Version:** 1.0
-**Last Updated:** January 2026
+> **Audience:** developers · **Status:** current for `@marinoscar/platform-*@0.1.0-next.39` (`npm run check:platform-pin`)
 
-This document provides a comprehensive architectural overview of the Enterprise Application Foundation designed for AI-assisted development with specialized coding agents.
+ShellKeep is a browser-based terminal workspace: persistent tmux-backed SSH sessions, an AI assistant for the terminal and Fleet Runbooks that run a procedure across many servers. It is a **host of the EnterpriseAppBase platform packages** (`@marinoscar/platform-*`) plus its own domain. The platform owns sign-in, settings, credentials, jobs, storage, notifications, AI, backups, telemetry and the rest; this repository owns servers, terminal sessions, Terminal AI and runbooks. Deviations from the platform are listed in [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md); an exception without a row there is a bug.
 
----
+Detail lives elsewhere: [specs/terminal.md](specs/terminal.md), [specs/terminal-ai.md](specs/terminal-ai.md), [specs/fleet-runbooks.md](specs/fleet-runbooks.md), [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md), [API.md](API.md).
 
-## Table of Contents
+## Contents
 
-1. [Executive Summary](#1-executive-summary)
-2. [System Overview](#2-system-overview)
-3. [Architecture Principles](#3-architecture-principles)
-4. [Technology Stack](#4-technology-stack)
-5. [Component Architecture](#5-component-architecture)
-6. [Data Architecture](#6-data-architecture)
-7. [Security Architecture](#7-security-architecture)
-8. [API Architecture](#8-api-architecture)
-9. [Frontend Architecture](#9-frontend-architecture)
-10. [Infrastructure Architecture](#10-infrastructure-architecture)
-11. [Observability Architecture](#11-observability-architecture)
-12. [Testing Architecture](#12-testing-architecture)
-13. [Agent-Based Development Model](#13-agent-based-development-model)
-14. [Development Workflows](#14-development-workflows)
-15. [Appendices](#15-appendices)
+1. [System overview](#1-system-overview)
+2. [Subsystem map](#2-subsystem-map)
+3. [Domain](#3-domain)
+4. [Authorization](#4-authorization)
+5. [Data](#5-data)
+6. [Background work](#6-background-work)
+7. [Settings](#7-settings)
+8. [Frontend](#8-frontend)
+9. [Infrastructure](#9-infrastructure)
+10. [Observability](#10-observability)
+11. [Extension points and related documents](#11-extension-points-and-related-documents)
 
----
+## 1. System overview
 
-## 1. Executive Summary
-
-### Purpose
-
-The Enterprise Application Foundation is a production-grade web application template that establishes:
-
-- **Secure Authentication**: OAuth 2.0 with Google (extensible to other providers)
-- **Fine-Grained Authorization**: Role-Based Access Control (RBAC) with permissions
-- **Flexible Configuration**: JSONB-based settings framework for system and user preferences
-- **Enterprise Observability**: OpenTelemetry instrumentation with traces, metrics, and structured logs
-- **Agent-Friendly Development**: Modular architecture designed for AI coding agent collaboration
-
-### Key Characteristics
-
-| Aspect | Description |
-|--------|-------------|
-| **Architecture Style** | Monorepo with API-first design |
-| **Hosting Model** | Same-origin (UI and API share base URL) |
-| **Auth Strategy** | OAuth 2.0 + JWT with refresh token rotation |
-| **Access Control** | Email allowlist + RBAC (Admin/Contributor/Viewer) |
-| **Data Storage** | PostgreSQL with Prisma ORM |
-| **Extensibility** | JSONB settings, modular NestJS structure |
-
-### Target Audience
-
-- **AI Coding Agents**: Primary consumers for automated development tasks
-- **Backend Developers**: NestJS/Node.js engineers
-- **Frontend Developers**: React/TypeScript engineers
-- **DevOps Engineers**: Infrastructure and deployment specialists
-- **Security Teams**: Security review and compliance
-
----
-
-## 2. System Overview
-
-### High-Level Architecture
+### 1.1 Request chain
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              NGINX REVERSE PROXY                             │
-│                           (Security Headers, Routing)                        │
-│                              http://localhost:8323                           │
-├────────────────────────────────────┬────────────────────────────────────────┤
-│         /* → Frontend (Web)        │           /api/* → Backend (API)       │
-├────────────────────────────────────┼────────────────────────────────────────┤
-│                                    │                                        │
-│  ┌──────────────────────────────┐  │  ┌──────────────────────────────────┐  │
-│  │       REACT FRONTEND         │  │  │       NESTJS + FASTIFY           │  │
-│  │                              │  │  │                                  │  │
-│  │  ┌────────────────────────┐  │  │  │  ┌────────────────────────────┐  │  │
-│  │  │      Pages/Routes      │  │  │  │  │    Controllers/Guards      │  │  │
-│  │  │  • Login               │  │  │  │  │  • AuthController          │  │  │
-│  │  │  • Home                │  │  │  │  │  • UsersController         │  │  │
-│  │  │  • User Settings       │  │  │  │  │  • SettingsController      │  │  │
-│  │  │  • System Settings     │  │  │  │  │  • HealthController        │  │  │
-│  │  │  • Device Activation   │  │  │  │  └────────────────────────────┘  │  │
-│  │  └────────────────────────┘  │  │  │                                  │  │
-│  │                              │  │  │  ┌────────────────────────────┐  │  │
-│  │  ┌────────────────────────┐  │  │  │  │    Services/Business       │  │  │
-│  │  │  Contexts/State        │  │  │  │  │    Logic Layer             │  │  │
-│  │  │  • AuthContext         │  │  │  │  │  • AuthService             │  │  │
-│  │  │  • ThemeContext        │  │  │  │  │  • UsersService            │  │  │
-│  │  │  • SettingsContext     │  │  │  │  │  • SettingsService         │  │  │
-│  │  └────────────────────────┘  │  │  │  │  • AllowlistService        │  │  │
-│  │                              │  │  │  └────────────────────────────┘  │  │
-│  │  ┌────────────────────────┐  │  │  │                                  │  │
-│  │  │  Material UI (MUI)     │  │  │  │  ┌────────────────────────────┐  │  │
-│  │  │  • Components          │  │  │  │  │    Prisma ORM              │  │  │
-│  │  │  • Theming             │  │  │  │  │  • Database Access         │  │  │
-│  │  │  • Responsive Design   │  │  │  │  │  • Query Building          │  │  │
-│  │  └────────────────────────┘  │  │  │  │  • Migrations              │  │  │
-│  │                              │  │  │  └────────────────────────────┘  │  │
-│  └──────────────────────────────┘  │  └──────────────────────────────────┘  │
-│                                    │                │                       │
-│              Port 5173             │                │      Port 3000        │
-└────────────────────────────────────┴────────────────┼───────────────────────┘
-                                                      │
-                                                      ▼
-                                     ┌────────────────────────────────┐
-                                     │        POSTGRESQL              │
-                                     │                                │
-                                     │  Tables:                       │
-                                     │  • users, user_identities      │
-                                     │  • roles, permissions          │
-                                     │  • user_roles, role_permissions│
-                                     │  • user_settings               │
-                                     │  • system_settings             │
-                                     │  • refresh_tokens              │
-                                     │  • device_codes                │
-                                     │  • allowed_emails              │
-                                     │  • audit_events                │
-                                     │                                │
-                                     │           Port 5432            │
-                                     └────────────────────────────────┘
-                                                      │
-                                                      ▼
-                                     ┌────────────────────────────────┐
-                                     │    OBSERVABILITY STACK         │
-                                     │                                │
-                                     │  • OTEL Collector              │
-                                     │  • GreptimeDB (Telemetry store)│
-                                     │                                │
-                                     │  In-app explorer (admin UI)    │
-                                     └────────────────────────────────┘
+Browser ──HTTPS──> VPS host proxy ──> 127.0.0.1:8323 ──> nginx (container, :80)
+                                                           ├─ /            -> web   (:5173 dev, :80 prod)
+                                                           ├─ /api        -> api   (:3000)
+                                                           └─ /api/terminal/ws  (WebSocket upgrade, 3600 s timeouts) -> api
+api ──SSH (ssh2)──> target server ──> tmux new-session -As sk-<8 hex>
+api ──SQL──> PostgreSQL (external, or the devdb overlay)
 ```
 
-### Request Flow
+The UI is served at `/`, the API at `/api`, the API reference (Scalar) at `/api/docs`, all on one origin: no CORS, no cross-origin token handling. Port 8323 is ShellKeep's published port (`NGINX_PORT` in `infra/compose/app.env.example`); the platform default 3535 is not used.
+
+### 1.2 Components
+
+| Component | Technology | Where |
+|---|---|---|
+| Web | React 19, MUI, xterm.js, TypeScript | `apps/web/` |
+| API | NestJS on Fastify, Prisma, Zod, `ws` gateway, `ssh2` | `apps/api/` |
+| CLI | Commander + ink on `@marinoscar/platform-cli` (`shellkeep`) | `apps/cli/` |
+| Database | PostgreSQL 16, forced row-level security on the runbook tables | `apps/api/prisma/` |
+| Edge | nginx (generated by `platform-infra`, app locations in `infra/nginx/app.d/`) | `infra/` |
+| Android | Trusted Web Activity shell, hosted APK releases | platform `android-app` slice |
+
+### 1.3 Principles
+
+1. The UI presents; the API holds every rule and every authorization decision.
+2. Every endpoint declares `@Auth(...)` or `@Public()`. There is no global JWT guard.
+3. Same origin, always.
+4. Anything that outlives a request or a cron tick is a queue job ([§6](#6-background-work)).
+5. A secret is encrypted at rest, decrypted only in the process that uses it, and never reaches a log, a span, a job payload, a node or a model ([SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md)).
+6. The platform is consumed, not copied. Base code never names the terminal domain (`apps/api/test/architecture/base-domain-boundary.spec.ts`); the app's own code registers itself through `apps/api/src/app-registrations/`.
+
+### 1.4 Repository layout
 
 ```
-┌──────┐    ┌───────┐    ┌─────────────┐    ┌──────────────┐    ┌────────────┐
-│Client│───▶│ Nginx │───▶│ JwtAuthGuard│───▶│ RolesGuard   │───▶│ Controller │
-└──────┘    └───────┘    └─────────────┘    └──────────────┘    └────────────┘
-                              │                    │                   │
-                              ▼                    ▼                   ▼
-                         Validate JWT       Check Roles/        Business Logic
-                         Load User          Permissions         Response
+apps/api/src/
+  platform/<slice>/        bindings of each adopted platform slice (config, host ports, adapters)
+  app-registrations/       every import-time registration of the domain (permissions, settings, AI features, ...)
+  server-profiles/         server profiles, SSH credential handling, host-key trust endpoints
+  ssh/                     SshConnectionFactory, host-key policy, server facts, SSH metrics
+  terminal/                sessions, gateway (WS), session manager, history, reaper, alerts, Doctor checks
+  terminal-ai/             assist, explain, session summaries, the context/redaction gate
+  command-safety/          classifyCommand, redactText, ANSI stripping (pure)
+  runbooks/                definitions, run engine, safety, AI step, artifacts, sharing, user-data
+  dashboard/               GET /api/dashboard/summary
+apps/api/prisma/           fragments/ (hand-edited), schema/ (GENERATED), migrations/, catalog/ (GENERATED), platform.lock
+apps/web/src/              pages/, components/terminal/, hooks/, services/terminal-ws.ts, platform/ (host adapters), config/ (registries)
+apps/cli/                  shellkeep CLI
+infra/                     compose/, nginx/, otel/: GENERATED by `npm run platform:infra:sync`; app-owned: app.*.compose.yml, app.env.example, nginx/app.d/, otel/app-collector.yaml
+packages/shared/           product identity (identity.json)
+docs/                      this folder; platform-adoption/ holds the frozen baseline and the exceptions ledger
 ```
 
----
+## 2. Subsystem map
 
-## 3. Architecture Principles
+Each adopted slice is bound in `apps/api/src/platform/<slice>/` (and `apps/web/src/platform/` on the web side). Package READMEs live in the [EnterpriseAppBase](https://github.com/marinoscar/EnterpriseAppBase) repository under `packages/platform-api/src/<slice>/README.md`; the links below point at `main`, the installed pin is in `apps/api/package.json`.
 
-### 3.1 Separation of Concerns
+| Slice | ShellKeep binding | What ShellKeep adds or decides | Package README |
+|---|---|---|---|
+| identity | `platform/identity/` | Google sign-in only; email allowlist; PATs and device flow (used by the CLI); the OAuth server is **not** mounted | [identity](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/identity/README.md) |
+| settings | `platform/settings/` | System namespaces `ui`, `features`, `terminal`, `ssh`, `runbooks`, `terminalAi`; user namespaces `terminal`, `shortcuts`, `terminalAi`, `onboarding` | [settings](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/settings/README.md) |
+| credentials | `platform/credentials/` | Purposes `ssh` (user tier, no fallback), `runbook_secret` (org tier); SMTP, SES, VAPID, AI, storage, webhook signing, GreptimeDB | [credentials](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/credentials/README.md) |
+| jobs | `platform/jobs/` | Job types in [§6](#6-background-work); reason `runbook_run`; retention policy `runbookArtifacts` | [jobs](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/jobs/README.md) |
+| nodes | `platform/jobs/` | Worker-node fleet; no ShellKeep job is node-eligible except `runbook.artifacts.bundle`; the nodes data-plane ports are shims | [nodes](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/nodes/README.md) |
+| storage | `platform/storage/` | Prefixes `session-logs/` (no writer yet) and `runbook-artifacts/`; profile images; terminal image paste | [storage](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/storage/README.md) |
+| email | `platform/email/` | Templates for the reaper and runbook notifications | [email](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/email/README.md) |
+| notifications | `platform/notifications/` | Events `terminal.session_reaped`, `runbooks.run_finished`, `runbooks.run_failed`, `runbooks.approval_requested`, `runbooks.dry_run_finished` | [notifications](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/notifications/README.md) |
+| ai | `platform/ai/` | Features `terminal_assist`, `terminal_explain`, `session_summary`, `runbook_agent`, `runbook_draft`; keys are per user | [ai](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/ai/README.md) |
+| db-backup | `platform/db-backup/` | No `RestoreCarryOver` (nothing outside the database to carry) | [db-backup](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/db-backup/README.md) |
+| telemetry | `platform/telemetry/` | `app.terminal.*`, `app.runbooks.*`, `app.ssh.*`, `app.terminal_ai.*` metrics and a Terminal dashboard group | [telemetry](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/telemetry/README.md) |
+| webhooks | `platform/webhooks/` | Events `terminal.session.created`, `terminal.session.terminated`, `server_profile.host_key_changed` (audience `user`) | [webhooks](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/webhooks/README.md) |
+| alerts | `platform/alerts/` | Rule kinds `terminal_ssh_connect_p95`, `terminal_job_stalled`; four starter rules seeded disabled | [alerts](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/alerts/README.md) |
+| exports | `platform/exports/` | Sources for server profiles, terminal sessions and runbook runs; never a credential, scrollback or log | [exports](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/exports/README.md) |
+| user-data | `platform/user-data/` | Categories `servers`, `sessions`, `runbooks`; delegated purge jobs | [user-data](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/user-data/README.md) |
+| onboarding | `platform/onboarding/` | Getting-started steps `shellkeep.add-server`, `.trust-host-key`, `.open-session`, `.add-ai-key`, `.first-runbook` | [onboarding](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/onboarding/README.md) |
+| sharing | `platform/sharing/` | Resource types `server_profile` and `runbook` (no links), plus the run-log bundle link | [sharing](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/sharing/README.md) |
+| android-app | `platform/android-app/` | Trusted Web Activity launcher, APK releases, `android_app` push channel | [android-app](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/android-app/README.md) |
+| host, about, doctor | `platform/host-core.config.ts`, `about/`, `doctor.config.ts` | `terminal` section of About; Doctor checks for tmux, SSH egress, host-key policy, legacy secrets, reaper | [host](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/host/README.md), [doctor](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/doctor/README.md) |
 
-| Layer | Responsibility | Location |
-|-------|---------------|----------|
-| **Presentation** | User interaction, rendering, UX | `apps/web/` |
-| **API Gateway** | HTTP handling, validation, auth | `apps/api/src/*/controllers/` |
-| **Business Logic** | Domain rules, orchestration | `apps/api/src/*/services/` |
-| **Data Access** | Database operations, queries | Prisma via services |
-| **Infrastructure** | Routing, containers, config | `infra/` |
+The permission and role registries come from the `manifest` package ([README](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/manifest/README.md)); the shared primitives from `core` ([README](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/core/README.md)). The adopted-slice list that drives permission seeding is `ADOPTED_PLATFORM_SLICES` in `apps/api/src/app-registrations/platform-slices.ts`. Web counterparts live under `packages/platform-web/src/<slice>/README.md` in the same repository.
 
-**Rule**: Frontend handles presentation only. All business logic resides in the API.
+## 3. Domain
 
-### 3.2 Same-Origin Hosting
+### 3.1 Server profiles
 
-All components served from the same base URL via Nginx reverse proxy:
+A server profile (`server_profiles`) is a saved SSH target: hostname, port, username, auth method (`password`, `key`, `agent`), tags, colour and `aiOutputSharing`. It belongs to the user who created it (`user_id`, the holder of the credentials); `org_id` records the organization and `owner_group_id` optionally names an owning group.
 
-| Path | Component | Purpose |
-|------|-----------|---------|
-| `/` | Frontend (React) | User interface |
-| `/api/*` | Backend (NestJS) | REST API |
-| `/api/docs` | Swagger UI | API documentation |
-| `/api/openapi.json` | OpenAPI spec | Machine-readable API schema |
+- **Credentials** are not columns. A password, private key or passphrase is one credential per field in the user credential store (purpose `ssh`, name `profile.<profileId>.<field>`). The three `encrypted_*` columns are legacy, unread, and remain until [#84](https://github.com/marinoscar/shellkeep/issues/84) drops them ([ssh-secret-reencryption.md](runbooks/ssh-secret-reencryption.md)).
+- **Host key.** `fingerprint`, `host_key_algorithm`, `host_key_trusted_at/by` pin the key. `SshConnectionFactory` checks the key **before any credential is sent**; policy `ssh.hostKeyPolicy` is `tofu_prompt` (default), `tofu_auto` or `strict`, and a changed key is refused under every policy.
+- **Facts** (`facts`, `facts_probed_at`): OS, shell and package manager, probed on demand; used by command assist and by the runbook package step.
+- **Sharing.** Roles `viewer`, `operator`, `editor` through the sharing slice. Credentials never move: a grant carries a role, the secrets stay with the user who saved them.
+- **Health.** `last_test_at/ok/code` hold the outcome of `POST /api/server-profiles/:id/test`, shown on the Servers page and the Home dashboard.
 
-**Benefits**: No CORS complexity, simplified cookie handling, unified deployment.
+### 3.2 Terminal sessions
 
-### 3.3 Security by Default
-
-- **Authentication Required**: All API endpoints require JWT unless explicitly marked `@Public()`
-- **Authorization Enforced**: RBAC guards verify roles/permissions before controller execution
-- **Input Validated**: Zod schemas validate all request payloads
-- **Secrets Protected**: Environment variables only, never committed to source
-
-### 3.4 API-First Design
-
-- **Contract-Driven**: OpenAPI specification generated from code annotations
-- **Versioned**: API paths support future versioning (`/api/v1/`)
-- **Consistent**: Standardized response format for success and errors
-- **Documented**: Every endpoint documented with Swagger decorators
-
-### 3.5 Observable by Design
-
-- **Traced**: OpenTelemetry auto-instrumentation for all HTTP and DB operations
-- **Metered**: Request counts, durations, error rates exposed as metrics
-- **Logged**: Structured JSON logging with correlation IDs
-- **Health-Checked**: Liveness and readiness endpoints for orchestration
-
----
-
-## 4. Technology Stack
-
-### 4.1 Core Technologies
-
-| Component | Technology | Version | Purpose |
-|-----------|------------|---------|---------|
-| **Runtime** | Node.js | 18+ | Server runtime |
-| **Language** | TypeScript | 5.x | Type safety |
-| **Backend Framework** | NestJS | 10.x | API structure |
-| **HTTP Adapter** | Fastify | 4.x | High-performance HTTP |
-| **Frontend Framework** | React | 18.x | UI rendering |
-| **UI Library** | Material UI (MUI) | 5.x | Component library |
-| **Database** | PostgreSQL | 14+ | Data persistence |
-| **ORM** | Prisma | 5.x | Database access |
-
-### 4.2 Authentication & Security
-
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **OAuth Strategy** | Passport.js | OAuth flow handling |
-| **OAuth Provider** | Google OAuth 2.0 | Primary identity provider |
-| **Token Format** | JWT (HS256) | Stateless authentication |
-| **Validation** | Zod | Runtime schema validation |
-| **Security Headers** | Helmet (via Nginx) | HTTP security headers |
-
-### 4.3 Infrastructure
-
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Containerization** | Docker | Application packaging |
-| **Orchestration** | Docker Compose | Local development environment |
-| **Reverse Proxy** | Nginx | Routing, SSL termination, headers |
-| **Observability** | OpenTelemetry + GreptimeDB | Traces, metrics, logs |
-| **Logging** | Pino | Structured JSON logging |
-
-### 4.4 Testing
-
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Backend Unit Tests** | Jest + jest-mock-extended | Service/guard testing with mocked Prisma |
-| **Backend Integration** | Jest + Supertest | HTTP endpoint testing with mocked database |
-| **Prisma Mocking** | jest-mock-extended (DeepMockProxy) | Type-safe database mocking |
-| **Frontend Tests** | Vitest + React Testing Library | Component and context testing |
-| **Frontend API Mocking** | MSW (Mock Service Worker) | Network request interception |
-| **E2E (Optional)** | Playwright | Full system testing |
-
-**Key Testing Characteristics:**
-- Backend tests use **mocked PrismaService** by default (no real database required)
-- Integration tests verify full HTTP request/response cycle with mocked data layer
-- Frontend tests run in jsdom environment with MSW intercepting API calls
-- Coverage thresholds: 70% minimum for frontend (enforced in vitest.config.ts)
-
----
-
-## 5. Component Architecture
-
-### 5.1 Repository Structure
+A terminal session (`terminal_sessions`) is the user's handle on one tmux session (`sk-<8 hex>`) on one server. Status is `active`, `detached` or `terminated`; the row is then purged.
 
 ```
-EnterpriseAppBase/
-├── apps/
-│   ├── api/                          # Backend API (NestJS + Fastify)
-│   │   ├── src/
-│   │   │   ├── auth/                 # Authentication module
-│   │   │   │   ├── controllers/
-│   │   │   │   ├── services/
-│   │   │   │   ├── guards/
-│   │   │   │   ├── strategies/
-│   │   │   │   └── decorators/
-│   │   │   ├── users/                # User management module
-│   │   │   ├── settings/             # Settings module (user + system)
-│   │   │   ├── allowlist/            # Email allowlist module
-│   │   │   ├── health/               # Health check module
-│   │   │   ├── prisma/               # Prisma service
-│   │   │   ├── common/               # Shared utilities
-│   │   │   │   ├── constants/
-│   │   │   │   ├── filters/
-│   │   │   │   └── interceptors/
-│   │   │   ├── config/               # Configuration module
-│   │   │   └── main.ts               # Application entry
-│   │   ├── prisma/
-│   │   │   ├── schema.prisma         # Database schema
-│   │   │   ├── migrations/           # Migration history
-│   │   │   └── seed.ts               # Database seeding
-│   │   ├── test/                     # Integration tests
-│   │   └── Dockerfile
-│   │
-│   └── web/                          # Frontend (React + MUI)
-│       ├── src/
-│       │   ├── components/           # Reusable UI components
-│       │   ├── pages/                # Page components
-│       │   ├── contexts/             # React context providers
-│       │   ├── hooks/                # Custom hooks
-│       │   ├── services/             # API client
-│       │   ├── theme/                # MUI theme configuration
-│       │   ├── types/                # TypeScript types
-│       │   └── __tests__/            # Component tests
-│       └── Dockerfile
-│
-├── docs/                             # Documentation
-│   ├── ARCHITECTURE.md               # This document
-│   ├── SECURITY-ARCHITECTURE.md      # Security details
-│   ├── API.md                        # API reference
-│   ├── DEVELOPMENT.md                # Development guide
-│   ├── TESTING.md                    # Testing guide
-│   ├── DEVICE-AUTH.md                # Device auth guide
-│   ├── System_Specification_Document.md  # Full specification
-│   └── specs/                        # Implementation specifications
-│       ├── 01-project-setup.md
-│       ├── 02-database-schema.md
-│       └── ... (24 specs total)
-│
-├── infra/                            # Infrastructure configuration
-│   ├── compose/
-│   │   ├── base.compose.yml          # Core services
-│   │   ├── dev.compose.yml           # Development overrides
-│   │   ├── prod.compose.yml          # Production overrides
-│   │   ├── telemetry.compose.yml     # Telemetry stack (collector + GreptimeDB)
-│   │   └── .env.example              # Environment template
-│   ├── nginx/
-│   │   └── nginx.conf                # Reverse proxy config
-│   └── otel/
-│       ├── otel-collector-config.yaml
-│       └── app-collector.yaml
-│
-├── .claude/                          # AI agent configuration
-│   └── agents/
-│       ├── backend-dev.md            # Backend specialist
-│       ├── frontend-dev.md           # Frontend specialist
-│       ├── database-dev.md           # Database specialist
-│       ├── testing-dev.md            # Testing specialist
-│       └── docs-dev.md               # Documentation specialist
-│
-├── CLAUDE.md                         # AI assistant guidance
-└── README.md                         # Project overview
+          connect                last WebSocket closes
+ (new) ───────────> active ───────────────────────────> detached
+                      │  ▲    reconnect (connect)           │
+                      │  └────────────────────────────────  │
+   idle > detachAfterMinutes (reaper)                       │ idle > terminateDetachedAfterHours (reaper)
+                      ▼                                     ▼
+                   detached                             terminated ── older than purgeTerminatedAfterDays ──> row deleted
+   SSH stream closes, or DELETE /api/sessions/:id, or batch-terminate ──> terminated
 ```
 
-### 5.2 Backend Module Structure
-
-Each NestJS module follows a consistent pattern:
-
-```
-module-name/
-├── module-name.module.ts         # Module definition
-├── module-name.controller.ts     # HTTP endpoints
-├── module-name.service.ts        # Business logic
-├── dto/                          # Data Transfer Objects
-│   ├── create-item.dto.ts
-│   └── update-item.dto.ts
-├── interfaces/                   # TypeScript interfaces
-├── guards/                       # Module-specific guards
-└── module-name.controller.spec.ts  # Unit tests
-```
-
-### 5.3 Frontend Component Structure
-
-```
-components/
-├── ComponentName/
-│   ├── ComponentName.tsx         # Component implementation
-│   ├── ComponentName.test.tsx    # Component tests
-│   └── index.ts                  # Barrel export
-
-pages/
-├── PageName/
-│   ├── PageName.tsx              # Page component
-│   ├── PageName.test.tsx         # Page tests
-│   └── index.ts                  # Barrel export
-```
-
-### 5.4 Storage Subsystem
-
-The storage system provides file upload and management capabilities with support for large files through resumable multipart uploads.
-
-#### Architecture Overview
-
-The storage system uses a provider abstraction pattern to support multiple cloud storage backends while maintaining a consistent API.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Storage Module                            │
-├─────────────────────────────────────────────────────────────┤
-│  Objects Controller                                          │
-│  └── Upload/Download/CRUD endpoints                          │
-├─────────────────────────────────────────────────────────────┤
-│  Objects Service                                             │
-│  └── Business logic, ownership validation                    │
-├─────────────────────────────────────────────────────────────┤
-│  Storage Provider Interface                                  │
-│  ├── S3StorageProvider (implemented)                         │
-│  └── AzureStorageProvider (future)                          │
-├─────────────────────────────────────────────────────────────┤
-│  Object Processing Pipeline                                  │
-│  └── Async post-upload processing with pluggable processors  │
-└─────────────────────────────────────────────────────────────┘
-```
-
-#### Upload Flow
-
-**1. Resumable Upload (Large Files)**:
-   - Client calls `/api/storage/objects/upload/init` with file metadata
-   - Server creates DB record, initializes S3 multipart, returns presigned URLs
-   - Client uploads parts directly to S3 (bypasses application server)
-   - Client calls `/api/storage/objects/:id/upload/complete` with part ETags
-   - Server finalizes upload with S3, triggers processing pipeline
-
-**2. Simple Upload (Small Files < 100MB)**:
-   - Client sends file via multipart/form-data to `/api/storage/objects`
-   - Server streams directly to S3
-   - Processing pipeline triggered on completion
-
-#### Processing Pipeline
-
-Post-upload processing is handled asynchronously via NestJS EventEmitter:
-
-```
-ObjectUploadedEvent (emitted)
-         ↓
-ObjectProcessingService (orchestrator)
-         ↓
-Registered Processors (run in priority order)
-         ↓
-Results aggregated into object metadata
-         ↓
-Status updated: ready | failed
-```
-
-**Key Features:**
-- Pluggable processor architecture
-- Priority-based execution order
-- Processors run asynchronously (non-blocking)
-- Results stored in object metadata JSONB field
-- Extensible for future processing needs (virus scanning, image resizing, etc.)
-
-#### Database Schema
-
-**storage_objects**:
-- File metadata, status, storage key
-- Owner reference (user_id)
-- Processing results in JSONB metadata field
-
-**storage_object_chunks**:
-- Tracks multipart upload progress
-- Part number, ETag, upload status
-- Enables resume capability
-
-#### Module Structure
-
-```
-apps/api/src/storage/
-├── storage.module.ts                # Module definition
-├── objects/
-│   ├── objects.controller.ts        # HTTP endpoints
-│   ├── objects.service.ts           # Business logic
-│   ├── dto/                         # Data transfer objects
-│   └── interfaces/
-├── providers/
-│   ├── storage-provider.interface.ts
-│   └── s3-storage.provider.ts
-└── processing/
-    ├── object-processing.service.ts
-    └── processors/
-        └── base-processor.interface.ts
-```
-
----
-
-## 6. Data Architecture
-
-### 6.1 Entity Relationship Diagram
-
-```
-┌────────────────────┐       ┌────────────────────┐
-│       users        │       │   user_identities  │
-├────────────────────┤       ├────────────────────┤
-│ id (PK, UUID)      │──┐    │ id (PK, UUID)      │
-│ email (UNIQUE)     │  │    │ user_id (FK)       │──┘
-│ display_name       │  └───▶│ provider           │
-│ provider_display   │       │ provider_subject   │
-│ profile_image_url  │       │ provider_email     │
-│ provider_image_url │       │ created_at         │
-│ is_active          │       └────────────────────┘
-│ created_at         │
-│ updated_at         │       ┌────────────────────┐
-└────────────────────┘       │    user_settings   │
-         │                   ├────────────────────┤
-         │                   │ id (PK, UUID)      │
-         │                   │ user_id (FK, UNIQUE)│◀─┐
-         │                   │ value (JSONB)      │  │
-         │                   │ version            │  │
-         ▼                   │ updated_at         │  │
-┌────────────────────┐       └────────────────────┘  │
-│    user_roles      │                               │
-├────────────────────┤                               │
-│ user_id (FK, PK)   │───────────────────────────────┘
-│ role_id (FK, PK)   │──┐
-└────────────────────┘  │    ┌────────────────────┐
-                        │    │       roles        │
-                        │    ├────────────────────┤
-                        └───▶│ id (PK, UUID)      │
-                             │ name (UNIQUE)      │
-                             │ description        │
-                             └────────────────────┘
-                                       │
-                                       ▼
-                             ┌────────────────────┐
-                             │  role_permissions  │
-                             ├────────────────────┤
-                             │ role_id (FK, PK)   │
-                             │ permission_id (PK) │──┐
-                             └────────────────────┘  │
-                                                     │
-                             ┌────────────────────┐  │
-                             │    permissions     │  │
-                             ├────────────────────┤  │
-                             │ id (PK, UUID)      │◀─┘
-                             │ name (UNIQUE)      │
-                             │ description        │
-                             └────────────────────┘
-
-┌────────────────────┐       ┌────────────────────┐
-│  system_settings   │       │   refresh_tokens   │
-├────────────────────┤       ├────────────────────┤
-│ id (PK, UUID)      │       │ id (PK, UUID)      │
-│ key (UNIQUE)       │       │ user_id (FK)       │
-│ value (JSONB)      │       │ token_hash (UNIQUE)│
-│ version            │       │ expires_at         │
-│ updated_by_user_id │       │ created_at         │
-│ updated_at         │       │ revoked_at         │
-└────────────────────┘       └────────────────────┘
-
-┌────────────────────┐       ┌────────────────────┐
-│   allowed_emails   │       │    device_codes    │
-├────────────────────┤       ├────────────────────┤
-│ id (PK, UUID)      │       │ id (PK, UUID)      │
-│ email (UNIQUE)     │       │ device_code_hash   │
-│ added_by_id (FK)   │       │ user_code (UNIQUE) │
-│ added_at           │       │ user_id (FK)       │
-│ claimed_by_id (FK) │       │ client_info (JSONB)│
-│ claimed_at         │       │ status             │
-│ notes              │       │ expires_at         │
-└────────────────────┘       │ last_polled_at     │
-                             └────────────────────┘
-
-┌────────────────────┐
-│    audit_events    │
-├────────────────────┤
-│ id (PK, UUID)      │
-│ actor_user_id (FK) │
-│ action             │
-│ target_type        │
-│ target_id          │
-│ meta (JSONB)       │
-│ created_at         │
-└────────────────────┘
-
-┌────────────────────┐       ┌────────────────────────┐
-│  storage_objects   │       │ storage_object_chunks  │
-├────────────────────┤       ├────────────────────────┤
-│ id (PK, UUID)      │──┐    │ id (PK, UUID)          │
-│ owner_id (FK)      │  │    │ object_id (FK)         │──┘
-│ name               │  └───▶│ part_number            │
-│ size               │       │ e_tag                  │
-│ mime_type          │       │ size                   │
-│ storage_key        │       │ status                 │
-│ storage_provider   │       │ created_at             │
-│ upload_id          │       │ completed_at           │
-│ status             │       └────────────────────────┘
-│ metadata (JSONB)   │
-│ created_at         │
-│ updated_at         │
-└────────────────────┘
-```
-
-### 6.2 JSONB Schema Definitions
-
-#### User Settings Shape
-
-```json
-{
-  "theme": "light | dark | system",
-  "profile": {
-    "displayName": "string | null",
-    "useProviderImage": true,
-    "customImageUrl": "string | null"
-  }
-}
-```
-
-#### System Settings Shape
-
-```json
-{
-  "ui": {
-    "allowUserThemeOverride": true
-  },
-  "security": {
-    "jwtAccessTtlMinutes": 15,
-    "refreshTtlDays": 14
-  },
-  "features": {
-    "exampleFlag": false
-  }
-}
-```
-
-### 6.3 Database Design Principles
-
-| Principle | Implementation |
-|-----------|---------------|
-| **UUID Primary Keys** | All tables use UUID v4 for primary keys |
-| **Timestamptz** | All timestamps use `timestamptz` for timezone awareness |
-| **JSONB for Flexibility** | Settings stored as JSONB for schema-less extensibility |
-| **Cascade Deletes** | Foreign keys cascade on user deletion |
-| **Soft Deletes** | Users deactivated via `is_active` flag, not hard deleted |
-| **Audit Trail** | `audit_events` table logs all security-relevant actions |
-
----
-
-## 7. Security Architecture
-
-### 7.1 Authentication Flow
-
-```
-┌─────────┐          ┌─────────┐          ┌─────────┐          ┌─────────┐
-│  User   │          │ Frontend│          │   API   │          │ Google  │
-└────┬────┘          └────┬────┘          └────┬────┘          └────┬────┘
-     │                    │                    │                    │
-     │  1. Click Login    │                    │                    │
-     │───────────────────▶│                    │                    │
-     │                    │                    │                    │
-     │                    │ 2. Redirect to     │                    │
-     │                    │    /api/auth/google│                    │
-     │                    │───────────────────▶│                    │
-     │                    │                    │                    │
-     │                    │                    │ 3. Redirect to     │
-     │◀───────────────────┼────────────────────┼────────────────────│
-     │                    │                    │    Google OAuth    │
-     │                    │                    │                    │
-     │  4. Grant Consent  │                    │                    │
-     │────────────────────┼────────────────────┼───────────────────▶│
-     │                    │                    │                    │
-     │                    │                    │ 5. Callback with   │
-     │                    │                    │◀───────────────────│
-     │                    │                    │    auth code       │
-     │                    │                    │                    │
-     │                    │                    │ 6. Exchange code   │
-     │                    │                    │    for tokens      │
-     │                    │                    │───────────────────▶│
-     │                    │                    │                    │
-     │                    │                    │◀───────────────────│
-     │                    │                    │    User profile    │
-     │                    │                    │                    │
-     │                    │                    │ 7. Check allowlist │
-     │                    │                    │    Provision user  │
-     │                    │                    │    Generate JWT    │
-     │                    │                    │    Store refresh   │
-     │                    │                    │                    │
-     │                    │ 8. Redirect with   │                    │
-     │                    │◀───────────────────│                    │
-     │                    │    access token    │                    │
-     │                    │    + refresh cookie│                    │
-     │                    │                    │                    │
-     │ 9. Authenticated   │                    │                    │
-     │◀───────────────────│                    │                    │
-     │                    │                    │                    │
-```
-
-### 7.2 Token Strategy
-
-| Token Type | Storage (Client) | Storage (Server) | Lifetime | Purpose |
-|------------|-----------------|------------------|----------|---------|
-| **Access Token** | Memory only | None (stateless) | 15 min | API authorization |
-| **Refresh Token** | HttpOnly cookie | SHA256 hash in DB | 14 days | Obtain new access tokens |
-
-**Security Properties:**
-- Access tokens never touch localStorage (XSS protection)
-- Refresh tokens in HttpOnly cookies (JavaScript cannot access)
-- Refresh token rotation on each use (reuse detection)
-- Database allows server-side revocation
-
-### 7.3 RBAC Model
-
-```
-                    ┌─────────────────────────────────────────────┐
-                    │                 PERMISSIONS                  │
-                    ├─────────────────────────────────────────────┤
-                    │ system_settings:read  │ system_settings:write│
-                    │ user_settings:read    │ user_settings:write  │
-                    │ users:read            │ users:write          │
-                    │ rbac:manage           │ allowlist:read       │
-                    │ allowlist:write       │                      │
-                    └────────────┬───────────┴──────────────────────┘
-                                 │
-        ┌────────────────────────┼────────────────────────┐
-        │                        │                        │
-        ▼                        ▼                        ▼
-┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-│     ADMIN     │      │  CONTRIBUTOR  │      │    VIEWER     │
-├───────────────┤      ├───────────────┤      ├───────────────┤
-│ ALL           │      │ user_settings:│      │ user_settings:│
-│ PERMISSIONS   │      │   read/write  │      │   read        │
-│               │      │               │      │               │
-│ (Full Access) │      │ (Standard     │      │ (Least        │
-│               │      │  User)        │      │  Privilege)   │
-└───────────────┘      └───────────────┘      └───────────────┘
-        │                        │                        │
-        └────────────────────────┼────────────────────────┘
-                                 │
-                                 ▼
-                        ┌───────────────┐
-                        │     USERS     │
-                        │  (Many-to-Many│
-                        │   Assignment) │
-                        └───────────────┘
-```
-
-### 7.4 Access Control Layers
-
-```
-Request → Nginx → JwtAuthGuard → RolesGuard → PermissionsGuard → Controller
-            │           │             │              │
-            │           │             │              └── Check @Permissions()
-            │           │             │                  AND logic (all required)
-            │           │             │
-            │           │             └── Check @Roles() decorator
-            │           │                 OR logic (any role matches)
-            │           │
-            │           └── Validate JWT, load user+roles+permissions
-            │               Check user is active
-            │
-            └── Security headers, rate limiting (optional)
-```
-
-### 7.5 Email Allowlist
-
-Before OAuth authentication completes:
-
-1. Check if email matches `INITIAL_ADMIN_EMAIL` (bypass check)
-2. Check if email exists in `allowed_emails` table
-3. If not found, reject with "Email not authorized"
-4. If found, proceed with user provisioning
-5. Mark allowlist entry as "claimed" with user ID
-
-**Management:**
-- Admins add emails via `/api/allowlist` before users can login
-- Claimed entries cannot be removed (protects existing users)
-- Use user deactivation (`is_active: false`) to revoke access
-
----
-
-## 8. API Architecture
-
-### 8.1 Endpoint Categories
-
-| Category | Base Path | Auth Required | Description |
-|----------|-----------|---------------|-------------|
-| **Health** | `/api/health/*` | No | Liveness/readiness probes |
-| **Auth** | `/api/auth/*` | Varies | OAuth, JWT, sessions |
-| **Users** | `/api/users/*` | Yes (Admin) | User management |
-| **Settings** | `/api/user-settings/*` | Yes | User preferences |
-| **System Settings** | `/api/system-settings/*` | Yes (Admin) | App configuration |
-| **Allowlist** | `/api/allowlist/*` | Yes (Admin) | Access control |
-
-### 8.2 Complete Endpoint Reference
-
-#### Authentication Endpoints
-
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| `GET` | `/api/auth/providers` | Public | List enabled OAuth providers |
-| `GET` | `/api/auth/google` | Public | Initiate Google OAuth |
-| `GET` | `/api/auth/google/callback` | Public | OAuth callback handler |
-| `POST` | `/api/auth/refresh` | Cookie | Refresh access token |
-| `POST` | `/api/auth/logout` | JWT | Single session logout |
-| `POST` | `/api/auth/logout-all` | JWT | All sessions logout |
-| `GET` | `/api/auth/me` | JWT | Current user info |
-| `POST` | `/api/auth/test/login` | Public | Test login bypass (dev only) |
-
-#### Device Authorization (RFC 8628)
-
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| `POST` | `/api/auth/device/code` | Public | Generate device code |
-| `POST` | `/api/auth/device/token` | Public | Poll for authorization |
-| `GET` | `/api/auth/device/activate` | JWT | Get activation info |
-| `POST` | `/api/auth/device/authorize` | JWT | Approve/deny device |
-| `GET` | `/api/auth/device/sessions` | JWT | List device sessions |
-| `DELETE` | `/api/auth/device/sessions/:id` | JWT | Revoke device session |
-
-#### User Management (Admin)
-
-| Method | Path | Permission | Purpose |
-|--------|------|------------|---------|
-| `GET` | `/api/users` | `users:read` | List users (paginated) |
-| `GET` | `/api/users/:id` | `users:read` | Get user details |
-| `PATCH` | `/api/users/:id` | `users:write` | Update user |
-| `PUT` | `/api/users/:id/roles` | `rbac:manage` | Update user roles |
-
-#### Settings
-
-| Method | Path | Permission | Purpose |
-|--------|------|------------|---------|
-| `GET` | `/api/user-settings` | `user_settings:read` | Get user settings |
-| `PUT` | `/api/user-settings` | `user_settings:write` | Replace settings |
-| `PATCH` | `/api/user-settings` | `user_settings:write` | Partial update |
-| `GET` | `/api/system-settings` | `system_settings:read` | Get system settings |
-| `PUT` | `/api/system-settings` | `system_settings:write` | Replace settings |
-| `PATCH` | `/api/system-settings` | `system_settings:write` | Partial update |
-
-#### Allowlist (Admin)
-
-| Method | Path | Permission | Purpose |
-|--------|------|------------|---------|
-| `GET` | `/api/allowlist` | `allowlist:read` | List allowlisted emails |
-| `POST` | `/api/allowlist` | `allowlist:write` | Add email |
-| `DELETE` | `/api/allowlist/:id` | `allowlist:write` | Remove email (if pending) |
-
-#### Health
-
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| `GET` | `/api/health` | Public | Full health check |
-| `GET` | `/api/health/live` | Public | Liveness probe |
-| `GET` | `/api/health/ready` | Public | Readiness probe (+ DB) |
-
-### 8.3 Response Format
-
-#### Success Response
-
-```json
-{
-  "data": {
-    // Response payload
-  },
-  "meta": {
-    "timestamp": "2024-01-01T00:00:00.000Z",
-    "total": 100,
-    "page": 1,
-    "pageSize": 20,
-    "totalPages": 5
-  }
-}
-```
-
-#### Error Response
-
-```json
-{
-  "statusCode": 400,
-  "message": "Human readable error message",
-  "error": "BadRequest",
-  "details": {
-    // Additional context
-  }
-}
-```
-
----
-
-## 9. Frontend Architecture
-
-### 9.1 Page Structure
-
-| Page | Route | Auth | Role | Purpose |
-|------|-------|------|------|---------|
-| Login | `/login` | Public | - | OAuth provider selection |
-| Auth Callback | `/auth/callback` | Public | - | Token handling |
-| Home | `/` | Required | Any | Dashboard |
-| User Settings | `/settings` | Required | Any | User preferences |
-| System Settings | `/admin/settings` | Required | Admin | App configuration |
-| User Management | `/admin/users` | Required | Admin | User/allowlist mgmt |
-| Device Activation | `/device` | Required | Any | Device auth approval |
-| Test Login | `/testing/login` | Public | - | Test auth bypass (dev only) |
-
-**Note:** The `/testing/login` route is excluded from production builds via `import.meta.env.PROD` check.
-
-### 9.2 Context Providers
-
-```tsx
-<App>
-  <ThemeProvider>        {/* MUI theme + dark mode */}
-    <AuthProvider>       {/* Authentication state */}
-      <SettingsProvider> {/* User settings */}
-        <RouterProvider> {/* React Router */}
-          <Layout>
-            <Pages />
-          </Layout>
-        </RouterProvider>
-      </SettingsProvider>
-    </AuthProvider>
-  </ThemeProvider>
-</App>
-```
-
-### 9.3 Authentication State
-
-```typescript
-interface AuthContext {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  accessToken: string | null;
-  login: (provider: string) => void;
-  logout: () => Promise<void>;
-  refreshToken: () => Promise<void>;
-}
-```
-
-### 9.4 Protected Routes
-
-```tsx
-<Route path="/admin/*" element={
-  <ProtectedRoute requiredRole="admin">
-    <AdminLayout />
-  </ProtectedRoute>
-} />
-```
-
----
-
-## 10. Infrastructure Architecture
-
-### 10.1 Docker Services
-
-```yaml
-# Core Services (base.compose.yml)
-services:
-  nginx:        # Reverse proxy (port 8323)
-  api:          # NestJS backend (port 3000)
-  web:          # React frontend (port 5173)
-  db:           # PostgreSQL (port 5432)
-
-# Telemetry (telemetry.compose.yml)
-services:
-  otel-collector:  # OpenTelemetry Collector
-  greptimedb:      # Telemetry store, read by the in-app explorer
-```
-
-### 10.2 Network Topology
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Docker Network                           │
-│                                                             │
-│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐  │
-│  │  nginx  │    │   api   │    │   web   │    │   db    │  │
-│  │  :8323  │───▶│  :3000  │    │  :5173  │    │  :5432  │  │
-│  │         │    └─────────┘    └─────────┘    └─────────┘  │
-│  │         │         │                            ▲        │
-│  │         │─────────┼────────────────────────────┘        │
-│  └─────────┘         │                                     │
-│       │              ▼                                     │
-│       │         ┌─────────┐                                │
-│       │         │  otel   │                                │
-│       │         │collector│                                │
-│       │         └─────────┘                                │
-│       │              │                                     │
-│       │              ▼                                     │
-│       │         ┌─────────┐    ┌─────────┐                 │
-│       │         │greptime │                                │
-│       │         │  db     │                                │
-│       │         └─────────┘    └─────────┘                 │
-└───────┼─────────────────────────────────────────────────────┘
-        │
-        ▼
-   External Access
-   http://localhost:8323
-```
-
-### 10.3 Environment Configuration
-
-Key environment variables (see `infra/compose/.env.example`):
-
-```bash
-# Application
-NODE_ENV=development
-PORT=3000
-APP_URL=http://localhost:8323
-
-# Database
-POSTGRES_HOST=db
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=appdb
-
-# JWT
-JWT_SECRET=<min-32-character-secret>
-JWT_ACCESS_TTL_MINUTES=15
-JWT_REFRESH_TTL_DAYS=14
-
-# OAuth
-GOOGLE_CLIENT_ID=<from-google-console>
-GOOGLE_CLIENT_SECRET=<from-google-console>
-GOOGLE_CALLBACK_URL=http://localhost:8323/api/auth/google/callback
-
-# Admin Bootstrap
-INITIAL_ADMIN_EMAIL=admin@example.com
-
-# Observability
-OTEL_ENABLED=true
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
-```
-
----
-
-## 11. Observability Architecture
-
-### 11.1 Signal Types
-
-| Signal | Collection | Storage | Purpose |
-|--------|------------|---------|---------|
-| **Traces** | OTEL SDK auto-instrumentation | GreptimeDB | Request flow tracking |
-| **Metrics** | OTEL SDK | GreptimeDB | Performance monitoring |
-| **Logs** | Pino structured logs | GreptimeDB | Debugging, audit |
-
-### 11.2 Trace Propagation
-
-```
-Request → Nginx → API → Database
-   │         │       │       │
-   └─────────┴───────┴───────┴──▶ trace_id: abc123
-                                  spans: [nginx, api, db-query]
-```
-
-### 11.3 Log Correlation
-
-```json
-{
-  "level": "info",
-  "time": 1704067200000,
-  "msg": "User logged in",
-  "requestId": "req-123",
-  "traceId": "abc123",
-  "spanId": "span456",
-  "userId": "user-789"
-}
-```
-
-### 11.4 Health Checks
-
-| Endpoint | Purpose | Checks |
-|----------|---------|--------|
-| `/api/health/live` | Kubernetes liveness | Process running |
-| `/api/health/ready` | Kubernetes readiness | Process + DB connection |
-
----
-
-## 12. Testing Architecture
-
-### 12.1 Testing Strategy Overview
-
-The project uses a **mocked database approach** for all tests by default. This provides fast, isolated tests without requiring a running PostgreSQL instance.
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         TESTING ARCHITECTURE                            │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  BACKEND (apps/api/)                    FRONTEND (apps/web/)            │
-│  ┌─────────────────────────────┐       ┌─────────────────────────────┐  │
-│  │  Jest + Supertest           │       │  Vitest + RTL               │  │
-│  │                             │       │                             │  │
-│  │  Unit Tests (*.spec.ts)     │       │  Component Tests            │  │
-│  │  • Co-located with source   │       │  (*.test.tsx)               │  │
-│  │  • Mock all dependencies    │       │  • In __tests__/ folder     │  │
-│  │                             │       │  • MSW for API mocking      │  │
-│  │  Integration Tests          │       │                             │  │
-│  │  (*.integration.spec.ts)    │       │  Context Tests              │  │
-│  │  • In test/ directory       │       │  • AuthContext              │  │
-│  │  • Full HTTP cycle          │       │  • ThemeContext             │  │
-│  │  • Mocked PrismaService     │       │                             │  │
-│  │                             │       │                             │  │
-│  │  Mocking:                   │       │  Mocking:                   │  │
-│  │  • jest-mock-extended       │       │  • MSW (Mock Service Worker)│  │
-│  │  • DeepMockProxy<Prisma>    │       │  • vi.fn() for functions    │  │
-│  └─────────────────────────────┘       └─────────────────────────────┘  │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### 12.2 Backend Test Structure
-
-```
-apps/api/
-├── src/
-│   ├── auth/
-│   │   ├── auth.service.spec.ts          # Unit test (co-located)
-│   │   ├── auth.controller.spec.ts
-│   │   ├── guards/
-│   │   │   ├── jwt-auth.guard.spec.ts
-│   │   │   ├── roles.guard.spec.ts
-│   │   │   └── permissions.guard.spec.ts
-│   │   └── strategies/
-│   │       ├── jwt.strategy.spec.ts
-│   │       └── google.strategy.spec.ts
-│   ├── users/
-│   │   └── users.service.spec.ts
-│   ├── settings/
-│   │   ├── user-settings/
-│   │   │   └── user-settings.service.spec.ts
-│   │   └── system-settings/
-│   │       └── system-settings.service.spec.ts
-│   └── common/
-│       ├── filters/http-exception.filter.spec.ts
-│       └── interceptors/transform.interceptor.spec.ts
-│
-└── test/
-    ├── jest.config.js                    # Jest configuration
-    ├── setup.ts                          # Global test setup
-    ├── teardown.ts                       # Global cleanup
-    ├── helpers/
-    │   ├── test-app.helper.ts            # Creates test NestJS app
-    │   ├── auth-mock.helper.ts           # Creates mock users with JWTs
-    │   └── fixtures.helper.ts            # Test data utilities
-    ├── fixtures/
-    │   ├── users.fixture.ts              # User test data
-    │   ├── roles.fixture.ts              # Role test data
-    │   ├── settings.fixture.ts           # Settings test data
-    │   ├── test-data.factory.ts          # Factory functions
-    │   └── mock-setup.helper.ts          # Base mock configuration
-    ├── mocks/
-    │   ├── prisma.mock.ts                # Mocked PrismaService
-    │   └── google-oauth.mock.ts          # Mocked OAuth strategy
-    ├── auth/
-    │   ├── auth.integration.spec.ts      # Auth endpoint tests
-    │   ├── oauth.integration.spec.ts     # OAuth flow tests
-    │   └── allowlist-enforcement.integration.spec.ts
-    ├── rbac/
-    │   ├── rbac.integration.spec.ts
-    │   └── guard-integration.integration.spec.ts
-    ├── settings/
-    │   ├── user-settings.integration.spec.ts
-    │   └── system-settings.integration.spec.ts
-    ├── users.integration.spec.ts
-    ├── health/
-    │   └── health.integration.spec.ts
-    └── integration/
-        └── device-auth.integration.spec.ts
-```
-
-### 12.3 Backend Mocking Strategy
-
-#### Prisma Mocking with jest-mock-extended
-
-All backend tests use a **mocked PrismaService** via `jest-mock-extended`:
-
-```typescript
-// test/mocks/prisma.mock.ts
-import { DeepMockProxy, mockDeep, mockReset } from 'jest-mock-extended';
-import { PrismaClient } from '@prisma/client';
-
-export type MockPrismaClient = DeepMockProxy<PrismaClient>;
-export const prismaMock: MockPrismaClient = mockDeep<PrismaClient>();
-
-export function resetPrismaMock(): void {
-  mockReset(prismaMock);
-}
-```
-
-#### Test App Helper
-
-The `createTestApp()` helper creates a fully configured NestJS application with mocked database:
-
-```typescript
-// test/helpers/test-app.helper.ts
-export async function createTestApp(
-  options: { useMockDatabase?: boolean } = {}
-): Promise<TestContext> {
-  const shouldUseMock = options.useMockDatabase ?? true;  // Default: MOCKED
-
-  const moduleFixture = await Test.createTestingModule({
-    imports: [AppModule],
-  })
-    .overrideProvider(PrismaService)
-    .useValue(prismaMock)  // Inject mock instead of real Prisma
-    .compile();
-
-  // ... app configuration
-  return { app, prisma, prismaMock, module, isMocked: true };
-}
-```
-
-#### Integration Test Pattern
-
-```typescript
-// test/auth/auth.integration.spec.ts
-describe('Auth Controller (Integration)', () => {
-  let context: TestContext;
-
-  beforeAll(async () => {
-    context = await createTestApp({ useMockDatabase: true });
-  });
-
-  afterAll(async () => {
-    await closeTestApp(context);
-  });
-
-  beforeEach(async () => {
-    resetPrismaMock();      // Clear all mock calls
-    setupBaseMocks();        // Set up default mock responses
-  });
-
-  it('should return current user for authenticated request', async () => {
-    const user = await createMockTestUser(context);  // Creates user + JWT
-
-    const response = await request(context.app.getHttpServer())
-      .get('/api/auth/me')
-      .set(authHeader(user.accessToken))
-      .expect(200);
-
-    expect(response.body.data).toMatchObject({
-      id: user.id,
-      email: user.email,
-    });
-  });
-});
-```
-
-### 12.4 Frontend Test Structure
-
-```
-apps/web/src/
-└── __tests__/
-    ├── setup.ts                          # Vitest setup (MSW, mocks)
-    ├── mocks/
-    │   ├── server.ts                     # MSW server instance
-    │   ├── handlers.ts                   # API mock handlers
-    │   └── data.ts                       # Mock response data
-    ├── utils/
-    │   ├── test-utils.tsx                # Custom render with providers
-    │   ├── mock-providers.tsx            # Test provider wrappers
-    │   └── hook-utils.tsx                # Hook testing utilities
-    ├── components/
-    │   ├── common/
-    │   │   ├── LoadingSpinner.test.tsx
-    │   │   └── ProtectedRoute.test.tsx
-    │   ├── navigation/
-    │   │   ├── AppBar.test.tsx
-    │   │   ├── Sidebar.test.tsx
-    │   │   └── UserMenu.test.tsx
-    │   └── admin/
-    │       ├── UserList.test.tsx
-    │       ├── AllowlistTable.test.tsx
-    │       └── AddEmailDialog.test.tsx
-    ├── contexts/
-    │   ├── AuthContext.test.tsx
-    │   └── ThemeContext.test.tsx
-    ├── pages/
-    │   ├── LoginPage.test.tsx
-    │   ├── UserSettingsPage.test.tsx
-    │   └── SystemSettingsPage.test.tsx
-    └── services/
-        └── api.test.ts
-```
-
-### 12.5 Frontend Mocking Strategy
-
-#### MSW (Mock Service Worker)
-
-API calls are intercepted at the network level using MSW:
-
-```typescript
-// __tests__/mocks/handlers.ts
-import { http, HttpResponse } from 'msw';
-
-export const handlers = [
-  http.get('/api/auth/me', () => {
-    return HttpResponse.json({
-      data: {
-        id: 'user-1',
-        email: 'test@example.com',
-        roles: [{ name: 'viewer' }],
-        permissions: ['user_settings:read'],
-      },
-    });
-  }),
-
-  http.get('/api/auth/providers', () => {
-    return HttpResponse.json({
-      data: {
-        providers: [{ name: 'google', displayName: 'Google' }],
-      },
-    });
-  }),
-
-  http.post('/api/auth/logout', () => {
-    return new HttpResponse(null, { status: 204 });
-  }),
-];
-```
-
-#### Test Setup
-
-```typescript
-// __tests__/setup.ts
-import '@testing-library/jest-dom';
-import { cleanup } from '@testing-library/react';
-import { afterEach, beforeAll, afterAll, vi } from 'vitest';
-import { server } from './mocks/server';
-
-// Browser API mocks
-Object.defineProperty(window, 'matchMedia', { /* ... */ });
-global.ResizeObserver = class ResizeObserverMock { /* ... */ };
-
-// MSW lifecycle
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => { cleanup(); server.resetHandlers(); });
-afterAll(() => server.close());
-```
-
-#### Custom Render with Providers
-
-```typescript
-// __tests__/utils/test-utils.tsx
-import { render } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import { ThemeProvider } from '../../contexts/ThemeContext';
-import { AuthProvider } from '../../contexts/AuthContext';
-
-export function renderWithProviders(ui: React.ReactElement, options = {}) {
-  return render(ui, {
-    wrapper: ({ children }) => (
-      <BrowserRouter>
-        <ThemeProvider>
-          <AuthProvider>
-            {children}
-          </AuthProvider>
-        </ThemeProvider>
-      </BrowserRouter>
-    ),
-    ...options,
-  });
-}
-```
-
-### 12.6 Test Commands
-
-#### Backend
-
-```bash
-cd apps/api
-
-npm test                    # Run all tests (unit + integration)
-npm run test:unit           # Unit tests only (excludes e2e pattern)
-npm run test:watch          # Watch mode
-npm run test:cov            # With coverage report
-npm run test:debug          # Debug mode with inspector
-npm run test:ci             # CI mode (coverage + JUnit reporter)
-```
-
-#### Frontend
-
-```bash
-cd apps/web
-
-npm test                    # Run tests in watch mode
-npm run test:run            # Run once and exit
-npm run test:watch          # Interactive watch mode
-npm run test:coverage       # With coverage report
-npm run test:ui             # Open Vitest UI (browser-based)
-npm run test:ci             # CI mode (coverage + JUnit reporter)
-```
-
-### 12.7 Test Configuration
-
-#### Backend (Jest)
-
-```javascript
-// apps/api/test/jest.config.js
-module.exports = {
-  testRegex: '.*\\.spec\\.ts$',
-  roots: ['<rootDir>/src/', '<rootDir>/test/'],
-  setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
-  testTimeout: 30000,
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-  },
-};
-```
-
-#### Frontend (Vitest)
-
-```typescript
-// apps/web/vitest.config.ts
-export default defineConfig({
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: ['./src/__tests__/setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
-    coverage: {
-      thresholds: {
-        lines: 70, branches: 70, functions: 70, statements: 70,
-      },
-    },
-    testTimeout: 10000,
-  },
-});
-```
-
-### 12.8 Key Testing Patterns
-
-| Pattern | Backend | Frontend |
-|---------|---------|----------|
-| **Database** | Mocked via jest-mock-extended | N/A |
-| **API Calls** | Direct HTTP via Supertest | MSW network interception |
-| **Authentication** | Mock JWT tokens generated | MSW handlers return user |
-| **Test Isolation** | `resetPrismaMock()` in beforeEach | `server.resetHandlers()` in afterEach |
-| **Async Handling** | `async/await` with Jest | `waitFor()` from RTL |
-| **User Interactions** | N/A | `userEvent` from @testing-library |
-
-### 12.9 Important Notes
-
-1. **No Real Database Required**: All tests run with mocked Prisma - no PostgreSQL needed
-2. **Test File Naming**:
-   - Backend unit: `*.spec.ts` (co-located with source)
-   - Backend integration: `*.integration.spec.ts` (in test/ directory)
-   - Frontend: `*.test.tsx` (in __tests__/ directory)
-3. **Coverage Thresholds**: Frontend enforces 70% minimum coverage
-4. **MSW Strict Mode**: Unhandled API requests fail tests (`onUnhandledRequest: 'error'`)
-5. **Type Safety**: Prisma mocks are fully typed via `DeepMockProxy<PrismaClient>`
-
----
-
-## 13. Agent-Based Development Model
-
-### 13.1 Specialized Agents
-
-This project uses specialized AI coding agents for different domains:
-
-| Agent | File | Domain | Responsibilities |
-|-------|------|--------|------------------|
-| `backend-dev` | `.claude/agents/backend-dev.md` | API Layer | NestJS controllers, services, guards, OAuth, JWT |
-| `frontend-dev` | `.claude/agents/frontend-dev.md` | UI Layer | React components, pages, hooks, MUI theming |
-| `database-dev` | `.claude/agents/database-dev.md` | Data Layer | Prisma schema, migrations, seeds, queries |
-| `testing-dev` | `.claude/agents/testing-dev.md` | Quality | Jest, Supertest, Vitest, RTL, type checking |
-| `docs-dev` | `.claude/agents/docs-dev.md` | Documentation | Architecture, API, security docs |
-
-### 13.2 Agent Invocation Rules
-
-**MANDATORY**: All development tasks MUST be delegated to the appropriate agent.
-
-| Task Type | Required Agent | Example |
-|-----------|---------------|---------|
-| Add API endpoint | `backend-dev` | "Implement user search endpoint" |
-| Create component | `frontend-dev` | "Build user avatar component" |
-| Schema change | `database-dev` | "Add email verification table" |
-| Write tests | `testing-dev` | "Add integration tests for auth" |
-| Update docs | `docs-dev` | "Document new endpoint in API.md" |
-
-### 13.3 Multi-Agent Workflow
-
-For features spanning multiple domains, invoke agents sequentially:
-
-```
-Feature: "Add user notification preferences"
-
-1. database-dev  → Add preferences to user_settings schema
-2. backend-dev   → Implement API endpoints
-3. frontend-dev  → Build settings UI
-4. testing-dev   → Write tests for all layers
-5. docs-dev      → Update documentation
-```
-
-### 13.4 Agent Context
-
-Each agent has full context of:
-- System specification document
-- Technology stack requirements
-- Code patterns and conventions
-- Security requirements
-- Testing standards
-
-### 13.5 Orchestration Responsibilities
-
-The orchestrating agent (Claude) handles:
-- Reading files to understand context
-- Answering questions about the codebase
-- Planning and coordinating between agents
-- Running simple commands (git, npm)
-- Reviewing agent outputs
-
-**What NOT to do directly:**
-- Write NestJS code (use `backend-dev`)
-- Create React components (use `frontend-dev`)
-- Modify Prisma schema (use `database-dev`)
-- Write tests (use `testing-dev`)
-- Update documentation (use `docs-dev`)
-
----
-
-## 14. Development Workflows
-
-### 14.1 Local Development Setup
-
-```bash
-# 1. Clone repository
-git clone <repository-url>
-cd EnterpriseAppBase
-
-# 2. Configure environment
-cp infra/compose/.env.example infra/compose/.env
-# Edit .env with your Google OAuth credentials
-
-# 3. Start services
-cd infra/compose
-docker compose -f base.compose.yml -f dev.compose.yml up
-
-# 4. Seed database (first time only)
-docker compose exec api sh
-cd /app/apps/api && npx tsx prisma/seed.ts
-exit
-
-# 5. Access application
-# UI: http://localhost:8323
-# API: http://localhost:8323/api
-# Swagger: http://localhost:8323/api/docs
-```
-
-### 14.2 Database Changes
-
-```bash
-# 1. Modify schema
-# Edit apps/api/prisma/schema.prisma
-
-# 2. Create migration
-cd apps/api
-npm run prisma:migrate:dev -- --name descriptive_name
-
-# 3. Generate client
-npm run prisma:generate
-
-# 4. Update seeds if needed
-# Edit apps/api/prisma/seed.ts
-```
-
-### 14.3 Adding New Features
-
-1. **Plan**: Identify which agents are needed
-2. **Database**: Schema changes via `database-dev`
-3. **Backend**: API implementation via `backend-dev`
-4. **Frontend**: UI implementation via `frontend-dev`
-5. **Testing**: Test coverage via `testing-dev`
-6. **Documentation**: Updates via `docs-dev`
-
-### 14.4 Testing
-
-See [Section 12: Testing Architecture](#12-testing-architecture) for comprehensive testing documentation.
-
-```bash
-# Backend tests (all use mocked database)
-cd apps/api
-npm test                    # All tests (unit + integration)
-npm run test:watch          # Watch mode
-npm run test:cov            # With coverage
-
-# Frontend tests
-cd apps/web
-npm test                    # Watch mode
-npm run test:run            # Run once
-npm run test:coverage       # With coverage
-npm run test:ui             # Visual Vitest UI
-
-# Type checking
-cd apps/api && npm run typecheck
-cd apps/web && npm run typecheck
-```
-
----
-
-## 15. Appendices
-
-### 15.1 Quick Reference
-
-#### Service URLs (Development)
-
-| Service | URL |
-|---------|-----|
-| Application | http://localhost:8323 |
-| Swagger UI | http://localhost:8323/api/docs |
-| GreptimeDB dashboard | http://localhost:14000/dashboard |
-| PostgreSQL | localhost:5432 |
-
-#### Key Commands
-
-```bash
-# Start dev environment
-cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up
-
-# Start with observability
-cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f telemetry.compose.yml up
-
-# Run migrations
-cd apps/api && npm run prisma:migrate:dev -- --name <name>
-
-# Generate Prisma client
-cd apps/api && npm run prisma:generate
-
-# Run tests
-cd apps/api && npm test
-cd apps/web && npm test
-```
-
-### 15.2 Related Documents
-
-| Document | Purpose |
-|----------|---------|
-| `System_Specification_Document.md` (not in this repository) | Full system requirements |
-| [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) | Detailed security documentation |
-| [API.md](API.md) | API endpoint reference |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | Development guide |
-| [TESTING.md](TESTING.md) | Testing framework guide |
-| [DEVICE-AUTH.md](DEVICE-AUTH.md) | Device authorization guide |
-| [CLAUDE.md](../CLAUDE.md) | AI assistant guidance |
-
-### 15.3 Specification Index
-
-Implementation specs in `docs/specs/`:
-
-| Phase | Specs | Description |
-|-------|-------|-------------|
-| Foundation | 01-03 | Project setup, database schema, seeds |
-| API Core | 04-07 | NestJS setup, OAuth, JWT, RBAC |
-| API Features | 08-12 | Users, settings, health, observability |
-| Frontend | 13-18 | React setup, pages, components |
-| Testing | 19-24 | Test frameworks, unit/integration tests |
-
----
-
-## Document History
-
-| Version | Date | Author | Changes |
-|---------|------|--------|---------|
-| 1.0 | January 2026 | AI Assistant | Initial comprehensive architecture document |
+The three thresholds are the `terminal` system namespace (defaults 60 minutes, 12 hours, 3 days), read by the reaper job on every run. Terminating updates the row and emits a webhook; it does not kill the remote tmux session ([specs/terminal.md](specs/terminal.md#7-invariants)). Each person who connects to a shared server opens their own session: sessions are never shared.
+
+### 3.3 Gateway and protocol
+
+`WS /api/terminal/ws` carries one terminal's input and output. The client authenticates in-band with an `auth` message (never a query string), then sends `connect` with a session id; the server answers `auth_ok` and `session_ready`, then streams SSH output as binary frames. The access token expires on the socket's clock (`auth_expired`); the client re-sends `auth` on every refresh. Maintenance mode refuses a new authentication or attach, never a running socket. Full frame table, reasons and codes: [specs/terminal.md §3](specs/terminal.md#3-websocket-protocol).
+
+### 3.4 tmux, history and scrollback
+
+`SshService.connect` opens an interactive shell with a PTY and runs `tmux new-session -As <id>` with `history-limit 50000` and `mouse on`; reconnecting re-attaches. `SessionHistoryService` is the only code that reads a pane (`tmux capture-pane`): the history download and every AI feature go through it. Scrollback layers and the browser-side layout rules are in [specs/terminal.md §5](specs/terminal.md#5-the-browser-terminal).
+
+### 3.5 Terminal AI
+
+Three features reach a model only through `TerminalContextService.forAi` (consent, the server's AI switch, capture, ANSI strip, redaction, size cap, audit): command assist (`POST /api/ai/terminal/assist`, SSE), explain (`POST /api/ai/terminal/explain`, SSE) and session summaries (job `ai.session.summarize`). Keys are the user's own. [specs/terminal-ai.md](specs/terminal-ai.md).
+
+### 3.6 Fleet Runbooks
+
+A runbook is an immutable, versioned definition (`runbooks`, `runbook_versions`) of up to 50 steps of seven kinds. A **run** snapshots the resolved servers, then fans out: `runbook.run.start` resolves targets and creates rows, the coordinator enqueues one `runbook.target.run` job per target, and each job runs one segment over one SSH connection until the end or the next pause (an approval gate or an AI step). Logs stream over SSE and are archived to object storage; destructive runs need a typed confirmation and a second person. [specs/fleet-runbooks.md](specs/fleet-runbooks.md).
+
+### 3.7 Dashboard, CLI and Android
+
+- `GET /api/dashboard/summary` feeds the Home page (sessions, server health, recent runs; `sessions:read`).
+- The `shellkeep` CLI logs in with the device flow or a PAT, lists servers and sessions, attaches to a session over the same WebSocket (`sessions attach`), runs and follows runbooks, deploys the stack and runs worker nodes ([apps/cli/README.md](../apps/cli/README.md)).
+- The Android app is a Trusted Web Activity that starts at `/sessions` ([runbooks/android-app.md](runbooks/android-app.md)).
+
+## 4. Authorization
+
+Roles: `admin` is a **system** role (operates the deployment, holds no domain permission); `org_admin`, `contributor` and `viewer` are **org** roles held on a membership. All of ShellKeep's domain permissions are org-scoped and declared in `apps/api/src/app-registrations/permissions.ts`. A denied access to a record answers 404, never 403.
+
+The matrix below is checked against `apps/api/prisma/catalog/permissions.json` (generated by `npm run catalog:permissions` in `apps/api`) by `apps/api/test/docs-consistency.spec.ts`, so it cannot drift. The catalog holds all 71 permissions; the platform's system and admin permissions (`system_settings`, `users`, `jobs`, `nodes`, `db_backup`, `telemetry`, `alerts`, `ai_config`, ...) go to `admin` only and are documented with their slices.
+
+<!-- permission-matrix:start -->
+| Permission | admin | org_admin | contributor | viewer |
+|---|---|---|---|---|
+| `servers:read` | - | yes | yes | yes |
+| `servers:write` | - | yes | yes | - |
+| `servers:delete` | - | yes | yes | - |
+| `sessions:read` | - | yes | yes | yes |
+| `sessions:write` | - | yes | yes | - |
+| `sessions:delete` | - | yes | yes | - |
+| `runbooks:read` | - | yes | yes | yes |
+| `runbooks:write` | - | yes | yes | - |
+| `runbooks:run` | - | yes | yes | - |
+| `runbooks:approve` | - | yes | - | - |
+| `ai:use` | - | yes | yes | - |
+<!-- permission-matrix:end -->
+
+Beyond the table:
+
+- **Terminal input needs `sessions:write`.** A viewer may list sessions over HTTP but the gateway refuses their `auth` with `forbidden`.
+- **Sharing decides per record** ([SECURITY-ARCHITECTURE.md §5](SECURITY-ARCHITECTURE.md#5-authorization)): server roles `viewer` < `operator` < `editor`; runbook roles `viewer` < `runner` < `editor`. The RBAC permission is required **on top** of a role, even for the owner.
+- **Self-approval** of a runbook step is off by default (`runbooks.approvals.allowSelfApproval`); only `org_admin` holds `runbooks:approve`.
+
+## 5. Data
+
+### 5.1 Tables
+
+Platform tables (53 of them: identity, settings, credentials, jobs, nodes, storage, notifications, AI, backups, webhooks, alerts, sharing, OAuth, Android) come from the platform migrations; the installed copies and their hashes are in `apps/api/prisma/platform.lock`, the fragments in `packages/platform-db`. ShellKeep owns twelve:
+
+| Table | Owner | `org_id` | RLS | Purge on user delete | Export | Written by |
+|---|---|---|---|---|---|---|
+| `server_profiles` | user | reference | none (standing constraint) | cascade; credentials by `servers.user_data.purge` | included, no credential column | server-profiles |
+| `terminal_sessions` | user | reference | none | cascade | included | terminal |
+| `terminal_session_summaries` | user | reference | none | cascade | included | terminal-ai |
+| `runbooks` | org (author in `owner_user_id`) | isolation key | forced | detach (organization keeps it; `runbooks.user_data.purge` deletes a user-only runbook) | definition included | runbooks |
+| `runbook_versions` | org | isolation key | forced | detach (immutable) | included | runbooks |
+| `runbook_runs` | org | isolation key | forced | detach | excluded | engine |
+| `runbook_run_targets` | org | isolation key | forced | with the run | excluded | engine |
+| `runbook_run_steps` | org | isolation key | forced | with the run | excluded | engine |
+| `runbook_run_log_chunks` | org | isolation key | forced | with the run; hot buffer, compacted | excluded | engine |
+| `runbook_command_executions` | org | isolation key | forced | with the run | excluded | engine, AI step |
+| `runbook_approvals` | org | isolation key | forced | detach | excluded | engine |
+| `runbook_artifacts` | org | isolation key | forced | with the run; expiry purge | excluded | collect-logs, bundle |
+
+The two user-owned domain tables carry `org_id` as a reference, not an isolation key. They are **not** under row-level security: enabling it is out of scope of the adoption and is recorded as a standing constraint ([local-exceptions.md](platform-adoption/local-exceptions.md)). Every query of them filters `user_id` and `org_id` through `OwnerScope`. Runbook tables use composite foreign keys that include `org_id` (a foreign-key check bypasses RLS).
+
+Raw-SQL indexes (intentional drift, listed in `platform.lock` `rawSqlIndexes`): `runbooks_org_name_live_uniq_idx`, `runbook_artifacts_bundle_uniq_idx`, plus the platform's. Never "fix" one with `@@unique`.
+
+### 5.2 Schema workflow
+
+`apps/api/prisma/schema/` is generated: edit a fragment in `apps/api/prisma/fragments/`, run `npm run db:compose --workspace=api`, then `prisma:generate`. A migration of ShellKeep's own tables is a plain `prisma:migrate:dev`; a platform table follows the `platform-migration` skill. Installed migrations are never edited. `db:check`, `db:drift` and the `deviations` entry `shellkeep:domain-schema` in `platform.lock` guard this ([DEVELOPMENT.md](DEVELOPMENT.md)).
+
+### 5.3 Object storage
+
+Keys carry the organization segment (`buildObjectKey`). ShellKeep's prefixes: `runbook-artifacts/` (step logs, collected archives, bundles) and `session-logs/` (declared, no writer). Terminal scrollback is never stored.
+
+## 6. Background work
+
+Every long-running activity is a registered `JobHandler` enqueued through `JobsService`. ShellKeep's `@Cron` bodies only enqueue (`terminal/tasks/session-cleanup.task.ts` every five minutes, `runbooks/engine/runbook-reconcile.task.ts` every minute). Every `ai.*` job, the SSH jobs and the user-data jobs are **server-only**: none carries `nodeResultSchema` or `persistNodeResult`. A job type string is permanent once rows exist; `apps/api/test/jobs/job-type-snapshot.spec.ts` pins them, and the table below is checked against it.
+
+<!-- job-types:start -->
+| Job type | Label | Owner |
+|---|---|---|
+| `terminal.session.reap` | Reap idle terminal sessions | terminal |
+| `runbook.run.start` | Start a runbook run | runbooks |
+| `runbook.target.run` | Run a runbook on one server | runbooks |
+| `runbook.run.advance` | Advance a runbook run | runbooks |
+| `runbook.logs.compact` | Reconcile runbook runs and compact their logs | runbooks |
+| `runbook.artifacts.bundle` | Bundle the logs of a runbook run | runbooks |
+| `runbook.artifacts.purge` | Purge runbook logs and artifacts | runbooks |
+| `ai.session.summarize` | Summarize terminal session | terminal-ai |
+| `ai.runbook.agent` | Run an AI step of a runbook | runbooks |
+| `servers.user_data.purge` | Server profile deletion | user-data |
+| `runbooks.user_data.purge` | Runbook deletion | user-data |
+| `job.history.purge` | Job history purge | jobs |
+| `audit.events.purge` | Audit log purge | jobs |
+| `nodes.fleet.sweep` | Fleet sweep | nodes |
+| `nodes.fleet.prune` | Fleet prune | nodes |
+| `nodes.node_events_purge` | Node events purge | nodes |
+| `auth.token.cleanup` | Token cleanup | identity |
+| `device-auth.code.cleanup` | Device code cleanup | identity |
+| `storage.cleanup.stale-uploads` | Stale upload cleanup | storage |
+| `storage.migrate_object` | Storage migration (copy object) | storage |
+| `storage.migrate_plan` | Storage migration (plan) | storage |
+| `storage.object.process` | Object processing | storage |
+| `admin.broadcast.start` | Broadcast start | notifications |
+| `admin.broadcast.chunk` | Broadcast delivery | notifications |
+| `notifications.inbox.purge` | Notification inbox purge | notifications |
+| `notifications.deliveries.purge` | Delivery log purge | notifications |
+| `db.backup.run` | Database backup | db-backup |
+| `db.backup.sweep` | Backup sweep | db-backup |
+| `db.restore.run` | Database restore | db-backup |
+| `db.restore.old-db-drop` | Restore cleanup | db-backup |
+| `telemetry.retention.apply` | Telemetry retention | telemetry |
+| `telemetry.stack.deploy` | Telemetry services deploy | telemetry |
+| `webhooks.deliver` | Webhook delivery | webhooks |
+| `webhooks.fanout` | Webhook fan-out | webhooks |
+| `webhooks.deliveries_purge` | Webhook delivery purge | webhooks |
+| `alerts.evaluate` | Alert evaluation | alerts |
+| `alerts.evaluate_event` | Alert evaluation (node event) | alerts |
+| `alerts.incidents_purge` | Alert incident purge | alerts |
+| `ai.response.run` | AI background response | ai |
+| `ai.image.generate` | AI image generation | ai |
+| `ai.audio.transcribe` | AI audio transcription | ai |
+| `ai.audio.speech` | AI speech synthesis | ai |
+| `ai.catalog.refresh` | AI model catalog refresh | ai |
+| `ai.keys.recheck` | AI key recheck | ai |
+| `ai.runs.purge` | AI run purge | ai |
+| `ai.usage.purge` | AI usage purge | ai |
+| `export.run` | Data export | exports |
+| `export.purge` | Export expiry | exports |
+| `user.data.purge` | User data deletion | user-data |
+| `admin.factory_reset` | Factory reset | user-data |
+| `org.offboard` | Organization offboarding | user-data |
+| `sharing.grants.prune` | sharing.grants.prune | sharing |
+<!-- job-types:end -->
+
+The three permanent platform exemptions to "a cron only enqueues" (lease reaper, temp-file janitor, node-secret sweep) are the platform's; ShellKeep adds none. `runbook.target.run` and `ai.runbook.agent` have `maxAttempts: 1`: a retry would repeat commands that already ran, so a job that dies mid-step is failed by the reconcile sweep (`EXECUTOR_LOST`), never re-run.
+
+## 7. Settings
+
+### 7.1 Namespaces
+
+Registered in `apps/api/src/app-registrations/settings.ts` (order is the stored key order: append, never insert); defaults for the system row are generated into `apps/api/prisma/catalog/system-settings-defaults.json` (`npm run catalog:settings`).
+
+| Scope | Namespace | Holds | Notes |
+|---|---|---|---|
+| system | `ui` | `allowUserThemeOverride` | |
+| system | `features` | feature flags | empty by default |
+| system | `terminal` | `detachAfterMinutes`, `terminateDetachedAfterHours`, `purgeTerminatedAfterDays`, `doctorProbeProfileId` | read by the reaper on every run |
+| system | `ssh` | `hostKeyPolicy` | `tofu_prompt` default |
+| system | `runbooks` | `enabled`, `maxTargetsPerRun`, `maxConcurrency`, `defaultStepTimeoutSec`, `maxLogBytesPerStep`, `approvals.*`, `ai.agentEnabled` | organization may only tighten |
+| system | `terminalAi` | `redactionMode`, `requireConsent` | organization may only tighten |
+| user | `terminal` | font, size, cursor, scrollback, theme, bell, key bar, scroll buttons | |
+| user | `shortcuts` | key-bar shortcuts | moved out of `terminal` (#80) |
+| user | `terminalAi` | `consentAcceptedAt` | |
+| user | `onboarding` | welcome and checklist state | the platform's |
+
+The platform's own namespaces (`maintenance`, `jobs`, `nodes`, `retention`, `storage`, `notifications`, `databaseBackup`, `telemetry`, `ai`, ...) are documented with their slices. The `retention` namespace carries ShellKeep's `runbookArtifacts` policy (default 30 days).
+
+### 7.2 Settings pages
+
+Every page is a card in a registry (`apps/web/src/config/adminSections.tsx`, `userSettingsSections.tsx`), rendered by the packaged `SettingsHub`; the card's permission is the exact string the API enforces.
+
+| Area | Routes |
+|---|---|
+| Admin, General | `/admin/settings/about`, `/setup`, `/maintenance`, `/terminal`, `/storage`, `/email`, `/push` |
+| Admin, Access | `/admin/settings/users` |
+| Admin, Observability | `/admin/settings/doctor`, `/alerts` |
+| Admin, Operations | `/admin/settings/jobs`, `/jobs/insights`, `/workers`, `/broadcasts`, `/db-backup`, `/webhooks`, `/organization-webhooks`, `/android` |
+| Admin, AI | `/admin/settings/ai`, `/ai/models`, `/ai/usage`, `/ai/organization-keys` |
+| Admin, Danger zone | `/admin/settings/factory-reset` |
+| User | `/settings/profile`, `/appearance`, `/terminal`, `/shortcuts`, `/notifications`, `/getting-started`, `/tokens`, `/ai`, `/webhooks`, `/groups`, `/data-export`, `/danger-zone` |
+
+## 8. Frontend
+
+- **Routes** (`apps/web/src/App.tsx`): `/` Home dashboard; `/sessions` list and `/sessions/:id` the terminal workspace; `/servers`; `/runbooks`, `/runbooks/new`, `/runbooks/:id`, `/:id/edit`, `/:id/run`, `/runbooks/approvals`; `/runs`, `/runs/:id`, `/runs/commands`; `/ai`; `/s` public link; `/activate` device approval; `/login`.
+- **Shell.** `components/common/Layout.tsx` binds the platform `ShellLayout`; the five breakpoint gates (all at `sm`, 600 px) move together ([AGENTS.md](../AGENTS.md)).
+- **Platform host.** `apps/web/src/platform/` supplies the host ports (API client, auth, navigation); identity, settings, sharing, notifications and the other packaged pages are imported from `@marinoscar/platform-web/*`.
+- **Terminal.** `TerminalWorkspacePage` holds tabs and split panes (`components/terminal/workspace/`), each pane an xterm.js `TerminalView` driven by `services/terminal-ws.ts`; the AI panel, key bar, scroll buttons and status bar are siblings of the panes. Layout rules: [specs/terminal.md §5](specs/terminal.md#5-the-browser-terminal).
+- **State.** Server state goes through hooks (`useSessions`, `useServerProfiles`, `useCommandAssist`, ...); the user's terminal settings sync through `settingsSync`. The access token is held in memory; the refresh cookie is HttpOnly.
+- **PWA.** `sw.ts` is the service worker; install and update prompts are the platform's.
+
+## 9. Infrastructure
+
+`infra/` is rendered by `npm run platform:infra:sync` from `@marinoscar/platform-infra` and checked in CI with `-- --check` (lock: `infra/platform-infra.lock.json`). Never hand-edit a generated file; app differences live in `infra/compose/app.env.example`, `app.*.compose.yml` overlays, `infra/nginx/app.d/` and `infra/otel/app-collector.yaml`.
+
+| Compose file | Use |
+|---|---|
+| `base.compose.yml` | `nginx`, `api`, `web` on `app-network` and the external `devnet` |
+| `dev.compose.yml` | hot reload, source mounts |
+| `devdb.compose.yml` | adds a local PostgreSQL (`db`) |
+| `prod.compose.yml` | production images and limits |
+| `vps.compose.yml` | VPS deployment with the `stack-agent` sidecar |
+| `telemetry.compose.yml`, `vps.telemetry.compose.yml` | OpenTelemetry collector and GreptimeDB |
+| `test.compose.yml` | throwaway PostgreSQL and GreptimeDB for `test:db` |
+| `worker.compose.yml`, `worker.build.compose.yml` | a worker node |
+
+App-owned nginx locations (`infra/nginx/app.d/locations/`): `terminal-ws.conf` (3600 s timeouts, no buffering), `runbook-streams.conf` and `ai-terminal-streams.conf` (SSE), `terminal-uploads.conf` (100 MiB image paste), `android-app.conf`. Environment variables: `infra/compose/.env.example` is generated (platform variables, then `app.env.example`); do not duplicate it. Runtime-configured features (storage, AI, SMTP, VAPID, telemetry connection) get **no** environment variable. Deployment: [apps/cli/README.md](../apps/cli/README.md#deploying-to-a-server), [ssl-nginx-setup.md](ssl-nginx-setup.md).
+
+## 10. Observability
+
+OpenTelemetry (traces, metrics, logs) behind a runtime export gate, GreptimeDB as the store, Pino for structured logs; configuration and the explorer are in the admin telemetry page. ShellKeep's instruments:
+
+| Area | Metrics |
+|---|---|
+| Terminal | `app.terminal.sessions`, `app.terminal.ws.connections`, `app.terminal.ws.auth_denied`, `app.terminal.ssh.connect.duration`, `app.terminal.ssh.connections`, `app.terminal.sessions.reaped` |
+| SSH | `app.ssh.host_key_checks` |
+| Terminal AI | `app.terminal_ai.redactions` (kind and count only) |
+| Runbooks | `app.runbooks.definitions_saved`, `.runs_finished`, `.target_duration`, `.commands`, `.approvals`, `.destructive_runs`, `.dry_runs`, `.artifact_bytes`, `.bundle_builds`, `.ai_tool_calls` |
+
+Metric labels are bounded values, never ids; ids live on spans (`terminal.ws.session` carries `session.id` and `org.id`). The four starter alert rules (`shellkeep.ssh_connect_failures`, `.ssh_connect_slow`, `.ws_auth_denied_spike`, `.reaper_stalled`) are seeded disabled and never overwritten. Health: `GET /api/health/live`, `GET /api/health/ready`.
+
+## 11. Extension points and related documents
+
+Add a domain permission in `app-registrations/permissions.ts`; a settings namespace in `app-registrations/settings.ts`; an AI feature in `app-registrations/ai.ts`; a job type with the `add-job-type` skill (and its row in the snapshot spec); a notification with `add-notification`; a settings page with `add-settings-page`; a platform-table migration with `platform-migration`. Each spec has a "Extending it" section.
+
+| Document | Holds |
+|---|---|
+| [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) | Trust boundaries, secrets, threat model |
+| [API.md](API.md) | Conventions; endpoints are in `/api/docs` |
+| [specs/terminal.md](specs/terminal.md), [specs/terminal-ai.md](specs/terminal-ai.md), [specs/fleet-runbooks.md](specs/fleet-runbooks.md) | The three domain specs |
+| [DEVELOPMENT.md](DEVELOPMENT.md), [TESTING.md](TESTING.md) | Dev loop, tests |
+| [platform-adoption/](platform-adoption/README.md) | Baseline, classification, exceptions ledger |
+| [runbooks/](README.md#runbooks) | Operator procedures |
+| [EnterpriseAppBase docs](https://github.com/marinoscar/EnterpriseAppBase/tree/main/docs) | Platform specs (jobs, AI, sharing, ...) and the device-authorization guide ([DEVICE-AUTH.md](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/DEVICE-AUTH.md)) |
