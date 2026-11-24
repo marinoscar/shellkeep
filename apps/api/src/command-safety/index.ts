@@ -3,6 +3,7 @@ export {
   redactText,
   redactionToken,
   REDACTED_LINE,
+  REDACTION_KINDS,
   type RedactionFinding,
   type RedactionKind,
   type RedactionMode,

@@ -11,21 +11,25 @@
 
 export type RedactionMode = 'standard' | 'strict';
 
-export type RedactionKind =
-  | 'aws_access_key'
-  | 'aws_secret'
-  | 'github_token'
-  | 'slack_token'
-  | 'google_api_key'
-  | 'llm_key'
-  | 'jwt'
-  | 'private_key'
-  | 'url_credentials'
-  | 'auth_header'
-  | 'kv_secret'
-  | 'platform_token'
-  | 'literal'
-  | 'high_entropy';
+/** Every kind `redactText` can report (the metric's `kind` label values). */
+export const REDACTION_KINDS = [
+  'aws_access_key',
+  'aws_secret',
+  'github_token',
+  'slack_token',
+  'google_api_key',
+  'llm_key',
+  'jwt',
+  'private_key',
+  'url_credentials',
+  'auth_header',
+  'kv_secret',
+  'platform_token',
+  'literal',
+  'high_entropy',
+] as const;
+
+export type RedactionKind = (typeof REDACTION_KINDS)[number];
 
 export interface RedactionFinding {
   kind: RedactionKind;
