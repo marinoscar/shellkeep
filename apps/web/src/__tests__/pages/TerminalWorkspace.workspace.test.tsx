@@ -10,7 +10,7 @@ import type { TerminalSession } from '../../types';
 
 // =============================================================================
 // The terminal workspace (#77): tabs and splits from the URL, hidden panes,
-// the AI gate, the key bar on the keyboard, and the docs/SCROLLING.md layout
+// the AI gate, the key bar on the keyboard, and the docs/specs/terminal.md layout
 // invariants as a DOM walk. The real TerminalView renders (its xterm hook is
 // mocked), so the walk covers the actual component tree.
 // =============================================================================
@@ -291,7 +291,7 @@ describe('TerminalWorkspacePage: tabs and splits (#77)', () => {
   });
 });
 
-describe('TerminalWorkspacePage: hidden tabs and the scroll chain (docs/SCROLLING.md)', () => {
+describe('TerminalWorkspacePage: hidden tabs and the scroll chain (docs/specs/terminal.md)', () => {
   let restoreOffsetParent: () => void;
   beforeEach(() => {
     vi.clearAllMocks();

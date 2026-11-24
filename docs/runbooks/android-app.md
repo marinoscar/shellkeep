@@ -49,7 +49,7 @@ On the admin page choose **Send test notification**. The result reports counts p
 
 - The TWA opens without a URL bar once the certificate is trusted and the package is installed from the hosted APK.
 - Web Push reaches the phone after notification permission is granted inside the TWA (Android 13 asks for `POST_NOTIFICATIONS`).
-- The terminal's key-shortcut bar and keyboard inset behave in the TWA: [SCROLLING.md](../SCROLLING.md#terminal-in-the-android-twa).
+- The terminal's key-shortcut bar and keyboard inset behave in the TWA: [terminal spec](../specs/terminal.md#54-touch-and-mobile-input).
 
 ## 7. Roll back
 

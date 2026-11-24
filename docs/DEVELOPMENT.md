@@ -1,719 +1,128 @@
 # Development Guide
 
-This document provides essential information for developers working on this project, including setup instructions, common patterns, and important lessons learned from implementation.
+> **Audience:** developers · Rules for contributions and AI assistants: [AGENTS.md](../AGENTS.md) · Design: [ARCHITECTURE.md](ARCHITECTURE.md)
 
-## Table of Contents
+## Contents
 
-1. [Technology Stack](#technology-stack)
-2. [Development Setup](#development-setup)
-3. [Working with NestJS + Fastify](#working-with-nestjs--fastify)
-4. [Database Patterns](#database-patterns)
-5. [Common Pitfalls and Solutions](#common-pitfalls-and-solutions)
-6. [Testing Guidelines](#testing-guidelines)
-7. [Debugging Tips](#debugging-tips)
+1. [Prerequisites and setup](#1-prerequisites-and-setup)
+2. [Daily loop](#2-daily-loop)
+3. [Generated files](#3-generated-files)
+4. [Database changes](#4-database-changes)
+5. [Adding things](#5-adding-things)
+6. [NestJS and Fastify notes](#6-nestjs-and-fastify-notes)
+7. [Debugging](#7-debugging)
+8. [The CLI](#8-the-cli)
+9. [Checks CI runs](#9-checks-ci-runs)
 
----
+## 1. Prerequisites and setup
 
-## Technology Stack
+- Node.js 24 (`engines` in `package.json`), npm workspaces (`apps/*`, `packages/*`), Docker with Compose, a Google OAuth client (ID and secret, callback URL `http://localhost:8323/api/auth/google/callback`).
+- An external PostgreSQL 16 reachable on the `devnet` Docker network, or the `devdb` overlay for a local one. The API must connect as an ordinary role (not a superuser), because row-level security is inert for a superuser ([runbooks/application-role.md](runbooks/application-role.md)); the `devdb` overlay creates it.
 
-### Backend
-- **Framework**: NestJS with **Fastify adapter** (NOT Express)
-- **ORM**: Prisma with PostgreSQL
-- **Authentication**: Passport.js (Google OAuth)
-- **Validation**: Zod schemas with nestjs-zod
-- **Documentation**: Swagger/OpenAPI
+```bash
+npm install                                   # repository root, all workspaces
+cp infra/compose/.env.example infra/compose/.env
+# set at least: POSTGRES_*, JWT_SECRET (32+ chars), SECRETS_ENCRYPTION_KEY (openssl rand -base64 32),
+#   GOOGLE_CLIENT_ID/SECRET, INITIAL_ADMIN_EMAIL, APP_URL=http://localhost:8323,
+#   GOOGLE_CALLBACK_URL=http://localhost:8323/api/auth/google/callback
+docker network create devnet                  # once per host
+cd infra/compose
+docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml up
+# in another shell, migrate and seed with the same -f files (the API does not migrate on startup):
+docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml exec api npm run prisma:migrate
+docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml exec api npm run prisma:seed
+```
 
-### Key Difference: Fastify vs Express
+App: http://localhost:8323 (the platform default 3535 is not used). API reference: http://localhost:8323/api/docs. Add `-f telemetry.compose.yml` for the collector and GreptimeDB (explorer under `/admin/settings/telemetry`). The first sign-in as `INITIAL_ADMIN_EMAIL` bypasses the allowlist and becomes the administrator; add other people on the Users page (Allowlist tab).
 
-This application uses **Fastify** as the HTTP adapter, not Express. This has important implications for how you write controllers and work with request/response objects.
+`DATABASE_URL` is built at runtime from `POSTGRES_*`: use the `npm run prisma:*` scripts, never bare `npx prisma`. Storage, AI keys, SMTP, Web Push and the telemetry connection are configured at runtime in the admin UI and **never** get environment variables.
 
-**Why Fastify?**
-- Faster performance (2-3x faster than Express)
-- Better TypeScript support
-- Lower overhead
-- Built-in schema validation support
+## 2. Daily loop
 
----
+Work happens in a worktree on a branch, and every change ships as a pull request ([AGENTS.md](../AGENTS.md): issue first, worktree under `worktrees/<short-name>`, small Conventional Commits). Inside the worktree:
 
-## Development Setup
+```bash
+npm install
+npm run prisma:generate --workspace=api       # after install and after any schema change
+npm test --workspace=api                      # unit + mocked integration, no database
+npm run test:run --workspace=web              # Vitest
+npm run test:run --workspace=cli
+npm run typecheck --workspace=api             # also web, cli
+npm run lint
+```
 
-### Prerequisites
-- Node.js 18+
-- Docker Desktop
-- PostgreSQL (via Docker)
-- Google OAuth credentials (from Google Cloud Console)
+Without Docker: `npm run api:dev` (Nest watch) and `npm run web:dev` (Vite) need a database and the same `.env` values exported; the compose dev stack is the supported path because nginx provides the same-origin routing and the WebSocket location.
 
-### Initial Setup
+## 3. Generated files
 
-1. **Clone and install dependencies**
-   ```bash
-   git clone <repository-url>
-   cd EnterpriseAppBase
-   npm install
-   ```
+| Never edit | Source of truth | Regenerate |
+|---|---|---|
+| `apps/api/prisma/schema/*` | `apps/api/prisma/fragments/*` and the platform's fragments | `npm run db:compose --workspace=api`, then `prisma:generate` (`db:compose:check` in CI) |
+| `infra/compose/*.compose.yml` (except `app.*`), `infra/nginx/*` except `app.d/`, `infra/otel/otel-collector-config.yaml`, `infra/compose/.env.example` | `@marinoscar/platform-infra` plus `infra/compose/app.env.example`, `app.*.compose.yml`, `infra/nginx/app.d/`, `infra/otel/app-collector.yaml` | `npm run platform:infra:sync` (`-- --check` in CI); the lock is `infra/platform-infra.lock.json` |
+| `apps/api/prisma/catalog/permissions.json` | the registrations in `src/app-registrations/` | `npm run catalog:permissions --workspace=api` |
+| `apps/api/prisma/catalog/system-settings-defaults.json` | the settings registry | `npm run catalog:settings --workspace=api` |
+| the web's permission snapshot | the permission registry | `npm run permissions:dump --workspace=api` (`-- --check` in CI) |
+| `openapi.json` | the controllers | `npm run openapi:dump`, `npm run openapi:lint` |
+| `apps/api/prisma/migrations/**` installed platform copies | the platform package | `npm run db:sync --workspace=api`; never edit; `platform.lock` records every hash, comments count |
 
-2. **Set up environment variables**
-   ```bash
-   cd infra/compose
-   cp .env.example .env
-   # Edit .env with your Google OAuth credentials and other settings.
-   # ShellKeep publishes port 8323 (NGINX_PORT, from app.env.example), but the
-   # platform's template still says 3535, so also set:
-   #   APP_URL=http://localhost:8323
-   #   GOOGLE_CALLBACK_URL=http://localhost:8323/api/auth/google/callback
-   ```
+A platform variable ShellKeep serves differently (`APP_URL`, `GOOGLE_CALLBACK_URL`, `APP_BIND_PORT`) is set in `.env`, not repeated in `app.env.example`. Never add a commented `# KEY=value` line to either env example: the CLI reads it as a declared variable.
 
-3. **Start development environment**
-   ```bash
-   cd infra/compose
-   # devdb adds a local PostgreSQL (POSTGRES_HOST=db) and creates the ordinary
-   # application role, so row-level security applies. Leave devdb.compose.yml out
-   # to use an external PostgreSQL reachable on the devnet network.
-   docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml up
-   # Telemetry (collector + GreptimeDB; the explorer is /admin/settings/telemetry):
-   # add -f telemetry.compose.yml
-   ```
+## 4. Database changes
 
-4. **IMPORTANT: Run database seeds**
+- **ShellKeep's own tables** (`server_profiles`, `terminal_*`, `runbook*`): edit the fragment in `apps/api/prisma/fragments/`, `db:compose`, `prisma:generate`, then `cd apps/api && npm run prisma:migrate:dev -- --name <name>`. Review the SQL. A table that carries `org_id` and should be isolated is an **org table**: forced RLS, a policy per table, composite foreign keys that include `org_id`, and the migration runs as `BEGIN; SELECT set_config('app.rls_bypass','on',true); ...; COMMIT;` ([SECURITY-ARCHITECTURE.md §8](SECURITY-ARCHITECTURE.md#8-database-role-and-row-level-security)). Classify the model in `app-registrations/model-ownership.ts` and, if it references a user, `user-owned-models.ts` with a purge and export decision; the conformance suite fails otherwise.
+- **A platform table**: not a local change. File a seam request (`seam_request.yml`) and follow the `platform-migration` skill only when the platform ships the migration.
+- **Partial or expression indexes** are written in migration SQL and listed in `rawSqlIndexes`; never "fix" one with `@@unique`.
+- `npm run db:check` (hashes), `db:check:database` (the ledger of a live database), `db:drift` (migrations equal the composed schema) and `db:baseline` (adopt a deployed database: [runbooks/database-baseline.md](runbooks/database-baseline.md)).
+- Seed: `npm run prisma:seed --workspace=api` seeds roles, permissions and the initial admin from the generated catalog; it runs as the application role in CI.
+- Apply in production: `npm run prisma:migrate` (the CLI's deploy does it).
 
-   Before your first login, you MUST seed the database with roles and permissions:
+## 5. Adding things
 
-   ```bash
-   # In a new terminal, exec into the API container
-   docker compose exec api sh
-
-   # Run the seed script
-   cd /app/apps/api
-   npx tsx prisma/seed.ts
-
-   # Exit the container
-   exit
-   ```
-
-   **Why this is critical:**
-   - Seeds create the RBAC roles (admin, contributor, viewer)
-   - Seeds create permissions (users:read, users:write, etc.)
-   - Without seeds, user creation will fail with "Default role not found"
-   - Seeds are idempotent - safe to run multiple times
-
-5. **Access the application**
-   - Frontend: http://localhost:8323
-   - API: http://localhost:8323/api
-   - Swagger: http://localhost:8323/api/docs
-
-### The generated infrastructure files
-
-`infra/` is rendered by `npm run platform:infra:sync` from `@marinoscar/platform-infra` and checked in CI with `npm run platform:infra:sync -- --check` (the lock is `infra/platform-infra.lock.json`, which records the identity: `cliName: shellkeep`, `envPrefix: SHELLKEEP_`, `serviceName: shellkeep-api`). **Never hand-edit a generated file** (header `GENERATED from @marinoscar/platform-infra`): ShellKeep's differences live only in the app-owned files, which the sync creates once and never overwrites. After a platform version bump, run the sync and commit the result.
-
-| Generated (never edit) | App-owned (edit these) |
+| Task | Where and how |
 |---|---|
-| `infra/compose/{base,dev,devdb,prod,vps,vps.telemetry,telemetry,worker,worker.build,test}.compose.yml` | `infra/compose/app.*.compose.yml` (overlays, appended last; none needed today) |
-| `infra/compose/postgres-init/10-application-role.sh` (mode 0755) | `infra/compose/postgres-init/20-*.sh` (extra first-start steps) |
-| `infra/compose/.env.example`, `.env.worker.example` | `infra/compose/app.env.example` (ShellKeep variables, appended to `.env.example`) |
-| `infra/nginx/{nginx.conf,csp.conf,csp.dev.conf}`, `infra/nginx/platform/*` | `infra/nginx/app.d/` (`locations/`, `http/`, `server/`, `csp/`, `permissions-policy.conf`) |
-| `infra/otel/otel-collector-config.yaml` | `infra/otel/app-collector.yaml` |
-| `infra/platform-infra.lock.json` | none; `shellkeep deploy` (`apps/cli`, #72) deploys the generated files, and the legacy `infra/deploy/` scripts are gone |
-
-ShellKeep's `app.d/locations/`:
-
-- `terminal-ws.conf`: `/api/terminal/ws` with a 3600 s timeout (the platform's `/api` location reads for 60 s).
-- `runbook-streams.conf`: the runbook log SSE streams through `platform/sse-proxy.conf` (path to confirm when #62 merges).
-- `ai-terminal-streams.conf`: the terminal AI assistant's stream prefix `/api/ai/terminal/`. The generic AI response stream and the telemetry assistant stream are already in the platform's `nginx.conf`.
-- `terminal-uploads.conf`: the terminal toolbar's multipart `POST /api/storage/objects` (100 MiB; nginx's default is 1 MiB).
-
-A new SSE route is one location including `/etc/nginx/platform/sse-proxy.conf`; a location that sets its own `add_header` must `include /etc/nginx/platform/security-headers.conf`. nginx reads its configuration at start: after changing an `app.d/` file run `docker compose ... up -d --force-recreate nginx`.
-
-**Ports and URLs.** `APP_URL` and `APP_BIND_PORT` are platform variables with the platform defaults 3535. A ShellKeep `.env` sets `APP_URL=http://localhost:8323` (and `GOOGLE_CALLBACK_URL` to match) for development; on a VPS it sets `APP_BIND_PORT=8323` (the `vps` overlay binds `127.0.0.1:APP_BIND_PORT`). The dev and devdb stacks publish `NGINX_PORT`, which `app.env.example` sets to 8323.
-
-**Images.** Both Dockerfiles build from the repository root (`context: ../..`, `dockerfile: apps/<app>/Dockerfile`), keep the sources at `/app/apps/<app>`, and the web image listens on 5173 like the dev server, because the generated `nginx.conf` proxies to `web:5173` in every mode.
-
-**Checks.** `npm run test:infra` renders `docker compose config` for dev, devdb, prod, vps and test with the overlays and runs `nginx -t` over `app.d/` with both CSP files (a missing docker or nginx is a named skip). The e2e WebSocket idle check: `cd tests/e2e && npx playwright test specs/terminal-ws.spec.ts` against a running stack.
-
-### First Login
-
-The first user to login with the email matching `INITIAL_ADMIN_EMAIL` (from .env) will automatically be granted the **admin** role. All subsequent users get the **viewer** role by default.
-
----
-
-## Working with NestJS + Fastify
-
-### Critical Differences from Express
-
-#### 1. Response Methods
-
-**❌ WRONG (Express-style):**
-```typescript
-@Get('example')
-example(@Res() res: Response) {
-  return res.status(200).json({ data: 'Hello' });
-}
-```
-
-**✅ CORRECT (Fastify-style):**
-```typescript
-@Get('example')
-example(@Res() res: FastifyReply) {
-  return res.code(200).send({ data: 'Hello' });
-}
-```
-
-**Key Differences:**
-- Use `code()` instead of `status()`
-- Use `send()` instead of `json()`
-- Import types from `fastify` not `express`
-
-**Best Practice:**
-Most of the time, avoid using `@Res()` decorator directly. Let NestJS handle responses:
-
-```typescript
-@Get('example')
-example() {
-  // NestJS automatically serializes to JSON
-  return { data: 'Hello' };
-}
-```
-
-#### 2. Request Objects
-
-**Type Imports:**
-```typescript
-import { FastifyRequest, FastifyReply } from 'fastify';
-
-// NOT from express:
-// import { Request, Response } from 'express';
-```
-
-**Request Properties:**
-```typescript
-@Get('example')
-example(@Req() req: FastifyRequest) {
-  // Fastify uses req.body, req.params, req.query like Express
-  // But some properties differ
-  const ip = req.ip;           // Client IP
-  const protocol = req.protocol; // http/https
-  const hostname = req.hostname; // Host header
-}
-```
-
-### Passport OAuth with Fastify
-
-Passport strategies (like Google OAuth) are designed for Express and expect Express-style request/response objects. To work with Fastify, you need special handling.
-
-#### The Problem
-
-Passport OAuth guards expect to work with Node.js `IncomingMessage` and `ServerResponse` objects, but Fastify wraps these in its own request/response objects.
-
-#### The Solution
-
-Override `getRequest()` and `getResponse()` in your OAuth guard to return the raw Node.js objects:
-
-```typescript
-import { ExecutionContext, Injectable } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-
-@Injectable()
-export class GoogleOAuthGuard extends AuthGuard('google') {
-  getRequest(context: ExecutionContext) {
-    const request = context.switchToHttp().getRequest();
-    // Return the raw Node.js IncomingMessage for Passport compatibility
-    return request.raw || request;
-  }
-
-  getResponse(context: ExecutionContext) {
-    const response = context.switchToHttp().getResponse();
-    // Return the raw Node.js ServerResponse for Passport compatibility
-    return response.raw || response;
-  }
-
-  handleRequest<TUser = unknown>(
-    err: Error | null,
-    user: TUser | false,
-    _info: unknown,
-    context: ExecutionContext,
-  ): TUser {
-    if (err || !user) {
-      throw err || new Error('Authentication failed');
-    }
-
-    // IMPORTANT: Copy user from raw request to Fastify request
-    // so controllers can access req.user normally
-    const fastifyRequest = context.switchToHttp().getRequest();
-    fastifyRequest.user = user;
-
-    return user;
-  }
-}
-```
-
-**What this does:**
-1. `getRequest()` returns `request.raw` - the underlying Node.js request object
-2. `getResponse()` returns `response.raw` - the underlying Node.js response object
-3. Passport performs OAuth using these raw objects
-4. `handleRequest()` copies the authenticated user back to the Fastify request
-5. Your controllers can now access `req.user` as normal
-
-**Example in Controller:**
-```typescript
-@Get('google/callback')
-@Public()
-@UseGuards(GoogleOAuthGuard)
-async googleAuthCallback(
-  @Req() req: FastifyRequest & { user?: GoogleProfile },
-  @Res() res: FastifyReply,
-) {
-  // Guard has set req.user for us
-  const profile = req.user;
-
-  // Use Fastify methods for response
-  return res.redirect(302, redirectUrl.toString());
-}
-```
-
-### Cookies with Fastify
-
-Fastify uses `@fastify/cookie` plugin for cookie handling.
-
-**Set Cookie:**
-```typescript
-res.setCookie('name', 'value', {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
-  path: '/api/auth',
-  maxAge: 14 * 24 * 60 * 60 * 1000, // milliseconds
-});
-```
-
-**Read Cookie:**
-```typescript
-const value = req.cookies['name'];
-```
-
-**Clear Cookie:**
-```typescript
-res.clearCookie('name', { path: '/api/auth' });
-```
-
----
-
-## Database Patterns
-
-### Prisma Transactions
-
-When creating related records (e.g., user with roles), always use transactions to maintain data consistency.
-
-#### Why Transactions Matter
-
-Without transactions, you can encounter foreign key violations:
-
-**❌ WRONG (No Transaction):**
-```typescript
-// This can fail if user creation succeeds but role assignment fails
-const user = await prisma.user.create({
-  data: { email, displayName }
-});
-
-await prisma.userRole.create({
-  data: {
-    userId: user.id,
-    roleId: defaultRole.id, // FK violation if role doesn't exist
-  }
-});
-```
-
-**✅ CORRECT (With Transaction):**
-```typescript
-const user = await prisma.$transaction(async (tx) => {
-  const newUser = await tx.user.create({
-    data: {
-      email,
-      displayName,
-      userRoles: {
-        create: {
-          roleId: defaultRole.id,
-        },
-      },
-      userSettings: {
-        create: {
-          value: DEFAULT_USER_SETTINGS,
-        },
-      },
-    },
-    include: {
-      userRoles: {
-        include: { role: true },
-      },
-    },
-  });
-
-  return newUser;
-});
-```
-
-**Benefits:**
-- All-or-nothing: Either all records are created or none
-- No orphaned records
-- No foreign key violations
-- Consistent database state
-
-### Nested Creates
-
-Prisma supports nested creates which are automatically wrapped in transactions:
-
-```typescript
-const user = await prisma.user.create({
-  data: {
-    email: 'user@example.com',
-    // Create related records in the same operation
-    identities: {
-      create: {
-        provider: 'google',
-        providerSubject: 'google-id-123',
-        providerEmail: 'user@example.com',
-      },
-    },
-    userRoles: {
-      create: {
-        roleId: roleId,
-      },
-    },
-    userSettings: {
-      create: {
-        value: { theme: 'light' },
-      },
-    },
-  },
-  include: {
-    identities: true,
-    userRoles: { include: { role: true } },
-    userSettings: true,
-  },
-});
-```
-
-### Seeding the Database
-
-The seed script (`apps/api/prisma/seed.ts`) is idempotent and safe to run multiple times.
-
-**Running Seeds:**
-
-**In Docker:**
-```bash
-docker compose exec api sh
-cd /app/apps/api
-npx tsx prisma/seed.ts
-```
-
-**Locally:**
-```bash
-cd apps/api
-npx tsx prisma/seed.ts
-```
-
-**What Gets Seeded:**
-- RBAC roles (admin, contributor, viewer)
-- RBAC permissions (users:read, users:write, system_settings:read, etc.)
-- Role-permission assignments
-- Default system settings
-
-**When to Run Seeds:**
-- Before first login
-- After database reset
-- After pulling schema changes that add new roles/permissions
-- In CI/CD before running tests
-
----
-
-## Common Pitfalls and Solutions
-
-### 1. "Default role not found" Error
-
-**Symptom:** First OAuth login fails with database error.
-
-**Cause:** Database hasn't been seeded with RBAC roles.
-
-**Solution:**
-```bash
-docker compose exec api sh
-cd /app/apps/api
-npx tsx prisma/seed.ts
-exit
-```
-
-### 2. Passport OAuth Not Working with Fastify
-
-**Symptom:** OAuth redirect fails, or user object is undefined in callback.
-
-**Cause:** Passport expects Express-style request/response objects.
-
-**Solution:** Use the guard pattern shown above with `getRequest()`, `getResponse()`, and `handleRequest()` overrides to return raw Node.js objects and copy user back to Fastify request.
-
-### 3. Response Method Not Working
-
-**Symptom:** `res.status(200).json()` throws an error.
-
-**Cause:** Using Express-style methods with Fastify adapter.
-
-**Solution:** Use Fastify methods: `res.code(200).send()` or let NestJS handle the response.
-
-### 4. Foreign Key Violation on User Creation
-
-**Symptom:** User creation fails with FK constraint error.
-
-**Cause:** Not using transaction when creating user with roles.
-
-**Solution:** Wrap in `prisma.$transaction()` or use nested creates.
-
-### 5. Error Messages in Redirect URLs
-
-**Symptom:** Redirect fails or displays malformed error message.
-
-**Cause:** Error messages contain newlines or special characters not safe for URLs.
-
-**Solution:** Sanitize error messages before adding to URL:
-```typescript
-const errorMessage = error instanceof Error
-  ? encodeURIComponent(error.message.replace(/[\r\n]/g, ' ').substring(0, 100))
-  : 'authentication_failed';
-return res.redirect(`${appUrl}/auth/callback?error=${errorMessage}`);
-```
-
----
-
-## Testing Guidelines
-
-### Running Tests
-
-**Backend Tests:**
-```bash
-cd apps/api
-npm test                # Run all tests
-npm run test:watch      # Watch mode
-npm run test:cov        # With coverage
-npm run test:e2e        # E2E tests only
-```
-
-**Frontend Tests:**
-```bash
-cd apps/web
-npm test                # Run all tests
-npm run test:watch      # Watch mode
-npm run test:coverage   # With coverage
-```
-
-### Test Database
-
-Backend tests use a separate test database. Configure in `apps/api/.env.test`:
-
-```bash
-DATABASE_URL="postgresql://user:password@localhost:5432/app_test"
-JWT_SECRET="test-secret-key-min-32-characters"
-NODE_ENV="test"
-```
-
-**Important:** The test database is truncated between test runs. Never point tests at your development database.
-
-### Mocking OAuth in Tests
-
-OAuth strategies are mocked in tests to avoid external dependencies:
-
-```typescript
-import { MockGoogleStrategy } from '../../test/mocks/google-oauth.mock';
-
-// Set custom profile for test
-MockGoogleStrategy.setMockProfile({
-  email: 'test@example.com',
-  displayName: 'Test User',
-});
-
-// Perform OAuth test
-const response = await request(app.getHttpServer())
-  .get('/api/auth/google/callback')
-  .expect(302);
-```
-
----
-
-## Debugging Tips
-
-### Debugging OAuth Flow
-
-1. **Check Environment Variables:**
-   ```bash
-   echo $GOOGLE_CLIENT_ID
-   echo $GOOGLE_CLIENT_SECRET
-   echo $GOOGLE_CALLBACK_URL
-   ```
-
-2. **Verify Callback URL:**
-   - Must match exactly in Google Cloud Console
-   - Include protocol: `http://` or `https://`
-   - Include port if not 80/443: `http://localhost:8323/api/auth/google/callback`
-
-3. **Check Container Logs:**
-   ```bash
-   docker compose logs api -f
-   ```
-
-4. **Test OAuth Provider Endpoint:**
-   ```bash
-   curl http://localhost:8323/api/auth/providers
-   ```
-
-### Debugging Database Issues
-
-1. **Check Prisma Connection:**
-   ```bash
-   cd apps/api
-   npx prisma db push --preview-feature
-   ```
-
-2. **Inspect Database:**
-   ```bash
-   docker compose exec db psql -U postgres -d appdb
-   \dt              # List tables
-   SELECT * FROM roles;
-   SELECT * FROM permissions;
-   ```
-
-3. **View Prisma Logs:**
-   Set `LOG_LEVEL=debug` in `.env` to see SQL queries.
-
-### Common Log Messages
-
-**"Database connected"**
-✅ Prisma successfully connected to PostgreSQL
-
-**"User logged out: user@example.com"**
-✅ Logout successful
-
-**"Refresh token reuse detected for user: xxx"**
-⚠️ Security alert: Possible token theft
-
-**"Default role not found - run database seeds"**
-❌ Database not seeded - run `npx tsx prisma/seed.ts`
-
----
-
-## Development Workflow
-
-### Making Database Changes
-
-1. **Update Prisma Schema:**
-   ```bash
-   cd apps/api
-   # Edit the app fragment in prisma/fragments/*.prisma, then compose the schema:
-   npm run db:compose   # writes the generated prisma/schema/ (never edit it)
-   ```
-
-2. **Create Migration:**
-   ```bash
-   # Using npm script (recommended - handles environment variables)
-   npm run prisma:migrate:dev -- --name descriptive_name
-
-   # Or in Docker container
-   docker compose exec api npm run prisma:migrate:dev -- --name descriptive_name
-   ```
-
-3. **Generate Prisma Client:**
-   ```bash
-   # Using npm script (recommended)
-   npm run prisma:generate
-
-   # Or in Docker container
-   docker compose exec api npm run prisma:generate
-   ```
-
-4. **Update Seeds (if needed):**
-   ```bash
-   # Edit prisma/seed.ts
-   npx tsx prisma/seed.ts
-   ```
-
-**Note:** The project uses individual database environment variables (`POSTGRES_HOST`, `POSTGRES_PORT`, etc.) instead of a single `DATABASE_URL`. The npm scripts (`prisma:*`) automatically construct the connection URL from these variables. See `apps/api/scripts/README.md` for details.
-
-### Adding New API Endpoints
-
-1. Create DTO with Zod schema
-2. Add controller method with guards
-3. Implement service method with business logic
-4. Add Swagger decorators for documentation
-5. Write tests (unit + integration)
-6. Update API.md documentation
-
-### Adding New Guards
-
-1. Create guard in `apps/api/src/auth/guards/`
-2. Implement `canActivate()` method
-3. Register in module if not global
-4. Add tests for guard logic
-5. Document usage in SECURITY.md
-
----
-
-## Performance Considerations
-
-### Fastify Performance Tips
-
-1. **Avoid `@Res()` decorator when possible** - Let NestJS handle serialization
-2. **Use schema validation** - Fastify's built-in validation is faster than runtime checks
-3. **Enable compression** - Use `@fastify/compress` for large responses
-4. **Connection pooling** - Prisma handles this automatically
-
-### Database Query Optimization
-
-1. **Use `select` to limit fields:**
-   ```typescript
-   const user = await prisma.user.findUnique({
-     where: { id },
-     select: { id: true, email: true, displayName: true },
-   });
-   ```
-
-2. **Use `include` judiciously:**
-   ```typescript
-   // Only include what you need
-   include: {
-     userRoles: {
-       include: { role: true }, // Avoid deep nesting
-     },
-   }
-   ```
-
-3. **Index frequently queried fields** - Already done in schema for email, provider combinations
-
----
-
-## Resources
-
-- [NestJS Documentation](https://docs.nestjs.com/)
-- [Fastify Documentation](https://www.fastify.io/)
-- [Prisma Documentation](https://www.prisma.io/docs/)
-- [Passport.js Documentation](http://www.passportjs.org/)
-- [Project SECURITY-ARCHITECTURE.md](./SECURITY-ARCHITECTURE.md)
-- [Project TESTING.md](./TESTING.md)
-
----
-
-## Getting Help
-
-If you encounter issues:
-
-1. Check this guide for common pitfalls
-2. Review container logs: `docker compose logs api -f`
-3. Verify database seeds have run
-4. Check environment variables are set correctly
-5. Consult the specification docs in `docs/specs/`
-6. Ask the team in Slack/Teams
-
-## Summary
-
-Key takeaways for developers:
-
-- ✅ **Use Fastify methods**: `code()` and `send()`, not `status()` and `json()`
-- ✅ **Seed before first login**: `npx tsx prisma/seed.ts` in the API container
-- ✅ **Use transactions**: Wrap related creates in `prisma.$transaction()`
-- ✅ **Return raw objects for OAuth**: Override guard methods for Passport compatibility
-- ✅ **Sanitize redirect URLs**: Encode and remove newlines from error messages
-
-Following these patterns will help you avoid the most common issues and maintain consistency with the existing codebase.
+| An endpoint | controller method with `@Auth({ permissions })` (or `@Public()`), Zod DTO, `@ApiOperation`/`@ApiResponse`, service method, unit and integration tests, `npm run openapi:dump && npm run openapi:lint`; conventions in [API.md](API.md) |
+| A permission | `src/app-registrations/permissions.ts`; `npm run catalog:permissions`; update the matrix in [ARCHITECTURE.md §4](ARCHITECTURE.md#4-authorization) (`docs-consistency.spec.ts` fails otherwise) |
+| A job type | `add-job-type` skill; add the type and label to `test/jobs/job-type-snapshot.spec.ts` and the table in ARCHITECTURE.md §6 |
+| A notification | `add-notification` skill; `notify()` only after the write commits |
+| A settings namespace | `src/app-registrations/settings.ts` (append, never insert), defaults catalog |
+| A settings page | `add-settings-page` skill: a card in `adminSections.tsx` or `userSettingsSections.tsx` with the exact permission the controller enforces |
+| An AI feature | `src/app-registrations/ai.ts`; terminal text only through `TerminalContextService.forAi` ([specs/terminal-ai.md §4](specs/terminal-ai.md#4-extending-it)) |
+| A runbook step kind | [specs/fleet-runbooks.md §4](specs/fleet-runbooks.md#4-extending-it) |
+| A terminal protocol message | [specs/terminal.md §4](specs/terminal.md#4-extending-it) |
+| A platform gap | a seam request and a row in [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md) with a `// PLATFORM-ADOPTION-SHIM(<issue>)` marker; never copy or patch platform code |
+
+Base code (`apps/api/src/platform/`) never names the terminal domain; the domain registers itself from `app-registrations/` (`test/architecture/base-domain-boundary.spec.ts`). Deep imports into platform packages are refused (`npm run check:platform-imports`).
+
+## 6. NestJS and Fastify notes
+
+- The API runs on **Fastify**, not Express. Prefer returning values and letting Nest serialize; when you need the reply, use `FastifyReply` (`res.code(200).send(body)`, not `status().json()`), and `FastifyRequest` from `fastify`.
+- The success envelope is applied by a global interceptor; do not wrap bodies by hand. Errors are thrown as `HttpException`s with a registered `code` and answered by the global filter ([API.md](API.md#errors)).
+- Validation is Zod through `ZodValidationPipe`; WebSocket messages are validated by hand in the gateway.
+- Sign-in strategies, cookies and the Passport/Fastify adapter live in the platform identity slice; do not reimplement them. The only cookie is the HttpOnly `refresh_token`.
+- Prisma: use the `PrismaService`/`forOrg`/`runInOrg` helpers; row-level security context is written only with `set_config(..., true)` as the first statement of a transaction. Never use a `forOrg` client inside `$transaction(async tx => ...)`; use `runInOrg`.
+- A new `@Cron` only enqueues a job (`enqueueHousekeepingJob`); work in a `JobHandler`.
+- `ssh2` is imported only by the SSH factory and the executors; open every connection with `SshConnectionFactory.open`.
+
+## 7. Debugging
+
+| Symptom | Look at |
+|---|---|
+| Sign-in fails for a valid account | the allowlist (Users page) and `INITIAL_ADMIN_EMAIL`; the Google callback URL equals `GOOGLE_CALLBACK_URL` exactly |
+| "Default role not found" on first login | the database was not seeded: `npm run prisma:seed` |
+| Terminal does not connect | browser console for `auth_fail` or `session_error` and the reason table in [specs/terminal.md §3](specs/terminal.md#3-websocket-protocol); `HOST_KEY_UNKNOWN` means trust the key on the Servers page; check the API logs for `ws.auth.denied` (no token is ever logged) |
+| Terminal drops after a minute | a proxy with a 60 s read timeout between browser and API ([ssl-nginx-setup.md](ssl-nginx-setup.md)) |
+| Scroll wheel moves the cursor instead of the history | the tmux session was created before `mouse on`; create a new session |
+| A run is stuck `queued` | the worker queue: Jobs page (`/admin/settings/jobs`); `runbooks.enabled`; reconcile sweep status in Doctor |
+| `db:drift` fails | a migration and a fragment disagree; recompose, then fix the fragment, never the generated schema |
+| Everything under RLS returns empty | the API connected as a superuser or `BYPASSRLS` role, or the org context was not set; Doctor check `db.rls_role` |
+| OpenTelemetry noise | `OTEL_ENABLED=false` locally, or run the telemetry overlay |
+
+Logs are structured JSON (Pino); trace and request ids correlate. Doctor (`/admin/settings/doctor`, `shellkeep doctor`) is the first stop for configuration problems.
+
+## 8. The CLI
+
+`apps/cli` is the `shellkeep` command over `@marinoscar/platform-cli` (`npm run dev --workspace=cli -- <args>` runs it from source). Usage, deploy, doctor and worker nodes: [apps/cli/README.md](../apps/cli/README.md). Every improvement bumps `apps/cli/package.json` once per PR and refreshes the lockfile (`npm install --package-lock-only`).
+
+## 9. Checks CI runs
+
+Typecheck (api, web, cli), lint, `check:classification`, `db:compose:check`, `db:check`, `permissions:dump --check`, `check:platform-pin` (one exact `@marinoscar/platform-*` version everywhere), `check:single-instance`, `check:platform-imports`, `platform:infra:sync --check`, `test:infra` (compose config per mode and `nginx -t`), the docker smoke test on port 8323, API, web and CLI tests, the database job (fresh migrate, seed, `db:check:database`, `db:drift`, `test:db` as the bootstrap superuser **and** as `shellkeep_app`), OpenAPI dump and Spectral lint, and visual regression. Details: [TESTING.md](TESTING.md).

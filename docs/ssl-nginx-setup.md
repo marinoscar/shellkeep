@@ -1,184 +1,75 @@
-# SSL & Nginx Reverse Proxy Setup for shellkeep.dev.marin.cr
+# Host proxy, TLS and the terminal WebSocket
 
-## Overview
+ShellKeep's stack terminates plain HTTP inside Docker (nginx on port 80, published as `NGINX_PORT`, 8323 by default). On a VPS a host-level reverse proxy sits in front, terminates TLS and forwards to `127.0.0.1:8323`. This page covers what that proxy must do for ShellKeep. Installing and updating the stack itself is the `shellkeep` CLI's job ([apps/cli/README.md](../apps/cli/README.md#deploying-to-a-server)); the generic procedure is the platform's [deploy-to-vps runbook](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/runbooks/deploy-to-vps.md). Examples use `app.example.test`.
 
-ShellKeep is deployed behind a two-tier Nginx reverse proxy on the `dev.marin.cr` VPS, sharing the wildcard SSL certificate and subdomain routing infrastructure with other projects (Knecta, Clipboard, etc.).
-
-This document covers the ShellKeep-specific configuration. For the full infrastructure setup (SSL certificates, host Nginx, DNS), see the Clipboard project's SSL/Nginx setup guide (a separate repository).
-
-## Architecture
+## Request chain
 
 ```
-Internet (HTTPS :443)
-|
-v
-Host Nginx (SSL termination, wildcard cert for *.dev.marin.cr)
-|
-|   map $host -> $backend_port:
-|     shellkeep.dev.marin.cr  -> 127.0.0.1:8323
-|
-v  127.0.0.1:8323
-Docker Compose (bridge + devnet networks)
-+-- Nginx container (port 80 -> exposed as 8323)
-|   +-- /api/terminal/ws  -> API container (WebSocket, 1hr timeout)
-|   +-- /api              -> API container (port 3000)
-|   +-- /                 -> Web container (port 80 or 5173)
-+-- API container (NestJS + Fastify + WsAdapter)
-+-- Web container (React + Vite)
-+-- (no DB container -- uses external PostgreSQL via devnet)
+Browser ──HTTPS :443──> host proxy (TLS, certificate) ──> 127.0.0.1:8323 ──> nginx container :80
+                                                                  ├─ /                 -> web
+                                                                  ├─ /api              -> api :3000
+                                                                  └─ /api/terminal/ws  -> api (WebSocket)
 ```
 
-**Key differences from other projects:**
+## What the host proxy must do
 
-- **WebSocket support**: The internal Nginx has a dedicated `/api/terminal/ws` location block with 1-hour timeouts and disabled buffering for persistent terminal connections
-- **No database container**: Uses external PostgreSQL via the `devnet` Docker network (same as Knecta)
-- **WsAdapter**: The NestJS API uses `@nestjs/platform-ws` for WebSocket gateway support alongside Fastify
+1. **Forward to `127.0.0.1:<APP_BIND_PORT>`** (8323) and set `Host`, `X-Forwarded-For`, `X-Forwarded-Proto`.
+2. **Pass WebSocket upgrades** (`Upgrade` and `Connection` headers) for `/api/terminal/ws`.
+3. **Not buffer or time out the streaming routes** the inner nginx already streams: `/api/terminal/ws`, `/api/runbook-runs` (log SSE) and `/api/ai/terminal` (assistant SSE). A 60 second read timeout closes an idle terminal (the browser sees code 1006). The CLI sets this up for you (`proxy.streamPaths`).
+4. **Allow large bodies** where the app does: the terminal's image paste uploads up to 100 MiB through `POST /api/storage/objects` (set `client_max_body_size` accordingly at the host).
+5. **Terminate TLS** with a certificate for the app's host name; the app sets HSTS itself.
 
-## Port Assignment
-
-| Project | Port | Subdomain |
-|---------|------|-----------|
-| Knecta | 8319 | knecta.dev.marin.cr |
-| Clipboard | 8320 | clipboard.dev.marin.cr |
-| Semantic Convert | 8321 | semantic-convert.dev.marin.cr |
-| VitalMesh | 8322 | vitalmesh.dev.marin.cr |
-| **ShellKeep** | **8323** | **shellkeep.dev.marin.cr** |
-
-## Step 1: Update Host Nginx Map
-
-Edit `/etc/nginx/sites-available/dev-wildcard` on the VPS and add ShellKeep to the `map` block:
+A minimal host server block:
 
 ```nginx
-map $host $backend_port {
-    knecta.dev.marin.cr           8319;
-    clipboard.dev.marin.cr        8320;
-    semantic-convert.dev.marin.cr 8321;
-    vitalmesh.dev.marin.cr        8322;
-    shellkeep.dev.marin.cr        8323;    # <-- add this
+server {
+    listen 443 ssl;
+    server_name app.example.test;
+    # ssl_certificate and ssl_certificate_key: your certificate
+
+    client_max_body_size 100m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8323;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;   # map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
 }
 ```
 
-Reload:
+## The inner nginx
 
-```bash
-sudo nginx -t && sudo systemctl reload nginx
-```
+`infra/nginx/nginx.conf` is generated by `npm run platform:infra:sync`; ShellKeep's differences are includes in `infra/nginx/app.d/locations/`:
 
-No DNS changes needed -- the wildcard `*.dev.marin.cr` already resolves to the VPS.
-No new SSL certificate needed -- the wildcard cert covers all subdomains.
+| File | Purpose |
+|---|---|
+| `terminal-ws.conf` | exact-match `/api/terminal/ws`: 3600 s read and send timeouts, buffering off, the security-headers snippet |
+| `runbook-streams.conf` | the runbook log SSE routes, unbuffered |
+| `ai-terminal-streams.conf` | the terminal assistant SSE routes |
+| `terminal-uploads.conf` | 100 MiB body limit for the image paste |
+| `android-app.conf` | opts in to the platform snippet: assetlinks, the 150 MiB APK upload, the unbuffered signed download |
 
-## Step 2: Register Google OAuth Callback
+After changing one, recreate nginx: `docker compose ... up -d --force-recreate nginx`. Never edit a generated file.
 
-In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials), add the following as an authorized redirect URI:
+## Environment
 
-```
-https://shellkeep.dev.marin.cr/api/auth/google/callback
-```
-
-This must match the `GOOGLE_CALLBACK_URL` in the `.env` file.
-
-## Step 3: Create the Database
-
-Connect to the external PostgreSQL server and create the ShellKeep database:
-
-```bash
-psql -h <postgres-host> -U admin -c "CREATE DATABASE shellkeep;"
-```
-
-## Step 4: Configure Environment
-
-The `.env` file at `infra/compose/.env` should have:
-
-```env
-APP_URL=https://shellkeep.dev.marin.cr
-GOOGLE_CALLBACK_URL=https://shellkeep.dev.marin.cr/api/auth/google/callback
-POSTGRES_HOST=postgres
-POSTGRES_DB=shellkeep
-```
-
-The `POSTGRES_HOST=postgres` value refers to the PostgreSQL server hostname on the `devnet` Docker network.
-
-## Step 5: Create devnet Network
-
-If not already created (shared with Knecta and other projects):
-
-```bash
-docker network create devnet
-```
-
-## Step 6: Deploy
-
-```bash
-cd /home/marinoscar/git/shellkeep
-
-# Development
-cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up --build
-
-# Production
-cd infra/compose && docker compose -f base.compose.yml -f prod.compose.yml up --build -d
-```
-
-Verify:
-
-```bash
-curl https://shellkeep.dev.marin.cr/api/health/live
-# -> {"data":{"status":"ok"}}
-```
-
-## Internal Nginx Configuration
-
-ShellKeep's Docker-internal Nginx (`infra/nginx/nginx.conf`, generated by `npm run platform:infra:sync`) serves the terminal WebSocket from an app-owned include, `infra/nginx/app.d/locations/terminal-ws.conf`, with a longer timeout than the platform's `/api` location. The edge (host) proxy still needs its own block like this one:
-
-```nginx
-# Terminal WebSocket (before /api block)
-location /api/terminal/ws {
-    proxy_pass http://api_upstream;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_read_timeout 3600s;    # 1 hour for long-lived terminal sessions
-    proxy_send_timeout 3600s;
-    proxy_buffering off;          # Critical for streaming terminal I/O
-}
-```
-
-This block must appear **before** the general `/api` block so Nginx matches it first. The 1-hour timeout prevents idle terminal connections from being dropped. Buffering is disabled to ensure real-time terminal output streaming.
-
-The host Nginx wildcard config already forwards WebSocket upgrade headers (`Upgrade` and `Connection`), so no changes are needed at the host level.
+Set in `infra/compose/.env`: `APP_URL=https://app.example.test` and `GOOGLE_CALLBACK_URL=https://app.example.test/api/auth/google/callback` (register the same URI with the OAuth provider), `COMPOSE_PROJECT_NAME` (prefixes container, network and volume names so two checkouts or two apps on one Docker host never collide), `POSTGRES_*`.
 
 ## Troubleshooting
 
-**502 Bad Gateway:**
-- Docker containers not running: `cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml ps`
-- Port mismatch: Verify `8323:80` in `base.compose.yml` matches the host Nginx map entry
-
-**Database connection refused:**
-- Ensure `devnet` Docker network exists: `docker network ls | grep devnet`
-- Verify PostgreSQL is reachable from the API container: `docker compose exec api sh -c "nc -zv postgres 5432"`
-- Verify the `shellkeep` database exists on the PostgreSQL server
-
-**WebSocket / terminal connection failures:**
-- Check both Nginx tiers forward `Upgrade` and `Connection` headers
-- Verify `infra/nginx/app.d/locations/terminal-ws.conf` exists and recreate nginx after changing it (`docker compose ... up -d --force-recreate nginx`)
-- Check `proxy_read_timeout` is 3600s (not the default 60s) for long-lived sessions
-- Ensure `proxy_buffering off` is set for the WebSocket location
-
-**Google OAuth errors:**
-- Verify `https://shellkeep.dev.marin.cr/api/auth/google/callback` is registered in Google Cloud Console
-- Verify `GOOGLE_CALLBACK_URL` in `.env` matches exactly
-
-**SSL certificate errors:**
-- Check cert validity: `sudo certbot certificates`
-- Test renewal: `sudo certbot renew --dry-run`
-
-## File Reference
-
-| File | Purpose |
-|------|---------|
-| `/etc/nginx/sites-available/dev-wildcard` | Host reverse proxy -- subdomain-to-port mapping |
-| `/etc/letsencrypt/live/dev.marin.cr/` | Wildcard SSL certificate and key |
-| `infra/nginx/nginx.conf` | Docker internal routing (generated; app locations in `infra/nginx/app.d/locations/`) |
-| `infra/compose/base.compose.yml` | Docker Compose base services (nginx, api, web on devnet) |
-| `infra/compose/dev.compose.yml` | Development overrides (hot reload, volumes) |
-| `infra/compose/prod.compose.yml` | Production overrides (resource limits, restart policies) |
-| `infra/compose/.env` | Environment variables (DB, OAuth, encryption key) |
+| Symptom | Check |
+|---|---|
+| 502 | containers running (`docker compose ... ps`); the host proxy port matches `APP_BIND_PORT` |
+| Terminal drops after about a minute, code 1006 | a proxy in the chain has a 60 s read timeout or buffers the WebSocket |
+| Terminal never connects | `Upgrade` and `Connection` headers forwarded at both tiers; `auth_fail` reasons in [specs/terminal.md](specs/terminal.md#33-auth_fail-reasons) |
+| Runbook logs arrive in bursts | the SSE route is buffered by a proxy |
+| OAuth redirect error | the callback URL in `.env` matches the provider's registered URI exactly |
+| TLS errors | certificate validity and renewal on the host |

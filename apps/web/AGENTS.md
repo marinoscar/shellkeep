@@ -1,6 +1,6 @@
 # apps/web rules
 
-Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right when editing the React app. Scrolling behaviour: [docs/SCROLLING.md](../../docs/SCROLLING.md).
+Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right when editing the React app. Scrolling behaviour: [docs/specs/terminal.md](../../docs/specs/terminal.md#5-the-browser-terminal).
 
 ## Layout
 

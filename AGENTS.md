@@ -34,7 +34,7 @@ Full index: [docs/README.md](docs/README.md). The most used:
 
 - Architecture and module map: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); security design: [docs/SECURITY-ARCHITECTURE.md](docs/SECURITY-ARCHITECTURE.md)
 - API conventions: [docs/API.md](docs/API.md); dev loop and gotchas: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md); testing: [docs/TESTING.md](docs/TESTING.md)
-- Terminal scrolling behaviour: [docs/SCROLLING.md](docs/SCROLLING.md); device authorization: [docs/DEVICE-AUTH.md](docs/DEVICE-AUTH.md)
+- Terminal behaviour (protocol, scrolling, mobile input): [docs/specs/terminal.md](docs/specs/terminal.md); Terminal AI: [docs/specs/terminal-ai.md](docs/specs/terminal-ai.md); runbooks: [docs/specs/fleet-runbooks.md](docs/specs/fleet-runbooks.md)
 
 ## Working with a small context window
 

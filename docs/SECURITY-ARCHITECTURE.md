@@ -1,1765 +1,211 @@
 # Security Architecture
 
-## Executive Summary
+> **Audience:** developers and reviewers · Platform-owned mechanisms (sessions, token storage, credential encryption, tenant isolation) are documented in the [EnterpriseAppBase security architecture](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/SECURITY-ARCHITECTURE.md); this page covers how ShellKeep uses them and what it adds. Examples use `server-a.example.test` and obviously fake fingerprints (`SHA256:AAAA...`); a real host, key or token never belongs in this repository.
 
-This document provides a comprehensive overview of the security architecture for the Enterprise Application Foundation. The system implements defense-in-depth security through multiple layers: OAuth 2.0 authentication with Google, JWT-based session management with token rotation, email allowlist access control, Role-Based Access Control (RBAC), and comprehensive audit logging.
+ShellKeep holds the keys to other people's servers. The design goal is that an SSH secret exists in plaintext in exactly one place, the API process, for the length of one SSH call; that a terminal's content reaches a model only when the owner has allowed it and only after redaction; and that a fleet-wide command needs a typed confirmation and, when destructive, a second person.
 
-**Key Security Technologies:**
-- **Authentication**: OAuth 2.0 / OpenID Connect (Google)
-- **Access Control**: Email allowlist restricts access to pre-authorized users
-- **Session Management**: JWT access tokens + HttpOnly refresh tokens with rotation
-- **Authorization**: Role-Based Access Control (RBAC) with three roles (Admin, Contributor, Viewer)
-- **Token Storage**: SHA256 hashed refresh tokens in PostgreSQL
-- **Infrastructure**: Nginx reverse proxy with security headers
-- **Audit**: Comprehensive event logging for all security-relevant actions
+## Contents
 
-**Security Posture**: Production-grade security suitable for enterprise applications handling sensitive user data.
+1. [Trust boundaries](#1-trust-boundaries)
+2. [Sign-in and tokens](#2-sign-in-and-tokens)
+3. [Terminal WebSocket authorization](#3-terminal-websocket-authorization)
+4. [SSH secrets and host keys](#4-ssh-secrets-and-host-keys)
+5. [Authorization](#5-authorization)
+6. [Terminal content and AI](#6-terminal-content-and-ai)
+7. [Runbook safety](#7-runbook-safety)
+8. [Database role and row-level security](#8-database-role-and-row-level-security)
+9. [Secrets inventory](#9-secrets-inventory)
+10. [Egress](#10-egress)
+11. [HTTP hardening, validation and uploads](#11-http-hardening-validation-and-uploads)
+12. [Audit and logging](#12-audit-and-logging)
+13. [Threat model](#13-threat-model)
+14. [Security checklist](#14-security-checklist)
 
----
+## 1. Trust boundaries
 
-## 1. Authentication Architecture
-
-### OAuth 2.0 Flow with Google
-
-The application uses OAuth 2.0 with OpenID Connect for authentication. All user authentication flows through Google's OAuth service, eliminating the need to store or manage passwords.
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Frontend
-    participant Nginx
-    participant API
-    participant Google
-
-    User->>Frontend: Click "Login with Google"
-    Frontend->>Nginx: GET /api/auth/google
-    Nginx->>API: Forward request
-    API->>Google: Redirect to OAuth consent screen
-    Google->>User: Show consent screen
-    User->>Google: Grant permission
-    Google->>API: Redirect to callback with auth code
-    API->>Google: Exchange code for tokens
-    Google->>API: Return user profile
-    API->>API: Provision or update user
-    API->>API: Assign default role (Viewer)
-    API->>API: Check admin bootstrap (INITIAL_ADMIN_EMAIL)
-    API->>API: Generate JWT access token + refresh token
-    API->>API: Store hashed refresh token in DB
-    API->>Frontend: Redirect with access token (query param)<br/>Set refresh token (HttpOnly cookie)
-    Frontend->>Frontend: Store access token in memory
-    Frontend->>User: Authenticated and redirected to dashboard
+```
+ browser ──HTTPS──> host proxy ──> nginx ──> API ──SSH──> target servers (untrusted output)
+                                              │  └────HTTPS──> AI providers (redacted text only)
+                                              └────SQL────> PostgreSQL (ciphertext for secrets)
+ worker node ──nod_ token──> API   (receives no SSH secret, no AI key, no terminal text; see §4)
 ```
 
-**OAuth Endpoints:**
-- `GET /api/auth/google` - Initiates OAuth flow, redirects to Google
-- `GET /api/auth/google/callback` - Handles OAuth callback, provisions user, returns tokens
-
-**User Provisioning Logic:**
-1. **Allowlist check**: Verify email is in `allowed_emails` table (or matches `INITIAL_ADMIN_EMAIL`)
-2. If not in allowlist, reject login with "Email not authorized" error
-3. Check if user identity exists (provider + subject)
-4. If not, check if user exists by email (identity linking)
-5. If neither, create new user with:
-   - Default role: `viewer`
-   - Default user settings (theme, locale)
-   - Linked OAuth identity
-   - Mark allowlist entry as claimed (`claimedById`, `claimedAt`)
-6. Check if user email matches `INITIAL_ADMIN_EMAIL`
-7. If match and no other admins exist, grant admin role
-8. Update provider profile information (display name, profile image)
-9. Generate JWT tokens
-
-**Allowlist Security:**
-- Only admins can add/remove emails from the allowlist
-- The `INITIAL_ADMIN_EMAIL` bypasses allowlist check (bootstrap access)
-- Allowlist entries that have been claimed cannot be removed (prevents accidentally removing existing user access)
-- All allowlist operations are audit logged
-
-### JWT Token Structure
-
-**Access Token Payload:**
-```json
-{
-  "sub": "user-uuid",
-  "email": "user@example.com",
-  "roles": ["viewer"],
-  "iat": 1706123456,
-  "exp": 1706124356
-}
-```
-
-**Token Signing:**
-- Algorithm: HS256 (HMAC with SHA-256)
-- Secret: `JWT_SECRET` environment variable (minimum 32 characters)
-- Signature validates token integrity and authenticity
-
-**Token Validation Process:**
-```mermaid
-flowchart TD
-    A[Incoming Request] --> B{Has Authorization Header?}
-    B -->|No| C[401 Unauthorized]
-    B -->|Yes| D[Extract Bearer Token]
-    D --> E{Valid JWT Signature?}
-    E -->|No| C
-    E -->|Yes| F{Token Expired?}
-    F -->|Yes| C
-    F -->|No| G[Extract user ID from 'sub' claim]
-    G --> H[Query database for user + roles + permissions]
-    H --> I{User exists and active?}
-    I -->|No| C
-    I -->|Yes| J[Attach user object to request]
-    J --> K[Proceed to RBAC guards]
-```
-
-**Access Token Validation (JWT Strategy):**
-- Verify signature using `JWT_SECRET`
-- Check expiration (`exp` claim)
-- Extract user ID from `sub` claim
-- Load user from database with roles and permissions
-- Validate user is active (`isActive = true`)
-- Attach full user object to request for downstream guards
-
----
-
-## 2. Token Management
-
-### Access Tokens vs Refresh Tokens
-
-| Aspect | Access Token | Refresh Token |
-|--------|--------------|---------------|
-| **Type** | JWT (signed JSON) | Random 32-byte hex string |
-| **Storage (Client)** | Memory only (never localStorage) | HttpOnly cookie |
-| **Storage (Server)** | None (stateless) | SHA256 hash in `refresh_tokens` table |
-| **Lifetime** | 15 minutes (default) | 14 days (default) |
-| **Purpose** | Authorize API requests | Obtain new access tokens |
-| **Exposed to JS** | Yes (needed for Authorization header) | No (HttpOnly prevents access) |
-| **Revocable** | No (stateless, valid until expiry) | Yes (database record can be revoked) |
-| **Rotation** | New token on each refresh | New token on each refresh (old one revoked) |
-| **Attack Surface** | XSS (if stored in localStorage) | CSRF (mitigated by SameSite) |
-
-**Why This Design:**
-- **Short-lived access tokens** minimize damage from token theft (15 min window)
-- **HttpOnly cookies** protect refresh tokens from XSS attacks
-- **Token rotation** limits refresh token reuse and enables reuse detection
-- **Database storage** allows server-side revocation (logout, security breach)
-
-### Token Rotation Mechanism
-
-Refresh tokens are rotated on every use to detect token theft and limit the impact of compromised tokens.
-
-```mermaid
-sequenceDiagram
-    participant Frontend
-    participant API
-    participant Database
-
-    Note over Frontend: Access token expired
-    Frontend->>API: POST /api/auth/refresh<br/>(refresh token in cookie)
-    API->>API: Extract refresh token from cookie
-    API->>API: Hash token with SHA256
-    API->>Database: Query refresh_tokens WHERE tokenHash = ?
-    Database->>API: Return token record + user + roles
-
-    alt Token not found
-        API->>Frontend: 401 Invalid refresh token
-    else Token revoked
-        Note over API: SECURITY: Potential reuse attack
-        API->>Database: Revoke ALL user's refresh tokens
-        API->>Frontend: 401 Token has been revoked
-    else Token expired
-        API->>Frontend: 401 Token has expired
-    else User inactive
-        API->>Frontend: 401 User account deactivated
-    else Valid token
-        API->>Database: Set revokedAt = NOW() for old token
-        API->>API: Generate new refresh token (random 32 bytes)
-        API->>API: Hash new token with SHA256
-        API->>Database: INSERT new refresh token record
-        API->>API: Generate new access token (JWT)
-        API->>Frontend: 200 OK<br/>Return: accessToken + expiresIn<br/>Set-Cookie: new refresh token
-        Note over Frontend: Store new access token<br/>Browser stores new refresh cookie
-    end
-```
-
-**Rotation Benefits:**
-1. **Reuse Detection**: If a revoked token is used, all tokens are invalidated (indicates theft)
-2. **Limit Exposure**: Each token is single-use, limiting replay attack window
-3. **Audit Trail**: Each refresh creates a database record for security monitoring
-
-### Token Reuse Detection
-
-The system implements refresh token reuse detection to identify potential token theft:
-
-**Attack Scenario:**
-1. Attacker steals refresh token from victim
-2. Victim uses token normally (rotates to new token)
-3. Attacker attempts to use old (revoked) token
-
-**Detection & Response:**
-```typescript
-// Check if token is revoked
-if (storedToken.revokedAt) {
-  // SECURITY ALERT: Revoked token used - likely token theft
-  await this.revokeAllUserTokens(storedToken.userId);
-  logger.warn(`Refresh token reuse detected for user: ${userId}`);
-  throw new UnauthorizedException('Refresh token has been revoked');
-}
-```
-
-When a revoked token is used, the system:
-1. **Revokes all refresh tokens** for that user across all devices
-2. **Logs a security warning** for monitoring and alerting
-3. **Forces re-authentication** on all sessions
-
-This aggressive response ensures that if a token is stolen, the attacker's window is minimized and legitimate users are forced to re-authenticate.
-
-### Cookie Security Settings
-
-Refresh tokens are stored in HttpOnly cookies with strict security settings:
-
-```typescript
-const COOKIE_OPTIONS = {
-  httpOnly: true,                          // Prevents JavaScript access
-  secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-  sameSite: 'lax' as const,               // CSRF protection
-  path: '/api/auth',                      // Limit scope to auth endpoints
-  maxAge: 14 * 24 * 60 * 60 * 1000,      // 14 days in milliseconds
-};
-```
-
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| `httpOnly` | `true` | Prevents XSS attacks - JavaScript cannot read cookie |
-| `secure` | `true` (prod) | Requires HTTPS - prevents MITM attacks |
-| `sameSite` | `lax` | CSRF protection - blocks cross-site POST requests |
-| `path` | `/api/auth` | Minimizes cookie scope - only sent to auth endpoints |
-| `maxAge` | 14 days | Auto-expires after 14 days |
-
-**SameSite Policy Explanation:**
-- `lax`: Cookie sent on same-site requests and top-level navigation (safe GET)
-- Blocks cookie on cross-site POST/PUT/DELETE (prevents CSRF on token refresh)
-- Allows OAuth redirect callbacks (same-site navigation)
-
-### Token Cleanup Task
-
-Expired and revoked refresh tokens are automatically cleaned up to reduce database size:
-
-```typescript
-@Cron(CronExpression.EVERY_DAY_AT_3AM)
-async handleCron() {
-  const count = await this.authService.cleanupExpiredTokens();
-  logger.log(`Token cleanup: ${count} tokens removed`);
-}
-```
-
-**Cleanup Logic:**
-- Runs daily at 3:00 AM
-- Deletes tokens where:
-  - `expiresAt < NOW()` (expired)
-  - `revokedAt IS NOT NULL` (revoked)
-- Removes sensitive data from database
-- Improves query performance
-
----
-
-## 3. Authorization & RBAC
-
-### Roles and Permissions Model
-
-The system implements a flexible Role-Based Access Control (RBAC) model with three predefined roles:
-
-```mermaid
-erDiagram
-    User ||--o{ UserRole : has
-    UserRole }o--|| Role : references
-    Role ||--o{ RolePermission : has
-    RolePermission }o--|| Permission : references
-
-    User {
-        uuid id PK
-        string email UK
-        boolean isActive
-    }
-
-    Role {
-        uuid id PK
-        string name UK
-        string description
-    }
-
-    Permission {
-        uuid id PK
-        string name UK
-        string description
-    }
-
-    UserRole {
-        uuid userId FK
-        uuid roleId FK
-    }
-
-    RolePermission {
-        uuid roleId FK
-        uuid permissionId FK
-    }
-```
-
-### Permissions Matrix
-
-| Permission | Description | Admin | Contributor | Viewer |
-|------------|-------------|-------|-------------|--------|
-| `system_settings:read` | View system-wide settings | ✅ | ❌ | ❌ |
-| `system_settings:write` | Modify system-wide settings | ✅ | ❌ | ❌ |
-| `users:read` | View user list and details | ✅ | ❌ | ❌ |
-| `users:write` | Modify user accounts (activate/deactivate, assign roles) | ✅ | ❌ | ❌ |
-| `rbac:manage` | Assign roles to users | ✅ | ❌ | ❌ |
-| `allowlist:read` | View allowlisted email addresses | ✅ | ❌ | ❌ |
-| `allowlist:write` | Add/remove emails from allowlist | ✅ | ❌ | ❌ |
-| `user_settings:read` | View own user settings | ✅ | ✅ | ✅ |
-| `user_settings:write` | Modify own user settings | ✅ | ✅ | ✅ |
-
-**Role Descriptions:**
-- **Admin**: Full system access - manage users, roles, and all settings
-- **Contributor**: Standard user capabilities - manage own settings (ready for future feature expansion)
-- **Viewer**: Read-only access - minimal privileges, manage own settings (default role for new users)
-
-**Default Role Assignment:**
-- New users are assigned the `viewer` role automatically
-- First user matching `INITIAL_ADMIN_EMAIL` receives `admin` role (bootstrap)
-- Additional roles can be assigned by admins via `/api/users/{id}` endpoint
-
-### Guard Execution Flow
-
-The authorization system uses three guards that execute in sequence:
-
-```mermaid
-flowchart TD
-    A[Request Received] --> B{Endpoint has @Public?}
-    B -->|Yes| Z[Skip Guards - Allow Access]
-    B -->|No| C[1. JwtAuthGuard]
-
-    C --> D{Valid JWT Token?}
-    D -->|No| E[401 Unauthorized]
-    D -->|Yes| F{User Active?}
-    F -->|No| E
-    F -->|Yes| G[Attach user to request]
-
-    G --> H[2. RolesGuard]
-    H --> I{Endpoint requires roles?}
-    I -->|No| M[Skip to next guard]
-    I -->|Yes| J{User has ANY required role?}
-    J -->|No| K[403 Forbidden]
-    J -->|Yes| M
-
-    M --> N[3. PermissionsGuard]
-    N --> O{Endpoint requires permissions?}
-    O -->|No| S[All Guards Passed]
-    O -->|Yes| P{User has ALL required permissions?}
-    P -->|No| Q[403 Forbidden - List Missing]
-    P -->|Yes| S
-
-    S --> T[Execute Controller Method]
-```
-
-**Guard Logic:**
-
-1. **JwtAuthGuard** (Global, Required by default)
-   - Checks for `@Public()` decorator - if present, skip all auth
-   - Validates JWT token from `Authorization: Bearer <token>` header
-   - Loads user with roles and permissions from database
-   - Verifies user is active
-   - Attaches `AuthenticatedUser` object to `request.user`
-
-2. **RolesGuard** (OR Logic)
-   - Checks for `@Roles()` decorator - if absent, allow access
-   - Extracts required roles from decorator metadata
-   - Checks if user has **ANY** of the required roles
-   - Returns 403 if user lacks all required roles
-   - Example: `@Roles('admin', 'contributor')` - user needs admin OR contributor
-
-3. **PermissionsGuard** (AND Logic)
-   - Checks for `@Permissions()` decorator - if absent, allow access
-   - Extracts required permissions from decorator metadata
-   - Checks if user has **ALL** required permissions
-   - Returns 403 with list of missing permissions if check fails
-   - Example: `@Permissions('users:read', 'users:write')` - user needs BOTH
-
-**Why OR for Roles but AND for Permissions?**
-- **Roles** are broad categories - "any admin or contributor can access"
-- **Permissions** are specific capabilities - "needs both read AND write"
-- This provides flexibility: `@Auth({ roles: ['admin'], permissions: ['system_settings:write'] })`
-
-### Using Authorization Decorators
-
-**Combined `@Auth()` Decorator (Recommended):**
-```typescript
-import { Auth } from './auth/decorators';
-import { ROLES, PERMISSIONS } from './common/constants/roles.constants';
-
-// Just authentication, no role/permission requirements
-@Auth()
-@Get('profile')
-async getProfile(@CurrentUser() user: RequestUser) { }
-
-// Require admin role
-@Auth({ roles: [ROLES.ADMIN] })
-@Get('users')
-async listUsers() { }
-
-// Require specific permissions
-@Auth({ permissions: [PERMISSIONS.SYSTEM_SETTINGS_WRITE] })
-@Patch('system-settings')
-async updateSystemSettings() { }
-
-// Combine roles and permissions
-@Auth({
-  roles: [ROLES.ADMIN],
-  permissions: [PERMISSIONS.USERS_WRITE]
-})
-@Patch('users/:id')
-async updateUser() { }
-```
-
-**Individual Decorators:**
-```typescript
-import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard, RolesGuard } from './auth/guards';
-import { Roles } from './auth/decorators';
-
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin', 'contributor')
-@Get('dashboard')
-async getDashboard() { }
-```
-
-**Public Endpoints:**
-```typescript
-import { Public } from './auth/decorators';
-
-@Public()
-@Get('auth/providers')
-async getProviders() {
-  // No authentication required
-}
-```
-
----
-
-## 4. Email Allowlist Access Control
-
-### Overview
-
-The application implements an **email allowlist** as an additional security layer to restrict access to pre-authorized users only. This feature prevents unauthorized users from gaining access even if they successfully authenticate via OAuth.
-
-**Security Benefits:**
-- Prevents open registration - only invited users can access the application
-- Provides administrative control over who can login
-- Tracks when allowlist entries are claimed (first login)
-- Prevents accidental removal of access for existing users
-
-### Allowlist Enforcement Flow
-
-```mermaid
-flowchart TD
-    A[OAuth Callback] --> B{Email == INITIAL_ADMIN_EMAIL?}
-    B -->|Yes| J[Bypass Allowlist Check]
-    B -->|No| C{Email in allowed_emails?}
-    C -->|No| D[Reject Login]
-    D --> E[Redirect to /auth/error?error=not_authorized]
-    C -->|Yes| F{User Already Exists?}
-    F -->|Yes| K[Load Existing User]
-    F -->|No| G[Create New User]
-    G --> H[Mark Allowlist Entry as Claimed]
-    H --> I[Set claimedById + claimedAt]
-    I --> K
-    J --> K
-    K --> L[Generate JWT Tokens]
-    L --> M[Successful Login]
-```
-
-### Allowlist Table Schema
-
-```typescript
-model AllowedEmail {
-  id          String    @id @default(uuid())
-  email       String    @unique              // Pre-authorized email
-  addedById   String?                        // Admin who added this
-  addedAt     DateTime  @default(now())      // When it was allowlisted
-  claimedById String?   @unique              // User who claimed it
-  claimedAt   DateTime?                      // When user first logged in
-  notes       String?                        // Optional admin notes
-}
-```
-
-**Key Fields:**
-- `email` - Unique constraint ensures no duplicates
-- `claimedById` - Unique constraint (one user per allowlist entry)
-- `claimedAt` - Null = pending, populated = claimed
-
-### Status Types
-
-| Status | Description | claimedById | claimedAt |
-|--------|-------------|-------------|-----------|
-| **Pending** | Email added but user hasn't logged in yet | `null` | `null` |
-| **Claimed** | User has successfully logged in | User ID | Timestamp |
-
-### Admin Operations
-
-#### Add Email to Allowlist
-
-**Endpoint:** `POST /api/allowlist`
-
-**Permission Required:** `allowlist:write` (Admin only)
-
-**Request:**
-```json
-{
-  "email": "newuser@example.com",
-  "notes": "New team member starting next week"
-}
-```
-
-**Business Logic:**
-1. Validate email format
-2. Check for duplicates (return 409 if exists)
-3. Create allowlist entry with `addedById` = current admin
-4. Audit log the addition
-
-**Use Case:** Admins pre-authorize users before they attempt their first login.
-
----
-
-#### Remove Email from Allowlist
-
-**Endpoint:** `DELETE /api/allowlist/:id`
-
-**Permission Required:** `allowlist:write` (Admin only)
-
-**Validation:**
-- ✅ Can remove if `claimedById` is `null` (pending entry)
-- ❌ Cannot remove if `claimedById` is populated (claimed entry)
-
-**Rationale:** Prevents admins from accidentally removing access for existing users. To revoke access for existing users, use the user deactivation feature instead (`PATCH /api/users/:id` with `isActive: false`).
-
-**Business Logic:**
-1. Check if entry is claimed
-2. If claimed, return 400 Bad Request with error message
-3. If pending, delete entry
-4. Audit log the removal
-
----
-
-#### List Allowlist Entries
-
-**Endpoint:** `GET /api/allowlist`
-
-**Permission Required:** `allowlist:read` (Admin only)
-
-**Query Parameters:**
-- `status` - Filter by: `all`, `pending`, `claimed`
-- `search` - Search by email
-- `sortBy` - Sort by: `email`, `addedAt`, `claimedAt`
-- `sortOrder` - Order: `asc`, `desc`
-
-**Response Includes:**
-- Email address
-- Status (pending/claimed)
-- Admin who added it
-- When it was added
-- User who claimed it (if claimed)
-- When it was claimed (if claimed)
-- Optional notes
-
-### Bootstrap Admin Bypass
-
-The `INITIAL_ADMIN_EMAIL` environment variable provides a special bypass to enable the first admin to login without being pre-added to the allowlist.
-
-**Bootstrap Logic:**
-```typescript
-async validateOAuthUser(profile: OAuthProfile) {
-  const email = profile.email;
-
-  // Special case: initial admin bypasses allowlist
-  if (email === process.env.INITIAL_ADMIN_EMAIL) {
-    // Allow login without allowlist check
-    return this.provisionUser(profile);
-  }
-
-  // Check allowlist for all other users
-  const allowlistEntry = await this.allowlistService.findByEmail(email);
-  if (!allowlistEntry) {
-    throw new UnauthorizedException('Email not authorized');
-  }
-
-  return this.provisionUser(profile);
-}
-```
-
-**Why This is Secure:**
-- The admin must have access to the `.env` file (server access)
-- Only one email bypasses the check
-- After initial admin logs in, they can add other users to the allowlist
-- The initial admin email is automatically added to the allowlist during database seeding
-
-### Integration with User Provisioning
-
-When a user with a allowlisted email successfully authenticates:
-
-1. **Check allowlist** before user provisioning
-2. **Create user** if they don't exist
-3. **Mark entry as claimed** by setting:
-   - `claimedById` = new user's ID
-   - `claimedAt` = current timestamp
-4. **Update is idempotent** - if user logs in again, allowlist entry remains claimed
-
-### Audit Trail
-
-All allowlist operations are logged to the `audit_events` table:
-
-| Action | Actor | Target | Description |
-|--------|-------|--------|-------------|
-| `allowlist.added` | Admin User ID | Allowlist Entry ID | Admin added email to allowlist |
-| `allowlist.removed` | Admin User ID | Allowlist Entry ID | Admin removed pending entry |
-| `allowlist.claimed` | User ID | Allowlist Entry ID | User claimed allowlist entry on first login |
-
-### Security Considerations
-
-**Protection Against:**
-- ✅ Unauthorized access - Only allowlisted emails can login
-- ✅ Open registration - No public signup, invitation-only
-- ✅ Accidental removal - Cannot delete claimed entries
-
-**Edge Cases Handled:**
-- Email case-insensitivity (normalized to lowercase)
-- Duplicate email prevention (unique constraint)
-- Race condition on claim (unique constraint on claimedById)
-- Orphaned allowlist entries (admin can clean up pending entries)
-
-**Best Practices:**
-- Add users to allowlist before sharing OAuth link
-- Use notes field to track why user was allowlisted
-- Regularly audit claimed vs pending entries
-- Use user deactivation (`isActive: false`) instead of allowlist removal for revoking access
-
----
-
-## 5. Request Lifecycle
-
-### End-to-End Protected Request Flow
-
-This diagram shows the complete security lifecycle of a protected API request:
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Nginx
-    participant API
-    participant JwtAuthGuard
-    participant JwtStrategy
-    participant RolesGuard
-    participant PermissionsGuard
-    participant Controller
-    participant Database
-
-    Client->>Nginx: GET /api/users<br/>Authorization: Bearer <jwt>
-    Nginx->>Nginx: Add security headers<br/>(X-Frame-Options, X-XSS-Protection, etc.)
-    Nginx->>API: Forward request with headers
-
-    API->>JwtAuthGuard: canActivate(context)
-    JwtAuthGuard->>JwtAuthGuard: Check @Public() decorator
-
-    alt Endpoint is @Public()
-        JwtAuthGuard->>Controller: Allow access (skip auth)
-    else Protected endpoint
-        JwtAuthGuard->>JwtStrategy: validate(payload)
-        JwtStrategy->>JwtStrategy: Extract JWT from Authorization header
-        JwtStrategy->>JwtStrategy: Verify signature with JWT_SECRET
-
-        alt Invalid signature or expired
-            JwtStrategy->>Client: 401 Unauthorized
-        else Valid JWT
-            JwtStrategy->>Database: Query user + roles + permissions<br/>WHERE id = payload.sub
-            Database->>JwtStrategy: Return user data
-
-            alt User not found or inactive
-                JwtStrategy->>Client: 401 Unauthorized
-            else User found and active
-                JwtStrategy->>JwtAuthGuard: Return AuthenticatedUser
-                JwtAuthGuard->>API: Attach user to request
-
-                API->>RolesGuard: canActivate(context)
-                RolesGuard->>RolesGuard: Check @Roles() decorator
-
-                alt No roles required
-                    RolesGuard->>API: Allow (skip check)
-                else Roles required
-                    RolesGuard->>RolesGuard: Check user.roles vs required roles
-
-                    alt User lacks required role
-                        RolesGuard->>Client: 403 Forbidden<br/>"Required roles: admin"
-                    else User has required role
-                        RolesGuard->>API: Allow
-                    end
-                end
-
-                API->>PermissionsGuard: canActivate(context)
-                PermissionsGuard->>PermissionsGuard: Check @Permissions() decorator
-
-                alt No permissions required
-                    PermissionsGuard->>Controller: Allow (skip check)
-                else Permissions required
-                    PermissionsGuard->>PermissionsGuard: Check user.permissions vs required
-
-                    alt User lacks permissions
-                        PermissionsGuard->>Client: 403 Forbidden<br/>"Missing permissions: users:write"
-                    else User has all permissions
-                        PermissionsGuard->>Controller: Allow
-                        Controller->>Database: Execute business logic
-                        Database->>Controller: Return data
-                        Controller->>Client: 200 OK + Response data
-                    end
-                end
-            end
-        end
-    end
-```
-
-**Security Checkpoints:**
-1. **Nginx Layer**: Security headers, rate limiting (if configured)
-2. **JWT Validation**: Signature, expiration, user exists and active
-3. **Role Check**: User has required role (if specified)
-4. **Permission Check**: User has all required permissions (if specified)
-5. **Business Logic**: Controller executes with verified user context
-
-**Request Object After Guards:**
-```typescript
-interface FastifyRequest {
-  user: AuthenticatedUser;  // Full user object with relations
-  requestUser: RequestUser; // Simplified user object
-}
-
-interface AuthenticatedUser {
-  id: string;
-  email: string;
-  isActive: boolean;
-  userRoles: Array<{
-    role: {
-      name: string;
-      rolePermissions: Array<{
-        permission: { name: string; }
-      }>;
-    };
-  }>;
-}
-
-interface RequestUser {
-  id: string;
-  email: string;
-  roles: string[];        // ['admin', 'viewer']
-  permissions: string[];  // ['users:read', 'users:write', ...]
-}
-```
-
----
-
-## 6. Database Security Model
-
-### Security Tables ERD
-
-```mermaid
-erDiagram
-    User ||--o{ UserIdentity : "has"
-    User ||--o{ UserRole : "has"
-    User ||--o{ RefreshToken : "has"
-    User ||--o{ AuditEvent : "performs"
-    User ||--o{ AllowedEmail : "added by"
-    User ||--o| AllowedEmail : "claimed by"
-    Role ||--o{ UserRole : "assigned to"
-    Role ||--o{ RolePermission : "has"
-    Permission ||--o{ RolePermission : "granted to"
-
-    User {
-        uuid id PK
-        string email UK "Unique identifier"
-        string displayName "User override"
-        string providerDisplayName "From OAuth"
-        string profileImageUrl "User override"
-        string providerProfileImageUrl "From OAuth"
-        boolean isActive "Account status"
-        timestamptz createdAt
-        timestamptz updatedAt
-    }
-
-    UserIdentity {
-        uuid id PK
-        uuid userId FK
-        string provider "google, microsoft, etc"
-        string providerSubject "OAuth sub claim"
-        string providerEmail "Email from provider"
-        timestamptz createdAt
-    }
-
-    Role {
-        uuid id PK
-        string name UK "admin, contributor, viewer"
-        string description
-    }
-
-    Permission {
-        uuid id PK
-        string name UK "users:read, system_settings:write"
-        string description
-    }
-
-    RolePermission {
-        uuid roleId FK,PK
-        uuid permissionId FK,PK
-    }
-
-    UserRole {
-        uuid userId FK,PK
-        uuid roleId FK,PK
-    }
-
-    RefreshToken {
-        uuid id PK
-        uuid userId FK
-        string tokenHash UK "SHA256 hash of token"
-        timestamptz expiresAt "Token expiration"
-        timestamptz createdAt
-        timestamptz revokedAt "NULL if active"
-    }
-
-    AuditEvent {
-        uuid id PK
-        uuid actorUserId FK "Who performed action"
-        string action "user.created, settings.updated"
-        string targetType "user, system_settings"
-        string targetId "ID of affected resource"
-        json meta "Additional context"
-        timestamptz createdAt
-    }
-
-    AllowedEmail {
-        uuid id PK
-        string email UK "Pre-authorized email address"
-        uuid addedById FK "Admin who added this email"
-        timestamptz addedAt "When email was allowlisted"
-        uuid claimedById FK,UK "User who claimed this entry"
-        timestamptz claimedAt "When user first logged in"
-        string notes "Optional admin notes"
-    }
-```
-
-**Table Descriptions:**
-
-| Table | Purpose | Security Features |
-|-------|---------|-------------------|
-| `users` | Core user accounts | `isActive` flag for soft deletion, prevents auth |
-| `user_identities` | OAuth provider links | `provider + providerSubject` unique constraint |
-| `roles` | Role definitions | Seeded at deployment, rarely modified |
-| `permissions` | Permission definitions | Seeded at deployment, rarely modified |
-| `role_permissions` | Role-to-permission mapping | Defines RBAC matrix |
-| `user_roles` | User role assignments | Modified by admins via API, cascade delete |
-| `refresh_tokens` | Active refresh tokens | SHA256 hashed, includes revocation timestamp |
-| `allowed_emails` | Email allowlist | Restricts access, tracks claim status, prevents removal if claimed |
-| `audit_events` | Security audit log | Immutable log of all security events |
-
-### Audit Logging
-
-The `audit_events` table provides a comprehensive audit trail for compliance and security monitoring.
-
-**Audited Events:**
-- User account creation
-- User role assignments/changes
-- User activation/deactivation
-- System settings modifications
-- User settings modifications
-- Allowlist email additions/removals
-- Allowlist entry claims (when user first logs in)
-- Authentication events (login, logout, token refresh)
-
-**Audit Event Structure:**
-```typescript
-interface AuditEvent {
-  id: string;
-  actorUserId: string | null;  // null for system actions
-  action: string;               // e.g., 'user.role_assigned'
-  targetType: string;           // e.g., 'user', 'system_settings'
-  targetId: string;             // ID of affected resource
-  meta: Record<string, any>;    // Additional context (changes, IP, etc.)
-  createdAt: Date;
-}
-```
-
-**Example Audit Entries:**
-```json
-[
-  {
-    "action": "user.created",
-    "actorUserId": null,
-    "targetType": "user",
-    "targetId": "uuid-123",
-    "meta": {
-      "email": "user@example.com",
-      "provider": "google",
-      "initialRole": "viewer"
-    }
-  },
-  {
-    "action": "user.role_assigned",
-    "actorUserId": "admin-uuid",
-    "targetType": "user",
-    "targetId": "user-uuid",
-    "meta": {
-      "role": "admin",
-      "previousRoles": ["viewer"]
-    }
-  }
-]
-```
-
-**Indexed Fields** (for query performance):
-- `actorUserId` - Find all actions by a user
-- `targetType + targetId` - Find all events for a resource
-- `createdAt` - Time-based queries and retention policies
-
----
-
-## 7. File Storage Security
-
-The storage system implements multiple layers of security to protect uploaded files and prevent unauthorized access.
-
-### Upload Validation
-
-All file uploads are validated before acceptance:
-
-**MIME Type Validation:**
-- Configurable allowlist of permitted file types
-- Default: Common document and image formats
-- Server-side validation (client-declared MIME type verified)
-- Prevents upload of executable files and scripts
-
-**File Size Limits:**
-- Configurable maximum file size (default: 10GB)
-- Enforced at both simple upload and multipart initialization
-- Prevents storage abuse and DoS attacks
-- Size validation before S3 upload begins
-
-**Content Type Verification:**
-- Validates that file content matches declared MIME type
-- Uses magic number detection for common file types
-- Prevents MIME type spoofing attacks
-
-**Example Configuration:**
-```typescript
-STORAGE_MAX_FILE_SIZE=10737418240      // 10GB in bytes
-STORAGE_ALLOWED_MIME_TYPES=application/pdf,image/jpeg,image/png,application/zip
-```
-
-### Access Control
-
-The storage system enforces strict ownership and permission-based access:
-
-**Owner-Only Access (Default):**
-- Users can only access their own uploaded files
-- Object queries filtered by `owner_id = current_user.id`
-- Download URLs only generated for owned objects
-- Delete operations restricted to owner
-
-**Admin Override:**
-- Users with `storage:delete_any` permission can access all objects
-- Useful for moderation and content management
-- All admin operations logged to audit trail
-
-**Permission Model:**
-| Permission | Description | Granted To |
-|------------|-------------|------------|
-| `storage:read` | View own storage objects | All authenticated users |
-| `storage:write` | Upload and update own objects | All authenticated users |
-| `storage:delete` | Delete own storage objects | All authenticated users |
-| `storage:read_any` | View all storage objects | Admin |
-| `storage:write_any` | Update any storage object | Admin |
-| `storage:delete_any` | Delete any storage object | Admin |
-
-**Ownership Validation Example:**
-```typescript
-// Controller method enforces ownership
-async getObject(objectId: string, userId: string) {
-  const object = await this.objectsService.findById(objectId);
-
-  // Check ownership (or admin permission)
-  if (object.ownerId !== userId && !user.hasPermission('storage:read_any')) {
-    throw new ForbiddenException('Access denied');
-  }
-
-  return object;
-}
-```
-
-### Signed URLs
-
-The storage system uses time-limited presigned URLs for secure file access:
-
-**Download URLs:**
-- Generated via S3 presigned GET URLs
-- Default expiration: 1 hour (3600 seconds)
-- Configurable per-request via `expiresIn` parameter
-- URLs cannot be reused after expiration
-- No AWS credentials exposed to client
-
-**Upload URLs (Multipart):**
-- Generated via S3 presigned PUT URLs for each part
-- Short expiration: 15 minutes per part
-- One-time use: URL invalidated after part upload
-- Direct-to-S3 upload (bypasses application server for performance)
-
-**Security Properties:**
-- URLs cryptographically signed by AWS credentials
-- Tampering detected via signature validation
-- Time-based expiration prevents long-lived access
-- Scoped to specific S3 operation (GET or PUT)
-
-**Example Presigned URL Generation:**
-```typescript
-async generateDownloadUrl(objectId: string, expiresIn = 3600): Promise<string> {
-  const object = await this.findById(objectId);
-
-  return this.storageProvider.getSignedDownloadUrl(
-    object.storageKey,
-    expiresIn,
-  );
-}
-```
-
-### S3 Security Configuration
-
-**Recommended S3 Bucket Security Settings:**
-
-**IAM Roles (Production):**
-- Use EC2/ECS IAM roles instead of static credentials
-- Principle of least privilege: grant only required S3 permissions
-- Rotate credentials if using access keys
-
-**Server-Side Encryption:**
-```typescript
-// Enable SSE-S3 (AWS-managed keys)
-ServerSideEncryption: 'AES256'
-
-// Or SSE-KMS (customer-managed keys)
-ServerSideEncryption: 'aws:kms'
-KMSKeyId: 'arn:aws:kms:region:account:key/key-id'
-```
-
-**Block Public Access:**
-```json
-{
-  "BlockPublicAcls": true,
-  "IgnorePublicAcls": true,
-  "BlockPublicPolicy": true,
-  "RestrictPublicBuckets": true
-}
-```
-
-**Access Logging:**
-- Enable S3 access logs for audit trail
-- Log bucket: separate from application bucket
-- Review logs for suspicious access patterns
-
-**Versioning:**
-- Enable versioning for accidental deletion protection
-- Configure lifecycle policy to archive old versions
-
-**CORS Configuration:**
-```json
-{
-  "CORSRules": [
-    {
-      "AllowedOrigins": ["https://yourdomain.com"],
-      "AllowedMethods": ["PUT"],
-      "AllowedHeaders": ["*"],
-      "MaxAgeSeconds": 3000
-    }
-  ]
-}
-```
-
-**Bucket Policy Example:**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Deny",
-      "Principal": "*",
-      "Action": "s3:*",
-      "Resource": "arn:aws:s3:::bucket-name/*",
-      "Condition": {
-        "Bool": { "aws:SecureTransport": "false" }
-      }
-    }
-  ]
-}
-```
-
-### Audit Logging
-
-All storage operations are logged to the `audit_events` table for security monitoring and compliance:
-
-**Logged Events:**
-
-| Event | Action | Description |
-|-------|--------|-------------|
-| Upload Started | `storage:upload:init` | Multipart upload initialized |
-| Upload Completed | `storage:upload:complete` | File upload finalized successfully |
-| Upload Aborted | `storage:upload:abort` | Upload cancelled by user or system |
-| Object Downloaded | `storage:object:download` | Download URL generated |
-| Object Deleted | `storage:object:delete` | Object and file removed |
-| Metadata Updated | `storage:object:metadata:update` | Custom metadata modified |
-
-**Audit Event Structure:**
-```typescript
-{
-  actorUserId: 'user-uuid',
-  action: 'storage:upload:complete',
-  targetType: 'storage_object',
-  targetId: 'object-uuid',
-  meta: {
-    objectName: 'document.pdf',
-    size: 1048576,
-    mimeType: 'application/pdf',
-    storageProvider: 's3',
-    ipAddress: '192.168.1.1',
-    userAgent: 'Mozilla/5.0...'
-  },
-  createdAt: '2024-01-01T12:00:00Z'
-}
-```
-
-**Monitoring Queries:**
-```sql
--- Large file uploads
-SELECT * FROM audit_events
-WHERE action = 'storage:upload:complete'
-  AND (meta->>'size')::bigint > 1073741824  -- 1GB
-ORDER BY created_at DESC;
-
--- Suspicious deletion patterns
-SELECT actor_user_id, COUNT(*) as delete_count
-FROM audit_events
-WHERE action = 'storage:object:delete'
-  AND created_at > NOW() - INTERVAL '1 hour'
-GROUP BY actor_user_id
-HAVING COUNT(*) > 10;
-```
-
-### Security Best Practices
-
-**Do's:**
-- ✅ Use IAM roles instead of access keys in production
-- ✅ Enable S3 server-side encryption
-- ✅ Set short expiration times on presigned URLs
-- ✅ Validate file types server-side (never trust client)
-- ✅ Enforce file size limits to prevent abuse
-- ✅ Monitor audit logs for suspicious patterns
-- ✅ Block public access on S3 buckets
-- ✅ Use HTTPS for all S3 operations
-- ✅ Implement virus scanning for user uploads (recommended)
-
-**Don'ts:**
-- ❌ Never commit AWS credentials to source control
-- ❌ Never allow unrestricted file uploads
-- ❌ Never rely on client-side MIME type validation
-- ❌ Never use long-lived presigned URLs (> 1 hour)
-- ❌ Never skip ownership validation on operations
-- ❌ Never expose S3 bucket names in error messages
-- ❌ Never allow executable file uploads (.exe, .sh, .bat)
-
----
-
-## 8. Infrastructure Security
-
-### Nginx Security Headers
-
-The Nginx reverse proxy applies security headers to all responses:
-
-```nginx
-# Security headers
-add_header X-Frame-Options "SAMEORIGIN" always;
-add_header X-Content-Type-Options "nosniff" always;
-add_header X-XSS-Protection "1; mode=block" always;
-add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-```
-
-| Header | Value | Purpose |
-|--------|-------|---------|
-| `X-Frame-Options` | `SAMEORIGIN` | Prevents clickjacking - only allow framing from same origin |
-| `X-Content-Type-Options` | `nosniff` | Prevents MIME sniffing - force declared content type |
-| `X-XSS-Protection` | `1; mode=block` | Legacy XSS protection for older browsers |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` | Limit referrer info sent to external sites |
-
-**Additional Headers (Recommended for Production):**
-```nginx
-# Add these for enhanced security
-add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;  # HTTPS only
-add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';" always;
-add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-```
-
-### CORS Configuration
-
-The application uses same-origin architecture (frontend and API served from same host via Nginx), so CORS is disabled by default:
-
-- Frontend: `http://localhost:8323/`
-- API: `http://localhost:8323/api`
-- Swagger: `http://localhost:8323/api/docs`
-
-**Benefits of Same-Origin:**
-- No CORS configuration needed
-- Cookies work without `withCredentials`
-- Simplified security model
-- No preflight requests
-
-**If CORS is Needed (e.g., mobile app, separate domains):**
-```typescript
-// In main.ts
-app.enableCors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || 'http://localhost:3000',
-  credentials: true,  // Allow cookies
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Authorization', 'Content-Type'],
-});
-```
-
-### Environment Secrets
-
-**Critical Secrets (Must Protect):**
-
-| Variable | Purpose | Security Requirement |
-|----------|---------|---------------------|
-| `JWT_SECRET` | Signs JWT tokens | Min 32 chars, random, never commit |
-| `COOKIE_SECRET` | Signs session cookies | Min 32 chars, random, never commit |
-| `GOOGLE_CLIENT_SECRET` | OAuth with Google | From Google Console, never commit |
-| `DATABASE_URL` | Database connection | Contains credentials, never commit |
-| `POSTGRES_PASSWORD` | Database password | Strong password, never commit |
-
-**Generate Secrets:**
-```bash
-# Generate strong secrets (32+ characters)
-openssl rand -base64 32
-
-# Or use Node.js
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-```
-
-**Environment File Security:**
-```bash
-# Never commit .env files
-echo ".env" >> .gitignore
-echo ".env.local" >> .gitignore
-echo ".env.*.local" >> .gitignore
-
-# Use .env.example for template (no real values)
-cp .env.example .env
-# Then fill in real values
-```
-
-**Production Secret Management:**
-- Use secret management services (AWS Secrets Manager, Azure Key Vault, HashiCorp Vault)
-- Inject secrets as environment variables at runtime
-- Rotate secrets regularly (JWT_SECRET, GOOGLE_CLIENT_SECRET)
-- Use different secrets per environment (dev, staging, prod)
-
----
-
-## 9. Attack Mitigation Matrix
-
-| Attack Vector | Mitigation Strategy | Implementation |
-|--------------|---------------------|----------------|
-| **SQL Injection** | Parameterized queries | Prisma ORM (prepared statements by default) |
-| **XSS (Cross-Site Scripting)** | Output encoding, CSP headers | React automatic escaping, `X-XSS-Protection` header |
-| **CSRF (Cross-Site Request Forgery)** | SameSite cookies, same-origin | `SameSite=lax` on refresh token cookie |
-| **Token Theft (XSS)** | HttpOnly cookies for refresh tokens | Access token in memory only, refresh in HttpOnly cookie |
-| **Token Theft (MITM)** | HTTPS only, Secure cookies | `secure: true` in production, HSTS header |
-| **Brute Force (Password)** | No passwords (OAuth only) | Google OAuth, no password storage |
-| **Session Hijacking** | Short-lived tokens, rotation | 15-min access tokens, refresh rotation on use |
-| **Token Reuse Attack** | Reuse detection, revoke all | Revoke all user tokens when revoked token used |
-| **Privilege Escalation** | RBAC enforcement, server-side validation | Roles/Permissions guards, database-driven RBAC |
-| **Account Enumeration** | Generic error messages | "Invalid credentials" for all auth failures |
-| **Clickjacking** | Frame-busting headers | `X-Frame-Options: SAMEORIGIN` |
-| **MIME Sniffing** | Content-Type enforcement | `X-Content-Type-Options: nosniff` |
-| **Insecure Direct Object Reference** | Authorization checks | Guards verify user permissions before data access |
-| **Mass Assignment** | DTO validation | Class-validator on all DTOs, whitelist only |
-| **Information Disclosure** | Generic errors, no stack traces | Production error handler, sanitized responses |
-| **Denial of Service** | Rate limiting (recommended) | Can add rate limiter to Nginx or NestJS |
-
-**Not Yet Implemented (Consider for Production):**
-- **Rate Limiting**: Add `@nestjs/throttler` or Nginx rate limiting
-- **Input Validation**: Add class-validator decorators to all DTOs
-- **API Key Rotation**: Rotate Google OAuth credentials periodically
-- **Anomaly Detection**: Monitor audit logs for suspicious patterns
-- **IP Allowlisting**: Restrict admin endpoints to known IPs
-
----
-
-## 10. Configuration Reference
-
-### Environment Variables
-
-**Authentication & JWT:**
-```bash
-# JWT Configuration
-JWT_SECRET=your-super-secret-key-min-32-characters-long
-JWT_ACCESS_TTL_MINUTES=15          # Access token lifetime (default: 15 minutes)
-JWT_REFRESH_TTL_DAYS=14            # Refresh token lifetime (default: 14 days)
-
-# Cookie Configuration
-COOKIE_SECRET=your-cookie-secret-key-min-32-characters-long
-```
-
-**OAuth Providers:**
-```bash
-# Google OAuth (Required)
-GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_CALLBACK_URL=http://localhost:8323/api/auth/google/callback
-
-# Microsoft OAuth (Optional)
-MICROSOFT_CLIENT_ID=your-microsoft-client-id
-MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret
-MICROSOFT_CALLBACK_URL=http://localhost:8323/api/auth/microsoft/callback
-```
-
-**Database:**
-```bash
-DATABASE_URL=postgresql://postgres:postgres@db:5432/appdb
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your-strong-password-here
-POSTGRES_DB=appdb
-```
-
-**Admin Bootstrap:**
-```bash
-# First user with this email becomes admin
-INITIAL_ADMIN_EMAIL=admin@example.com
-```
-
-**Application:**
-```bash
-NODE_ENV=development              # development | production
-PORT=3000                         # API server port
-APP_URL=http://localhost:8323     # Base URL (for OAuth redirects)
-```
-
-### Recommended Security Settings
-
-**Development:**
-```bash
-JWT_ACCESS_TTL_MINUTES=60         # Longer for convenience
-JWT_REFRESH_TTL_DAYS=14
-NODE_ENV=development
-```
-
-**Production:**
-```bash
-JWT_ACCESS_TTL_MINUTES=15         # Short-lived for security
-JWT_REFRESH_TTL_DAYS=7            # Shorter refresh window
-NODE_ENV=production
-APP_URL=https://yourdomain.com    # HTTPS required
-```
-
-**High-Security Environment:**
-```bash
-JWT_ACCESS_TTL_MINUTES=5          # Very short access tokens
-JWT_REFRESH_TTL_DAYS=1            # Require daily re-authentication
-NODE_ENV=production
-```
-
----
-
-## 11. Implementation Notes: Fastify + Passport OAuth
-
-### Challenge: OAuth Strategy Compatibility
-
-This application uses NestJS with **Fastify adapter** instead of Express. Passport OAuth strategies (like `passport-google-oauth20`) are designed for Express and expect Express-style request/response objects, which creates a compatibility challenge.
-
-### The Problem
-
-Passport OAuth strategies perform these operations:
-1. Redirect user to OAuth provider (Google)
-2. Handle callback from provider
-3. Extract user profile from provider response
-4. Attach user object to request
-
-Passport expects to work with Node.js `http.IncomingMessage` and `http.ServerResponse` objects directly, but Fastify wraps these in its own `FastifyRequest` and `FastifyReply` objects with different APIs.
-
-**Key Differences:**
-- Express/Node.js: `res.status(200).json(data)`, `res.redirect(url)`
-- Fastify: `res.code(200).send(data)`, `res.redirect(url)`
-
-### The Solution: Custom OAuth Guard
-
-The `GoogleOAuthGuard` uses NestJS's execution context to provide Passport with the raw Node.js objects it expects, then copies the authenticated user back to the Fastify request.
-
-**Implementation (`apps/api/src/auth/guards/google-oauth.guard.ts`):**
-
-```typescript
-import { ExecutionContext, Injectable } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-
-@Injectable()
-export class GoogleOAuthGuard extends AuthGuard('google') {
-  // Provide raw Node.js request to Passport
-  getRequest(context: ExecutionContext) {
-    const request = context.switchToHttp().getRequest();
-    return request.raw || request;  // request.raw is the underlying http.IncomingMessage
-  }
-
-  // Provide raw Node.js response to Passport
-  getResponse(context: ExecutionContext) {
-    const response = context.switchToHttp().getResponse();
-    return response.raw || response;  // response.raw is the underlying http.ServerResponse
-  }
-
-  // After Passport authentication, copy user to Fastify request
-  handleRequest<TUser = unknown>(
-    err: Error | null,
-    user: TUser | false,
-    _info: unknown,
-    context: ExecutionContext,
-  ): TUser {
-    if (err || !user) {
-      throw err || new Error('Authentication failed');
-    }
-
-    // Copy user from raw request to Fastify request
-    // so controllers can access req.user normally
-    const fastifyRequest = context.switchToHttp().getRequest();
-    fastifyRequest.user = user;
-
-    return user;
-  }
-}
-```
-
-**How It Works:**
-
-1. **`getRequest()`**: Returns `request.raw` - the underlying Node.js `IncomingMessage` object that Passport can work with
-2. **`getResponse()`**: Returns `response.raw` - the underlying Node.js `ServerResponse` object
-3. **OAuth Flow**: Passport performs the OAuth redirect and callback using these raw objects
-4. **`handleRequest()`**: After successful authentication, copies the user profile from the raw request to the Fastify request object
-5. **Controller Access**: Controllers can now access `req.user` as if using Express
-
-**Controller Usage:**
-
-```typescript
-@Get('google/callback')
-@Public()
-@UseGuards(GoogleOAuthGuard)
-async googleAuthCallback(
-  @Req() req: FastifyRequest & { user?: GoogleProfile },
-  @Res() res: FastifyReply,
-) {
-  // Guard has populated req.user with the Google profile
-  const profile = req.user;
-
-  // Process authentication...
-  const tokens = await this.authService.handleGoogleLogin(profile);
-
-  // Use Fastify methods for response
-  return res.redirect(302, redirectUrl.toString());
-}
-```
-
-### Error Handling in OAuth Callbacks
-
-When OAuth callbacks fail, error messages must be safely embedded in redirect URLs.
-
-**Challenge:** Error messages may contain newlines, special characters, or exceed URL length limits.
-
-**Solution:** Sanitize error messages before adding to URL:
-
-```typescript
-try {
-  // OAuth authentication logic...
-} catch (error) {
-  this.logger.error('Error in Google OAuth callback', error);
-  const appUrl = this.configService.get<string>('appUrl');
-
-  // Sanitize: remove newlines, URL encode, limit length
-  const errorMessage = error instanceof Error
-    ? encodeURIComponent(error.message.replace(/[\r\n]/g, ' ').substring(0, 100))
-    : 'authentication_failed';
-
-  return res.redirect(`${appUrl}/auth/callback?error=${errorMessage}`);
-}
-```
-
-**Sanitization Steps:**
-1. Extract error message safely (check `instanceof Error`)
-2. Replace newlines with spaces: `replace(/[\r\n]/g, ' ')`
-3. Limit length: `substring(0, 100)`
-4. URL encode: `encodeURIComponent()`
-5. Provide fallback: default to generic error code if not an Error object
-
-### Key Takeaways for Developers
-
-**When working with Passport OAuth in Fastify:**
-
-1. ✅ **Override `getRequest()` and `getResponse()`** to return raw Node.js objects
-2. ✅ **Override `handleRequest()`** to copy user from raw request to Fastify request
-3. ✅ **Use Fastify response methods** in controllers: `res.code()` and `res.send()`
-4. ✅ **Sanitize error messages** before embedding in redirect URLs
-5. ✅ **Type request with user property**: `FastifyRequest & { user?: GoogleProfile }`
-
-**This pattern applies to all Passport OAuth strategies**, not just Google. If you add Microsoft, GitHub, or other OAuth providers, use the same guard pattern.
-
----
-
-## 13. Test Authentication (Development Only)
-
-### Overview
-
-The application provides a test authentication bypass mechanism that enables automated E2E testing with tools like Playwright without requiring real Google OAuth credentials.
-
-**IMPORTANT:** This feature is completely disabled in production environments through multiple security layers.
-
-### Security Layers
-
-| Layer | Protection | Implementation |
-|-------|------------|----------------|
-| **Build-time** | Frontend route excluded from production bundle | `import.meta.env.PROD` check in App.tsx |
-| **Module-level** | Backend module not imported in production | Conditional import in `app.module.ts` |
-| **Runtime guard** | Request rejected in production | `TestEnvironmentGuard` validates `NODE_ENV` |
-| **Bootstrap validation** | App fails to start if misconfigured | Error thrown if `TEST_AUTH_ENABLED=true` in production |
-
-### How It Works
-
-1. Playwright navigates to `/testing/login` (frontend test page)
-2. Test fills email and selects role (admin/contributor/viewer)
-3. Form submits POST to `/api/auth/test/login`
-4. Backend finds/creates user with specified role
-5. Backend generates real JWT tokens (same as OAuth flow)
-6. Backend sets HttpOnly refresh cookie and redirects to `/auth/callback?token=X`
-7. Frontend handles callback (existing flow) and app is authenticated
-
-### Test Auth Endpoint
-
-**Endpoint:** `POST /api/auth/test/login` (Non-production only)
-
-**Request:**
-```json
-{
-  "email": "test@test.local",
-  "role": "admin",
-  "displayName": "Test Admin"
-}
-```
-
-**Response:** HTTP 302 redirect to `/auth/callback?token=<accessToken>&expiresIn=900`
-- Sets HttpOnly refresh token cookie (same as OAuth)
-
-### Security Considerations
-
-- Test auth creates **real users** with **real tokens** - it only bypasses OAuth, not authorization
-- Users created via test auth are fully functional in the system
-- All RBAC guards still apply after authentication
-- Audit logging still captures test auth events
-- Consider using a test email pattern (e.g., `*@test.local`) for easy identification
-
----
-
-## 12. File Reference
-
-### Key Security Files
-
-**Authentication & Authorization:**
-```
-apps/api/src/auth/
-├── auth.controller.ts              # Auth endpoints (login, logout, refresh)
-├── auth.service.ts                 # Core auth logic (tokens, validation)
-├── auth.module.ts                  # Auth module configuration
-├── strategies/
-│   ├── google.strategy.ts          # Google OAuth strategy
-│   └── jwt.strategy.ts             # JWT validation strategy
-├── guards/
-│   ├── jwt-auth.guard.ts           # Global JWT authentication guard
-│   ├── roles.guard.ts              # RBAC roles guard (OR logic)
-│   ├── permissions.guard.ts        # RBAC permissions guard (AND logic)
-│   └── google-oauth.guard.ts       # Google OAuth flow guard
-├── decorators/
-│   ├── auth.decorator.ts           # Combined @Auth() decorator
-│   ├── public.decorator.ts         # @Public() to skip auth
-│   ├── roles.decorator.ts          # @Roles() for RBAC
-│   ├── permissions.decorator.ts    # @Permissions() for RBAC
-│   └── current-user.decorator.ts   # @CurrentUser() parameter decorator
-├── tasks/
-│   └── token-cleanup.task.ts       # Scheduled token cleanup (daily 3 AM)
-└── interfaces/
-    └── authenticated-user.interface.ts  # User object types
-```
-
-**Allowlist Access Control:**
-```
-apps/api/src/allowlist/
-├── allowlist.controller.ts         # Allowlist endpoints (list, add, remove)
-├── allowlist.service.ts            # Allowlist business logic
-├── allowlist.module.ts             # Allowlist module configuration
-└── dto/
-    ├── add-email.dto.ts            # Add email request validation
-    └── allowlist-query.dto.ts      # List query parameters validation
-```
-
-**Database & RBAC:**
-```
-apps/api/prisma/
-├── schema.prisma                   # Database schema (security tables, allowlist)
-├── seed.ts                         # RBAC seed data (roles, permissions, initial allowlist)
-└── migrations/                     # Database migration history
-```
-
-**Configuration:**
-```
-apps/api/src/
-├── main.ts                         # Application bootstrap (global guards)
-└── common/
-    ├── constants/
-    │   └── roles.constants.ts      # Role and permission constants
-    └── services/
-        └── admin-bootstrap.service.ts  # Initial admin setup
-```
-
-**Infrastructure:**
-```
-infra/
-├── nginx/
-│   └── nginx.conf                  # Reverse proxy, security headers
-└── compose/
-    ├── .env.example                # Environment variable template
-    ├── base.compose.yml            # Core services (db, api, web, nginx)
-    └── prod.compose.yml            # Production overrides
-```
-
-**Frontend (Security-Related):**
-```
-apps/web/src/
-├── contexts/
-│   └── AuthContext.tsx             # Auth state management
-├── services/
-│   └── api.ts                      # API client (token interceptors)
-└── utils/
-    └── auth.ts                     # Token storage utilities
-```
-
----
-
-## 13. Security Best Practices Summary
-
-### For Developers
-
-**Do's:**
-- ✅ Always use `@Auth()` decorator on protected endpoints
-- ✅ Validate all input with DTOs and class-validator
-- ✅ Use Prisma for database queries (prevents SQL injection)
-- ✅ Store access tokens in memory only (never localStorage)
-- ✅ Test RBAC logic with integration tests
-- ✅ Log security events to audit table
-- ✅ Use environment variables for all secrets
-- ✅ Keep dependencies updated (npm audit)
-- ✅ Add users to allowlist before sharing OAuth login link
-- ✅ Use user deactivation (`isActive: false`) instead of allowlist removal to revoke access
-
-**Don'ts:**
-- ❌ Never commit `.env` files to Git
-- ❌ Never store passwords in plain text
-- ❌ Never trust client-side authorization (always verify server-side)
-- ❌ Never expose stack traces in production errors
-- ❌ Never use `@Public()` without careful consideration
-- ❌ Never bypass guards with custom middleware
-- ❌ Never log sensitive data (tokens, passwords, secrets)
-
-### Security Checklist
-
-**Pre-Deployment:**
-- [ ] All secrets generated with `openssl rand -base64 32`
-- [ ] `NODE_ENV=production` set
-- [ ] HTTPS enabled and enforced
-- [ ] `secure: true` on cookies
-- [ ] Database backups configured
-- [ ] Rate limiting configured on Nginx or API
-- [ ] Security headers enabled in Nginx
-- [ ] Admin bootstrap email configured correctly
-- [ ] Initial admin email added to allowlist during seeding
-- [ ] OAuth credentials from production Google project
-- [ ] Audit logging verified and monitored
-- [ ] Error handler sanitizes responses (no stack traces)
-
-**Monitoring:**
-- [ ] Set up alerts for `refresh token reuse detected` logs
-- [ ] Monitor audit events for suspicious patterns
-- [ ] Track authentication failure rates
-- [ ] Monitor token refresh frequency
-- [ ] Watch for unusual role assignment changes
-- [ ] Monitor allowlist additions/removals for unauthorized changes
-- [ ] Track "email not authorized" login failures
-
----
-
-## Conclusion
-
-This security architecture provides defense-in-depth through multiple layers:
-1. **Authentication**: OAuth 2.0 eliminates password risks
-2. **Session Management**: Short-lived access tokens + rotated refresh tokens
-3. **Authorization**: Fine-grained RBAC with roles and permissions
-4. **Infrastructure**: Security headers and same-origin architecture
-5. **Audit**: Comprehensive logging for compliance and monitoring
-
-The system is designed for production use and follows industry best practices for web application security. Regular security audits and updates are recommended to maintain security posture.
-
----
-
-## SSH Credential Storage (issue #48)
-
-A server profile's password, private key and passphrase are stored in the platform's per-user credential store (`UserCredentialsService`, `user_credentials`), not on the profile row.
-
-- **Address**: `(userId = the profile's owner, purpose 'ssh', name)`; names `profile.<profileId>.password`, `profile.<profileId>.private_key`, `profile.<profileId>.passphrase`.
-- **Encryption**: AES-256-GCM under a sub-key derived from `SECRETS_ENCRYPTION_KEY` and the owner-bound domain `user:<userId>:ssh`. A ciphertext copied into another user's row fails authentication instead of decrypting. The key is verified at startup: the API refuses to boot with a missing or malformed key once a credential is stored.
-- **No fallback**: the `ssh` purpose is registered with `system: null` and `fallback: []`, so an organization or deployment credential can never answer an SSH secret. Org-owned or group-shared servers (#71, #35) will use `OrgCredentialsService` with the same names, decrypted server-side by the owner's credential, never shipped to a node.
-- **Egress**: `getSecret` is called only at the moment of connect, inside the API process (`ServerProfilesService.getDecryptedProfile`). Responses carry the booleans `hasPassword`, `hasPrivateKey` and `hasPassphrase` and nothing else; no secret, hint or ciphertext reaches a log, span, audit `meta`, export or AI prompt. The store logs only `Stored/Deleted user credential "ssh/<name>" for user <id>`.
-- **Legacy columns**: `server_profiles.encrypted_password`, `encrypted_private_key` and `encrypted_passphrase` (AES-256-GCM under the old `ENCRYPTION_KEY`) are no longer read or written. They stay until a later migration drops them after production verification (#84). The copy is [runbooks/ssh-secret-reencryption.md](runbooks/ssh-secret-reencryption.md).
-
----
-
-## SSH Host-Key Verification (issue #60)
-
-A man-in-the-middle on the path to a server could harvest the password or key of a profile, or feed false output to a terminal. Host keys are therefore verified **before any credential is sent**, on every path that connects.
-
-- **One factory**: `apps/api/src/ssh/ssh-connection.factory.ts` (`SshConnectionFactory`) is the only code that builds an ssh2 `ConnectConfig` or creates a `Client`. The interactive terminal, the connection test, the history download, the Doctor's tmux probe and the facts probe all open their connection through it. `test/ssh/ssh-boundary.spec.ts` fails on a `new Client(` anywhere else in the API.
-- **Verifier**: ssh2 calls `hostVerifier` during key exchange, before user authentication. The presented key is compared with the profile's trusted fingerprint (`server_profiles.fingerprint`, OpenSSH `SHA256:` format, with `host_key_algorithm`, `host_key_trusted_at`, `host_key_trusted_by`). A refusal ends the connection there, so no password, key or agent signature is sent, and it surfaces as a typed `HostKeyError` (`HOST_KEY_UNKNOWN` or `HOST_KEY_MISMATCH`, with the presented and expected fingerprints).
-- **Policy** (system setting `ssh.hostKeyPolicy`, default `tofu_prompt`): a profile that trusts no key yet is refused (`tofu_prompt`, `strict`) or trusts the presented key on first contact with an audit event (`tofu_auto`). **A different key is refused under every policy and every purpose**, and automatic trust only ever fills an empty slot (`WHERE fingerprint IS NULL`), so it can never replace a key. If the setting cannot be read the factory behaves as `tofu_prompt`.
-- **Trust is a user decision**: `POST /api/server-profiles/:id/host-key/trust` re-scans and stores the key only if it equals the fingerprint the user verified (otherwise `409 HOST_KEY_CHANGED_DURING_TRUST`); replacing a different key needs the profile hostname typed as `confirmHostname`. A scan connects with no credential in its configuration at all.
-- **Endpoint changes reset trust**: changing a profile's `hostname` or `port` clears the key and the probed facts.
-- **The Doctor never trusts**: its probe runs with the policy forced to `strict` (a Doctor check writes nothing). The `ssh.host_key_policy` check reports the policy and the number of profiles that trust no key, and warns for `tofu_auto`.
-- **Observability**: counter `app.ssh.host_key_checks` with the single label `outcome` (`match`, `unknown`, `mismatch`, `auto_trusted`; never a host), span attribute `ssh.host_key.outcome` on `ssh.connect`. A mismatch logs at `warn` with the profile id and both fingerprints (public values), never a credential.
-- **Audit actions**: `server_profile.host_key_trusted`, `server_profile.host_key_replaced` (old and new fingerprints), `server_profile.host_key_forgotten`, `server_profile.host_key_auto_trusted`.
-- **Rollback**: the new columns are nullable and ignored by older code. Without a revert, set `ssh.hostKeyPolicy` to `tofu_auto` so unknown keys are trusted automatically; mismatches are still refused.
-
----
-
-## Terminal AI Safety (issue #56)
-
-Terminal output routinely holds secrets (`env`, `cat .env`, `kubectl get secret -o yaml`, private keys). It reaches a model only through one door.
-
-- **One door**: `TerminalContextService.forAi` (`apps/api/src/terminal-ai/`). Every AI feature that needs terminal text calls it; none reads a pane. `tmux capture-pane` appears only in `terminal/session-history.service.ts` (`test/terminal-ai/capture-boundary.spec.ts` fails on any other file).
-- **Order**: session ownership (no access is 404), consent (`409 AI_CONSENT_REQUIRED`), the per-server switch, capture or the client's selection, ANSI stripping, redaction, size cap (the most recent text is kept), audit.
-- **Per-server switch**: `server_profiles.ai_output_sharing` (API `aiOutputSharing`, default true). When false, explain and summary answer `409 AI_OUTPUT_SHARING_DISABLED`, assist gets only OS, shell and working directory (no pane is captured), and `ai_task` runbook steps must fail on that target (#64). This is the hard control; redaction is defence in depth and the consent text says so.
-- **Redaction** (`apps/api/src/command-safety/redact.ts`, pure, reused by the runbook engine): `[REDACTED:<kind>]` for AWS keys, GitHub, Slack, Google and LLM keys, JWTs, whole PEM private-key blocks, URL credentials (scheme and host kept), `Authorization` headers, `key=value` secrets (key kept), platform tokens, exact literals and a high-entropy pass that spares UUIDs, git SHAs and `sha256:` digests. `strict` mode also replaces every line that had a finding with `[REDACTED LINE]`. The mode comes from the `terminalAi` system setting, which an organization may only tighten.
-- **Consent**: user setting `terminalAi.consentAcceptedAt`; `GET` and `POST /api/ai/terminal/consent` (`ai:use`, behind the AI kill switch). Required unless `terminalAi.requireConsent` is off.
-- **Audit and metrics**: one `terminal_ai.request` event per call with the feature, profile and session ids, finding kinds and counts, `bytesSent` and `truncated`, never content; `terminal_ai.consent` on acceptance. Counter `app.terminal_ai.redactions` with the single label `kind`.
-- **Never logged**: terminal text and matched secrets appear in no log line, span, audit row, metric or error. The integration test feeds a sentinel AWS key and a PEM block through the real `AiService` over `FakeAiProvider` and asserts none of them is in the provider's call log, the audit rows, the metrics, the logs or the response.
-- **Command risk**: `classifyCommand` (`command-safety/classify-command.ts`) over the data table `destructive-patterns.ts` reports `low`, `medium` or `high` for runbook approvals (#67). A quoted `echo "rm -rf /"` is an accepted `medium`.
-- **Command assist** (#57, `terminal-ai/terminal-assist.service.ts`): reaches the model only through `forAi` (purpose `assist`, 40 lines, or metadata only when `includeScreen` is false or the server shares no output) and `AiService.forUser(..., { feature: 'terminal_assist' })`. The user's prompt is redacted too. The model's answer must parse as one `COMMAND:` line with no control character; risk and destructive flags are computed by `classifyCommand`. Logs carry only the command's length and risk class. The web client inserts a suggestion with `terminal.paste` only when `sanitizeForInsert` finds no `\r`, `\n`, C0, C1 or ESC character, never appends a newline, and keeps the assist shortcut (Mod+Shift+A, rebindable at `shortcuts.actions['terminal.aiAssist']`) from the PTY. Nothing a model returns is ever executed.
-- **Session summaries** (#59, `terminal-ai/jobs/session-summarize.handler.ts`): `ai.session.summarize` is server-only for good (no `nodeResultSchema`, no `persistNodeResult`; no node ever holds a key or an SSH credential). The route runs `TerminalContextService.preflight` (404, consent, the per-server switch) and queues a payload of ids only; the job checks the AI policy, the session's owner and state and consent again, then reads the pane only through `forAi` (purpose `summary`, 200,000 characters). Over 60,000 characters the text is summarized in parts (one `respond` per part, then one `respondStructured`). The answer is redacted a second time and capped before it is stored in `terminal_session_summaries` (summary Markdown, listed commands, redaction kinds and counts: never terminal text); rows cascade with the session and the user. A rate limit defers the job (the row stays pending); a condition no retry fixes fails the row with its code; a pending row older than an hour is failed on read. The integration test plants a sentinel in a 150,000-character capture and asserts it is in no provider call, job payload, stored row, response, log line or audit event.
-- **Runbook AI steps** (#64, `runbooks/ai/`): `ai.runbook.agent` is server-only for good (no `nodeResultSchema`, no `persistNodeResult`), and it is the only code that sends a model-requested command to a server. Every command passes `AgentPolicy` first (RE2 deny list, the destructive table of `classifyCommand`, sensitive paths, and in autonomous mode the allow list; a pattern that does not compile fails closed): `per_command` mode never runs a command without an `approved` approval row (and the command that runs must match the approved sha256), `plan` mode runs exactly the approved plan, autonomous mode never runs what fails the allow list, matches the deny list or is destructive. What a model sees of any output is ANSI-stripped, redacted with the run's secret literals and cut to 8 KiB; a secret parameter reaches it by NAME only. Pre-checks (the AI switch, `runbooks.ai.agentEnabled`, the server's `aiOutputSharing`, the starter's `ai:use` and `runbooks:run`) end the step before any provider call or SSH connection. "Stop AI" and a cancel end it before the next command. Every command is a `runbook_command_executions` row (`origin: 'ai_agent'`, `outcome`, `approvedBy`) and an audit event holding the sha256, never the text. Draft: `POST /api/ai/runbooks/draft` returns a definition for a person to review; nothing is saved or run, and a draft that looks secret-shaped is flagged.
-- **Explain** (#58, `terminal-ai/terminal-explain.service.ts`): reaches terminal text only through `forAi` (purpose `explain`: the last 200 lines, or the client's selection, redacted on the server like captured text; a server that shares no output answers `409 AI_OUTPUT_SHARING_DISABLED`) and the model only through `AiService.forUser(..., { feature: 'terminal_explain' })`. `POST /api/ai/terminal/explain/preview` returns the same redacted text with no model call. The suggested fix is parsed and classified like command assist's; the web client renders the markdown without HTML and inserts a fix only through `sanitizeForInsert` and `terminal.paste`, never with a newline. Logs carry lengths and a risk class, never the selection, the screen or the answer.
-- **Rollback**: revert the PR. The `ai_output_sharing` column can stay (it defaults to true and is ignored).
+| Data | Class | Where it may exist |
+|---|---|---|
+| SSH password, key, passphrase | secret | credential store (ciphertext); API memory during one SSH call |
+| Runbook secret parameters | secret | organization credential store; API memory during one segment |
+| AI provider keys | secret | credential store, per user; API memory during one provider call |
+| Terminal input and output | sensitive | browser, API relay memory, target server tmux. Never stored by ShellKeep |
+| Redacted terminal text for AI | sensitive | API memory and the provider call; summaries store only the model's redacted answer |
+| Runbook step output | sensitive | redacted at the sink, then hot buffer and object storage under `runbook-artifacts/` |
+| Host-key fingerprint | public | database, API responses |
+| Session and profile metadata | internal | database, exports |
+
+Target-server output is untrusted input: it is stripped of control sequences and redacted before any model sees it, and a model's answer is never executed without a person (§6, §7).
+
+## 2. Sign-in and tokens
+
+Sign-in, sessions and tokens are the platform identity slice ([README](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/identity/README.md)); ShellKeep binds it in `apps/api/src/platform/identity/` with Google as the only provider and the OAuth server not mounted.
+
+- **Access token**: JWT, 15 minutes, read only from `Authorization: Bearer`, held in browser memory. **Refresh token**: opaque, HttpOnly `refresh_token` cookie, rotated on every use, stored hashed.
+- **Email allowlist**: only pre-authorized addresses may sign in; `INITIAL_ADMIN_EMAIL` always may. A deactivated user's token fails at the next principal check.
+- **Personal access tokens** (`pat_`) and the **device flow** ([RFC 8628 guide](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/DEVICE-AUTH.md)) serve the CLI and headless agents. A PAT is accepted on the terminal WebSocket too (§3). A worker-node token (`nod_`) and an OAuth token are not.
+- **Test login** (`/api/auth/test/*`) exists only outside production.
+
+## 3. Terminal WebSocket authorization
+
+A WebSocket frame has no `Authorization` header and the platform guard only runs on HTTP, so the gateway (`apps/api/src/terminal/terminal.gateway.ts`) enforces the same rules itself. The mechanism is recorded as a shim: `PLATFORM-ADOPTION-SHIM(#47)` on `TerminalPrincipalResolver`, pending a platform seam "verify an access token for a non-HTTP transport" ([local-exceptions.md](platform-adoption/local-exceptions.md)).
+
+1. **In-band token.** The first message must be `{type:"auth", token}` within **5 seconds** or the socket closes (`Authentication timeout`). The token is never read from a URL and never logged.
+2. **Resolution.** `TerminalPrincipalResolver` verifies the JWT signature and expiry with the slice's secret, then runs the slice's own `AuthService.validateJwtPayload` (principal cache, device-session and active-organization checks) and `toPrincipal`. A revoked device or removed member fails here as on HTTP. A `pat_` token goes through `PatService.resolveToken`.
+3. **Permission.** The principal must hold `sessions:write` or the answer is `auth_fail` with reason `forbidden`; a Viewer can list sessions but never type into one.
+4. **Expiry.** The socket ends with `auth_expired` when the access token's `exp` passes (a PAT socket after 15 minutes). The client re-sends `auth` before then; a re-auth as a different user or organization is refused (`identity_changed`, reason `forbidden`). Every message re-checks that the socket is still live.
+5. **Maintenance.** While a window is open, a **new** `auth` and a **new** `connect` are refused with reason `maintenance` (admins exempt when `allowAdmins`); an open socket and a token refresh are never cut. An unreadable window fails open, so a settings fault is not an outage.
+6. **Session ownership.** `connect` takes a UUID the client supplies, never trusted: it must be a session owned by this user in this organization, else `NOT_FOUND` (also for another user's session, so existence is not disclosed). The right to connect to the **server** is re-checked on every attach through the sharing policy, so a revoked share closes the door for a running session too (the stream already open keeps streaming until it closes: [local-exceptions.md](platform-adoption/local-exceptions.md)).
+7. **Input is raw.** Binary frames are written to the SSH stream only while the socket is live and attached.
+
+Denials are counted by bounded reason (`invalid_token`, `forbidden`, `expired`, `maintenance`, `timeout`) in `app.terminal.ws.auth_denied`; the alert rule `shellkeep.ws_auth_denied_spike` watches it. Protocol: [specs/terminal.md §3](specs/terminal.md#3-websocket-protocol).
+
+## 4. SSH secrets and host keys
+
+### 4.1 Secrets
+
+- **Store.** A server profile's password, private key and passphrase are three user credentials, purpose `ssh`, named `profile.<profileId>.<field>`, in the platform credential store. The AES-256-GCM key for a user's secret is derived per user and per purpose (the purpose is the sub-key domain, so renaming a purpose would orphan its secrets; `ssh` is permanent). The master key is `SECRETS_ENCRYPTION_KEY`.
+- **No fallback, ever.** The purpose is registered with `system: null` and `fallback: []`: the resolver never answers an SSH secret from an organization or deployment credential, and a profile's secret is its owner's alone. Org-owned or group-shared servers use the organization tier with the same names.
+- **Credentials never move.** A share grants a role, not a secret. Only the user who saved the secrets (`server_profiles.user_id`) may change the connection (host, port, user) or the secrets (`SERVER_PROFILE_CREDENTIAL_HOLDER_ONLY`); a different editor cannot redirect a connection to harvest a credential.
+- **Write-only.** No API response, export, log line, span, metric label, job payload, notification or webhook payload carries a secret or its ciphertext. The profile list shows no "has password" flag. Exports allowlist their columns and omit the three legacy `encrypted_*` columns.
+- **Decryption** happens in `ServerProfilesService.getDecryptedProfile(id, principal, purpose)` (purposes `connect`, `test`, `run`, `exec`), which first re-checks the sharing policy, and the plaintext lives only inside the SSH call.
+- **Never to nodes, never to AI.** SSH jobs (`runbook.target.run`, `ai.runbook.agent`) are server-only: they carry neither `nodeResultSchema` nor `persistNodeResult`; no node ever receives an SSH secret. Prompts, tool results and summaries are redacted with the run's secret values as literals.
+- **Legacy ciphertext.** Until [#84](https://github.com/marinoscar/shellkeep/issues/84) drops them, the old columns hold ciphertext under the retired key, unread. Doctor's legacy-secrets check reports profiles not yet migrated ([runbooks/ssh-secret-reencryption.md](runbooks/ssh-secret-reencryption.md)).
+
+### 4.2 Host-key verification (trust on first use)
+
+Every connection path (terminal, test, host-key scan, facts probe, runbook segment, AI step, Doctor probe) opens through `SshConnectionFactory.open`, which checks the presented key **before any credential is sent**. The table is `apps/api/src/ssh/host-key-policy.ts`:
+
+| Situation | interactive, test, exec | scan |
+|---|---|---|
+| fingerprint equals the pinned one | accept | capture |
+| none pinned, `tofu_prompt` (default) | refuse `HOST_KEY_UNKNOWN` | capture |
+| none pinned, `tofu_auto` | trust and accept, audited | capture |
+| none pinned, `strict` | refuse `HOST_KEY_UNKNOWN` | capture |
+| differs | **always** refuse `HOST_KEY_MISMATCH` | capture |
+
+A changed key is never accepted by any policy or purpose. The user scans, compares the fingerprint out of band and trusts it (`POST /server-profiles/:id/host-key/trust`, which fails `HOST_KEY_CHANGED_DURING_TRUST` if the key moved in between, and needs the fingerprint to be confirmed); replacing or forgetting a key is a separate audited write needing `servers:write`. The policy is the `ssh.hostKeyPolicy` system setting. A runbook run snapshots each target's trusted fingerprint. The gateway returns the presented and expected fingerprints in the `session_error` so the UI can warn of interception.
+
+## 5. Authorization
+
+- **RBAC.** `admin` is a system role and holds no domain permission; `org_admin`, `contributor` and `viewer` are org roles. The matrix is in [ARCHITECTURE.md §4](ARCHITECTURE.md#4-authorization) and is checked against the generated catalog. Every route declares `@Auth(...)` or `@Public()`; there is no global JWT guard, so a route without `@Auth()` is public. Permission checks are server-side only; the UI hides, the API decides.
+- **Sharing.** Two resource types: `server_profile` (`viewer` < `operator` < `editor`) and `runbook` (`viewer` < `runner` < `editor`). The sharing slice's `AccessPolicy` is the one decision point: owner or owning-group role, then grants, then the action's minimum role, with the RBAC permission required **on top**, even of the owner (a Viewer member holding a share still cannot open a session). A denial answers **404**, never 403. Link sharing is off for both types (`POST /api/grants/links` answers 422 `ROLE_NOT_GRANTABLE`); the one linkable type is a run's log bundle (`runbook_run`), served by a public route with its own miss limit and `no-store`.
+- **Runbooks need two grants.** `runbooks:run` plus `connect` on **each** target server, decided per target when the run starts and again when each segment starts (`PERMISSION_REVOKED` fails a target whose initiator lost either).
+- **Ownership of sessions.** A session is the caller's own; each person who connects to a shared server opens their own tmux session. Session queries filter `user_id` and `org_id` via `OwnerScope`.
+- **Tenant isolation.** See §8.
+
+## 6. Terminal content and AI
+
+Terminal output may contain secrets (a `cat` of an env file, a pasted token). Terminal AI therefore has one door, `TerminalContextService.forAi` ([specs/terminal-ai.md](specs/terminal-ai.md)); a capture can reach a model only through it, and `capture-pane` appears only in `SessionHistoryService` (guard spec `test/terminal-ai/capture-boundary.spec.ts`).
+
+1. **Owner and organization** of the session are checked (404 otherwise).
+2. **Consent.** Unless the organization turned `requireConsent` off, the user must have accepted the consent text (`terminalAi.consentAcceptedAt`, audited as `terminal_ai.consent`); else `409 AI_CONSENT_REQUIRED`. An organization can only tighten.
+3. **Per-server switch.** `server_profiles.ai_output_sharing = false` is the **hard control**: no output of that server reaches any AI feature (`409 AI_OUTPUT_SHARING_DISABLED`). Command assist then receives metadata only (OS, shell, cwd), and the runbook AI step refuses to run on that server.
+4. **Capture, strip, redact, cap.** ANSI and control sequences are stripped; `redactText` replaces secrets with `[REDACTED:<kind>]` (kinds: AWS keys, GitHub, Slack and Google tokens, LLM keys, JWTs, private-key blocks, URL credentials, auth headers, `key=value` secrets, platform tokens, exact literals, high-entropy strings). `strict` mode also drops every line that had a finding. Redaction is defence in depth, not a guarantee: the per-server switch is the control that holds. Text is capped (assist 40 lines, explain 200 lines and 16 KiB of selection, summary 200,000 characters), dropping the oldest.
+5. **Audit without content.** One `terminal_ai.request` audit event records purpose, counts and sizes, never text. Metrics record redaction kind and count only.
+6. **Output of the model.** A suggested command carries a risk class computed by `classifyCommand`, never by the model, and is only ever returned as text: nothing in the API or the web client runs it. A summary is redacted again and capped before it is stored.
+7. **Keys are the user's own** (`AiService.forUser`); no deployment fallback; the provider SDK is imported only inside the platform AI providers package.
+
+## 7. Runbook safety
+
+Detail and flows: [specs/fleet-runbooks.md §6](specs/fleet-runbooks.md#6-safety).
+
+- **Definitions never hold secrets.** A `secret` parameter has no default and no stored value; a run records the **name** of an organization credential (`secret_refs`, purpose `runbook_secret`, write-only). The value is read at segment start and lives only in that process's memory. Parameters and secrets reach the target on **stdin** (`bash -s`), never in argv, so no local user on the target can read them from the process list.
+- **Risk assessment.** `assessDefinition` classifies every line of a `command` or `script` with `classifyCommand`; `file_upload` into `/etc`, `/boot`, `/usr` is medium, with `overwrite` high; `package_update` of `all` is medium; an autonomous AI step is medium. A definition with any destructive step is **destructive**. Findings name the step and reasons, never the command text.
+- **Destructive launch.** A destructive run (not a dry run) must carry `confirm = { runbookName, targetCount }` matching the exact name and the number of servers the selector resolves to now, else `428 RUNBOOK_CONFIRMATION_REQUIRED`. Unless `runbooks.approvals.allowSelfApproval` is on, the run then parks behind a `destructive_run` approval that **a different person** holding `runbooks:approve` (only `org_admin`) must grant; the initiator's own decision answers `RUNBOOK_SELF_APPROVAL`. Audited as `runbook_run.destructive_confirmed`.
+- **Approval gates and canary.** An `approval_gate` step parks a run or one target; `pauseAfterFirstBatch` pauses after the first wave. Approvals expire (`runbooks.approvals.defaultExpirySec`, default 24 h); an expired or rejected approval ends the run (`APPROVAL_EXPIRED`, `APPROVAL_REJECTED`).
+- **Dry run.** Connects to every target (host key and credential verified as usual) and sends one read-only probe per step from a fixed allowlist (`bash -n`, `command -v`, package-manager simulation, `test -w`, `ls -la`); nothing that changes a server is sent. A dry run creates no approvals and skips AI and gate steps.
+- **AI step.** Every `run_command` is judged by the policy before anything is asked of a person or sent: `deny` patterns always win; a destructive command is refused even if an `allow` pattern matches; sensitive paths (shadow files, SSH keys, `*.pem`, `*.key`) are refused; in `autonomous_within_allowlist` the command must match an `allow` pattern; patterns are RE2 (linear time) and fail closed. `per_command` and `plan` need an `approved` row whose stored command hash matches (`AI_APPROVAL_MISMATCH` otherwise). Three refusals abort the step; "Stop AI" ends agents before their next tool call. Everything the model sees is stripped and redacted with the run's literals.
+- **Audit.** Every command a run or an AI agent executes or refuses is a `runbook_command_executions` row: sha256, a redacted 2 KiB preview, exit, outcome, approver. `GET /api/runbook-runs/:id/audit` and a CSV export read it; RBAC `runbooks:read`.
+- **Log hygiene.** The log sink redacts every chunk with the exact secret values before it is buffered, streamed or archived; collected archives are re-written with redaction (`tar-redact`) and capped; logs expire by retention (`runbookArtifacts`, 30 days default).
+- **Schedules.** A schedule has no per-run confirmation, so a destructive one is confirmed and approved by a second person **once, per version** before it fires; a new destructive version switches it off until re-approved. It runs as a named user whose permissions are re-checked at every fire (a revoked user disables it, never widens it); the tick reads across organizations only to find due rows, under the access reason `runbooks-schedules`, and acts inside each organization.
+- **Webhooks and notifications of runs** carry ids, names, counts and a link only (`runbook.run.completed`, `runbook.approval.requested`); strict schemas.
+- **No retries of side effects.** `runbook.target.run` and `ai.runbook.agent` have `maxAttempts: 1`.
+
+## 8. Database role and row-level security
+
+- The API connects as an ordinary `NOSUPERUSER NOBYPASSRLS` role that owns the tables (`shellkeep_app`, [runbooks/application-role.md](runbooks/application-role.md)); RLS is inert for a superuser. Doctor check `db.rls_role` verifies it.
+- The runbook tables and the platform's `org` tables force RLS on `org_id`. `app.org_id`, `app.user_id`, `app.rls_bypass` are written only with `set_config(name, value, true)` as the first statement of a transaction (`forOrg`/`runInOrg`, `asSystem`), never a session `SET`. A job touching org tables carries `orgId` in its payload and runs under `JobScope.run`. Only files in the `ALLOWLIST` of `apps/api/test/tenancy/system-injection-boundary.spec.ts` may inject `PrismaSystemService`, each naming a registered reason; ShellKeep's reasons are the runbook reconcile, artifacts purge and schedules tick.
+- **Standing constraint:** `server_profiles`, `terminal_sessions` and `terminal_session_summaries` carry `org_id` as a reference and are **not** under RLS. Isolation there is code: every query filters on `user_id` and `org_id`, the sharing policy decides cross-user access, and `ModelOwnership` and the `user-owned-data` conformance suite fail on an unclassified model. Enabling RLS on them is future work.
+- Every dump and restore carries both `--enable-row-security` and `PGOPTIONS=-c app.rls_bypass=on`; a backup is streamed, never buffered ([runbooks/database-backup-restore.md](runbooks/database-backup-restore.md)).
+
+## 9. Secrets inventory
+
+| Secret | Where it lives | Rotation |
+|---|---|---|
+| `SECRETS_ENCRYPTION_KEY` | environment only; encrypts every credential-store row | platform runbook [rotate-secrets-encryption-key](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/runbooks/rotate-secrets-encryption-key.md) (re-encrypts the three credential tables) |
+| `JWT_SECRET` (min 32 chars) | environment only | restart invalidates sessions |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | environment | Google console |
+| `POSTGRES_PASSWORD` (application role) | environment | role password change |
+| SSH password, key, passphrase | credential store, user tier, purpose `ssh` | the owner edits the profile |
+| Runbook secret parameters | credential store, organization tier, `runbook_secret` | write-only `PUT /api/runbook-secrets/:name` |
+| AI provider keys | credential store, per user (and organization tier) | the user, in settings |
+| SMTP, SES, VAPID, storage secret, webhook signing, GreptimeDB passwords | credential store, runtime-configured in the admin UI | the admin pages; never an environment variable |
+| PATs, device tokens, refresh tokens | database, hashed | revoke in settings |
+
+`INITIAL_ADMIN_EMAIL` is not a secret but grants first-admin access: keep it a mailbox you control. The retired key of the old SSH ciphertext leaves the environment with [#84](https://github.com/marinoscar/shellkeep/issues/84).
+
+## 10. Egress
+
+| Destination | Why | Control |
+|---|---|---|
+| Target servers, port per profile | SSH | host-key pinning; Doctor `ssh-egress` check; no allowlist of hosts (users choose servers), so the API host must not be able to reach internal networks it should not |
+| AI providers | model calls | redacted text only; key per user; provider SDKs isolated in one package |
+| Webhook receivers | outbound events | the webhooks slice's SSRF guard (private ranges refused unless an admin allows a host), Standard Webhooks signing, payloads of ids and names only |
+| Google, SMTP/SES, Web Push, object storage | sign-in, mail, push, files | configured in the admin UI |
+
+**Operator note.** A user can point a server profile at any host the API container can route to. If the API shares a network with internal services, restrict egress at the network layer; ShellKeep does not filter SSH destinations.
+
+## 11. HTTP hardening, validation and uploads
+
+- nginx adds `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS and a per-path CSP (`infra/nginx/csp.conf`, app additions in `app.d/`). The WebSocket location includes the same security-headers snippet.
+- Every body and query is validated with Zod (`ZodValidationPipe`); errors publish the path and message, never the submitted value. WebSocket messages are validated by hand: a non-UUID session id is `NOT_FOUND`.
+- Uploads (terminal image paste, runbook `file_upload`): size and type limits (100 MiB at the proxy), randomized object keys with the organization segment, stored by the storage slice; a `file_upload` step names a stored object and verifies the checksum on the target (`UPLOAD_CHECKSUM_MISMATCH`).
+- No global rate limiter exists; targeted limits are the platform's (AI, device polling, link resolution). Add `limit_req` at the proxy if the deployment is exposed.
+
+## 12. Audit and logging
+
+- Audit events (`audit_events`, optional retention): `terminal_session.create|terminate`, `server_profile.create|update|delete|test|host_key_trusted|host_key_auto_trusted|host_key_replaced|host_key_forgotten|connect_as_grantee`, `terminal_ai.consent|request`, `runbook.created|version_created|archived|restored|deleted`, `runbook_run.created|cancelled|target_cancelled|destructive_confirmed|ai_stopped`, `runbook_schedule.created|updated|deleted|approved|run_now`, `runbook_agent.command`. Plus the platform's identity, settings and sharing events.
+- Logs are structured (Pino) with request and trace ids. Never logged: terminal input or output, commands, prompts, model output, credentials, tokens (including the WebSocket `auth` token). Logs carry counts, lengths, risk classes and codes.
+- Webhook and notification payloads carry ids, names and times only; their schemas are strict so a secret cannot be added by accident.
+
+## 13. Threat model
+
+| Threat | Mitigation | Residual risk |
+|---|---|---|
+| Stolen access token | 15 minute TTL, memory-only; WebSocket `exp` timer; revoked devices fail principal checks | live until `exp` |
+| Stolen refresh cookie | HttpOnly, rotated on use | |
+| Database dump leaked | secrets are ciphertext under `SECRETS_ENCRYPTION_KEY`, per-user sub-keys; fingerprints are public | key and dump together |
+| Compromised API host | secrets in memory during calls only; no plaintext at rest | an attacker with the process reads live secrets |
+| Man-in-the-middle to a target | host key pinned before any credential; mismatch always refused | trusting the wrong key on first use (user compares out of band) |
+| A shared-server editor redirects a connection to steal a credential | credential-holder-only edit of host, port, user and secrets | |
+| Terminal output leaks a secret to an AI provider | consent, per-server hard switch, redaction, caps, audit | redaction is heuristic; the switch is the control |
+| Prompt injection through target output | the model's output is text; commands need a person, or a policy-checked allowlist that excludes destructive and sensitive commands | `autonomous_within_allowlist` is a deliberate trust grant |
+| An AI agent or runbook wipes a fleet | risk classification, typed confirmation, two-person approval, canary, dry run, `maxFailures` budget, cancel | a non-destructive-looking command that destroys (the classifier is a net, not the access model) |
+| Command injection through parameters | parameters and secrets travel on stdin as quoted exports, never in argv or interpolated into the body | a script that `eval`s its own parameter |
+| Cross-organization access | RLS on org tables, composite foreign keys, 404 rather than 403 | user-owned domain tables rely on code (§8) |
+| Viewer types into a terminal | `sessions:write` required at `auth`; sharing adds the RBAC check on top | |
+| Idle sessions linger | reaper detaches, terminates and purges | DELETE does not kill the remote tmux session ([specs/terminal.md §7](specs/terminal.md#7-invariants)) |
+| Maintenance bypass | window applies to new auth and connect; admins exempt only by setting | |
+| Worker node abuse | `nod_` token only on `/api/nodes`; no SSH or AI job is node-eligible | |
+| SSRF through webhooks | slice egress guard | |
+| Excessive terminal fan-out | per-run `maxConcurrency` and `maxTargetsPerRun`, bounded system settings | |
+
+## 14. Security checklist
+
+- [ ] Every new endpoint declares `@Auth({ permissions })` or `@Public()` with a reason.
+- [ ] A new route that touches a server or runbook goes through `AccessPolicy`; a denial is 404.
+- [ ] No SSH or provider secret in a log, span, metric label, payload, response, export or prompt.
+- [ ] Every new SSH path opens through `SshConnectionFactory`.
+- [ ] Terminal text reaches a model only through `TerminalContextService.forAi`.
+- [ ] A new job type is in `job-type-snapshot.spec.ts`; SSH and `ai.*` jobs have neither node member.
+- [ ] A new WebSocket message is validated and re-checks session ownership.
+- [ ] A new org table has forced RLS and composite keys; a new user table is classified in `model-ownership.ts` and `user-owned-models.ts`.
+- [ ] A new setting that loosens safety is tighten-only at the organization layer.
+- [ ] Docs and the exceptions ledger updated in the same PR.

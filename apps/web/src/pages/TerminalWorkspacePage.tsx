@@ -68,7 +68,7 @@ export function keyDockOffset(keyboardInset: number, gapBelowPage: number): numb
  * two of them as a split, every pane its own `TerminalView` and WebSocket. It
  * fills the shell's full-bleed `<main>` (`useShellMainVariant`): no negative
  * margins and no height computed from the AppBar. Layout chain
- * (docs/SCROLLING.md, "CSS Layout Requirements"):
+ * (docs/specs/terminal.md, "CSS Layout Requirements"):
  *
  *   <main> (flex column) → root (flex: 1, minHeight: 0, relative)
  *     → frame (absolute; bottom = the key dock offset; flex column)
@@ -484,7 +484,7 @@ export default function TerminalWorkspacePage() {
           </Box>
         </Box>
 
-        {/* Never `overflow: hidden` between here and the xterm (docs/SCROLLING.md). */}
+        {/* Never `overflow: hidden` between here and the xterm (docs/specs/terminal.md). */}
         <Box data-testid="terminal-body" sx={{ display: 'flex', flex: 1, minHeight: 0, minWidth: 0 }}>
           <SplitLayout
             paneIds={layout.tabs}
@@ -516,7 +516,7 @@ export default function TerminalWorkspacePage() {
             />
           )}
         </Box>
-        {/* The status bar is the bottom gutter: outside the FitAddon host (docs/SCROLLING.md). */}
+        {/* The status bar is the bottom gutter: outside the FitAddon host (docs/specs/terminal.md). */}
         <TerminalStatusBar
           session={activeSession}
           connected={activeConnected}
