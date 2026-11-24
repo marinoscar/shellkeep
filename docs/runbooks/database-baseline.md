@@ -15,7 +15,7 @@ The generic procedure and the tool's reference live in the platform packages (`n
 
 ## Order of operations (production, via #84)
 
-`infra/deploy/update.sh` runs `npx prisma migrate deploy` on every update. On an existing database the new image's migrate step would try to run `20260124223147_add_terminal_domain` against tables that already exist and fail with `type "AuthMethod" already exists`. So the resolve below must happen **before** the new image's migrate step.
+`shellkeep deploy update` runs the migrate step (`prisma migrate deploy`) on every update. On an existing database the new image's migrate step would try to run `20260124223147_add_terminal_domain` against tables that already exist and fail with `type "AuthMethod" already exists`. So the resolve below must happen **before** the new image's migrate step.
 
 1. Maintenance window; back up (`pg_dump -Fc`).
 2. `migrate resolve --applied 20260124223147_add_terminal_domain` (section 3).

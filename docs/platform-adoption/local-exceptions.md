@@ -68,7 +68,6 @@ Web: `platform/notifications.ts` calls `configureNotificationsWeb` before the fi
 | **No `RestoreCarryOver` is registered** | ShellKeep keeps no deployment state outside the database that a restore must carry across the swap. The slice carries the backup catalog (`database_backup_runs`) and the restore's own job row itself. Server profiles and terminal sessions are ordinary rows in the archive; SSH secrets are ciphertext in the credential store and open again with the same `SECRETS_ENCRYPTION_KEY`, which lives outside the database (an archive restored under another key keeps every profile but cannot connect). Add one only if a later slice keeps state that must survive a restore | Revisit when a slice adds such state |
 | The API connects as `shellkeep_app` | `POSTGRES_USER` / `POSTGRES_PASSWORD` name the role; there is no second set of variables for the restore: its cluster-admin connection (a short-lived client on the `postgres` database, outside the Prisma pool) uses the same login, so the role carries `CREATEDB` (`create-app-role.sql`, `-v createdb=off` to withhold it). The bootstrap superuser is used only by the operator: extensions, the role script, a manual restore | Kept |
 | `PrismaSystemService` is injected by an allowlist | `test/tenancy/system-injection-boundary.spec.ts`: the storage host module, the backup host module (Doctor `backup.rls-bypass`) and `main.ts` (startup count of `org_credentials`). The same spec lists the files of ShellKeep's own code that name an org table | Kept |
-| `infra/deploy/*.sh` take no backup | `DEPLOY.md` describes a manual `pg_dump`, now superseded by the admin page | #72 replaces the deploy scripts |
 
 ### Infrastructure (#73)
 
@@ -82,9 +81,7 @@ Web: `platform/notifications.ts` calls `configureNotificationsWeb` before the fi
 | `app.d/locations/ai-terminal-streams.conf` | `/api/ai/terminal/` (terminal AI assistant); the generic AI response and telemetry assistant streams are already in the platform's `nginx.conf` | Kept |
 | `app.d/locations/terminal-uploads.conf` | The terminal toolbar's multipart `POST /api/storage/objects` takes up to 100 MiB; the platform sets no `client_max_body_size` (nginx default 1 MiB) | Kept |
 | Dockerfiles build from the repository root | The generated compose uses `context: ../..` with `apps/<app>/Dockerfile`, sources at `/app/apps/<app>`, and `web:5173` as the web upstream; the web production image listens on 5173 (`apps/web/nginx.conf`). The root `.dockerignore` replaces the per-app one | Kept |
-| `infra/deploy/*.sh` generate their own `compose.yml` | The installer's generated file now mounts the generated nginx files and builds from the repository root. An existing VPS must re-run the installer's step 4 (regenerate `compose.yml`) once | #72 replaces the deploy scripts |
 | No `app.*.compose.yml` overlay | The platform defaults (512M api, 128M web) are kept: no measurement of concurrent SSH streams exists to justify another number. `vps` mode needs `apps/stack-agent`, which ShellKeep does not have yet | #72 / #74 |
-| The infra conformance test runs under `node:test` | `tests/infra/infra-conformance.test.mts` (`npm run test:infra`): the package is ESM, the API's Jest is CommonJS and there is no CLI workspace | #72 may move it to `apps/cli/src/` |
 
 ### Identity ports bound by the host (#46)
 
@@ -202,3 +199,16 @@ Terminal output reaches an AI feature only through `TerminalContextService.forAi
 | `POST /api/ai/terminal/consent` is an app route under `/api/ai/*` | It carries `AiEnabledGuard`, `AiOrgEnabledInterceptor` and `ai:use` like every platform consumer route there, so the `ai-kill-switch` and `ai-rbac-matrix` suites cover it | Kept |
 | `POST /api/ai/terminal/assist` is an app route under `/api/ai/*` | It carries `AiEnabledGuard`, `AiOrgEnabledInterceptor` and `ai:use` (the `ai-rbac-matrix` suite allows no other permission in a declaration, so `sessions:write` is checked in the handler) like every platform consumer route there, so the `ai-kill-switch` and `ai-rbac-matrix` suites cover it | Kept |
 | Redaction is best effort | The per-server switch is the hard control; the consent copy says so | Kept |
+
+### The CLI (#72)
+
+| Decision | Detail | Removed by |
+|---|---|---|
+| The workspace is named `cli`, not `@shellkeep/cli` | `npm run typecheck --workspace=cli` and the CI steps select a workspace by name; a scoped name would break them. The `bin` is `shellkeep` | Kept |
+| `packages/shared` keeps the name `@shellkeep/shared` | Nothing imported it before the CLI; renaming it to the template's `@app/shared` would change the Docker layers and `.dockerignore` for no gain | Kept |
+| `tmux-on-api-image` is a `recommended` check | The api image installs no tmux (a session's tmux runs on the target server over SSH), so a `required` check would fail every preflight. It reports the failure without blocking | Add tmux to the api image, then raise it to `required` |
+| `proxy.streamPaths` also lists `/api/ai/terminal` | `infra/nginx/app.d/locations/ai-terminal-streams.conf` streams it for the inner nginx; the host proxy needs the same | Kept |
+| There is no `deploy health` | The platform's pipeline reports health through `deploy status` (exit 1 when unhealthy) | Kept |
+| A PAT on the terminal socket is re-validated every 15 minutes | A PAT has no `exp`; the socket is authorized for `PAT_SOCKET_TTL_MS` and the CLI re-sends `auth` every 10 minutes (the gateway's re-auth path) | Kept |
+| The runbook commands and the Runs TUI screen are not shipped | They need the runbook routes of #62 | #62 |
+| `nodeExecutors` is empty | No ShellKeep job type is node-eligible (`nodeResultSchema` and `persistNodeResult`) | A job type that declares itself eligible |
