@@ -1,7 +1,9 @@
-import { createCli, exitCodeFor, formatError } from '@marinoscar/platform-cli';
+import { createCli, EXIT, exitCodeFor, formatError } from '@marinoscar/platform-cli';
 import { CLI_NAME } from '@shellkeep/shared';
 
 import { APP_CLI_OPTIONS } from './app.js';
+import { runAttachBridge } from './commands/sessions-attach.js';
+import { takePendingAttach } from './tui/pending-attach.js';
 
 // =============================================================================
 // One invocation of the CLI  (issue #72)
@@ -9,7 +11,11 @@ import { APP_CLI_OPTIONS } from './app.js';
 //
 // `cli.ts` is the entry point and stays import-light; the work of one
 // invocation lives here so a test can run it without a process exiting under
-// the test runner. It builds the platform CLI over `APP_CLI_OPTIONS` and runs it.
+// the test runner. It builds the platform CLI over `APP_CLI_OPTIONS`, runs it,
+// and then, if the TUI's Sessions screen asked for an attach, runs the terminal
+// bridge in the terminal Ink has just released (Ink is not suspended in place:
+// the menu exits, the bridge owns the TTY, and the process ends with the
+// bridge's exit code).
 //
 // It returns the exit code and never calls `process.exit()`.
 // =============================================================================
@@ -52,5 +58,11 @@ export async function runApp(argv: string[], options: RunAppOptions = {}): Promi
     return exitCodeFor(error);
   }
 
-  return cli.run(argv);
+  const code = await cli.run(argv);
+
+  const pending = takePendingAttach();
+  if (pending !== undefined && code === EXIT.OK) {
+    return runAttachBridge({ sessionId: pending });
+  }
+  return code;
 }

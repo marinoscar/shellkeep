@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { githubRawManifest, type CreateCliOptions } from '@marinoscar/platform-cli';
 import { APP_NAME, CLI_NAME, REPO_SLUG } from '@shellkeep/shared';
 
+import { serversCommand } from './commands/servers.js';
+import { sessionsCommand } from './commands/sessions.js';
 import { dockerNetworkCheck } from './extensions/docker-network.check.js';
 import { SHELLKEEP_ENV_SPEC } from './extensions/env-spec.js';
 import { sshEgressCheck } from './extensions/ssh-egress.check.js';
@@ -128,6 +130,7 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
     repoSlug: REPO_SLUG,
   },
   version: readVersion(),
+  extraCommands: [serversCommand(), sessionsCommand()],
   nodeExecutors: [],
   envSpecFragments: [SHELLKEEP_ENV_SPEC],
   envAnnotations: {
