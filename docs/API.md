@@ -115,6 +115,21 @@ Summarizing up to 50,000 lines of scrollback outlives a request, so it is a back
 
 A summary is `{ id, sessionId, jobId, status, summaryMd, commands: [{ command, outcome? }], findings: [{ kind, count }], sourceChars, truncated, model, errorCode, createdAt, completedAt }`; `summaryMd` is Markdown and must be rendered without HTML. `errorCode` on a failed summary is an `AiError` code or one of `AI_CONSENT_REQUIRED`, `AI_OUTPUT_SHARING_DISABLED`, `SESSION_TERMINATED`, `SESSION_NOT_FOUND`, `SESSION_EMPTY`, `SUMMARY_FAILED`, `SUMMARY_TIMED_OUT`. Failures before queuing are ordinary JSON errors: `404` for a session that is not the caller's, `400 SESSION_TERMINATED`, `409 AI_CONSENT_REQUIRED`, `409 AI_OUTPUT_SHARING_DISABLED`, `403` without `sessions:read`.
 
+## Terminal explain
+
+`POST /api/ai/terminal/explain` explains terminal output and suggests one fix (`ai:use` in the route declaration plus `sessions:read` checked in the handler, behind the AI kill switch and the organization AI switch). Body, a union on `mode`: `{ "mode": "selection", "sessionId": "<uuid>", "selection": "<1..16384 chars>" }` or `{ "mode": "last_error", "sessionId": "<uuid>" }`. A selection is client text and is redacted on the server exactly like captured text; `last_error` captures the last 200 lines. The answer is `text/event-stream`:
+
+| Event | Data | Meaning |
+|---|---|---|
+| `context` | `{ findings, lines, truncated }` | What was sent: the redaction findings (kind and count), the number of lines and whether older text was cut |
+| `delta` | `{ text }` | The raw markdown token stream |
+| `result` | `{ markdown, suggestedCommand? }` | The sections `## What happened`, `## Likely cause`, `## Suggested fix`. `suggestedCommand` is `{ command, risk, destructive, reasons }`, parsed from a final `COMMAND:` line (one plain line, no control character) and classified by `classifyCommand`, never by the model |
+| `error` | `{ code }` | In-band failure after streaming began: `AI_EXPLAIN_EMPTY` or an `AiError` code |
+
+A failure before the first event is an ordinary JSON error: `404` for a session that is not the caller's, `403 AI_DISABLED`, `409 AI_CONSENT_REQUIRED`, `409 AI_OUTPUT_SHARING_DISABLED` (the server profile never shares output), `429 AI_RATE_LIMITED` with `Retry-After`.
+
+`POST /api/ai/terminal/explain/preview` takes the same body and the same checks and returns `{ "data": { "text", "findings", "truncated" } }`: the exact redacted text an explain call would send. It makes no model call. The suggestion is text only: nothing runs it.
+
 ## Endpoints
 
 ### Authentication

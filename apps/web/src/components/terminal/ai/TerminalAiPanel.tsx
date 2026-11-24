@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import {
   Alert,
   Box,
@@ -15,6 +15,7 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { CommandAssistPanel } from './CommandAssistPanel';
+import { ExplainPanel, type ExplainTrigger } from './ExplainPanel';
 import { SessionSummaryPanel } from './SessionSummaryPanel';
 
 /** The panel's three actions (#57, #58, #59). */
@@ -42,6 +43,12 @@ export interface TerminalAiPanelProps {
   sessionId?: string | null;
   /** Changes when the keyboard shortcut asks to focus the prompt (#57). */
   focusRequest?: number;
+  /** A request to explain a selection or the last error (#58); switches to the Explain action. */
+  explainTrigger?: ExplainTrigger | null;
+  /** Called once the Explain action has taken `explainTrigger`. */
+  onExplainTriggerHandled?: () => void;
+  /** The focused terminal's selected text, or `''` (#58). */
+  getSelection?: () => string;
 }
 
 const MODES: Array<{ value: TerminalAiMode; label: string }> = [
@@ -50,33 +57,32 @@ const MODES: Array<{ value: TerminalAiMode; label: string }> = [
   { value: 'summarize', label: 'Summarize session' },
 ];
 
-function ComingSoon({ action }: { action: string }) {
-  return (
-    <Box sx={{ display: 'grid', gap: 0.5, justifyItems: 'start' }}>
-      <Button variant="contained" size="small" disabled>
-        {action}
-      </Button>
-      <Typography variant="caption" color="text.secondary">
-        {AI_COMING_SOON}
-      </Typography>
-    </Box>
-  );
-}
-
-function PanelBody({ onClose, onInsert, sessionId = null, focusRequest = 0 }: Omit<TerminalAiPanelProps, 'open' | 'variant'>) {
-  const [mode, setMode] = useState<TerminalAiMode>('suggest');
+function PanelBody({
+  onClose,
+  onInsert,
+  sessionId = null,
+  focusRequest = 0,
+  explainTrigger = null,
+  onExplainTriggerHandled,
+  getSelection = () => '',
+}: Omit<TerminalAiPanelProps, 'open' | 'variant'>) {
+  const [mode, setMode] = useState<TerminalAiMode>(explainTrigger ? 'explain' : 'suggest');
+  useEffect(() => {
+    if (explainTrigger) setMode('explain');
+  }, [explainTrigger]);
 
   let body: ReactNode;
   if (mode === 'suggest') {
     body = <CommandAssistPanel sessionId={sessionId} onInsert={onInsert} focusRequest={focusRequest} />;
   } else if (mode === 'explain') {
     body = (
-      <>
-        <Typography variant="body2" color="text.secondary">
-          Explains the text selected in the terminal, or the last error block when nothing is selected.
-        </Typography>
-        <ComingSoon action="Explain" />
-      </>
+      <ExplainPanel
+        sessionId={sessionId}
+        onInsert={onInsert}
+        getSelection={getSelection}
+        trigger={explainTrigger}
+        onTriggerHandled={onExplainTriggerHandled}
+      />
     );
   } else {
     body = <SessionSummaryPanel sessionId={sessionId} />;
@@ -126,11 +132,11 @@ function PanelBody({ onClose, onInsert, sessionId = null, focusRequest = 0 }: Om
  * it is a bottom sheet. The page renders it only when `useTerminalAiAvailable`
  * says so (the `ai` feature on and `ai:use`).
  *
- * "Suggest command" is live (#57, `CommandAssistPanel`) and so is Summarize (#59, `SessionSummaryPanel`); Explain still renders
- * disabled with {@link AI_COMING_SOON} until #58. Insert hands the command to
+ * "Suggest command" (#57, `CommandAssistPanel`), "Explain" (#58, `ExplainPanel`) and "Summarize session" (#59,
+ * `SessionSummaryPanel`) are all live. Insert hands the command to
  * `onInsert`, which pastes it without a newline. Nothing is ever run automatically.
  */
-export function TerminalAiPanel({ open, onClose, variant, onInsert, sessionId = null, focusRequest = 0 }: TerminalAiPanelProps) {
+export function TerminalAiPanel({ open, onClose, variant, onInsert, sessionId = null, focusRequest = 0, ...explain }: TerminalAiPanelProps) {
   const [width, setWidth] = useState(AI_PANEL_DEFAULT_WIDTH);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -147,7 +153,7 @@ export function TerminalAiPanel({ open, onClose, variant, onInsert, sessionId = 
           } as object,
         }}
       >
-        <PanelBody onClose={onClose} onInsert={onInsert} sessionId={sessionId} focusRequest={focusRequest} />
+        <PanelBody onClose={onClose} onInsert={onInsert} sessionId={sessionId} focusRequest={focusRequest} {...explain} />
       </Drawer>
     );
   }
@@ -208,7 +214,7 @@ export function TerminalAiPanel({ open, onClose, variant, onInsert, sessionId = 
           '&:hover, &:focus-visible': { bgcolor: 'primary.main', opacity: 0.6, outline: 'none' },
         }}
       />
-      <PanelBody onClose={onClose} onInsert={onInsert} sessionId={sessionId} focusRequest={focusRequest} />
+      <PanelBody onClose={onClose} onInsert={onInsert} sessionId={sessionId} focusRequest={focusRequest} {...explain} />
     </Box>
   );
 }

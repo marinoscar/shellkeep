@@ -9,6 +9,8 @@ import { SessionSummaryController } from './session-summary.controller';
 import { SessionSummaryService } from './session-summary.service';
 import { TerminalAssistController } from './terminal-assist.controller';
 import { TerminalAssistService } from './terminal-assist.service';
+import { TerminalExplainController } from './terminal-explain.controller';
+import { TerminalExplainService } from './terminal-explain.service';
 import { TerminalContextService } from './terminal-context.service';
 
 /**
@@ -18,8 +20,14 @@ import { TerminalContextService } from './terminal-context.service';
  */
 @Module({
   imports: [PrismaModule, TerminalModule, AiModule],
-  controllers: [TerminalAiConsentController, TerminalAssistController, SessionSummaryController],
-  providers: [TerminalContextService, TerminalAssistService, SessionSummaryService, SessionSummarizeHandler],
+  controllers: [TerminalAiConsentController, TerminalAssistController, TerminalExplainController, SessionSummaryController],
+  providers: [
+    TerminalContextService,
+    TerminalAssistService,
+    TerminalExplainService,
+    SessionSummaryService,
+    SessionSummarizeHandler,
+  ],
   exports: [TerminalContextService],
 })
 export class TerminalAiModule {}

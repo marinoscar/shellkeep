@@ -57,7 +57,7 @@ export function SummaryResult({ summary, sessionName }: { summary: SessionSummar
           Only the most recent part of a very long session was summarized.
         </Alert>
       )}
-      <SafeMarkdown source={summary.summaryMd ?? ''} />
+      <SafeMarkdown markdown={summary.summaryMd ?? ''} />
       {summary.commands && summary.commands.length > 0 && (
         <Box sx={{ display: 'grid', gap: 0.5 }}>
           <Typography variant="subtitle2">Commands</Typography>
