@@ -66,6 +66,7 @@ describe('ShellKeep user-data routes', () => {
       const viewer = await createMockViewerUser(context);
       (prismaMock.serverProfile.count as jest.Mock).mockResolvedValue(3);
       (prismaMock.terminalSession.count as jest.Mock).mockResolvedValue(5);
+      (prismaMock.terminalSessionSummary.count as jest.Mock).mockResolvedValue(0);
       (prismaMock.runbook.count as jest.Mock).mockResolvedValue(2);
 
       const response = await request(server()).get('/api/user-data/summary').set(authHeader(viewer.accessToken)).expect(200);

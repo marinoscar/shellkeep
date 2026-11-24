@@ -13,6 +13,7 @@
 //   ServerProfile    delete, category `servers`, DELEGATED to `servers.user_data.purge`: the profile's SSH
 //                    secrets are in the credential store, which only `UserCredentialsService` may delete.
 //   TerminalSession  delete, category `sessions`, inline (children before parents: sessions go first).
+//   TerminalSessionSummary  delete, category `sessions`, inline: the AI summary of a session (redacted text).
 //   Runbook          delete, category `runbooks`, DELEGATED to `runbooks.user_data.purge`: a runbook only
 //                    the user owns goes; one a group owns stays with the group (author link nulled). The
 //                    platform's `keepWhenReferenced` cannot express this (it keeps any row with a
@@ -92,6 +93,12 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   },
   {
     model: 'TerminalSession',
+    category: SHELLKEEP_USER_DATA_CATEGORY_IDS.SESSIONS,
+  },
+  {
+    // The AI summary of a session (#59): redacted text only, never terminal output. Deleted with the sessions
+    // (it cascades from its session; the plan deletes it first so it is counted).
+    model: 'TerminalSessionSummary',
     category: SHELLKEEP_USER_DATA_CATEGORY_IDS.SESSIONS,
   },
   {

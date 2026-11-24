@@ -197,6 +197,7 @@ export async function seedShellkeepUser(
         data: { id, userId, orgId, serverProfileId: profileIds[index]!, name: `Session ${tag} ${index}`, tmuxSessionId: `tmux-${tag}-${index}`, status: index === 0 ? 'active' : 'detached' },
       });
     }
+    await tx.terminalSessionSummary.create({ data: { sessionId: sessionIds[0]!, userId, orgId, status: 'succeeded', summaryMd: 'Checked disk usage.' } });
     for (const [id, ownerGroupId] of [[ownRunbookId, null], [groupRunbookId, groupId]] as const) {
       await tx.runbook.create({ data: { id, orgId, ownerUserId: userId, ownerGroupId, name: `Runbook ${tag} ${ownerGroupId ? 'group' : 'own'}` } });
       for (const version of [1, 2]) {
@@ -257,6 +258,7 @@ export async function shellkeepCounts(db: RlsDatabase, user: SeededUser) {
   return sys(db, async (tx) => ({
     profiles: await tx.serverProfile.count({ where: { userId } }),
     sessions: await tx.terminalSession.count({ where: { userId } }),
+    summaries: await tx.terminalSessionSummary.count({ where: { userId } }),
     sshCredentials: await tx.userCredential.count({ where: { userId, purpose: SSH_CREDENTIAL_PURPOSE } }),
     ownRunbooks: await tx.runbook.count({ where: { id: user.ownRunbookId } }),
     ownRunbookVersions: await tx.runbookVersion.count({ where: { runbookId: user.ownRunbookId } }),

@@ -63,6 +63,7 @@ describeWithDb('user.data.purge of ShellKeep data (real Postgres, RLS on)', () =
     expect(await shellkeepCounts(db, user)).toMatchObject({
       profiles: 3,
       sessions: 2,
+      summaries: 1,
       sshCredentials: 3,
       ownRunbooks: 1,
       ownRunbookVersions: 2,
@@ -91,7 +92,7 @@ describeWithDb('user.data.purge of ShellKeep data (real Postgres, RLS on)', () =
     expect(delegatedTypes).toEqual(['servers.user_data.purge']);
     expect(result.models.TerminalSession).toBe(2);
     const after = await shellkeepCounts(db, user);
-    expect(after).toMatchObject({ profiles: 0, sessions: 0, sshCredentials: 0 });
+    expect(after).toMatchObject({ profiles: 0, sessions: 0, summaries: 0, sshCredentials: 0 });
     // Grants on the profiles went; grants on the runbooks stay.
     expect(after.grants).toBe(2);
     // Not in the scope: runbooks, files, the account and the memberships.
@@ -128,7 +129,7 @@ describeWithDb('user.data.purge of ShellKeep data (real Postgres, RLS on)', () =
     // Grants: the two on the profiles and the one on the group's runbook remain.
     expect(after.grants).toBe(3);
     // Not in the scope: servers, sessions, credentials, files.
-    expect(after).toMatchObject({ profiles: 3, sessions: 2, sshCredentials: 3, objects: 2 });
+    expect(after).toMatchObject({ profiles: 3, sessions: 2, summaries: 1, sshCredentials: 3, objects: 2 });
     expect(await shellkeepCounts(db, other)).toEqual(otherBefore);
   });
 
