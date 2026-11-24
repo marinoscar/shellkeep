@@ -4,7 +4,7 @@ import { SessionsService } from './sessions.service';
 import { TerminalWebhooksService } from './webhooks/terminal-webhooks.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AUDIT_SINK } from '@marinoscar/platform-api/core';
-import { AccessPolicy } from '@marinoscar/platform-api/sharing';
+import { AccessPolicy, PrincipalGroupsProvider } from '@marinoscar/platform-api/sharing';
 
 describe('SessionsService', () => {
   let service: SessionsService;
@@ -50,6 +50,7 @@ describe('SessionsService', () => {
         SessionsService,
         { provide: AUDIT_SINK, useValue: auditSink },
         { provide: AccessPolicy, useValue: access },
+        { provide: PrincipalGroupsProvider, useValue: { enrich: async (principal: unknown) => principal } },
         { provide: TerminalWebhooksService, useValue: { sessionCreated: jest.fn(), sessionTerminated: jest.fn() } },
         {
           provide: PrismaService,

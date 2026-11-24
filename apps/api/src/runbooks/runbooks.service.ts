@@ -201,6 +201,11 @@ export class RunbooksService {
     @Optional() private readonly metrics?: AppMetricsService,
   ) {}
 
+  /** The caller with their groups read fresh: the principal the guard built may be a few seconds old. */
+  private actor(principal: Principal): Promise<Principal> {
+    return this.principalGroups.enrich(principal);
+  }
+
   private scopeOf(principal: Principal): OwnerScope {
     if (!principal.activeOrgId) throw new ForbiddenException('No active organization');
     return { userId: principal.userId, orgId: principal.activeOrgId };
@@ -309,8 +314,9 @@ export class RunbooksService {
 
   async findOne(principal: Principal, id: string): Promise<RunbookDetail> {
     const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     return runInOrg(this.prisma, scope, async (tx) => {
-      const decision = await this.access.requireIn(tx, principal, 'read', { type: RUNBOOK_RESOURCE, id });
+      const decision = await this.access.requireIn(tx, me, 'read', { type: RUNBOOK_RESOURCE, id });
       const row = await tx.runbook.findFirst({ where: { id, orgId: scope.orgId }, include: OWNER_INCLUDE });
       if (!row) throw new NotFoundException('Runbook not found');
       const latest = row.latestVersionId
@@ -322,8 +328,9 @@ export class RunbooksService {
 
   async listVersions(principal: Principal, id: string, query: VersionsQueryDto): Promise<Page<RunbookVersionSummary>> {
     const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     return runInOrg(this.prisma, scope, async (tx) => {
-      await this.access.requireIn(tx, principal, 'read', { type: RUNBOOK_RESOURCE, id });
+      await this.access.requireIn(tx, me, 'read', { type: RUNBOOK_RESOURCE, id });
       const where = { orgId: scope.orgId, runbookId: id };
       const [rows, total] = await Promise.all([
         tx.runbookVersion.findMany({
@@ -340,8 +347,9 @@ export class RunbooksService {
 
   async getVersion(principal: Principal, id: string, version: number): Promise<RunbookVersionView> {
     const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     return runInOrg(this.prisma, scope, async (tx) => {
-      await this.access.requireIn(tx, principal, 'read', { type: RUNBOOK_RESOURCE, id });
+      await this.access.requireIn(tx, me, 'read', { type: RUNBOOK_RESOURCE, id });
       const row = await tx.runbookVersion.findFirst({ where: { orgId: scope.orgId, runbookId: id, version } });
       if (!row) throw new NotFoundException('Runbook version not found');
       return { ...summaryOf(row), definition: row.definition as unknown as RunbookDefinition };
@@ -355,7 +363,7 @@ export class RunbooksService {
    * the target resolver (`connect`), never here.
    */
   async requireRun(principal: Principal, id: string): Promise<void> {
-    await this.access.require(principal, 'run', { type: RUNBOOK_RESOURCE, id });
+    await this.access.require(await this.actor(principal), 'run', { type: RUNBOOK_RESOURCE, id });
   }
 
   // ---------------------------------------------------------------------------
@@ -411,12 +419,13 @@ export class RunbooksService {
     dto: ReplaceDefinitionDto,
   ): Promise<{ runbook: RunbookDetail; created: boolean }> {
     const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     const definition = this.parseDefinition(dto.definition);
     const sha = definitionSha256(definition);
 
     const outcome = await this.guardStale(() =>
       runInOrg(this.prisma, scope, async (tx) => {
-        const decision = await this.access.requireIn(tx, principal, 'write', { type: RUNBOOK_RESOURCE, id });
+        const decision = await this.access.requireIn(tx, me, 'write', { type: RUNBOOK_RESOURCE, id });
         const row = await this.requireRunbook(tx, scope, id);
         if (row.archivedAt) throw this.archived();
         const latest = row.latestVersionId
@@ -455,9 +464,10 @@ export class RunbooksService {
 
   async updateMetadata(principal: Principal, id: string, dto: UpdateRunbookMetadataDto): Promise<RunbookView> {
     const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     return this.guardName(() =>
       runInOrg(this.prisma, scope, async (tx) => {
-        const decision = await this.access.requireIn(tx, principal, 'write', { type: RUNBOOK_RESOURCE, id });
+        const decision = await this.access.requireIn(tx, me, 'write', { type: RUNBOOK_RESOURCE, id });
         const row = await this.requireRunbook(tx, scope, id);
         if (row.archivedAt) throw this.archived();
         await tx.runbook.update({
@@ -480,8 +490,9 @@ export class RunbooksService {
   /** Soft delete. Idempotent: archiving an archived runbook changes nothing. A hard delete is the user-data purge (#69). */
   async archive(principal: Principal, id: string): Promise<void> {
     const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     const changed = await runInOrg(this.prisma, scope, async (tx) => {
-      await this.access.requireIn(tx, principal, 'write', { type: RUNBOOK_RESOURCE, id });
+      await this.access.requireIn(tx, me, 'write', { type: RUNBOOK_RESOURCE, id });
       const row = await this.requireRunbook(tx, scope, id);
       if (row.archivedAt) return false;
       await tx.runbook.update({ where: { id }, data: { archivedAt: new Date() } });
@@ -492,9 +503,10 @@ export class RunbooksService {
 
   async restore(principal: Principal, id: string): Promise<RunbookView> {
     const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
     const result = await this.guardName(() =>
       runInOrg(this.prisma, scope, async (tx) => {
-        const decision = await this.access.requireIn(tx, principal, 'write', { type: RUNBOOK_RESOURCE, id });
+        const decision = await this.access.requireIn(tx, me, 'write', { type: RUNBOOK_RESOURCE, id });
         const row = await this.requireRunbook(tx, scope, id);
         const wasArchived = row.archivedAt !== null;
         if (wasArchived) await tx.runbook.update({ where: { id }, data: { archivedAt: null } });

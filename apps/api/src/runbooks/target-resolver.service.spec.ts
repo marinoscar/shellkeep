@@ -25,6 +25,8 @@ describe('TargetResolverService', () => {
   let findMany: jest.Mock;
   let resolve: jest.Mock;
   let service: TargetResolverService;
+  // The caller's groups: none in a unit test (the batch decision is what is under test).
+  const groups = { enrich: async (principal: unknown) => principal };
 
   beforeEach(() => {
     allowed.connect.clear();
@@ -32,7 +34,7 @@ describe('TargetResolverService', () => {
     findMany = jest.fn().mockResolvedValue([]);
     resolve = jest.fn().mockResolvedValue({ maxTargetsPerRun: 200 });
     const access = { decideMany: jest.fn().mockImplementation((p: unknown, action: 'connect' | 'read', refs: never[]) => decisions(action)(p, action, refs)) };
-    service = new TargetResolverService({ serverProfile: { findMany } } as never, { resolveSystem: resolve } as never, access as never);
+    service = new TargetResolverService({ serverProfile: { findMany } } as never, { resolveSystem: resolve } as never, access as never, groups as never);
   });
 
   it('returns nothing, without a query, for an empty selector', async () => {
@@ -82,7 +84,7 @@ describe('TargetResolverService', () => {
 
   it('decides connect for the whole batch with ONE AccessPolicy call', async () => {
     const decideMany = jest.fn().mockResolvedValue(new Map());
-    service = new TargetResolverService({ serverProfile: { findMany } } as never, { resolveSystem: resolve } as never, { decideMany } as never);
+    service = new TargetResolverService({ serverProfile: { findMany } } as never, { resolveSystem: resolve } as never, { decideMany } as never, groups as never);
     findMany.mockResolvedValue([row(1), row(2), row(3)]);
     await service.resolve(ME, { serverIds: [id(1), id(2), id(3)] });
     expect(decideMany.mock.calls.filter((call) => call[1] === 'connect')).toHaveLength(1);

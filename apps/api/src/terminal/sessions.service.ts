@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AUDIT_SINK, type AuditSink, type Principal } from '@marinoscar/platform-api/core';
-import { AccessPolicy } from '@marinoscar/platform-api/sharing';
+import { AccessPolicy, PrincipalGroupsProvider } from '@marinoscar/platform-api/sharing';
 import { PrismaService } from '../prisma/prisma.service';
 import type { OwnerScope } from '../common/types/owner-scope';
 import { recordAudit } from '../common/audit/record-audit';
@@ -34,6 +34,7 @@ export class SessionsService {
     @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
     private readonly webhooks: TerminalWebhooksService,
     private readonly access: AccessPolicy,
+    private readonly principalGroups: PrincipalGroupsProvider,
   ) {}
 
   private audit(
@@ -119,7 +120,9 @@ export class SessionsService {
   async create(principal: Principal, dto: CreateSessionDto) {
     if (!principal.activeOrgId) throw new ForbiddenException('No active organization');
     const scope: OwnerScope = { userId: principal.userId, orgId: principal.activeOrgId };
-    await this.access.require(principal, 'connect', { type: SERVER_PROFILE_RESOURCE, id: dto.serverProfileId });
+    // The caller's groups are read fresh: the principal the guard built may be a few seconds old.
+    const me = await this.principalGroups.enrich(principal);
+    await this.access.require(me, 'connect', { type: SERVER_PROFILE_RESOURCE, id: dto.serverProfileId });
     const serverProfile = await this.prisma.serverProfile.findFirst({
       where: { id: dto.serverProfileId, orgId: scope.orgId },
     });

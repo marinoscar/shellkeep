@@ -383,8 +383,9 @@ export class ServerProfilesService {
    */
   async remove(id: string, principal: Principal) {
     const scope = this.scopeOf(principal);
+    const me = await this.principalGroups.enrich(principal);
     const existing = await runInOrg(this.prisma, scope, async (tx) => {
-      await this.access.requireIn(tx, principal, 'delete', { type: SERVER_PROFILE_RESOURCE, id });
+      await this.access.requireIn(tx, me, 'delete', { type: SERVER_PROFILE_RESOURCE, id });
       const found = await tx.serverProfile.findFirst({ where: { id, orgId: scope.orgId } });
       if (!found) throw new NotFoundException(`Server profile with ID ${id} not found`);
       await this.grants.deleteForResources(tx, SERVER_PROFILE_RESOURCE, [id]);
@@ -577,7 +578,8 @@ export class ServerProfilesService {
    */
   private async loadFor(id: string, principal: Principal, action: 'connect' | 'test' | 'write') {
     const scope = this.scopeOf(principal);
-    await this.access.require(principal, action, { type: SERVER_PROFILE_RESOURCE, id });
+    // The caller's groups are read fresh: the principal the guard built may be a few seconds old.
+    await this.access.require(await this.principalGroups.enrich(principal), action, { type: SERVER_PROFILE_RESOURCE, id });
     const profile = await this.prisma.serverProfile.findFirst({ where: { id, orgId: scope.orgId } });
     if (!profile) {
       throw new NotFoundException(`Server profile with ID ${id} not found`);
@@ -587,7 +589,7 @@ export class ServerProfilesService {
 
   /** Throws unless the caller may open a connection to the profile (404 otherwise). No credential is read. */
   async assertCanConnect(id: string, principal: Principal): Promise<void> {
-    await this.access.require(principal, 'connect', { type: SERVER_PROFILE_RESOURCE, id });
+    await this.access.require(await this.principalGroups.enrich(principal), 'connect', { type: SERVER_PROFILE_RESOURCE, id });
   }
 
   /** Scans the server; an unreachable one is a 502, never a credential-bearing error. */

@@ -25,7 +25,7 @@
 import { ForbiddenException, Injectable, UnprocessableEntityException } from '@nestjs/common';
 import type { Principal } from '@marinoscar/platform-api/core';
 import { SettingsResolver } from '@marinoscar/platform-api/settings';
-import { AccessPolicy } from '@marinoscar/platform-api/sharing';
+import { AccessPolicy, PrincipalGroupsProvider } from '@marinoscar/platform-api/sharing';
 import type { Prisma } from '@prisma/client';
 
 import { SERVER_PROFILE_RESOURCE } from '../app-registrations/sharing';
@@ -76,6 +76,7 @@ export class TargetResolverService {
     private readonly prisma: PrismaService,
     private readonly settings: SettingsResolver,
     private readonly access: AccessPolicy,
+    private readonly principalGroups: PrincipalGroupsProvider,
   ) {}
 
   /** The cap for an organization: `runbooks.maxTargetsPerRun` with the org layer applied. */
@@ -117,9 +118,11 @@ export class TargetResolverService {
 
     // ONE decision per action for the whole batch (`connect`, and `read` for the tag matches).
     const refs = rows.map((row) => ({ type: SERVER_PROFILE_RESOURCE, id: row.id }));
+    // The caller's groups are read fresh: the principal the guard built may be a few seconds old.
+    const me = await this.principalGroups.enrich(principal);
     const [connect, read] = await Promise.all([
-      this.access.decideMany(principal, 'connect', refs),
-      this.access.decideMany(principal, 'read', refs),
+      this.access.decideMany(me, 'connect', refs),
+      this.access.decideMany(me, 'read', refs),
     ]);
     const named = new Set(selector.serverIds);
 
