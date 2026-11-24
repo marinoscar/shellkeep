@@ -30,6 +30,8 @@ describe('ADMIN_SECTIONS (#46)', () => {
       ['Web Push', '/admin/settings/push'],
       ['Users & Allowlist', '/admin/settings/users'],
       ['Doctor', '/admin/settings/doctor'],
+      // #54: appended to Observability.
+      ['Alerts', '/admin/settings/alerts'],
       // #49: appended, in the jobs slice's order.
       ['Jobs', '/admin/settings/jobs'],
       ['Job Insights', '/admin/settings/jobs/insights'],
@@ -38,6 +40,9 @@ describe('ADMIN_SECTIONS (#46)', () => {
       ['Broadcasts', '/admin/settings/broadcasts'],
       // #52: appended to Operations.
       ['Database Backup', '/admin/settings/db-backup'],
+      // #54: appended to Operations.
+      ['Webhooks', '/admin/settings/webhooks'],
+      ['Organization webhooks', '/admin/settings/organization-webhooks'],
       // #55: the AI group, appended after Operations.
       ['AI', '/admin/settings/ai'],
       ['AI Models', '/admin/settings/ai/models'],
@@ -91,6 +96,12 @@ describe('ADMIN_SECTIONS (#46)', () => {
       // GET /api/admin/db-backup (DatabaseBackupController); writes need
       // db_backup:write and restore db_backup:restore, gated in the page.
       '/admin/settings/db-backup': 'db_backup:read',
+      // GET /api/admin/alerts (every read route); writes need alerts:write, gated in the page.
+      '/admin/settings/alerts': 'alerts:read',
+      // GET /api/admin/webhooks (system scope); writes need system_webhooks:write, gated in the page.
+      '/admin/settings/webhooks': 'system_webhooks:read',
+      // GET /api/org/webhooks (org scope, org_admin); writes need org_webhooks:write, gated in the page.
+      '/admin/settings/organization-webhooks': 'org_webhooks:read',
       // /api/admin/ai/* reads (the slice's admin controllers); writes need
       // ai_config:write, gated in the pages.
       '/admin/settings/ai': 'ai_config:read',
@@ -117,15 +128,18 @@ describe('ADMIN_SECTIONS (#46)', () => {
   it('gates the hub on any card permission', () => {
     expect(ADMIN_HUB_PERMISSIONS.sort()).toEqual([
       'ai_config:read',
+      'alerts:read',
       'broadcasts:read',
       'db_backup:read',
       'jobs:read',
       'nodes:read',
       'org_ai_config:read',
       'org_broadcasts:read',
+      'org_webhooks:read',
       'push:read',
       'storage_config:read',
       'system_settings:read',
+      'system_webhooks:read',
       'users:read',
     ]);
     const hub = routes.find((r) => r.path === ADMIN_HUB_PATH);
@@ -155,6 +169,16 @@ describe('ADMIN_SECTIONS (#46)', () => {
       '/admin/settings/workers',
       BROADCASTS_PATH,
       '/admin/settings/db-backup',
+      '/admin/settings/webhooks',
+      '/admin/settings/organization-webhooks',
+    ]);
+  });
+
+  it('appends Alerts (#54) to Observability, after Doctor', () => {
+    const observability = ADMIN_SECTIONS.find((section) => section.label === 'Observability');
+    expect(observability?.cards.map((c) => c.path)).toEqual([
+      '/admin/settings/doctor',
+      '/admin/settings/alerts',
     ]);
   });
 

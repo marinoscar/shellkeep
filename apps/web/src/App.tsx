@@ -114,6 +114,13 @@ const UserAiKeysPage = lazy(() => import('@marinoscar/platform-web/ai/ui/keys-pa
 const AiPlaygroundPage = lazy(() => import('@marinoscar/platform-web/ai/ui/playground-page'));
 // Database backup and restore (issue #52): the packaged admin page.
 const DbBackupPage = lazy(() => import('@marinoscar/platform-web/db-backup/ui'));
+// Webhooks and alerts (issue #54): the packaged pages. One webhooks page, routed once per scope.
+const WebhooksPage = lazy(() =>
+  import('@marinoscar/platform-web/webhooks/ui').then((m) => ({ default: m.WebhooksPage })),
+);
+const AlertsPage = lazy(() =>
+  import('@marinoscar/platform-web/alerts/ui').then((m) => ({ default: m.AlertsPage })),
+);
 const UserNotificationsPage = lazy(() =>
   import('@marinoscar/platform-web/notifications/ui').then((m) => ({
     default: m.UserNotificationsPage,
@@ -271,6 +278,16 @@ function AppRoutes() {
                     </RequirePermission>
                   }
                 />
+                {/* Webhooks (#54): the caller's own endpoints, gated on the string
+                    `/api/webhooks` enforces. Writes are gated inside the page. */}
+                <Route
+                  path="/settings/webhooks"
+                  element={
+                    <RequirePermission permission="webhooks:read" fallback={HOME}>
+                      <WebhooksPage scope="user" />
+                    </RequirePermission>
+                  }
+                />
                 {/* The Console (#46, #76): every card of ADMIN_SECTIONS has a route
                     here, gated on the card's permission (the string its API
                     controller enforces). The hub admits any card's permission
@@ -281,7 +298,7 @@ function AppRoutes() {
                 <Route
                   path="/admin/settings"
                   element={
-                    <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read', 'db_backup:read', 'ai_config:read', 'org_ai_config:read']} fallback={HOME}>
+                    <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read', 'db_backup:read', 'alerts:read', 'system_webhooks:read', 'org_webhooks:read', 'ai_config:read', 'org_ai_config:read']} fallback={HOME}>
                       <AdminSettingsHubPage />
                     </RequirePermission>
                   }
@@ -426,6 +443,38 @@ function AppRoutes() {
                   element={
                     <RequirePermission permission="system_settings:read" fallback={HOME}>
                       <DoctorPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Alerts (#54): `alerts:read`, the string every read route of
+                    `/api/admin/alerts` enforces; writes (`alerts:write`) are gated
+                    inside the page. Not behind a telemetry gate: node rules work
+                    while telemetry is off. */}
+                <Route
+                  path="/admin/settings/alerts"
+                  element={
+                    <RequirePermission permission="alerts:read" fallback={HOME}>
+                      <AlertsPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Webhooks (#54): the deployment's endpoints (`system_webhooks:read`,
+                    `/api/admin/webhooks`) and the organization's (`org_webhooks:read`,
+                    `/api/org/webhooks`, `org_admin` only). Writes
+                    are gated inside the page. */}
+                <Route
+                  path="/admin/settings/webhooks"
+                  element={
+                    <RequirePermission permission="system_webhooks:read" fallback={HOME}>
+                      <WebhooksPage scope="system" />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/admin/settings/organization-webhooks"
+                  element={
+                    <RequirePermission permission="org_webhooks:read" fallback={HOME}>
+                      <WebhooksPage scope="org" />
                     </RequirePermission>
                   }
                 />

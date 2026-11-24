@@ -70,6 +70,7 @@ function build(terminated: ReapedSession[], opts: { notifyThrows?: boolean; prof
     prisma as never,
     { getNamespace: async () => ({ detachAfterMinutes: 60, terminateDetachedAfterHours: 12, purgeTerminatedAfterDays: 3 }) } as never,
     { notify } as never,
+    { sessionTerminated: jest.fn().mockResolvedValue(undefined) } as never,
   );
   return { handler, prisma, notify, log };
 }

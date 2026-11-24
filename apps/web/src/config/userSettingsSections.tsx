@@ -9,10 +9,9 @@
  * (Settings UI Pattern, AGENTS.md). Append new cards; never insert between
  * existing ones.
  *
- * NO CARD DECLARES A `permission` except AI Keys (#55): the API grants
- * `user_settings:read` and `user_settings:write` to every role, so a gate on
- * the others would invent an authorization rule the API does not enforce;
- * `ai:use` is a grant a deployment really can withhold.
+ * NO CARD DECLARES A `permission`, except `Webhooks` (#54) and `AI Keys` (#55): the API grants `user_settings:read` and
+ * `user_settings:write` to every role, so a gate on the others would invent an
+ * authorization rule the API does not enforce; `ai:use` is a grant a deployment really can withhold.
  *
  * The composition root: the `Terminal` card is the terminal domain's
  * (`components/terminal/settings/TerminalSettingsPage.tsx`), declared here so
@@ -27,6 +26,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
+import { webhooksUserSettingsSections } from '@marinoscar/platform-web/webhooks/ui';
 import {
   TERMINAL_SETTINGS_DESCRIPTION,
   TERMINAL_SETTINGS_TITLE,
@@ -106,6 +106,15 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
         feature: 'ai',
       },
     ],
+  },
+  {
+    // #54, appended: the caller's own outbound webhook endpoints, the
+    // webhooks slice's card as data. `webhooks:read` is the exact string
+    // `/api/webhooks` enforces (an org permission every org role holds by
+    // default but a deployment can withhold); writes (`webhooks:write`) are
+    // gated inside the packaged page.
+    label: 'Integrations',
+    cards: [...webhooksUserSettingsSections.integrations],
   },
 ];
 

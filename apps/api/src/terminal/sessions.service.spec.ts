@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
+import { TerminalWebhooksService } from './webhooks/terminal-webhooks.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AUDIT_SINK } from '@marinoscar/platform-api/core';
 
@@ -43,6 +44,7 @@ describe('SessionsService', () => {
       providers: [
         SessionsService,
         { provide: AUDIT_SINK, useValue: auditSink },
+        { provide: TerminalWebhooksService, useValue: { sessionCreated: jest.fn(), sessionTerminated: jest.fn() } },
         {
           provide: PrismaService,
           useValue: {

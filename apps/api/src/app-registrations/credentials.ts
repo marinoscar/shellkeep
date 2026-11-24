@@ -8,6 +8,7 @@
 //
 //   smtp, email_ses, push_vapid  the deployment's mail and Web Push secrets (#51)
 //   the AI slice's deployment key purpose (#55)
+//   webhook_signing  an endpoint's signing secret, per tier (#54)
 //   runbook_secret  an organization's runbook secret parameters (#61, org tier only)
 //   ssh  a user's SSH secrets, one credential per field of a server profile
 //        (`profile.<profileId>.password | private_key | passphrase`)
@@ -33,6 +34,10 @@ import { AI_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/ai';
 import { SES_CREDENTIAL_PURPOSE_DEF, SMTP_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/email';
 import { PUSH_VAPID_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/notifications';
 import { STORAGE_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/storage';
+import {
+  WEBHOOK_SIGNING_CREDENTIAL_PURPOSE_DEF,
+  WEBHOOK_SIGNING_USER_CREDENTIAL_PURPOSE_DEF,
+} from '@marinoscar/platform-api/webhooks';
 
 import { RUNBOOK_SECRET_PURPOSE_DEF } from '../runbooks/runbooks.credentials';
 import { SSH_CREDENTIAL_PURPOSE } from '../server-profiles/ssh-credentials';
@@ -82,4 +87,9 @@ export function registerShellkeepCredentialPurposes(): void {
   registerCredentialPurpose(RUNBOOK_SECRET_PURPOSE_DEF);
   for (const def of APP_CREDENTIAL_PURPOSES) registerCredentialPurpose(def);
   for (const def of APP_USER_CREDENTIAL_PURPOSES) registerUserCredentialPurpose(def);
+  // Webhook signing secrets (#54): the deployment's and an organization's tier, then a member's own.
+  // Each endpoint's secret is one credential under this purpose; it is shown twice in its life
+  // (create, rotate) and never listed, logged or put in a payload.
+  registerCredentialPurpose(WEBHOOK_SIGNING_CREDENTIAL_PURPOSE_DEF);
+  registerUserCredentialPurpose(WEBHOOK_SIGNING_USER_CREDENTIAL_PURPOSE_DEF);
 }

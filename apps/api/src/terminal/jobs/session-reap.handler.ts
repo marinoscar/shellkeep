@@ -32,6 +32,11 @@
 // owner's sessions. `notify` is detached and never rejects, so a mail outage cannot fail
 // or retry the job. The payload names a session, its server PROFILE and its idle time:
 // never a host, a user, a command or any output.
+//
+// WEBHOOK (#54). In the same place, after the commit, one `terminal.session.terminated`
+// (reason `reaped`) per session step 2 terminated, to the owner's own webhook endpoints.
+// `TerminalWebhooksService` never throws, so an outage of the webhooks slice cannot fail
+// or retry the job.
 // =============================================================================
 
 import { Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
@@ -44,6 +49,7 @@ import type { TerminalSessionReapedData } from '../../email-templates/terminal-s
 import { TERMINAL_SESSION_REAPED_EVENT } from '../../notifications-registry/terminal.notifications';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TerminalMetricsService } from '../telemetry/terminal-metrics.service';
+import { TerminalWebhooksService } from '../webhooks/terminal-webhooks.service';
 
 /** The job type string. Permanent: rows of this type outlive any rename. */
 export const TERMINAL_SESSION_REAP_TYPE = 'terminal.session.reap';
@@ -121,6 +127,7 @@ export class SessionReapHandler implements JobHandler, OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly settings: SystemSettingsService,
     private readonly notifications: NotificationsService,
+    private readonly webhooks: TerminalWebhooksService,
     @Optional() private readonly metrics?: TerminalMetricsService,
   ) {}
 
@@ -139,7 +146,15 @@ export class SessionReapHandler implements JobHandler, OnModuleInit {
       `Reaped sessions: ${result.detached} detached, ${result.terminated} terminated, ${result.purged} purged`,
     );
     // AFTER the updates committed (reap() has returned), outside any transaction.
+    await this.raiseWebhooks(result.terminatedSessions, now);
     await this.notifyOwners(result.terminatedSessions, now);
+  }
+
+  /** One `terminal.session.terminated` (reason `reaped`) per session the pass terminated (#54). Never throws. */
+  async raiseWebhooks(sessions: readonly ReapedSession[], now: Date): Promise<void> {
+    for (const session of sessions) {
+      await this.webhooks.sessionTerminated(session, session, 'reaped', now);
+    }
   }
 
   /** One `terminal.session_reaped` per owner. Never throws: a notification must not fail the job. */

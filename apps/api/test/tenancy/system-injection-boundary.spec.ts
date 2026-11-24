@@ -42,6 +42,8 @@ const SYSTEM_ALLOWLIST: Record<string, string> = {
     'admin-aggregate: the startup secrets-key check counts `org_credentials` (forced row-level security) across organizations, read-only',
   'platform/db-backup/db-backup-host.module.ts':
     "doctor: the db-backup slice's DB_BACKUP_SYSTEM_DATA port (#52): the backup.rls-bypass check's read-only row counts",
+  'platform/webhooks/webhooks-host.module.ts':
+    "webhooks and retention: the webhooks slice's WEBHOOKS_SYSTEM_PRISMA port (#54): a system-scope endpoint and its deliveries have no organization, so only the bypass client sees them; the delivery purge crosses organizations",
   'platform/ai/ai-host.module.ts':
     "purge and admin-aggregate: the AI slice's AI_SYSTEM_PRISMA port (#55): the ai_runs and ai_usage_events retention purges, the deployment-wide usage report and the catalogue sync's organization-less usage row",
 };

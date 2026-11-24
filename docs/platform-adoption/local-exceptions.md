@@ -98,6 +98,19 @@ Web: `platform/notifications.ts` calls `configureNotificationsWeb` before the fi
 | `STORAGE_PART_SIZE` is gone | The part size is the slice's 10 MiB default; `storage:import-env` reports a different old value and ignores it | Kept |
 | A legacy `customImageUrl` profile picture is no longer shown | The platform rule reads a `useProviderImage: false` profile as `imageSource: 'none'` and ignores `customImageUrl` | Kept |
 
+### Webhooks and alerts (#54)
+
+`WebhooksModule.forRoot` (`platform/webhooks/`, host port in `webhooks-host.module.ts`) and `AlertsModule.forRoot` (`platform/alerts/`) are mounted after the database backup slice: `/api/webhooks`, `/api/org/webhooks`, `/api/admin/webhooks`, `/api/admin/alerts`, the job types `webhooks.deliver`, `webhooks.fanout`, `webhooks.deliveries_purge`, `alerts.evaluate`, `alerts.evaluate_event` and `alerts.incidents_purge`, the `webhook` notification channel and the `alerts.alert_fired`, `alerts.alert_resolved` and `webhooks.endpoint_disabled` notification events. Neither slice has a settings namespace or an environment variable, so no stored settings key moved. Every webhooks option is the slice's default: the SSRF guard is on, and a private receiver needs `allowedHosts` or `allowPrivateTargets` in `webhooks.config.ts` ([runbook](../runbooks/webhooks.md)).
+
+| Decision | Detail | Removed by |
+|---|---|---|
+| ShellKeep's four starter alert rules are seeded by the app | The slice seeds a fixed list (`STARTER_ALERT_RULES`) and has no hook for an app's rules. `terminal/alerts/terminal-alert-rules.seed.ts` runs at start (`onApplicationBootstrap`) with the slice's own rule: insert if the key is absent, always disabled, never overwritten, a lost insert race is not an error. Keys `shellkeep.ssh_connect_failures`, `shellkeep.ssh_connect_slow`, `shellkeep.ws_auth_denied_spike`, `shellkeep.reaper_stalled` | A platform release whose alerts slice accepts the app's starter rules (seam request) |
+| Two app alert rule kinds | `terminal_ssh_connect_p95` (a quantile of a histogram: `metric_threshold` aggregates a column and cannot interpolate buckets) and `terminal_job_stalled` (no job of a type succeeded: no built-in kind reads the queue). Registered with `registerAlertRuleKind` in `app-registrations/alerts.ts`; ids are permanent. The failure-count, WebSocket-refusal rules use `metric_threshold` with `rate` (per minute), so their thresholds are per-minute rates | Kept |
+| The terminal events are `user` audience | `terminal.session.created`, `terminal.session.terminated` and `server_profile.host_key_changed` reach only the owner's own (`user` scope) endpoints, never an organization's or the deployment's, so one member's terminal activity is not visible to an administrator's endpoint. They are not bridged from notifications, and ShellKeep's notification events do not declare the `webhook` channel | Revisit if an organization-level feed is wanted |
+| A session that ends by itself raises no event | `terminal.session.terminated` has the reasons `user`, `batch` and `reaped` (the issue's contract). A session whose tmux ended (the remote shell exited) is marked terminated by the session manager without an event | A follow-up that extends the reason set (the key stays) |
+| `onEventNoIo` stays skipped | ShellKeep still declares no `@OnEvent` listener of its own; the webhooks and alerts listeners ship compiled in the package and the suite refuses a scan that finds none in the app's sources | The first ShellKeep listener |
+| `PrismaSystemService` gained one injection | `platform/webhooks/webhooks-host.module.ts` binds `WEBHOOKS_SYSTEM_PRISMA` (reasons `webhooks` and `retention`); on the allowlist of `test/tenancy/system-injection-boundary.spec.ts` | Kept |
+
 ## App-owned host pieces (not shims)
 
 | Piece | Where | Why it is the app's | Removed by |

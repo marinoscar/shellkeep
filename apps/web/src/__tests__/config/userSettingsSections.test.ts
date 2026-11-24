@@ -8,7 +8,7 @@ const cards = USER_SETTINGS_SECTIONS.flatMap((s) => s.cards);
 const routes = parseAppRoutes(readFileSync(join(__dirname, '..', '..', 'App.tsx'), 'utf8'));
 
 describe('USER_SETTINGS_SECTIONS', () => {
-  it('declares the Profile, Appearance, Notifications, Terminal, Access Tokens and AI Keys cards', () => {
+  it('declares the Profile, Appearance, Notifications, Terminal, Access Tokens, AI Keys and Webhooks cards', () => {
     expect(cards.map((c) => [c.title, c.path])).toEqual([
       ['Profile', '/settings/profile'],
       ['Appearance', '/settings/appearance'],
@@ -19,13 +19,16 @@ describe('USER_SETTINGS_SECTIONS', () => {
       ['Access Tokens', '/settings/tokens'],
       // #55: appended to Security.
       ['AI Keys', '/settings/ai'],
+      // #54: the webhooks slice's Integrations card, appended.
+      ['Webhooks', '/settings/webhooks'],
     ]);
   });
 
-  it('declares no card permission but AI Keys (user_settings:* is every role\'s, ai:use is not)', () => {
-    expect(cards.filter((c) => c.permission !== undefined).map((c) => [c.path, c.permission, c.feature])).toEqual([
-      // The `/api/ai/keys` controller's string; hidden while AI is off.
+  it('declares no card permission but AI Keys and Webhooks (user_settings:* is every role\'s)', () => {
+    // `ai:use` is the `/api/ai/keys` controller's string and `webhooks:read` the one `/api/webhooks` enforces.
+    expect(cards.filter((c) => c.permission !== undefined).map((c) => [c.path, c.permission, c.feature ?? null])).toEqual([
       ['/settings/ai', 'ai:use', 'ai'],
+      ['/settings/webhooks', 'webhooks:read', null],
     ]);
   });
 

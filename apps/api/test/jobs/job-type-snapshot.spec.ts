@@ -58,6 +58,14 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   // The telemetry slice (#53): the store's TTL and the managed stack's deploy. Both are server-only.
   'telemetry.retention.apply': 'Telemetry retention',
   'telemetry.stack.deploy': 'Telemetry services deploy',
+  // The webhooks slice (#54): one delivery per (endpoint, event), the fan-out of a bridged event and the daily purge.
+  'webhooks.deliver': 'Webhook delivery',
+  'webhooks.fanout': 'Webhook fan-out',
+  'webhooks.deliveries_purge': 'Webhook delivery purge',
+  // The alerts slice (#54): the every-minute evaluation, one node event, the daily incident purge.
+  'alerts.evaluate': 'Alert evaluation',
+  'alerts.evaluate_event': 'Alert evaluation (node event)',
+  'alerts.incidents_purge': 'Alert incident purge',
   // The AI slice (#55): background runs, the catalogue and key rechecks and the two retention purges.
   // Every ai.* type is server-only (no node ever holds a provider key).
   'ai.response.run': 'AI background response',
