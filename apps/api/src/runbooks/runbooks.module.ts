@@ -7,6 +7,8 @@ import { RunbookSecretsController } from './runbook-secrets.controller';
 import { RunbooksController } from './runbooks.controller';
 import { RunbooksService } from './runbooks.service';
 import { TargetResolverService } from './target-resolver.service';
+import { RunbooksUserDataPurgeHandler } from './user-data/runbooks-purge.handler';
+import { UserDataHostModule } from '../platform/user-data/user-data-host.module';
 
 /**
  * Runbooks (#61): versioned multi-step procedure definitions, target resolution and the
@@ -14,9 +16,10 @@ import { TargetResolverService } from './target-resolver.service';
  * import time by `runbooks.registrations.ts` (before the registries freeze).
  */
 @Module({
-  imports: [PrismaModule, OrgCredentialsModule, sharingModule],
+  imports: [PrismaModule, OrgCredentialsModule, sharingModule, UserDataHostModule],
   controllers: [RunbooksController, RunbookSecretsController],
-  providers: [RunbooksService, TargetResolverService],
+  // `RunbooksUserDataPurgeHandler` (#69) is the delegated half of the user-data purge.
+  providers: [RunbooksService, TargetResolverService, RunbooksUserDataPurgeHandler],
   exports: [RunbooksService, TargetResolverService],
 })
 export class RunbooksModule {}
