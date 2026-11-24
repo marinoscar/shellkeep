@@ -7,6 +7,7 @@ import { androidCommand, androidDeployStep, androidTuiScreen } from '@marinoscar
 import type { TuiMenuSlots, TuiThemeOverrides } from '@marinoscar/platform-cli/tui';
 import { ANDROID_IDENTITY_SOURCE, APP_NAME, BRAND, CLI_NAME, REPO_SLUG, TAGLINE } from '@shellkeep/shared';
 
+import { filesCommand } from './commands/files.js';
 import { runbookCommand } from './commands/runbook.js';
 import { serversCommand } from './commands/servers.js';
 import { sessionsCommand } from './commands/sessions.js';
@@ -25,7 +26,7 @@ import { runsScreen, serversScreen, sessionsScreen } from './tui/screens.js';
 // the worker-node engine are `@marinoscar/platform-cli`'s; this app adds only
 // what the platform does not have:
 //
-//   - `servers`, `sessions` and `runbook`: commands over the API
+//   - `servers`, `sessions`, `runbook` and `files`: commands over the API
 //     (`extraCommands`, one file each under src/commands/), plus their TUI
 //     screens (`tuiScreens`: Servers, Sessions, Runs);
 //   - the Android companion (#74): the platform's `android` group
@@ -191,6 +192,7 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
     serversCommand(),
     sessionsCommand(),
     runbookCommand(),
+    filesCommand(),
     androidCommand({ identity: ANDROID_IDENTITY_SOURCE }),
   ],
   tuiScreens: [serversScreen, sessionsScreen, runsScreen, androidTuiScreen],
