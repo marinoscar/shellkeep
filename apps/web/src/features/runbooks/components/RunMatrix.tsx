@@ -8,7 +8,9 @@
  * column, and a hand-rolled window needs no new dependency.
  */
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { Box, ButtonBase, Typography } from '@mui/material';
+import { Box, ButtonBase, IconButton, Tooltip, Typography } from '@mui/material';
+import ManageSearchIcon from '@mui/icons-material/ManageSearch';
+import { Link as RouterLink } from 'react-router-dom';
 import type { RunStepRow, RunTargetRow } from '../api/types';
 import { formatDuration } from '../lib/format';
 import { statusMeta, toneColor } from '../lib/statusMeta';
@@ -187,7 +189,7 @@ export function RunMatrix({ targets, onCellClick, height = 'min(70vh, 720px)' }:
                   sx={{ position: 'sticky', left: 0, zIndex: 1, bgcolor: 'background.paper', display: 'flex', alignItems: 'center', gap: 1, px: 1.5, minWidth: 0, borderRight: 1, borderColor: 'divider' }}
                 >
                   <TIcon fontSize="small" sx={{ color: toneColor(tMeta.tone), flexShrink: 0 }} aria-hidden="true" />
-                  <Box sx={{ minWidth: 0 }}>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
                       {target.serverName}
                     </Typography>
@@ -196,6 +198,18 @@ export function RunMatrix({ targets, onCellClick, height = 'min(70vh, 720px)' }:
                       {target.errorCode ? ` · ${target.errorCode}` : ''}
                     </Typography>
                   </Box>
+                  {target.serverProfileId && (
+                    <Tooltip title="Commands on this server">
+                      <IconButton
+                        size="small"
+                        component={RouterLink}
+                        to={`/runs/commands?serverId=${encodeURIComponent(target.serverProfileId)}`}
+                        aria-label={`Commands on ${target.serverName}`}
+                      >
+                        <ManageSearchIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </Box>
                 {target.steps.map((step) => (
                   <Cell key={step.stepIndex} target={target} step={step} onClick={onCellClick} />

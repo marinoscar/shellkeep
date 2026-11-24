@@ -57,6 +57,8 @@ const RunLauncherPage = lazy(() => import('./pages/runbooks/RunLauncherPage'));
 const ApprovalsPage = lazy(() => import('./pages/runbooks/ApprovalsPage'));
 const RunsPage = lazy(() => import('./pages/runbooks/RunsPage'));
 const RunDetailPage = lazy(() => import('./pages/runbooks/RunDetailPage'));
+// #67: the org-wide runbook command log, linked per server from the run matrix.
+const RunbookCommandsPage = lazy(() => import('./pages/runbooks/RunbookCommandsPage'));
 // Settings (issue #48): the packaged hub over `config/userSettingsSections.tsx`,
 // the packaged Profile and Appearance pages, and the terminal domain's page.
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
@@ -333,6 +335,14 @@ function AppRoutes() {
                   element={
                     <RequirePermission permission="runbooks:read" fallback={HOME}>
                       <RunsPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/runs/commands"
+                  element={
+                    <RequirePermission permission="runbooks:read" fallback={HOME}>
+                      <RunbookCommandsPage />
                     </RequirePermission>
                   }
                 />

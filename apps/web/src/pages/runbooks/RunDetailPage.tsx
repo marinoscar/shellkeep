@@ -15,6 +15,8 @@ import {
   Link,
   MenuItem,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
   useMediaQuery,
@@ -37,6 +39,7 @@ import { RunMatrix } from '../../features/runbooks/components/RunMatrix';
 import { RunCardList } from '../../features/runbooks/components/RunCardList';
 import { LogDrawer } from '../../features/runbooks/components/LogDrawer';
 import { StatusChip } from '../../features/runbooks/components/StatusChip';
+import { AuditPanel } from '../../features/runbooks/components/AuditPanel';
 
 type SortKey = 'position' | 'status' | 'duration';
 
@@ -51,21 +54,37 @@ const STATUS_ORDER: Record<string, number> = {
   succeeded: 7,
 };
 
-const targetDuration = (t: RunTargetRow): number => t.steps.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
+const targetDuration = (t: RunTargetRow): number =>
+  t.steps.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
 
 /** Filter and sort the matrix rows. */
-export function arrangeTargets(targets: readonly RunTargetRow[], status: TargetStatus | 'all', sort: SortKey): RunTargetRow[] {
+export function arrangeTargets(
+  targets: readonly RunTargetRow[],
+  status: TargetStatus | 'all',
+  sort: SortKey
+): RunTargetRow[] {
   const rows = status === 'all' ? [...targets] : targets.filter((t) => t.status === status);
-  if (sort === 'status') rows.sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9) || a.position - b.position);
-  else if (sort === 'duration') rows.sort((a, b) => targetDuration(b) - targetDuration(a) || a.position - b.position);
+  if (sort === 'status')
+    rows.sort(
+      (a, b) =>
+        (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9) || a.position - b.position
+    );
+  else if (sort === 'duration')
+    rows.sort((a, b) => targetDuration(b) - targetDuration(a) || a.position - b.position);
   else rows.sort((a, b) => a.position - b.position);
   return rows;
 }
 
 function ProgressHeader({ run }: { run: RunDetail }) {
   const total = Math.max(run.counts.total, 1);
-  const parts = (['succeeded', 'failed', 'running', 'waiting', 'cancelled', 'skipped'] as TargetStatus[]).filter((s) => (run.counts[s] ?? 0) > 0);
-  const settled = (run.counts.succeeded ?? 0) + (run.counts.failed ?? 0) + (run.counts.cancelled ?? 0) + (run.counts.skipped ?? 0);
+  const parts = (
+    ['succeeded', 'failed', 'running', 'waiting', 'cancelled', 'skipped'] as TargetStatus[]
+  ).filter((s) => (run.counts[s] ?? 0) > 0);
+  const settled =
+    (run.counts.succeeded ?? 0) +
+    (run.counts.failed ?? 0) +
+    (run.counts.cancelled ?? 0) +
+    (run.counts.skipped ?? 0);
   return (
     <Box>
       <LinearProgress
@@ -112,6 +131,7 @@ export default function RunDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [tab, setTab] = useState<'servers' | 'audit'>('servers');
 
   const finished = run ? isRunFinished(run.status) : false;
   useEffect(() => {
@@ -120,8 +140,12 @@ export default function RunDetailPage() {
     return () => clearInterval(timer);
   }, [finished]);
 
-  const rows = useMemo(() => (run ? arrangeTargets(run.targets, statusFilter, sort) : []), [run, statusFilter, sort]);
-  const drawerTarget = run && drawer ? run.targets.find((t) => t.id === drawer.targetId) ?? null : null;
+  const rows = useMemo(
+    () => (run ? arrangeTargets(run.targets, statusFilter, sort) : []),
+    [run, statusFilter, sort]
+  );
+  const drawerTarget =
+    run && drawer ? (run.targets.find((t) => t.id === drawer.targetId) ?? null) : null;
 
   const act = async (fn: () => Promise<unknown>, after?: (result: unknown) => void) => {
     setBusy(true);
@@ -146,8 +170,16 @@ export default function RunDetailPage() {
     );
   }
 
+  const awaitingApproval = (run.approvals ?? []).some(
+    (a) => a.kind === 'destructive_run' && a.status === 'pending'
+  );
   const failedCount = (run.counts.failed ?? 0) + (run.counts.cancelled ?? 0);
-  const initiator = run.initiatedBy && run.initiatedBy === user?.id ? 'you' : run.initiatedBy ? 'another user' : 'a deleted user';
+  const initiator =
+    run.initiatedBy && run.initiatedBy === user?.id
+      ? 'you'
+      : run.initiatedBy
+        ? 'another user'
+        : 'a deleted user';
   const elapsed = formatDuration(elapsedMs(run.startedAt ?? run.createdAt, run.finishedAt, now));
 
   return (
@@ -158,11 +190,20 @@ export default function RunDetailPage() {
         </Link>
         <Typography color="text.primary">Run</Typography>
       </Breadcrumbs>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', mb: 2 }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={2}
+        sx={{ justifyContent: 'space-between', mb: 2 }}
+      >
         <Box sx={{ minWidth: 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             <Typography variant="h5" component="h1" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-              <Link component={RouterLink} to={`/runbooks/${run.runbookId}`} underline="hover" color="inherit">
+              <Link
+                component={RouterLink}
+                to={`/runbooks/${run.runbookId}`}
+                underline="hover"
+                color="inherit"
+              >
                 {run.runbookName}
               </Link>{' '}
               <Typography component="span" variant="h6" sx={{ color: 'text.secondary' }}>
@@ -170,19 +211,29 @@ export default function RunDetailPage() {
               </Typography>
             </Typography>
             <StatusChip status={run.status} size="medium" />
+            {run.dryRun && <Chip color="info" label="DRY RUN" data-testid="dry-run-badge" />}
+            {run.destructive && <Chip color="error" variant="outlined" label="Destructive" />}
           </Box>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            {run.trigger === 'manual' ? 'Started' : `Triggered (${run.trigger})`} by {initiator} · elapsed {elapsed || '0 s'}
+            {run.trigger === 'manual' ? 'Started' : `Triggered (${run.trigger})`} by {initiator} ·
+            elapsed {elapsed || '0 s'}
             {live.streamState === 'polling' ? ' · live updates paused, refreshing every 5 s' : ''}
             {live.streamState === 'reconnecting' ? ' · reconnecting…' : ''}
           </Typography>
           {Object.keys(run.secretRefs).length > 0 && (
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-              Secrets: {Object.entries(run.secretRefs).map(([param, name]) => `${param} → ${name}`).join(', ')}
+              Secrets:{' '}
+              {Object.entries(run.secretRefs)
+                .map(([param, name]) => `${param} → ${name}`)
+                .join(', ')}
             </Typography>
           )}
         </Box>
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'flex-start' }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'flex-start' }}
+        >
           {canRun && !finished && (
             <Button
               color="error"
@@ -195,7 +246,12 @@ export default function RunDetailPage() {
             </Button>
           )}
           {canRun && canApprove && run.status === 'paused' && (
-            <Button variant="contained" startIcon={<PlayArrowIcon />} disabled={busy} onClick={() => void act(() => resumeRun(run.id))}>
+            <Button
+              variant="contained"
+              startIcon={<PlayArrowIcon />}
+              disabled={busy}
+              onClick={() => void act(() => resumeRun(run.id))}
+            >
               Resume
             </Button>
           )}
@@ -207,7 +263,7 @@ export default function RunDetailPage() {
               onClick={() =>
                 void act(
                   () => retryRun(run.id, 'failed'),
-                  (result) => navigate(`/runs/${(result as { runId: string }).runId}`),
+                  (result) => navigate(`/runs/${(result as { runId: string }).runId}`)
                 )
               }
             >
@@ -215,10 +271,41 @@ export default function RunDetailPage() {
             </Button>
           )}
           {/* TODO(#64): "Stop AI" while an ai_task step runs. TODO(#63): the artifacts panel
-              (download and share). TODO(#67): the Audit tab. */}
+              (download and share). */}
         </Stack>
       </Stack>
 
+      {awaitingApproval && (
+        <Alert severity="info" sx={{ mb: 2 }} data-testid="awaiting-approval">
+          Waiting for a second approver: this destructive run starts only after someone else with
+          the approve permission approves it.{' '}
+          <Link component={RouterLink} to="/runbooks/approvals">
+            Open approvals
+          </Link>
+        </Alert>
+      )}
+      {run.errorCode && (
+        <Alert
+          severity={
+            run.errorCode === 'APPROVAL_REJECTED' || run.errorCode === 'APPROVAL_EXPIRED'
+              ? 'warning'
+              : 'error'
+          }
+          sx={{ mb: 2 }}
+        >
+          {run.errorCode === 'APPROVAL_REJECTED'
+            ? 'The approval was rejected; nothing ran.'
+            : run.errorCode === 'APPROVAL_EXPIRED'
+              ? 'The approval expired; nothing ran.'
+              : run.errorCode}
+        </Alert>
+      )}
+      {run.dryRun && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Dry run: nothing was changed. Succeeded means the step would run, failed means a
+          precondition failed, skipped means it is not simulated.
+        </Alert>
+      )}
       <ProgressHeader run={run} />
 
       {(actionError || live.error) && (
@@ -227,37 +314,74 @@ export default function RunDetailPage() {
         </Alert>
       )}
 
-      <Stack direction="row" spacing={2} sx={{ my: 2, flexWrap: 'wrap', rowGap: 2 }}>
-        <TextField
-          select
-          size="small"
-          label="Status"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as TargetStatus | 'all')}
-          sx={{ minWidth: 160 }}
-        >
-          <MenuItem value="all">All servers</MenuItem>
-          {TARGET_STATUSES.map((s) => (
-            <MenuItem key={s} value={s}>
-              {statusMeta(s).label} ({run.counts[s] ?? 0})
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField select size="small" label="Sort" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} sx={{ minWidth: 160 }}>
-          <MenuItem value="position">Run order</MenuItem>
-          <MenuItem value="status">Status</MenuItem>
-          <MenuItem value="duration">Duration</MenuItem>
-        </TextField>
-      </Stack>
-
-      {rows.length === 0 ? (
-        <Typography variant="body2" sx={{ color: 'text.secondary', py: 3 }}>
-          {run.targets.length === 0 ? 'No servers resolved yet.' : 'No servers with this status.'}
-        </Typography>
-      ) : phone ? (
-        <RunCardList targets={rows} onOpen={(t, stepIndex) => setDrawer({ targetId: t.id, stepIndex })} />
+      <Tabs
+        value={tab}
+        onChange={(_e, next) => setTab(next)}
+        sx={{ mt: 2, borderBottom: 1, borderColor: 'divider' }}
+        aria-label="Run views"
+      >
+        <Tab
+          value="servers"
+          label="Servers"
+          id="run-tab-servers"
+          aria-controls="run-panel-servers"
+        />
+        <Tab value="audit" label="Audit" id="run-tab-audit" aria-controls="run-panel-audit" />
+      </Tabs>
+      {tab === 'audit' ? (
+        <Box role="tabpanel" id="run-panel-audit" aria-labelledby="run-tab-audit" sx={{ mt: 2 }}>
+          <AuditPanel runId={run.id} />
+        </Box>
       ) : (
-        <RunMatrix targets={rows} onCellClick={(t, stepIndex) => setDrawer({ targetId: t.id, stepIndex })} />
+        <Box role="tabpanel" id="run-panel-servers" aria-labelledby="run-tab-servers">
+          <Stack direction="row" spacing={2} sx={{ my: 2, flexWrap: 'wrap', rowGap: 2 }}>
+            <TextField
+              select
+              size="small"
+              label="Status"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as TargetStatus | 'all')}
+              sx={{ minWidth: 160 }}
+            >
+              <MenuItem value="all">All servers</MenuItem>
+              {TARGET_STATUSES.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {statusMeta(s).label} ({run.counts[s] ?? 0})
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              size="small"
+              label="Sort"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              sx={{ minWidth: 160 }}
+            >
+              <MenuItem value="position">Run order</MenuItem>
+              <MenuItem value="status">Status</MenuItem>
+              <MenuItem value="duration">Duration</MenuItem>
+            </TextField>
+          </Stack>
+
+          {rows.length === 0 ? (
+            <Typography variant="body2" sx={{ color: 'text.secondary', py: 3 }}>
+              {run.targets.length === 0
+                ? 'No servers resolved yet.'
+                : 'No servers with this status.'}
+            </Typography>
+          ) : phone ? (
+            <RunCardList
+              targets={rows}
+              onOpen={(t, stepIndex) => setDrawer({ targetId: t.id, stepIndex })}
+            />
+          ) : (
+            <RunMatrix
+              targets={rows}
+              onCellClick={(t, stepIndex) => setDrawer({ targetId: t.id, stepIndex })}
+            />
+          )}
+        </Box>
       )}
 
       <LogDrawer
