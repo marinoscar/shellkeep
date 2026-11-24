@@ -30,6 +30,7 @@ import type { ServerFacts } from '../ssh/server-facts';
 import { SshConnectionFactory } from '../ssh/ssh-connection.factory';
 import type { DecryptedServerProfile } from '../ssh/ssh-profile';
 import { TrustHostKeyDto } from './dto/trust-host-key.dto';
+import { TerminalWebhooksService } from '../terminal/webhooks/terminal-webhooks.service';
 
 /** What a forgotten or reset endpoint leaves: no trusted key. */
 const HOST_KEY_RESET = {
@@ -88,6 +89,7 @@ export class ServerProfilesService {
     private readonly credentials: UserCredentialsService,
     private readonly ssh: SshConnectionFactory,
     private readonly factsService: ServerFactsService,
+    private readonly webhooks: TerminalWebhooksService,
   ) {}
 
   /**
@@ -406,6 +408,13 @@ export class ServerProfilesService {
         oldFingerprint: profile.fingerprint,
         newFingerprint: presented.fingerprint,
         algorithm: presented.algorithm,
+      });
+      // A different trusted key was replaced: tell the owner's webhook endpoints, after the
+      // update committed and outside any transaction (#54). Fingerprints only; never throws.
+      await this.webhooks.hostKeyChanged(scope, {
+        serverProfileId: profile.id,
+        previousFingerprint: profile.fingerprint as string,
+        presentedFingerprint: presented.fingerprint,
       });
     } else {
       await this.audit('server_profile.host_key_trusted', scope, profile, {

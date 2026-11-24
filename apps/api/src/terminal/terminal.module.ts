@@ -12,6 +12,7 @@ import { TerminalGateway } from './terminal.gateway';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
 import { TerminalMaintenancePolicy } from './ws/terminal-maintenance.policy';
 import { SessionReapHandler } from './jobs/session-reap.handler';
+import { TerminalWebhooksModule } from './webhooks/terminal-webhooks.module';
 import { TerminalMetricsService } from './telemetry/terminal-metrics.service';
 import { SessionCleanupTask } from './tasks/session-cleanup.task';
 import { TerminalAboutSource } from './about/terminal.about-contributor';
@@ -33,6 +34,8 @@ import { LegacySecretsDoctorCheck } from './doctor/legacy-secrets.doctor-check';
     AuthModule,
     // `UserCredentialsService`: the Doctor's tmux probe reads the probe profile's secrets.
     UserCredentialsModule,
+    // `TerminalWebhooksService`: the session events (#54).
+    TerminalWebhooksModule,
   ],
   controllers: [SessionsController],
   providers: [

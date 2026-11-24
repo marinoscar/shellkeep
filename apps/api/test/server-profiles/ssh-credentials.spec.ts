@@ -27,6 +27,7 @@ import {
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { ServerProfilesService } from '../../src/server-profiles/server-profiles.service';
 import { ServerFactsService } from '../../src/ssh/server-facts.service';
+import { TerminalWebhooksService } from '../../src/terminal/webhooks/terminal-webhooks.service';
 import { SshConnectionFactory } from '../../src/ssh/ssh-connection.factory';
 import { sshCredentialName } from '../../src/server-profiles/ssh-credentials';
 import { createInMemoryCredentialPrisma } from '../helpers/in-memory-credentials';
@@ -96,6 +97,7 @@ describe('SSH credentials in the platform credential store', () => {
         // The service never connects in this spec (it proves credential storage only).
         { provide: SshConnectionFactory, useValue: {} },
         { provide: ServerFactsService, useValue: {} },
+        { provide: TerminalWebhooksService, useValue: { hostKeyChanged: jest.fn() } },
         { provide: AUDIT_SINK, useValue: { record: jest.fn().mockResolvedValue(undefined) } },
         { provide: USER_CREDENTIAL_PURPOSE_REGISTRY, useValue: userCredentialPurposeRegistry.list() },
         // The deployment and organization tiers HOLD a secret at the same address: the resolver
