@@ -138,7 +138,7 @@ export function TargetPicker({ value, onChange, onPreview, height = 320 }: Targe
   const selectedIds = useMemo(() => new Set(value.serverIds), [value.serverIds]);
   // The table is told only about the picked servers it lists.
   const listedSelected = useMemo(() => new Set(servers.map((s) => s.id).filter((id) => selectedIds.has(id))), [servers, selectedIds]);
-  const untrusted = preview?.servers.filter((s) => !s.hostKeyTrusted) ?? [];
+  const untrusted = preview?.servers?.filter((s) => !s.hostKeyTrusted) ?? [];
 
   return (
     <Stack spacing={2}>

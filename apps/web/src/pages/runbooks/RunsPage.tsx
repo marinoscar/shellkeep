@@ -122,7 +122,7 @@ export default function RunsPage() {
           </Button>
         </Box>
       </Stack>
-      <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 2 }}>
+      <Stack useFlexGap direction="row" spacing={2} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 2 }}>
         <TextField select size="small" label="Runbook" value={runbookId ?? ''} onChange={(e) => setParam('runbookId', e.target.value)} sx={{ minWidth: 200, flex: { xs: '1 1 100%', sm: '0 1 auto' } }}>
           <MenuItem value="">All runbooks</MenuItem>
           {(runbooks.data?.items ?? []).map((r) => (

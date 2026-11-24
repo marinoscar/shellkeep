@@ -272,7 +272,7 @@ export default function RunbooksPage() {
             Versioned procedures to run on your fleet.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap', rowGap: 1 }}>
+        <Stack useFlexGap direction="row" spacing={1} sx={{ alignItems: 'flex-start', flexWrap: 'wrap', rowGap: 1 }}>
           <Button component={RouterLink} to="/runs" variant="outlined">
             Runs
           </Button>

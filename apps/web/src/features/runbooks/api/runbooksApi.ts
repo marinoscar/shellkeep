@@ -104,7 +104,10 @@ export const validateDefinition = (definition: RunbookDefinitionInput): Promise<
 export const previewTargets = (selector: Partial<TargetSelector>): Promise<TargetPreview> =>
   api.post('/runbooks/targets/preview', { selector });
 
-export const listRunbookSecrets = (): Promise<RunbookSecret[]> => api.get('/runbook-secrets');
+export const listRunbookSecrets = async (): Promise<RunbookSecret[]> => {
+  const secrets = await api.get<RunbookSecret[]>('/runbook-secrets');
+  return Array.isArray(secrets) ? secrets : [];
+};
 
 /** Write-only: the value is sent once and never comes back. */
 export const putRunbookSecret = (name: string, body: { value: string; label?: string }): Promise<RunbookSecret> =>

@@ -265,7 +265,7 @@ export default function RunbookBuilderPage() {
         <Typography variant="h4" component="h1">
           {isNew ? 'New runbook' : `Edit runbook${baseVersion ? ` (v${baseVersion})` : ''}`}
         </Typography>
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+        <Stack useFlexGap direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
           {!isNew && (
             <Button startIcon={<HistoryIcon />} onClick={() => setHistoryOpen(true)}>
               History

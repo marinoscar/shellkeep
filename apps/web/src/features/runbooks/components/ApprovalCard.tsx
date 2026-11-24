@@ -83,7 +83,7 @@ export function ApprovalCard({ approval, canApprove, isSelf, allowSelfApproval, 
   return (
     <Card variant="outlined" component="article" aria-labelledby={headingId}>
       <CardContent>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1, mb: 1 }}>
+        <Stack useFlexGap direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1, mb: 1 }}>
           <Chip size="small" color={approval.kind === 'destructive_run' ? 'error' : 'default'} label={APPROVAL_KIND_LABELS[approval.kind] ?? approval.kind} />
           <StatusChip status={approval.status} />
           {pending && (

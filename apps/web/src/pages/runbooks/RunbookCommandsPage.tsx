@@ -91,7 +91,7 @@ export default function RunbookCommandsPage() {
         {serverId ? `What runbooks ran on ${serverName ?? 'this server'}` : 'What runbooks ran on your servers'}, newest first. Previews are
         redacted; output is never stored here.
       </Typography>
-      <Stack direction="row" spacing={2} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 2 }}>
+      <Stack useFlexGap direction="row" spacing={2} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 2 }}>
         <TextField type="date" size="small" label="From" value={from} onChange={(e) => setParam('from', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
         <TextField type="date" size="small" label="To" value={to} onChange={(e) => setParam('to', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
         {serverId && (

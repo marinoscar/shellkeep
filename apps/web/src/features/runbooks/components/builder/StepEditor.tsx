@@ -211,7 +211,7 @@ export function StepEditor({ step, index, onChange, errors, warnings }: StepEdit
     case 'file_upload':
       kindFields = (
         <>
-          <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+          <Stack useFlexGap direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
             <Button component="label" variant="outlined" startIcon={<UploadFileOutlinedIcon />} disabled={uploading}>
               {uploading ? 'Uploading…' : step.storageObjectId ? 'Replace file' : 'Choose file'}
               <input

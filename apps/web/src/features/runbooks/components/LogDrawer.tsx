@@ -255,7 +255,7 @@ export function LogDrawer({ open, onClose, runId, target, stepIndex, onStepChang
           <CloseIcon />
         </IconButton>
       </Stack>
-      <Stack direction="row" spacing={1} sx={{ px: 2, pb: 1, flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}>
+      <Stack useFlexGap direction="row" spacing={1} sx={{ px: 2, pb: 1, flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}>
         {target && (
           <TextField
             select
@@ -304,7 +304,7 @@ export function LogDrawer({ open, onClose, runId, target, stepIndex, onStepChang
         data-testid="log-terminal"
         sx={{ flex: 1, minHeight: 240, mx: 2, borderRadius: 1, overflow: 'hidden', bgcolor: 'background.default', border: 1, borderColor: 'divider' }}
       />
-      <Stack direction="row" spacing={1} sx={{ p: 2, flexWrap: 'wrap', rowGap: 1 }}>
+      <Stack useFlexGap direction="row" spacing={1} sx={{ p: 2, flexWrap: 'wrap', rowGap: 1 }}>
         <Button startIcon={<DownloadIcon />} onClick={() => void download()}>
           Download log
         </Button>

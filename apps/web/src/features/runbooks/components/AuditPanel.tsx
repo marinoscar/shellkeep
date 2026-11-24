@@ -80,7 +80,7 @@ export function AuditPanel({ runId }: { runId: string }) {
 
   return (
     <Stack spacing={2} component="section" aria-label="Audit trail">
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+      <Stack useFlexGap direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
         <Typography variant="body2" sx={{ color: 'text.secondary', flex: 1, minWidth: 200 }}>
           {audit.data ? `${audit.data.events} events · ${audit.data.commands} commands` : ' '}
         </Typography>

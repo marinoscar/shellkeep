@@ -334,7 +334,7 @@ export default function RunDetailPage() {
         </Box>
       ) : (
         <Box role="tabpanel" id="run-panel-servers" aria-labelledby="run-tab-servers">
-          <Stack direction="row" spacing={2} sx={{ my: 2, flexWrap: 'wrap', rowGap: 2 }}>
+          <Stack useFlexGap direction="row" spacing={2} sx={{ my: 2, flexWrap: 'wrap', rowGap: 2 }}>
             <TextField
               select
               size="small"

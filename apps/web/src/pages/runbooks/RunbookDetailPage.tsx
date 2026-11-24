@@ -101,7 +101,7 @@ export default function RunbookDetailPage({ launch = false, launchServerIds }: R
             ))}
           </Box>
         </Box>
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'flex-start' }}>
+        <Stack useFlexGap direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'flex-start' }}>
           {canRun && (
             <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={() => setLauncherOpen(true)}>
               Run
