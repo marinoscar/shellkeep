@@ -1,128 +1,101 @@
-import { useState, useEffect } from 'react';
 import {
-  Card,
-  CardContent,
-  Typography,
   Box,
   Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
-  Chip,
-  CircularProgress,
+  Typography,
 } from '@mui/material';
-import {
-  OpenInNew as OpenIcon,
-  Terminal as TerminalIcon,
-} from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import { getSessions } from '../../services/terminal-api';
-import type { TerminalSession } from '../../types';
+import { Terminal as TerminalIcon } from '@mui/icons-material';
+import { Link as RouterLink } from 'react-router-dom';
+import type { DashboardSessionSummary } from '../../types/dashboard';
+import { relativeTime } from './relativeTime';
 
-function getRelativeTime(dateString: string): string {
-  const now = new Date();
-  const date = new Date(dateString);
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHour = Math.floor(diffMin / 60);
-
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  return date.toLocaleDateString();
+export interface ActiveSessionsPanelProps {
+  /** The most recently used live sessions (at most five, from the dashboard summary). */
+  sessions: DashboardSessionSummary[];
+  /** How many live sessions the caller has in all. */
+  total: number;
+  isLoading?: boolean;
+  /** Whether the caller can see any server; with none, the empty state points at adding one. */
+  hasServers?: boolean;
 }
 
-export function ActiveSessionsPanel() {
-  const navigate = useNavigate();
-  const [sessions, setSessions] = useState<TerminalSession[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([
-      getSessions({ status: 'active', pageSize: 6 }),
-      getSessions({ status: 'detached', pageSize: 6 }),
-    ])
-      .then(([activeRes, detachedRes]) => {
-        const combined = [...(activeRes?.items ?? []), ...(detachedRes?.items ?? [])].slice(0, 6);
-        setSessions(combined);
-      })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
-  }, []);
-
+/** The caller's live sessions on Home (#78). "Resume" opens the workspace at `/sessions/:id`. */
+export function ActiveSessionsPanel({ sessions, total, isLoading = false, hasServers = true }: ActiveSessionsPanelProps) {
   return (
-    <Card sx={{ height: '100%' }}>
+    <Card variant="outlined" sx={{ height: '100%' }} component="section" aria-labelledby="home-active-sessions">
       <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">
-            Active Sessions
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Typography variant="h6" component="h2" id="home-active-sessions">
+            Active sessions
           </Typography>
-          <Button size="small" onClick={() => navigate('/sessions')}>
-            View All
+          <Button size="small" component={RouterLink} to="/sessions">
+            All sessions{total > sessions.length ? ` (${total})` : ''}
           </Button>
         </Box>
 
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-            <CircularProgress size={24} />
+            <CircularProgress size={24} aria-label="Loading sessions" />
           </Box>
         ) : sessions.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 3 }}>
-            <TerminalIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-            <Typography variant="body2" sx={{
-              color: "text.secondary"
-            }}>
+            <TerminalIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} aria-hidden="true" />
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               No active sessions.
             </Typography>
-            <Typography variant="body2" sx={{
-              color: "text.secondary"
-            }}>
-              Start one from your saved servers.
-            </Typography>
+            {hasServers ? (
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                Start one from Quick connect.
+              </Typography>
+            ) : (
+              <Button size="small" variant="outlined" component={RouterLink} to="/servers" sx={{ mt: 1 }}>
+                Add your first server
+              </Button>
+            )}
           </Box>
         ) : (
           <List disablePadding>
             {sessions.map((session) => (
               <ListItem
                 key={session.id}
-                sx={{
-                  px: 1,
-                  borderRadius: 1,
-                  '&:hover': { bgcolor: 'action.hover' },
-                  cursor: 'pointer',
-                }}
-                onClick={() => navigate(`/sessions/${session.id}/terminal`)}
-              >
-                <ListItemText
-                  primary={session.name}
-                  secondary={`${session.serverProfile.username}@${session.serverProfile.hostname} - ${getRelativeTime(session.lastActivityAt)}`}
-                  slotProps={{
-                    primary: { noWrap: true, variant: 'body2' },
-                    secondary: { noWrap: true, variant: 'caption' }
-                  }} />
-                <ListItemSecondaryAction>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                disableGutters
+                sx={{ py: 0.75 }}
+                secondaryAction={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Chip
-                      label={session.status}
+                      label={session.status === 'active' ? 'attached' : 'detached'}
                       size="small"
-                      color={session.status === 'active' ? 'success' : 'warning'}
-                      sx={{ height: 20, fontSize: '0.7rem' }}
+                      color={session.status === 'active' ? 'success' : 'default'}
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: '0.7rem', display: { xs: 'none', sm: 'inline-flex' } }}
                     />
                     <Button
                       size="small"
-                      variant="text"
-                      startIcon={<OpenIcon sx={{ fontSize: '14px !important' }} />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/sessions/${session.id}/terminal`);
-                      }}
-                      sx={{ minWidth: 'auto', fontSize: '0.75rem' }}
+                      variant={session.status === 'detached' ? 'outlined' : 'text'}
+                      component={RouterLink}
+                      to={`/sessions/${session.id}`}
+                      aria-label={`${session.status === 'detached' ? 'Resume' : 'Open'} ${session.name}`}
                     >
-                      Open
+                      {session.status === 'detached' ? 'Resume' : 'Open'}
                     </Button>
                   </Box>
-                </ListItemSecondaryAction>
+                }
+              >
+                <ListItemText
+                  sx={{ minWidth: 0, pr: { xs: 10, sm: 20 } }}
+                  primary={session.name}
+                  secondary={`${session.serverName} · ${relativeTime(session.lastActivityAt)}`}
+                  slotProps={{
+                    primary: { noWrap: true, variant: 'body2' },
+                    secondary: { noWrap: true, variant: 'caption' },
+                  }}
+                />
               </ListItem>
             ))}
           </List>
