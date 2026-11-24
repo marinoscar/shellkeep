@@ -115,6 +115,8 @@ export interface ServerProfile {
   factsProbedAt?: string | null;
   tags: string[];
   color: ServerProfileColor;
+  /** `false`: no terminal output of this server ever reaches an AI feature (#56). Treat absent as `true`. */
+  aiOutputSharing: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -175,6 +177,7 @@ export interface ServerProfileFormData {
   passphrase?: string;
   tags?: string[];
   color?: ServerProfileColor;
+  aiOutputSharing?: boolean;
 }
 
 export interface ServerProfilesResponse {

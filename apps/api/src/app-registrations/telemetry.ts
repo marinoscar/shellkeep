@@ -20,9 +20,10 @@ import type { MetricGroupDef } from '@marinoscar/platform-api/telemetry';
 
 import { TERMINAL_METRIC_GROUP } from '../terminal/telemetry/terminal.metric-group';
 import { TERMINAL_APP_METRICS } from '../terminal/telemetry/terminal.metrics';
+import { TERMINAL_AI_APP_METRICS } from '../terminal-ai/terminal-ai.metrics';
 
 /** ShellKeep's own `app.*` metrics. */
-export const APP_METRICS: readonly AppMetricDef[] = [...TERMINAL_APP_METRICS];
+export const APP_METRICS: readonly AppMetricDef[] = [...TERMINAL_APP_METRICS, ...TERMINAL_AI_APP_METRICS];
 
 /** ShellKeep's own dashboard metric groups. */
 export const APP_METRIC_GROUPS: readonly MetricGroupDef[] = [TERMINAL_METRIC_GROUP];

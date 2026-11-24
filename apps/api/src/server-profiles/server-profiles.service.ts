@@ -209,6 +209,7 @@ export class ServerProfilesService {
       authMethod: dto.authMethod,
       tags: dto.tags || [],
       color: dto.color || 'default',
+      aiOutputSharing: dto.aiOutputSharing ?? true,
     };
 
     const profile = await this.prisma.serverProfile.create({ data });
@@ -253,6 +254,7 @@ export class ServerProfilesService {
     if (dto.authMethod !== undefined) data.authMethod = dto.authMethod;
     if (dto.tags !== undefined) data.tags = dto.tags;
     if (dto.color !== undefined) data.color = dto.color;
+    if (dto.aiOutputSharing !== undefined) data.aiOutputSharing = dto.aiOutputSharing;
 
     // A different endpoint is a different server: what was trusted and probed for the old
     // one proves nothing about the new one, so it prompts again on the next connect.
@@ -279,7 +281,13 @@ export class ServerProfilesService {
       data,
     });
 
-    await this.audit('server_profile.update', scope, profile, endpointChanged ? { hostKeyReset: true } : {});
+    await this.audit('server_profile.update', scope, profile, {
+      ...(endpointChanged ? { hostKeyReset: true } : {}),
+      // The hard AI switch is a security setting: its change is on the record.
+      ...(dto.aiOutputSharing !== undefined && dto.aiOutputSharing !== existing.aiOutputSharing
+        ? { aiOutputSharing: dto.aiOutputSharing }
+        : {}),
+    });
     this.logger.log(`Server profile "${profile.name}" updated by user ${scope.userId}`);
 
     return this.toResponse(profile, await this.storedSecrets(scope.userId, profile.id));
@@ -549,6 +557,7 @@ export class ServerProfilesService {
       authMethod: profile.authMethod,
       tags: profile.tags,
       color: profile.color,
+      aiOutputSharing: profile.aiOutputSharing ?? true,
       hasPassword: stored.has('password'),
       hasPrivateKey: stored.has('private_key'),
       hasPassphrase: stored.has('passphrase'),

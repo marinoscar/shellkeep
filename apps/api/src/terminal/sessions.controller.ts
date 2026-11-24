@@ -11,7 +11,6 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
-  HttpException,
   Res,
 } from '@nestjs/common';
 import {
@@ -24,24 +23,20 @@ import {
 import { FastifyReply } from 'fastify';
 
 import { SessionsService } from './sessions.service';
-import { SshService } from './ssh.service';
+import { SessionHistoryService } from './session-history.service';
 import { Auth, CurrentOrg, CurrentUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { SessionQueryDto } from './dto/session-query.dto';
 import { BatchTerminateSessionsDto } from './dto/batch-terminate-sessions.dto';
-import { ServerProfilesService } from '../server-profiles/server-profiles.service';
-import { HostKeyError } from '../ssh/host-key.error';
-import { hostKeyErrorToHttp } from '../ssh/host-key-http';
 
 @ApiTags('Terminal Sessions')
 @Controller('sessions')
 export class SessionsController {
   constructor(
     private readonly sessionsService: SessionsService,
-    private readonly sshService: SshService,
-    private readonly serverProfilesService: ServerProfilesService,
+    private readonly history: SessionHistoryService,
   ) {}
 
   @Get()
@@ -92,39 +87,16 @@ export class SessionsController {
       throw new BadRequestException('Cannot download history for a terminated session');
     }
 
-    const profile = await this.serverProfilesService.getDecryptedProfile(
-      session.serverProfileId,
-      { userId, orgId },
-    );
+    // Raw wrapping, as the download always was (`joinWrapped: false`). Failures are already
+    // HttpExceptions (404 tmux gone, 409 host key, 502 gateway): the capture service maps them.
+    const output = await this.history.captureSession(session, { userId, orgId }, { joinWrapped: false });
 
-    try {
-      const output = await this.sshService.execForOutput(
-        profile,
-        `tmux capture-pane -p -S - -t ${session.tmuxSessionId}`,
-      );
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    const filename = `${session.name}-${timestamp}.txt`;
 
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-      const filename = `${session.name}-${timestamp}.txt`;
-
-      res.header('Content-Type', 'text/plain; charset=utf-8');
-      res.header('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send(output);
-    } catch (error) {
-      // A refused host key is the user's decision to make, not a gateway failure.
-      if (error instanceof HostKeyError) throw hostKeyErrorToHttp(error, session.serverProfileId);
-      const message = error instanceof Error ? error.message : String(error);
-      if (
-        message.includes('session not found') ||
-        message.includes('no server running') ||
-        message.includes("can't find")
-      ) {
-        throw new HttpException('Remote tmux session no longer exists', HttpStatus.NOT_FOUND);
-      }
-      throw new HttpException(
-        'Failed to retrieve terminal history from remote server',
-        HttpStatus.BAD_GATEWAY,
-      );
-    }
+    res.header('Content-Type', 'text/plain; charset=utf-8');
+    res.header('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(output);
   }
 
   @Get(':id')

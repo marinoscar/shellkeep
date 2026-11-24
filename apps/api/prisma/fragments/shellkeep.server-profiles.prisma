@@ -32,6 +32,8 @@ model ServerProfile {
   hostKeyTrustedBy    String?    @map("host_key_trusted_by") @db.Uuid
   facts               Json?      @map("facts")
   factsProbedAt       DateTime?  @map("facts_probed_at") @db.Timestamptz
+  // #56: when false, no terminal output of this server reaches an AI feature (the hard control).
+  aiOutputSharing     Boolean    @default(true) @map("ai_output_sharing")
   tags                String[]
   color               String     @default("default")
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz

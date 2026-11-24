@@ -7,7 +7,7 @@
 // ORDER IS THE STORED KEY ORDER: append, never insert.
 //
 //   system: ui, features (the keys the `global` row has always held), terminal
-//   user:   terminal (the `terminal` key of `user_settings.value`), shortcuts (#80)
+//   user:   terminal (the `terminal` key of `user_settings.value`), shortcuts (#80), terminalAi (#56)
 //
 // The platform's own system namespaces (notifications, jobs, nodes,
 // databaseBackup, maintenance, storage, ...) are registered by the issue that
@@ -28,6 +28,7 @@ import type {
 
 import { FEATURES_SYSTEM_SETTINGS, UI_SYSTEM_SETTINGS } from '../platform/settings/app-system-settings';
 import { TERMINAL_SYSTEM_SETTINGS } from '../terminal/settings/terminal.system-settings';
+import { TERMINAL_AI_SYSTEM_SETTINGS, TERMINAL_AI_USER_SETTINGS } from '../terminal-ai/terminal-ai.settings';
 import { DEFAULT_TERMINAL_SETTINGS, TERMINAL_USER_SETTINGS } from '../terminal/settings/terminal.user-settings';
 import {
   DEFAULT_SHORTCUTS_SETTINGS,
@@ -41,11 +42,22 @@ export const APP_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] 
   TERMINAL_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
+/**
+ * The app's own system namespaces registered AFTER the platform's appended ones (`ai` is the
+ * last of them), so the stored key order of the `global` row stays append-only. Terminal AI
+ * safety (#56): the redaction mode and consent, with a tighten-only organization layer.
+ */
+export const APP_TRAILING_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [
+  TERMINAL_AI_SYSTEM_SETTINGS as SystemSettingsNamespace,
+];
+
 /** The app's own optional user settings namespaces, in stored key order. */
 export const APP_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [
   TERMINAL_USER_SETTINGS as UserSettingsNamespace,
   // #80, appended: the key bar's shortcuts, moved out of `terminal`.
   SHORTCUTS_USER_SETTINGS as UserSettingsNamespace,
+  // Terminal AI consent (#56); appended, so no stored key moves.
+  TERMINAL_AI_USER_SETTINGS as UserSettingsNamespace,
 ];
 
 /** Fields the app adds inside platform system namespaces. None: every stored key has a home. */

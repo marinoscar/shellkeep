@@ -21,6 +21,7 @@ import { permissionIds, roleIds } from '@marinoscar/platform-api/core';
 import { ALLOWLIST_PERMISSIONS, USERS_PERMISSIONS } from '@marinoscar/platform-api/identity';
 import { ORG_SETTINGS_PERMISSIONS, SETTINGS_PERMISSIONS } from '@marinoscar/platform-api/settings';
 import { STORAGE_PERMISSIONS } from '@marinoscar/platform-api/storage';
+import { AI_PERMISSIONS } from '@marinoscar/platform-api/ai';
 import { PLATFORM_ROLES } from '@marinoscar/platform-api/manifest';
 
 import { APP_PERMISSIONS, RUNBOOK_PERMISSIONS } from '../../app-registrations/permissions';
@@ -37,6 +38,7 @@ export const PERMISSIONS = {
   ...permissionIds(USERS_PERMISSIONS),
   ...permissionIds(ALLOWLIST_PERMISSIONS),
   ...permissionIds(STORAGE_PERMISSIONS),
+  ...permissionIds(AI_PERMISSIONS),
   ...permissionIds(APP_PERMISSIONS),
   ...permissionIds(RUNBOOK_PERMISSIONS),
 } as const;
