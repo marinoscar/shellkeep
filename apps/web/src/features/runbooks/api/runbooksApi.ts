@@ -15,6 +15,8 @@ import type {
   RunbookVersionView,
   RunbookView,
   RunDetail,
+  RunArtifacts,
+  SignedDownload,
   RunStatus,
   RunAuditPage,
   RunbookCommandRow,
@@ -209,3 +211,17 @@ export interface ListCommandsParams {
 /** The org-wide command log (#67): what runbooks ran, newest first. */
 export const listRunbookCommands = (params: ListCommandsParams = {}): Promise<Page<RunbookCommandRow>> =>
   api.get(`/runbook-commands${query({ ...params })}`);
+
+// ---------------------------------------------------------------------------
+// Artifacts (#63)
+// ---------------------------------------------------------------------------
+
+export const getRunArtifacts = (runId: string): Promise<RunArtifacts> => api.get(`/runbook-runs/${runId}/artifacts`);
+
+/** Queues the zip bundle of a finished run; `jobId` is null when a bundle already exists. */
+export const requestRunBundle = (runId: string): Promise<{ jobId: string | null; artifactId: string | null }> =>
+  api.post(`/runbook-runs/${runId}/artifacts/bundle`);
+
+/** A signed URL (15 minutes) of one artifact. The caller opens it and drops it: it is never logged or stored. */
+export const getArtifactDownload = (runId: string, artifactId: string): Promise<SignedDownload> =>
+  api.get(`/runbook-runs/${runId}/artifacts/${artifactId}/download`);

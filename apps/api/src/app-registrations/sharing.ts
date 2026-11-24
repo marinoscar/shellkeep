@@ -31,13 +31,15 @@
 // at connect time only (`ServerProfilesService.getDecryptedProfile`), never returned to anyone else.
 //
 // LINKS ARE OFF: `grantable.link: []` for both types, so `POST /api/grants/links` answers
-// 422 ROLE_NOT_GRANTABLE. A server or a runbook is never reachable by a public URL.
+// 422 ROLE_NOT_GRANTABLE. A server or a runbook is never reachable by a public URL. The ONE type that
+// may be linked is a run's log bundle, `runbook_run` (#63, `runbooks/sharing/runbook-run.resource.ts`).
 //
 // A `runbook` has no `connect` action: running one also needs `connect` on EACH target server, decided
 // per target at enqueue time (`runbooks/target-resolver.service.ts`).
 // =============================================================================
 
 import type { Prisma } from '@prisma/client';
+import { registerRunbookRunResource } from '../runbooks/sharing/runbook-run.resource';
 import {
   registerGroupOwnedResource,
   registerResourceType,
@@ -127,6 +129,8 @@ export function registerShellkeepSharing(): void {
       return new Map<string, ResourceDescription>(rows.map((row) => [row.id, { title: row.name, path: '/servers' }]));
     },
   });
+
+  registerRunbookRunResource();
 
   registerResourceType<RunbookRole>({
     type: RUNBOOK_RESOURCE,
