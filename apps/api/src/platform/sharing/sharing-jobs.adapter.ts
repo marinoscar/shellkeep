@@ -20,6 +20,7 @@ import { JobsService } from '@marinoscar/platform-api/jobs';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /** Compile-time proof that a sharing handler IS an app job handler. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the parameters ARE the proof: `From extends To` fails to compile otherwise
 type AssertAssignable<_From extends _To, _To> = true;
 export type SharingJobHandlerIsJobHandler = AssertAssignable<SharingJobHandler, JobHandler>;
 
