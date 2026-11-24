@@ -63,7 +63,9 @@ Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, a
 |---|---|---|
 | A 400 validation error carries `details.issues` | The platform exception filter names each offending field (`path`) and the validator's message, never a submitted value; the forked filter returned only `statusCode`, `code`, `message`, `timestamp` and `path`. The web client reads `message` and `code`, so nothing breaks | Kept (the platform's contract) |
 | A maintenance 503 has `code: "ERROR"` and `details.reason: "MAINTENANCE_MODE"` | The filter derives `code` from the status; the marker the web keys on is `details.reason` (and the `Retry-After: 30` header) | Kept |
-| `common/logger` and `common/exceptions` stay | The host core has no Pino logger or seed exception; nothing injects `LoggerService` and nothing references `DatabaseSeedException`, so both are dead code | Deleted with the telemetry adoption (#53) and the seed review (#84) |
+| `common/exceptions` stays | The host core has no seed exception and nothing references `DatabaseSeedException`, so it is dead code. `common/logger` was deleted with the telemetry adoption (#53) | Deleted with the seed review (#84) |
+| The telemetry assistant reports itself as disabled | `platform/telemetry/telemetry-ai.adapter.ts` binds `TELEMETRY_AI` to an adapter that answers "not available", because ShellKeep has no AI platform yet | #55 |
+| The telemetry compose and collector files are copies | `infra/compose/telemetry.compose.yml`, `infra/otel/otel-collector-config.yaml` and `infra/otel/app-collector.yaml` are copied from `@marinoscar/platform-infra` with a `PLATFORM-ADOPTION-SHIM(#73)` header | #73 |
 | `@stoplight/spectral-cli` is a root dev dependency | The OpenAPI CI job lints the dumped document with the platform's Spectral ruleset (`.spectral.yaml`) | Kept |
 
 ## App-owned host pieces (not shims)
