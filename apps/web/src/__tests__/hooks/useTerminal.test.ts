@@ -64,6 +64,11 @@ vi.mock('@xterm/xterm', () => {
     // The file link provider (#155): one registration, one disposable.
     this.registerLinkProvider = vi.fn(() => ({ dispose: vi.fn() }));
     this.buffer = { active: { length: 0, getLine: vi.fn() } };
+    // The key handler and the cursor-key mode the key bar's modifiers read (#166).
+    this.attachCustomKeyEventHandler = vi.fn((handler: (e: KeyboardEvent) => boolean) => {
+      this.keyHandler = handler;
+    });
+    this.modes = { applicationCursorKeysMode: false };
   });
   return { Terminal: TerminalMock };
 });
@@ -122,6 +127,8 @@ import { SearchAddon } from '@xterm/addon-search';
 import { TerminalWebSocket } from '../../services/terminal-ws';
 import { api } from '../../services/api';
 import { DEFAULT_TERMINAL_SETTINGS, type ResolvedTerminalSettings } from '../../lib/terminal/settings';
+import { createModifierStore } from '../../lib/terminal/keys/modifierState';
+import { createModifierInputInterceptor } from '../../lib/terminal/keys/modifiedInput';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -883,6 +890,92 @@ describe('useTerminal', () => {
       rerender({ prefs: { ...DEFAULT_TERMINAL_SETTINGS, copyOnSelect: true } });
       act(() => term.selectionHandler());
       expect(writeText).toHaveBeenCalledWith('selected text');
+    });
+  });
+  // -------------------------------------------------------------------------
+  describe('key bar modifiers on typed input (#166)', () => {
+    function setup() {
+      const store = createModifierStore();
+      const inputModifiers = createModifierInputInterceptor(store);
+      renderHook(() => {
+        const containerRef = useRef<HTMLDivElement>(containerDiv);
+        return useTerminal('session-1', containerRef, undefined, { inputModifiers });
+      });
+      const term = getTerminalInstance() as unknown as {
+        onData: ReturnType<typeof vi.fn>;
+        keyHandler: (e: KeyboardEvent) => boolean;
+        modes: { applicationCursorKeysMode: boolean };
+      };
+      const type = (data: string) => (term.onData.mock.calls[0][0] as (d: string) => void)(data);
+      const sent = () => wsSendFn.mock.calls.map((c) => new TextDecoder().decode(c[0] as Uint8Array));
+      return { store, term, type, sent };
+    }
+
+    it('sends Ctrl+R for an r typed with Ctrl armed, then releases it', () => {
+      const { store, type, sent } = setup();
+      store.tap('ctrl');
+      type('r');
+      type('r');
+      expect(sent()).toEqual(['\x12', 'r']);
+      expect(store.getSnapshot().ctrl).toBe('off');
+    });
+
+    it('sends Alt+b as ESC b', () => {
+      const { store, type, sent } = setup();
+      store.tap('alt');
+      type('b');
+      expect(sent()).toEqual(['\x1bb']);
+    });
+
+    it('applies the modifier to an arrow typed in application cursor mode', () => {
+      const { store, term, type, sent } = setup();
+      term.modes.applicationCursorKeysMode = true;
+      store.tap('shift');
+      type('\x1bOA');
+      expect(sent()).toEqual(['\x1b[1;2A']);
+    });
+
+    it('sends a paste unchanged and keeps the one-shot', () => {
+      const { store, type, sent } = setup();
+      store.tap('ctrl');
+      type('echo hi');
+      expect(sent()).toEqual(['echo hi']);
+      expect(store.getSnapshot().ctrl).toBe('armed');
+    });
+
+    it('a hardware Ctrl wins: the one-shot is released and the data is not modified twice', () => {
+      const { store, term, type, sent } = setup();
+      store.tap('alt');
+      const pass = term.keyHandler(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }));
+      expect(pass).toBe(true);
+      expect(store.getSnapshot().alt).toBe('off');
+      type('\x03');
+      expect(sent()).toEqual(['\x03']);
+    });
+
+    it('a hardware chord does not double-apply a locked modifier', () => {
+      const { store, term, type, sent } = setup();
+      vi.setSystemTime(10_000);
+      store.tap('ctrl');
+      store.tap('ctrl');
+      expect(store.getSnapshot().ctrl).toBe('locked');
+      term.keyHandler(new KeyboardEvent('keydown', { key: 'r', ctrlKey: true }));
+      type('\x12');
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      // The next soft-keyboard key gets the lock again.
+      type('a');
+      expect(sent()).toEqual(['\x12', '\x01']);
+      expect(store.getSnapshot().ctrl).toBe('locked');
+    });
+
+    it('a plain hardware key gets the armed modifier like a soft key', () => {
+      const { store, term, type, sent } = setup();
+      store.tap('ctrl');
+      expect(term.keyHandler(new KeyboardEvent('keydown', { key: 'l' }))).toBe(true);
+      type('l');
+      expect(sent()).toEqual(['\x0c']);
     });
   });
 });

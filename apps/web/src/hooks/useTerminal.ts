@@ -15,6 +15,7 @@ import {
   type AppColorMode,
 } from '../lib/terminal/appearance';
 import { createFileLinkProvider, type TerminalFileLinkSource } from '../lib/terminal/file-link-provider';
+import type { TerminalInputModifiers } from '../lib/terminal/keys/modifiedInput';
 
 /**
  * Apply attributes to the xterm.js helper textarea that suppress the
@@ -126,6 +127,11 @@ export interface TerminalOptions {
    * `null` or absent: no file links. Read on every hover, so it may change without a reconnect.
    */
   fileLinks?: TerminalFileLinkSource | null;
+  /**
+   * The key bar's armed or locked modifiers (#166): typed input passes through it
+   * before it is sent, so Ctrl armed + `r` sends Ctrl+R. Read on every keystroke.
+   */
+  inputModifiers?: TerminalInputModifiers | null;
 }
 
 const DEFAULT_APPEARANCE: TerminalAppearance = {
@@ -145,6 +151,8 @@ export function useTerminal(
   appearanceRef.current = appearance;
   const fileLinksRef = useRef(options.fileLinks ?? null);
   fileLinksRef.current = options.fileLinks ?? null;
+  const inputModifiersRef = useRef(options.inputModifiers ?? null);
+  inputModifiersRef.current = options.inputModifiers ?? null;
   const [bellCount, setBellCount] = useState(0);
   // Whether text is selected (#58: the floating Explain chip).
   const [hasSelection, setHasSelection] = useState(false);
@@ -177,9 +185,25 @@ export function useTerminal(
       convertEol: true,
     });
 
+    // A hardware key with a real Ctrl, Alt or Meta (#166): it wins over the key
+    // bar's one-shots, which are released, and the data it produces (sent
+    // synchronously by xterm inside this keydown) is not modified again.
+    let hardwareChord = false;
+    let hardwareChordTimer: ReturnType<typeof setTimeout> | null = null;
+
     // App shortcuts never reach the PTY (#57).
     terminal.attachCustomKeyEventHandler?.((event) => {
-      return !(event.type === 'keydown' && appearanceRef.current.isReservedKey?.(event));
+      if (event.type === 'keydown' && appearanceRef.current.isReservedKey?.(event)) return false;
+      if (event.type === 'keydown' && (event.ctrlKey || event.altKey || event.metaKey)) {
+        inputModifiersRef.current?.onHardwareChord();
+        hardwareChord = true;
+        if (hardwareChordTimer !== null) clearTimeout(hardwareChordTimer);
+        hardwareChordTimer = setTimeout(() => {
+          hardwareChord = false;
+          hardwareChordTimer = null;
+        }, 0);
+      }
+      return true;
     });
 
     // The bell (#80): a flash the view draws, or a short beep.
@@ -265,7 +289,13 @@ export function useTerminal(
     // and a keystroke is sent exactly once (issue #93).
     const encoder = new TextEncoder();
     const dataSubscription = terminal.onData((data: string) => {
-      wsRef.current?.send(encoder.encode(data));
+      // The key bar's modifiers apply to typed keys (#166), never to a hardware chord.
+      const modifiers = inputModifiersRef.current;
+      const out =
+        modifiers && !hardwareChord
+          ? modifiers.transform(data, terminal.modes?.applicationCursorKeysMode ?? false)
+          : data;
+      wsRef.current?.send(encoder.encode(out));
     });
 
     // Terminal binary -> the current socket
@@ -296,6 +326,7 @@ export function useTerminal(
 
     return () => {
       if (fitTimer !== null) clearTimeout(fitTimer);
+      if (hardwareChordTimer !== null) clearTimeout(hardwareChordTimer);
       resizeObserver.disconnect();
       mutationObserver.disconnect();
       container.removeEventListener('focus', handleFocus, true);
