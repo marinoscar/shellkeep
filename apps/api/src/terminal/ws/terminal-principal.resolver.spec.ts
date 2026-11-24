@@ -1,7 +1,7 @@
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { TerminalPrincipalResolver } from './terminal-principal.resolver';
-import { createMockUserWithRelations } from '../../../test/fixtures/test-data.factory';
+import { MOCK_DEFAULT_ORG_ID, createMockUserWithRelations } from '../../../test/fixtures/test-data.factory';
 
 const SECRET = 'a-test-secret-with-at-least-32-characters!!';
 
@@ -32,7 +32,7 @@ describe('TerminalPrincipalResolver', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.principal.userId).toBe('user-1');
-    expect(result.principal.orgId).toBe('org-default');
+    expect(result.principal.orgId).toBe(MOCK_DEFAULT_ORG_ID);
     expect(result.principal.permissions).toEqual(expect.arrayContaining(['sessions:read', 'sessions:write']));
     expect(result.principal.expiresAtMs).toBe(exp * 1000);
   });
