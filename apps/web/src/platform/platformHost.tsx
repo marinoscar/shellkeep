@@ -11,12 +11,12 @@
  *     packaged profile page shows its upload control once storage is configured.
  *   - `viewer`: the signed-in user from the identity slice; `hasPermission` is
  *     `usePermissions`'s, the predicate every route guard uses.
- *   - `applyTheme`: the app theme context's `setMode`, so a theme picked on the
- *     Appearance page applies at once (light, dark and system; ShellKeep
- *     registers no other theme). The shell theme replaces it in #76.
+ *   - `applyTheme`: the shell theme's `setMode` (`ShellRoot`, #76), so a theme
+ *     picked on the Appearance page applies at once (light, dark and system;
+ *     ShellKeep registers no other theme).
  *
- * Mount `AppPlatformHostProvider` once, inside the identity providers and the
- * theme context.
+ * Mount `AppPlatformHostProvider` once, inside the identity providers and
+ * `ShellRoot`.
  */
 
 import { useCallback, useMemo } from 'react';
@@ -25,7 +25,7 @@ import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import type { PlatformViewer, PlatformWebHost } from '@marinoscar/platform-web/core';
 import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
 import { useSettingsFeatures } from '@marinoscar/platform-web/settings/headless';
-import { useThemeContext } from '../contexts/ThemeContext';
+import { useShellTheme } from '@marinoscar/platform-web/shell/headless';
 import { platformApi } from '../services/api';
 
 const THEME_MODES = ['light', 'dark', 'system'] as const;
@@ -39,7 +39,7 @@ function isThemeMode(theme: string): theme is ThemeMode {
 export function useAppPlatformHost(): PlatformWebHost {
   const { user, refreshUser } = useAuth();
   const { hasPermission } = usePermissions();
-  const { setMode } = useThemeContext();
+  const { setMode } = useShellTheme();
   const features = useSettingsFeatures();
 
   const applyTheme = useCallback<NonNullable<PlatformWebHost['applyTheme']>>(

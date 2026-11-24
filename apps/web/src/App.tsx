@@ -1,9 +1,11 @@
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { RequireAuth, RequirePermission } from '@marinoscar/platform-web/identity/headless';
+import { ShellProviders } from '@marinoscar/platform-web/shell/headless';
+import type { ShellProvider } from '@marinoscar/platform-web/shell/headless';
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
 import { IdentityProviders } from './identity/IdentityProviders';
-import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
+import { SHELLKEEP_THEMES } from './platform/shellTheme';
 import { Layout } from './components/common/Layout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { useRegisterSW } from 'virtual:pwa-register/react';
@@ -36,8 +38,9 @@ const UsersPage = lazy(() =>
 const HomePage = lazy(() => import('./pages/HomePage'));
 const ServerProfilesPage = lazy(() => import('./pages/ServerProfilesPage'));
 const SessionsPage = lazy(() => import('./pages/SessionsPage'));
+// The session terminal at `/sessions/:id`, full-bleed inside the shell (#76);
+// #77 replaces it with the session workspace.
 const TerminalPage = lazy(() => import('./pages/TerminalPage'));
-const TerminalFullPage = lazy(() => import('./pages/TerminalFullPage'));
 // Settings (issue #48): the packaged hub over `config/userSettingsSections.tsx`,
 // the packaged Profile and Appearance pages, and the terminal domain's page.
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
@@ -46,6 +49,10 @@ const UserProfilePage = lazy(() =>
 );
 const UserAppearancePage = lazy(() =>
   import('@marinoscar/platform-web/settings/ui').then((m) => ({ default: m.UserAppearancePage })),
+);
+// The identity slice's per-user Access Tokens page (#47's card, routed by #76).
+const UserTokensPage = lazy(() =>
+  import('@marinoscar/platform-web/identity/ui').then((m) => ({ default: m.UserTokensPage })),
 );
 const TerminalSettingsPage = lazy(
   () => import('./components/terminal/settings/TerminalSettingsPage'),
@@ -103,256 +110,274 @@ const TestLoginPage = import.meta.env.PROD
   ? null
   : lazy(() => import('./pages/TestLoginPage'));
 
+
 /** Sends a viewer without the route's permission home. */
 const HOME = <Navigate to="/" replace />;
 
+/**
+ * The old terminal URLs (`/terminal/:id`, the layout-less page, and
+ * `/sessions/:id/terminal`) now land on the session itself, `/sessions/:id`
+ * (#76), so a bookmark or an "open in new tab" link keeps working.
+ */
+function SessionRedirect() {
+  const { id = '' } = useParams<{ id: string }>();
+  return <Navigate to={`/sessions/${encodeURIComponent(id)}`} replace />;
+}
+
+/** The slices' adapters for the packaged jobs and nodes pages (#49). */
+function JobsNodesShellProvider({ children }: { children: ReactNode }) {
+  return <JobsNodesProviders>{children}</JobsNodesProviders>;
+}
+
+/**
+ * The providers around the signed-in shell, outermost first (`ShellProviders`,
+ * #76). Inside `RequireAuth`: the notification centre (#51) wraps the SHELL
+ * because the bell lives in its AppBar and one mount means one live stream
+ * per tab; the jobs and nodes adapters serve the Console's Operations pages.
+ */
+const SHELL_PROVIDERS: readonly ShellProvider[] = [NotificationProvider, JobsNodesShellProvider];
+
 function AppRoutes() {
-  const { theme } = useThemeContext();
-
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <ErrorBoundary>
-        {/* The host slice's client gate (#46): while the API answers a request
-            with a maintenance 503 (recorded by `services/api.ts`), the screen
-            replaces the routes; every route but the Maintenance page. */}
-        <MaintenanceGate appName={APP_NAME}>
-          <Suspense fallback={<LoadingSpinner fullScreen />}>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/auth/callback" element={<AuthCallbackPage />} />
-              {/* A failed sign-in: the packaged page shows the screen for `?error=<code>`. */}
-              <Route path="/auth/error" element={<AuthCallbackPage />} />
+    <ErrorBoundary>
+      {/* The host slice's client gate (#46): while the API answers a request
+          with a maintenance 503 (recorded by `services/api.ts`), the screen
+          replaces the routes; every route but the Maintenance page. */}
+      <MaintenanceGate appName={APP_NAME}>
+        <Suspense fallback={<LoadingSpinner fullScreen />}>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            {/* A failed sign-in: the packaged page shows the screen for `?error=<code>`. */}
+            <Route path="/auth/error" element={<AuthCallbackPage />} />
 
-              {/* Test login (development only) */}
-              {!import.meta.env.PROD && TestLoginPage && (
-                <Route path="/testing/login" element={<TestLoginPage />} />
-              )}
+            {/* Test login (development only) */}
+            {!import.meta.env.PROD && TestLoginPage && (
+              <Route path="/testing/login" element={<TestLoginPage />} />
+            )}
 
-              {/* Protected routes */}
-              <Route element={<RequireAuth loading={<LoadingSpinner fullScreen />} />}>
-                {/* Device activation page - without layout for full-screen experience */}
-                <Route path="/activate" element={<ActivateDevicePage />} />
+            {/* Protected routes */}
+            <Route element={<RequireAuth loading={<LoadingSpinner fullScreen />} />}>
+              {/* Device activation page - without the shell for a full-screen experience */}
+              <Route path="/activate" element={<ActivateDevicePage />} />
 
-                {/* Full-screen terminal - without layout */}
+              {/* The signed-in shell (#76): the platform's ShellLayout, bound in
+                  `components/common/Layout.tsx`, around every page below. */}
+              <Route
+                element={
+                  <ShellProviders providers={SHELL_PROVIDERS}>
+                    <Layout />
+                  </ShellProviders>
+                }
+              >
+                <Route path="/" element={<HomePage />} />
                 <Route
-                  path="/terminal/:id"
+                  path="/sessions"
+                  element={
+                    <RequirePermission permission="sessions:read" fallback={HOME}>
+                      <SessionsPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* The session terminal, full-bleed (`useShellMainVariant`). */}
+                <Route
+                  path="/sessions/:id"
                   element={
                     <RequirePermission permission="sessions:read" fallback={HOME}>
                       <TerminalAccessGate>
-                        <TerminalFullPage />
+                        <TerminalPage />
                       </TerminalAccessGate>
                     </RequirePermission>
                   }
                 />
-
-                <Route element={<Layout />}>
-                  <Route path="/" element={<HomePage />} />
-                  <Route
-                    path="/sessions"
-                    element={
-                      <RequirePermission permission="sessions:read" fallback={HOME}>
-                        <SessionsPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/sessions/:id/terminal"
-                    element={
-                      <RequirePermission permission="sessions:read" fallback={HOME}>
-                        <TerminalAccessGate>
-                          <TerminalPage />
-                        </TerminalAccessGate>
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/servers"
-                    element={
-                      <RequirePermission permission="servers:read" fallback={HOME}>
-                        <ServerProfilesPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* Settings (#48): every card of USER_SETTINGS_SECTIONS has a route
-                      here, and none is gated (user_settings:* is every role's). */}
-                  <Route path="/settings" element={<UserSettingsHubPage />} />
-                  <Route path="/settings/profile" element={<UserProfilePage />} />
-                  <Route path="/settings/appearance" element={<UserAppearancePage />} />
-                  <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
-                  <Route path="/settings/notifications" element={<UserNotificationsPage />} />
-                  {/* Admin settings (#46): every card of ADMIN_SECTIONS has a route
-                      here, gated on the card's permission (the string its API
-                      controller enforces). The hub admits any card's permission
+                <Route path="/sessions/:id/terminal" element={<SessionRedirect />} />
+                <Route path="/terminal/:id" element={<SessionRedirect />} />
+                <Route
+                  path="/servers"
+                  element={
+                    <RequirePermission permission="servers:read" fallback={HOME}>
+                      <ServerProfilesPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Settings (#48): every card of USER_SETTINGS_SECTIONS has a route
+                    here, and none is gated (user_settings:* is every role's). */}
+                <Route path="/settings" element={<UserSettingsHubPage />} />
+                <Route path="/settings/profile" element={<UserProfilePage />} />
+                <Route path="/settings/appearance" element={<UserAppearancePage />} />
+                <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
+                <Route path="/settings/notifications" element={<UserNotificationsPage />} />
+                <Route path="/settings/tokens" element={<UserTokensPage />} />
+                {/* The Console (#46, #76): every card of ADMIN_SECTIONS has a route
+                    here, gated on the card's permission (the string its API
+                    controller enforces). The hub admits any card's permission
                     (`ADMIN_HUB_PERMISSIONS`). Paths are spelled out: the
-                    registry test parses this file as text. */}
-                  <Route
-                    path="/admin/settings"
-                    element={
-                      <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read']} fallback={HOME}>
-                        <AdminSettingsHubPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/admin/settings/about"
-                    element={
-                      <RequirePermission permission="system_settings:read" fallback={HOME}>
-                        <AboutPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/admin/settings/maintenance"
-                    element={
-                      <RequirePermission permission="system_settings:read" fallback={HOME}>
-                        <MaintenancePage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/admin/settings/terminal"
-                    element={
-                      <RequirePermission permission="system_settings:read" fallback={HOME}>
-                        <TerminalSystemSettingsPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* Storage (#50): `storage_config:read` is what the storage
-                      slice's `/api/admin/storage-config` GET enforces (not
-                      `storage:read`, which every role holds). Saving, testing
-                      and migrating need `storage_config:write`, gated inside
-                      the packaged page. */}
-                  <Route
-                    path="/admin/settings/storage"
-                    element={
-                      <RequirePermission permission="storage_config:read" fallback={HOME}>
-                        <StorageConfigPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* Email (#51): `GET /api/email-settings` enforces
-                      `system_settings:read`; saving and the test send need
-                      `system_settings:write`, gated inside the page. */}
-                  <Route
-                    path="/admin/settings/email"
-                    element={
-                      <RequirePermission permission="system_settings:read" fallback={HOME}>
-                        <EmailSettingsPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* Web Push (#51): `GET /api/admin/push-config` enforces
-                      `push:read`; key generation, rotation and the test push
-                      need `push:write`, gated inside the page. */}
-                  <Route
-                    path="/admin/settings/push"
-                    element={
-                      <RequirePermission permission="push:read" fallback={HOME}>
-                        <PushConfigPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* Broadcasts (#51): the controller admits either scope
-                      (`anyPermissions`); writes need the matching `:write`,
-                      gated inside the page. */}
-                  <Route
-                    path="/admin/settings/broadcasts"
-                    element={
-                      <RequirePermission permissions={['broadcasts:read', 'org_broadcasts:read']} fallback={HOME}>
-                        <BroadcastsPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/admin/settings/users"
-                    element={
-                      <RequirePermission permission="users:read" fallback={HOME}>
-                        <UsersPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/admin/settings/doctor"
-                    element={
-                      <RequirePermission permission="system_settings:read" fallback={HOME}>
-                        <DoctorPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* Operations (#49). `jobs:read` is what the jobs slice's
-                      admin controller enforces on the list, the stats and the
-                      insights; `nodes:read` is the nodes admin controller's.
-                      Writes (`jobs:write`, `nodes:write`) are gated inside the
-                      pages. Job Insights nests under the Jobs path: two routes,
-                      not a tab. */}
-                  <Route
-                    path="/admin/settings/jobs"
-                    element={
-                      <RequirePermission permission="jobs:read" fallback={HOME}>
-                        <JobsPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/admin/settings/jobs/insights"
-                    element={
-                      <RequirePermission permission="jobs:read" fallback={HOME}>
-                        <JobInsightsPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/admin/settings/workers"
-                    element={
-                      <RequirePermission permission="nodes:read" fallback={HOME}>
-                        <WorkersPage />
-                      </RequirePermission>
-                    }
-                  />
-                  {/* `users:read` is what `GET /api/users` enforces; the packaged page
-                      gates its Allowlist tab on `allowlist:read` itself. */}
-                  <Route
-                    path="/admin/users"
-                    element={
-                      <RequirePermission permission="users:read" fallback={HOME}>
-                        <UsersPage />
-                      </RequirePermission>
-                    }
-                  />
-                </Route>
+                    registry tests and the web conformance suites parse this
+                    file as text. */}
+                <Route path="/admin" element={<Navigate to="/admin/settings" replace />} />
+                <Route
+                  path="/admin/settings"
+                  element={
+                    <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read']} fallback={HOME}>
+                      <AdminSettingsHubPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/admin/settings/about"
+                  element={
+                    <RequirePermission permission="system_settings:read" fallback={HOME}>
+                      <AboutPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/admin/settings/maintenance"
+                  element={
+                    <RequirePermission permission="system_settings:read" fallback={HOME}>
+                      <MaintenancePage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/admin/settings/terminal"
+                  element={
+                    <RequirePermission permission="system_settings:read" fallback={HOME}>
+                      <TerminalSystemSettingsPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Storage (#50): `storage_config:read` is what the storage
+                    slice's `/api/admin/storage-config` GET enforces (not
+                    `storage:read`, which every role holds). Saving, testing
+                    and migrating need `storage_config:write`, gated inside
+                    the packaged page. */}
+                <Route
+                  path="/admin/settings/storage"
+                  element={
+                    <RequirePermission permission="storage_config:read" fallback={HOME}>
+                      <StorageConfigPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Email (#51): `GET /api/email-settings` enforces
+                    `system_settings:read`; saving and the test send need
+                    `system_settings:write`, gated inside the page. */}
+                <Route
+                  path="/admin/settings/email"
+                  element={
+                    <RequirePermission permission="system_settings:read" fallback={HOME}>
+                      <EmailSettingsPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Web Push (#51): `GET /api/admin/push-config` enforces
+                    `push:read`; key generation, rotation and the test push
+                    need `push:write`, gated inside the page. */}
+                <Route
+                  path="/admin/settings/push"
+                  element={
+                    <RequirePermission permission="push:read" fallback={HOME}>
+                      <PushConfigPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Broadcasts (#51): the controller admits either scope
+                    (`anyPermissions`); writes need the matching `:write`,
+                    gated inside the page. */}
+                <Route
+                  path="/admin/settings/broadcasts"
+                  element={
+                    <RequirePermission permissions={['broadcasts:read', 'org_broadcasts:read']} fallback={HOME}>
+                      <BroadcastsPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/admin/settings/users"
+                  element={
+                    <RequirePermission permission="users:read" fallback={HOME}>
+                      <UsersPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/admin/settings/doctor"
+                  element={
+                    <RequirePermission permission="system_settings:read" fallback={HOME}>
+                      <DoctorPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Operations (#49). `jobs:read` is what the jobs slice's
+                    admin controller enforces on the list, the stats and the
+                    insights; `nodes:read` is the nodes admin controller's.
+                    Writes (`jobs:write`, `nodes:write`) are gated inside the
+                    pages. Job Insights nests under the Jobs path: two routes,
+                    not a tab. */}
+                <Route
+                  path="/admin/settings/jobs"
+                  element={
+                    <RequirePermission permission="jobs:read" fallback={HOME}>
+                      <JobsPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/admin/settings/jobs/insights"
+                  element={
+                    <RequirePermission permission="jobs:read" fallback={HOME}>
+                      <JobInsightsPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/admin/settings/workers"
+                  element={
+                    <RequirePermission permission="nodes:read" fallback={HOME}>
+                      <WorkersPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* `users:read` is what `GET /api/users` enforces; the packaged page
+                    gates its Allowlist tab on `allowlist:read` itself. Kept for
+                    bookmarks; the Console card is `/admin/settings/users`. */}
+                <Route
+                  path="/admin/users"
+                  element={
+                    <RequirePermission permission="users:read" fallback={HOME}>
+                      <UsersPage />
+                    </RequirePermission>
+                  }
+                />
               </Route>
+            </Route>
 
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
-        </MaintenanceGate>
-      </ErrorBoundary>
-    </ThemeProvider>
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </MaintenanceGate>
+    </ErrorBoundary>
   );
 }
 
 export default function App() {
   return (
-    <ThemeContextProvider>
+    // The shell's theme root (#76): the viewer's light, dark or system choice
+    // (kept under `localStorage['theme_mode']`), MUI's ThemeProvider and
+    // CssBaseline for the resolved ShellKeep theme.
+    <ShellRoot themes={SHELLKEEP_THEMES}>
       <IdentityProviders>
         <AppPlatformHostProvider>
-          {/* The live inbox (#51): one SSE stream per tab, opened only while
-              signed in (the provider watches the session), so the bell in
-              the app bar and the toasts work on every route. */}
-          <NotificationProvider>
-            <JobsNodesProviders>
-              <AppRoutes />
-            </JobsNodesProviders>
-          </NotificationProvider>
+          <AppRoutes />
           {/* The host slice's PWA prompts (#46): the update prompt also
               registers the service worker. */}
           <UpdatePrompt useRegisterSW={useRegisterSW} />
           <InstallPrompt appName={APP_NAME} />
         </AppPlatformHostProvider>
       </IdentityProviders>
-    </ThemeContextProvider>
+    </ShellRoot>
   );
 }
