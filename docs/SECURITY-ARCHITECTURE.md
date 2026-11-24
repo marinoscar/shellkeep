@@ -169,6 +169,15 @@ Detail and flows: [specs/fleet-runbooks.md §6](specs/fleet-runbooks.md#6-safety
 - Uploads (terminal image paste, runbook `file_upload`): size and type limits (100 MiB at the proxy), randomized object keys with the organization segment, stored by the storage slice; a `file_upload` step names a stored object and verifies the checksum on the target (`UPLOAD_CHECKSUM_MISMATCH`).
 - No global rate limiter exists; targeted limits are the platform's (AI, device polling, link resolution). Add `limit_req` at the proxy if the deployment is exposed.
 
+### Command history redaction
+
+The key panel's History tab (`GET /api/sessions/:id/command-history`, [specs/terminal.md §5.14](specs/terminal.md#514-command-history)) shows the login user's shell history in the browser, so it is treated as terminal content that may hold secrets (`mysql -pSECRET`, `sshpass -p`, `export TOKEN=...`).
+
+- **Redacted before it is cached or searched.** Every entry passes command-line rules (password and token flags, `sshpass -p`, attached `mysql -p`, `curl -u user:pw`, secret-named assignments) and then `redactText`, the terminal AI redactor, with the same kinds. An entry with a finding is masked (`[REDACTED:<kind>]`); an entry that is entirely a secret is dropped and only counted. Because search runs on the redacted text, a query cannot be used to probe a masked value.
+- **Limits.** Defence in depth, not a guarantee: a secret typed where a command was expected (a password at a wrong prompt) looks like any word, and a custom `$HISTFILE` is not read. The user can keep such lines out of history with the shell's own controls (`HISTCONTROL=ignorespace`, a leading space).
+- **Access** is the terminal's (`sessions:write`, the caller's own session, the `connect` right on its server, 404 otherwise), checked on every request, so one user's history is never shown to another.
+- **Transport and reading.** Over SFTP on the host-key-verified factory, fixed file names relative to home, the last 256 KB only, no command executed. Entries live in API memory for 30 seconds (cache) and nowhere else; they are never logged, traced, audited or sent to AI.
+
 ### Remote file access
 
 Detail: [specs/files.md](specs/files.md).

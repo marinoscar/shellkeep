@@ -107,6 +107,7 @@ All under `/api`. Exact routes: `/api/docs`.
 | `server-profiles/:id/files`, `files/download` | files on a server over SFTP: list, stat, ranged text, single-use download token and streamed download | `sessions:write` plus the right to connect (no `files:*`); `files/download/:token` is public by token | [specs/files.md](specs/files.md) |
 | `sessions` | list, create, rename, terminate, batch-terminate, history download | `sessions:read/write/delete` | [specs/terminal.md](specs/terminal.md) |
 | `snippets`, `snippets/order` | the key panel's saved terminal text: list and search, create, edit, delete, reorder; owner-only; `warning: "looks-like-secret"` on save | `sessions:write` | [specs/terminal.md §5.13](specs/terminal.md#513-snippets) |
+| `sessions/:id/command-history` | the key panel's History tab: the shell history file of the session's server over SFTP, newest first, deduplicated, secrets masked or dropped; cached 30 s; 30 reads per user and minute | `sessions:write` (own session, connect right) | [specs/terminal.md §5.14](specs/terminal.md#514-command-history) |
 | `dashboard` | Home summary | `sessions:read` | [ARCHITECTURE §3.7](ARCHITECTURE.md#37-dashboard-cli-and-android) |
 | `ai/terminal` | assist, explain (+ `explain/preview`), consent, session summaries (`sessions/:id/summaries`) | `ai:use` | [specs/terminal-ai.md](specs/terminal-ai.md) |
 | `ai/runbooks` | draft a runbook with AI | `ai:use` | [specs/fleet-runbooks.md §7](specs/fleet-runbooks.md#7-ai-step-and-drafting) |
