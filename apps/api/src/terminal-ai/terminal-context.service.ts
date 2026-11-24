@@ -129,8 +129,14 @@ export class TerminalContextService {
     return { ...system, consentAcceptedAt: user?.consentAcceptedAt ?? null };
   }
 
-  async forAi(sessionId: string, scope: OwnerScope, options: TerminalAiOptions): Promise<TerminalAiContext> {
-    const { purpose } = options;
+  /**
+   * The gates that come before any capture: the session (owner and organization checked: no access
+   * is a 404), the consent notice and the server's AI switch. Throws the same 409s as `forAi`.
+   * Nothing is read from the pane. A route that queues work for later (#59 summaries) calls it so the
+   * user hears `AI_CONSENT_REQUIRED` or `AI_OUTPUT_SHARING_DISABLED` now, not from a failed job; the
+   * job still goes through `forAi`, which checks again.
+   */
+  async preflight(sessionId: string, scope: OwnerScope, purpose: TerminalAiPurpose) {
     const session = await this.sessions.findOne(sessionId, scope);
 
     // 1. Consent. It comes before the switch: an unconsented user learns nothing about the server.
@@ -161,6 +167,12 @@ export class TerminalContextService {
         message: 'This server is set to never send terminal output to AI.',
       });
     }
+    return { session, policy, profile, sharing };
+  }
+
+  async forAi(sessionId: string, scope: OwnerScope, options: TerminalAiOptions): Promise<TerminalAiContext> {
+    const { purpose } = options;
+    const { session, policy, profile, sharing } = await this.preflight(sessionId, scope, purpose);
 
     const facts = readStoredFacts(profile.facts);
     const cwdRaw = await this.history.currentPath(session, scope);

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from '
 import {
   Alert,
   Box,
-  Button,
   Drawer,
   IconButton,
   ToggleButton,
@@ -16,6 +15,7 @@ import {
 } from '@mui/icons-material';
 import { CommandAssistPanel } from './CommandAssistPanel';
 import { ExplainPanel, type ExplainTrigger } from './ExplainPanel';
+import { SessionSummaryPanel } from './SessionSummaryPanel';
 
 /** The panel's three actions (#57, #58, #59). */
 export type TerminalAiMode = 'suggest' | 'explain' | 'summarize';
@@ -56,19 +56,6 @@ const MODES: Array<{ value: TerminalAiMode; label: string }> = [
   { value: 'summarize', label: 'Summarize session' },
 ];
 
-function ComingSoon({ action }: { action: string }) {
-  return (
-    <Box sx={{ display: 'grid', gap: 0.5, justifyItems: 'start' }}>
-      <Button variant="contained" size="small" disabled>
-        {action}
-      </Button>
-      <Typography variant="caption" color="text.secondary">
-        {AI_COMING_SOON}
-      </Typography>
-    </Box>
-  );
-}
-
 function PanelBody({
   onClose,
   onInsert,
@@ -97,14 +84,7 @@ function PanelBody({
       />
     );
   } else {
-    body = (
-      <>
-        <Typography variant="body2" color="text.secondary">
-          Summarizes this session in the background and shows the result here when it is ready.
-        </Typography>
-        <ComingSoon action="Summarize" />
-      </>
-    );
+    body = <SessionSummaryPanel sessionId={sessionId} />;
   }
 
   return (
@@ -151,8 +131,8 @@ function PanelBody({
  * it is a bottom sheet. The page renders it only when `useTerminalAiAvailable`
  * says so (the `ai` feature on and `ai:use`).
  *
- * "Suggest command" (#57, `CommandAssistPanel`) and "Explain" (#58, `ExplainPanel`) are live; Summarize still
- * renders disabled with {@link AI_COMING_SOON} until #59. Insert hands the command to
+ * "Suggest command" (#57, `CommandAssistPanel`), "Explain" (#58, `ExplainPanel`) and "Summarize session" (#59,
+ * `SessionSummaryPanel`) are all live. Insert hands the command to
  * `onInsert`, which pastes it without a newline. Nothing is ever run automatically.
  */
 export function TerminalAiPanel({ open, onClose, variant, onInsert, sessionId = null, focusRequest = 0, ...explain }: TerminalAiPanelProps) {

@@ -32,7 +32,7 @@ export const SHELLKEEP_AI_FEATURES: readonly AiFeatureDefinition[] = [
     id: 'session_summary',
     label: 'Session summaries',
     group: 'Terminal',
-    needs: ['responses'],
+    needs: ['responses', 'structured_output'],
   },
   {
     id: 'runbook_agent',
