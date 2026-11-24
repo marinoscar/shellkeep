@@ -46,7 +46,12 @@ import {
   terminalSessionsExportRequestSchema,
 } from '../../src/terminal/export/terminal-sessions.export-source';
 import {
+  RUNBOOK_APPROVAL_EXPORT_COLUMNS,
+  RUNBOOK_COMMAND_EXECUTION_EXPORT_COLUMNS,
   RUNBOOK_RUNS_EXPORT_SOURCE,
+  RUNBOOK_RUN_EXPORT_COLUMNS,
+  RUNBOOK_RUN_STEP_EXPORT_COLUMNS,
+  RUNBOOK_RUN_TARGET_EXPORT_COLUMNS,
   runbookRunsExportRequestSchema,
 } from '../../src/runbooks/export/runbook-runs.export-source';
 
@@ -256,19 +261,83 @@ describe('ShellKeep export sources', () => {
   });
 
   describe('runbook-runs', () => {
-    it('is registered and exports no dataset until the run tables exist (#62), reading nothing', async () => {
-      const { db, calls } = recordingDb();
-      const ctx = contextOf(db);
-      const req = RUNBOOK_RUNS_EXPORT_SOURCE.requestSchema.parse({ from: '2026-01-01', to: '2026-01-31' });
-      const tables = [];
-      for await (const table of RUNBOOK_RUNS_EXPORT_SOURCE.collect(ctx, req)) tables.push(table);
-      expect(tables).toEqual([]);
-      expect(calls).toEqual([]);
+    /** Every secret-bearing column of the run tables: none may be selected or emitted. */
+    const FORBIDDEN: Record<string, readonly string[]> = {
+      RunbookRun: ['params', 'secretRefs', 'targetSelector', 'strategy', 'initiatedBy', 'orgId'],
+      RunbookRunTarget: ['hostname', 'port', 'username', 'hostKeyFingerprint', 'errorMessage', 'orgId'],
+      RunbookRunStep: ['outputTail', 'aiTranscript', 'aiSummary', 'logStorageKey', 'orgId'],
+      RunbookApproval: ['message', 'comment', 'payload', 'orgId'],
+      RunbookCommandExecution: ['commandPreview', 'orgId'],
+    };
+    const ALLOWLISTS: Record<string, { model: string; columns: ReadonlyArray<{ key: string }> }> = {
+      RunbookRun: { model: 'runbookRun', columns: RUNBOOK_RUN_EXPORT_COLUMNS },
+      RunbookRunTarget: { model: 'runbookRunTarget', columns: RUNBOOK_RUN_TARGET_EXPORT_COLUMNS },
+      RunbookRunStep: { model: 'runbookRunStep', columns: RUNBOOK_RUN_STEP_EXPORT_COLUMNS },
+      RunbookApproval: { model: 'runbookApproval', columns: RUNBOOK_APPROVAL_EXPORT_COLUMNS },
+      RunbookCommandExecution: { model: 'runbookCommandExecution', columns: RUNBOOK_COMMAND_EXECUTION_EXPORT_COLUMNS },
+    };
+
+    it('lists no secret-bearing column in any allowlist', () => {
+      for (const [name, { columns }] of Object.entries(ALLOWLISTS)) {
+        const keys = columns.map((column) => column.key);
+        for (const field of FORBIDDEN[name]!) expect(keys).not.toContain(field);
+        for (const key of keys) expect(key).not.toMatch(/password|passphrase|secret(?!Ref)|ciphertext|encrypted|preview|output|transcript|payload/i);
+      }
     });
 
-    it('writes a well-formed (empty) file in every format', async () => {
+    it('emits no secret sentinel in any writer, though the client returns every column', async () => {
       const texts = await outputsOf(RUNBOOK_RUNS_EXPORT_SOURCE, { from: '2026-01-01', to: '2026-01-31' });
       expect(texts).toHaveLength(3);
+      for (const text of texts) {
+        for (const [name, fields] of Object.entries(FORBIDDEN)) {
+          for (const field of fields) expect(text).not.toContain(exportSentinel(name, field));
+        }
+        // The run tables are really there (the proof is not vacuous).
+        expect(text).toContain(exportSentinel('RunbookRun', 'status'));
+        expect(text).toContain(exportSentinel('RunbookRunTarget', 'serverName'));
+        expect(text).toContain(exportSentinel('RunbookRunStep', 'name'));
+        expect(text).toContain(exportSentinel('RunbookApproval', 'stepName'));
+        expect(text).toContain(exportSentinel('RunbookCommandExecution', 'commandSha256'));
+      }
+    });
+
+    it('selects exactly each allowlist, never a secret column', async () => {
+      const calls: Recorded[] = [];
+      await outputsOf(RUNBOOK_RUNS_EXPORT_SOURCE, { from: '2026-01-01', to: '2026-01-31' }, calls);
+      for (const [name, { model, columns }] of Object.entries(ALLOWLISTS)) {
+        const modelCalls = calls.filter((call) => call.model === model);
+        expect(modelCalls.length).toBeGreaterThan(0);
+        for (const call of modelCalls) {
+          const selected = Object.keys(call.args.select);
+          expect(selected.sort()).toEqual([...new Set(['id', ...columns.map((c) => c.key)])].sort());
+          for (const field of FORBIDDEN[name]!) expect(selected).not.toContain(field);
+        }
+      }
+      // Only the five run tables are read: no log chunk, no credential, no storage object.
+      expect([...new Set(calls.map((call) => call.model))].sort()).toEqual(Object.values(ALLOWLISTS).map((a) => a.model).sort());
+    });
+
+    it('filters every table on the requester’s own runs, the inclusive day range in their zone and the runbook', async () => {
+      const calls: Recorded[] = [];
+      const RUNBOOK = '88888888-8888-4888-8888-888888888888';
+      await outputsOf(RUNBOOK_RUNS_EXPORT_SOURCE, { from: '2026-01-01', to: '2026-01-31', runbookId: RUNBOOK }, calls);
+      const runWhere = {
+        initiatedBy: SUBJECT,
+        createdAt: { gte: new Date('2026-01-01T00:00:00.000Z'), lt: new Date('2026-02-01T00:00:00.000Z') },
+        runbookId: RUNBOOK,
+      };
+      const whereOf = (model: string) => calls.find((call) => call.model === model)!.args.where;
+      expect(whereOf('runbookRun')).toEqual(runWhere);
+      expect(whereOf('runbookRunTarget')).toEqual({ run: runWhere });
+      expect(whereOf('runbookRunStep')).toEqual({ run: runWhere });
+      expect(whereOf('runbookApproval')).toEqual({ run: runWhere });
+      expect(whereOf('runbookCommandExecution')).toEqual({ step: { run: runWhere } });
+    });
+
+    it('omits the runbook filter when none is given', async () => {
+      const calls: Recorded[] = [];
+      await outputsOf(RUNBOOK_RUNS_EXPORT_SOURCE, { from: '2026-01-01', to: '2026-01-31' }, calls);
+      expect(calls.find((call) => call.model === 'runbookRun')!.args.where).not.toHaveProperty('runbookId');
     });
   });
 });

@@ -6,12 +6,13 @@
 // with real users. It proves what a mocked client cannot: the counts cover exactly what the
 // caller may see through the sharing slice (their own servers, servers shared with them, never
 // another user's), sessions are the caller's own, untrusted host keys are counted, and `runs` is
-// `null` with and without `runbooks:read` until the runbook engine (#62) binds a runs source.
+// `null` without `runbooks:read`; with it the runs come from the runbook engine's source (#62): the runs the caller
+// started or may read through a shared runbook, counted the way the Runs list they link to counts them.
 //
 // Run with `npm run test:db`.
 // =============================================================================
 
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import request from 'supertest';
 
 import { DashboardService } from '../../src/dashboard/dashboard.service';
@@ -114,6 +115,7 @@ describeWithDb('Home dashboard summary (real database)', () => {
 
   afterAll(async () => {
     await bypass(async (tx) => {
+      await tx.runbook.deleteMany({ where: { name: { endsWith: `-${RUN}` } } });
       await tx.terminalSession.deleteMany({ where: { name: { endsWith: `-${RUN}` } } });
       await tx.grant.deleteMany({ where: { resourceId: { in: Object.values(profiles) } } });
       await tx.serverProfile.deleteMany({ where: { name: { endsWith: `-${RUN}` } } });
@@ -169,9 +171,9 @@ describeWithDb('Home dashboard summary (real database)', () => {
     expect(other.sessions.recent.map((s: { name: string }) => s.name)).toEqual([`b-live-${RUN}`]);
   });
 
-  it('answers runs: null with runbooks:read (no runs source until #62) and without it', async () => {
+  it('answers runs: null without runbooks:read, and empty counts with it before any run exists', async () => {
     expect(A.permissions).toContain('runbooks:read');
-    expect((await summaryOf(A)).runs).toBeNull();
+    expect((await summaryOf(A)).runs).toEqual({ running: 0, failedLast24h: 0, recent: [] });
 
     const service = context.app.get(DashboardService);
     const withoutRunbooks = actingPrincipal({
@@ -184,6 +186,77 @@ describeWithDb('Home dashboard summary (real database)', () => {
     expect(summary.runs).toBeNull();
     expect(summary.servers?.total).toBe(3);
   });
+
+  it('summarizes the runs the caller started or may read, and nobody else’s', async () => {
+    const own = randomUUID();
+    const shared = randomUUID();
+    const hidden = randomUUID();
+    const hours = (n: number) => new Date(Date.now() - n * 3_600_000);
+    const runIds: string[] = [];
+    await bypass(async (tx) => {
+      for (const [id, owner, name] of [[own, A.userId, 'own'], [shared, B.userId, 'shared'], [hidden, B.userId, 'hidden']] as const) {
+        await tx.runbook.create({ data: { id, orgId: A.orgId, ownerUserId: owner, name: `rb-${name}-${RUN}` } });
+        await tx.runbookVersion.create({
+          data: { orgId: A.orgId, runbookId: id, version: 1, definition: { schemaVersion: 1, steps: [] }, definitionSha256: 'a'.repeat(64), createdBy: owner },
+        });
+      }
+      // [runbook, started by, status, created hours ago, target statuses]
+      const runs: Array<[string, string, string, number, string[]]> = [
+        [own, A.userId, 'running', 1, ['succeeded', 'running', 'failed']],
+        [own, A.userId, 'failed', 2, ['failed']],
+        [own, A.userId, 'failed', 30, ['failed']], // failed, but queued before the 24h window
+        [own, A.userId, 'succeeded', 3, ['succeeded']],
+        [shared, B.userId, 'running', 4, ['running', 'queued']], // B's run of a runbook shared with A
+        [hidden, B.userId, 'running', 5, ['running']], // B's private runbook: A sees nothing of it
+        [hidden, B.userId, 'failed', 6, ['failed']],
+      ];
+      for (const [runbookId, owner, status, ago, targets] of runs) {
+        const id = randomUUID();
+        runIds.push(id);
+        await tx.runbookRun.create({
+          data: { id, orgId: A.orgId, runbookId, version: 1, initiatedBy: owner, status, createdAt: hours(ago), startedAt: hours(ago), params: {}, secretRefs: {}, targetSelector: {}, strategy: {} },
+        });
+        for (const [position, targetStatus] of targets.entries()) {
+          await tx.runbookRunTarget.create({
+            data: { orgId: A.orgId, runId: id, position, serverName: `t${position}-${RUN}`, hostname: 'h.example.test', port: 22, username: 'ops', status: targetStatus },
+          });
+        }
+      }
+    });
+    await request(server())
+      .post('/api/grants')
+      .set(bearer(B.token))
+      .send({ resourceType: 'runbook', resourceId: shared, role: 'viewer', grantee: { kind: 'user', userId: A.userId } })
+      .expect(201);
+
+    const { runs } = await summaryOf(A);
+    expect(runs).toMatchObject({ running: 2, failedLast24h: 1 });
+    // Newest first: own running (1h), own failed (2h), own succeeded (3h), shared running (4h), own failed (30h).
+    expect(runs!.recent.map((r: { runbookName: string; status: string }) => [r.runbookName, r.status])).toEqual([
+      [`rb-own-${RUN}`, 'running'],
+      [`rb-own-${RUN}`, 'failed'],
+      [`rb-own-${RUN}`, 'succeeded'],
+      [`rb-shared-${RUN}`, 'running'],
+      [`rb-own-${RUN}`, 'failed'],
+    ]);
+    expect(runs!.recent[0]).toMatchObject({ targets: { total: 3, succeeded: 1, failed: 1, running: 1 } });
+    expect(runs!.recent[3]).toMatchObject({ targets: { total: 2, succeeded: 0, failed: 0, running: 2 } });
+    expect(runs!.recent.map((r: { runbookName: string; status: string }) => r.runbookName)).not.toContain(`rb-hidden-${RUN}`);
+
+    // The tiles count what the Runs list they link to lists.
+    const listed = async (query: string) =>
+      (await request(server()).get(`/api/runbook-runs?${query}`).set(bearer(A.token)).expect(200)).body.data.total as number;
+    expect(await listed('status=running')).toBe(runs!.running);
+    expect(await listed('status=failed&since=24h')).toBe(runs!.failedLast24h);
+
+    // An outsider with no runs and no share sees nothing, and B sees B's own runs and no one else's private ones.
+    expect((await summaryOf(C)).runs).toEqual({ running: 0, failedLast24h: 0, recent: [] });
+    const b = (await summaryOf(B)).runs!;
+    expect(b.running).toBe(2);
+    expect(b.failedLast24h).toBe(1);
+    expect(b.recent.map((r: { runbookName: string; status: string }) => r.runbookName)).not.toContain(`rb-own-${RUN}`);
+    void runIds;
+  }, 60_000);
 
   it('answers servers: null for a caller without servers:read', async () => {
     const service = context.app.get(DashboardService);
