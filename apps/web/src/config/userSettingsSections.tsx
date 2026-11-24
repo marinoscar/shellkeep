@@ -9,7 +9,7 @@
  * (Settings UI Pattern, AGENTS.md). Append new cards; never insert between
  * existing ones.
  *
- * NO CARD DECLARES A `permission`, except `Webhooks` (#54): the API grants `user_settings:read` and
+ * NO CARD DECLARES A `permission`, except `Webhooks` (#54) and `Groups` (#71): the API grants `user_settings:read` and
  * `user_settings:write` to every role, so a gate here would invent an
  * authorization rule the API does not enforce.
  *
@@ -26,6 +26,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import { webhooksUserSettingsSections } from '@marinoscar/platform-web/webhooks/ui';
+import { groupsSettingsPage } from '@marinoscar/platform-web/sharing/ui';
 import {
   TERMINAL_SETTINGS_DESCRIPTION,
   TERMINAL_SETTINGS_TITLE,
@@ -96,6 +97,13 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
     // gated inside the packaged page.
     label: 'Integrations',
     cards: [...webhooksUserSettingsSections.integrations],
+  },
+  {
+    // #71, appended: the sharing slice's Groups card, as data. `groups:read` is the exact string the
+    // `/api/groups` controller enforces (an org permission every org role holds by default). The
+    // group detail page (`/settings/groups/:id`) is a child route of this card, not a card.
+    label: 'Sharing',
+    cards: [{ ...groupsSettingsPage.card, Icon: groupsSettingsPage.Icon }],
   },
 ];
 

@@ -57,6 +57,13 @@ const UserTokensPage = lazy(() =>
 const TerminalSettingsPage = lazy(
   () => import('./components/terminal/settings/TerminalSettingsPage'),
 );
+// Sharing (#71): the packaged groups pages behind the Groups card of the user hub.
+const GroupsPage = lazy(() =>
+  import('@marinoscar/platform-web/sharing/ui').then((m) => ({ default: m.GroupsPage })),
+);
+const GroupDetailPage = lazy(() =>
+  import('@marinoscar/platform-web/sharing/ui').then((m) => ({ default: m.GroupDetailPage })),
+);
 // Admin settings (issue #46): the packaged hub over `config/adminSections.tsx`,
 // the host slice's About and Maintenance pages, the packaged Doctor, and the
 // terminal domain's system settings page.
@@ -225,6 +232,24 @@ function AppRoutes() {
                   element={
                     <RequirePermission permission="webhooks:read" fallback={HOME}>
                       <WebhooksPage scope="user" />
+                    </RequirePermission>
+                  }
+                />
+                {/* Groups (#71): the sharing slice's pages, gated on the string `/api/groups`
+                    enforces. The detail page is a child of the Groups card, not a card. */}
+                <Route
+                  path="/settings/groups"
+                  element={
+                    <RequirePermission permission="groups:read" fallback={HOME}>
+                      <GroupsPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/settings/groups/:id"
+                  element={
+                    <RequirePermission permission="groups:read" fallback={HOME}>
+                      <GroupDetailPage />
                     </RequirePermission>
                   }
                 />
