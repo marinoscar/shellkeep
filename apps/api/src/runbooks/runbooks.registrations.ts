@@ -15,6 +15,8 @@ import { registerRunbookNotifications } from '../notifications-registry/runbooks
 import { RUNBOOKS_ARTIFACTS_PURGE_REASON, RUNBOOKS_RECONCILE_REASON } from './engine/engine.constants';
 import { registerRunbookRunErrorCodes } from './engine/engine.error-codes';
 import { registerRunbookErrorCodes } from './runbooks.error-codes';
+import { RUNBOOKS_SCHEDULES_REASON } from './schedules/schedules.constants';
+import { registerRunbookScheduleErrorCodes } from './schedules/schedules.error-codes';
 
 let registered = false;
 
@@ -24,10 +26,16 @@ export function registerRunbookRegistrations(): void {
   registered = true;
   registerRunbookErrorCodes();
   registerRunbookRunErrorCodes();
+  registerRunbookScheduleErrorCodes();
   registerSystemAccessReason({
     id: RUNBOOKS_RECONCILE_REASON,
     description:
       'The runbook reconcile job (runbook.logs.compact) finds stuck runs, lost executors, expired approvals and orphan log chunks across every organization.',
+  });
+  registerSystemAccessReason({
+    id: RUNBOOKS_SCHEDULES_REASON,
+    description:
+      'The runbook schedules tick (runbook.schedules.tick) finds the schedules that are due across every organization; each is then claimed and fired inside its own organization.',
   });
   registerSystemAccessReason({
     id: RUNBOOKS_ARTIFACTS_PURGE_REASON,

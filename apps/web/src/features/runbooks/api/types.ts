@@ -417,6 +417,62 @@ export interface ApprovalsPage extends Page<RunbookApproval> {
   allowSelfApproval: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Schedules (#66)
+// ---------------------------------------------------------------------------
+
+export type ScheduleOverlap = 'skip' | 'queue' | 'allow';
+export type ScheduleApprovalState = 'not_required' | 'pending' | 'approved' | 'stale';
+
+/** One schedule of `GET /api/runbooks/:id/schedules`. */
+export interface RunbookSchedule {
+  id: string;
+  runbookId: string;
+  name: string;
+  cron: string;
+  timezone: string;
+  versionPin: string;
+  resolvedVersion: number | null;
+  params: Record<string, string | number | boolean>;
+  /** The NAMES of the secrets, never a value. */
+  secretRefs: Record<string, string>;
+  targets: Partial<TargetSelector>;
+  strategy: Partial<RunStrategy> | null;
+  overlap: ScheduleOverlap;
+  enabled: boolean;
+  nextRunAt: string | null;
+  lastRunId: string | null;
+  lastRunStatus: RunStatus | null;
+  lastFiredAt: string | null;
+  runAsUserId: string | null;
+  /** Why the system switched it off: `PERMISSION_REVOKED`, `APPROVAL_REQUIRED`, `RUNBOOK_ARCHIVED`, ... */
+  disabledReason: string | null;
+  destructive: boolean;
+  approval: { state: ScheduleApprovalState; approvedBy: string | null; approvedAt: string | null; approvedVersion: number | null };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateScheduleInput {
+  name: string;
+  cron: string;
+  timezone: string;
+  versionPin?: string;
+  params?: Record<string, string | number | boolean>;
+  secretRefs?: Record<string, string>;
+  targets?: Partial<TargetSelector>;
+  strategy?: Partial<RunStrategy>;
+  overlap?: ScheduleOverlap;
+  enabled?: boolean;
+  confirm?: { runbookName: string; targetCount: number };
+}
+
+export interface SchedulePreview {
+  cron: string;
+  timezone: string;
+  next: string[];
+}
+
 /** One log archive a `collect_logs` step stored (#63). */
 export interface RunArtifact {
   id: string;

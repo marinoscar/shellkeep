@@ -6,6 +6,9 @@ import { api } from '../../../services/api';
 import type {
   ApprovalsPage,
   CreateRunInput,
+  CreateScheduleInput,
+  RunbookSchedule,
+  SchedulePreview,
   Page,
   RunbookDefinitionInput,
   RunbookDetail,
@@ -211,6 +214,34 @@ export interface ListCommandsParams {
 /** The org-wide command log (#67): what runbooks ran, newest first. */
 export const listRunbookCommands = (params: ListCommandsParams = {}): Promise<Page<RunbookCommandRow>> =>
   api.get(`/runbook-commands${query({ ...params })}`);
+
+// ---------------------------------------------------------------------------
+// Schedules (#66)
+// ---------------------------------------------------------------------------
+
+export const listSchedules = (runbookId: string): Promise<Page<RunbookSchedule>> => api.get(`/runbooks/${runbookId}/schedules`);
+
+export const createSchedule = (runbookId: string, input: CreateScheduleInput): Promise<RunbookSchedule> =>
+  api.post(`/runbooks/${runbookId}/schedules`, input);
+
+export const updateSchedule = (
+  runbookId: string,
+  scheduleId: string,
+  patch: Partial<CreateScheduleInput>,
+): Promise<RunbookSchedule> => api.patch(`/runbooks/${runbookId}/schedules/${scheduleId}`, patch);
+
+export const deleteSchedule = (runbookId: string, scheduleId: string): Promise<void> =>
+  api.delete(`/runbooks/${runbookId}/schedules/${scheduleId}`);
+
+export const approveSchedule = (runbookId: string, scheduleId: string): Promise<RunbookSchedule> =>
+  api.post(`/runbooks/${runbookId}/schedules/${scheduleId}/approve`, {});
+
+export const runScheduleNow = (runbookId: string, scheduleId: string): Promise<StartRunResult> =>
+  api.post(`/runbooks/${runbookId}/schedules/${scheduleId}/run-now`, {});
+
+/** The next 5 fire times of an expression; rejects with a 422 `RUNBOOK_SCHEDULE_INVALID` for a bad expression or zone. */
+export const previewSchedule = (cron: string, timezone: string): Promise<SchedulePreview> =>
+  api.get(`/runbook-schedules/preview${query({ cron, timezone })}`);
 
 // ---------------------------------------------------------------------------
 // Artifacts (#63)

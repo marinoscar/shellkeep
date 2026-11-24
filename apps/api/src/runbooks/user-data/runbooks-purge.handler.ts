@@ -149,6 +149,13 @@ export class RunbooksUserDataPurgeHandler implements JobHandler, OnModuleInit {
       const kept = await tx.runbook.updateMany({ where: { ownerUserId: userId, ownerGroupId: { not: null } }, data: { ownerUserId: null } });
       const runs = await tx.runbookRun.updateMany({ where: { initiatedBy: userId }, data: { initiatedBy: null } });
       const approvals = await tx.runbookApproval.updateMany({ where: { decidedBy: userId }, data: { decidedBy: null } });
+      // A schedule the user created on a runbook that stays no longer acts as them: it is switched off, the way
+      // the tick would (`PERMISSION_REVOKED`), and the approval they gave is detached.
+      await tx.runbookSchedule.updateMany({
+        where: { runAsUserId: userId },
+        data: { runAsUserId: null, enabled: false, disabledReason: 'PERMISSION_REVOKED', nextRunAt: null },
+      });
+      await tx.runbookSchedule.updateMany({ where: { approvedBy: userId }, data: { approvedBy: null } });
       return { runbooks: deleted, keptWithGroup: kept.count as number, grants, cancelledJobs: cancelled, runsDetached: runs.count as number, approvalsDetached: approvals.count as number };
     });
     return { ...rows, logObjects };

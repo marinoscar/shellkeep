@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { targetSelectorSchema } from '../../schema/runbook-definition.schema';
 import { RUNBOOK_SECRET_NAME_PATTERN } from '../../runbooks.credentials';
 
-const strategyOverride = z
+/** The per-run strategy overrides (also the strategy a schedule stores, #66). */
+export const strategyOverride = z
   .object({
     concurrency: z.number().int().min(1).max(50),
     batchSize: z.number().int().min(1).max(500),

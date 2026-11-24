@@ -44,6 +44,8 @@ const SYSTEM_ALLOWLIST: Record<string, string> = {
     "doctor: the db-backup slice's DB_BACKUP_SYSTEM_DATA port (#52): the backup.rls-bypass check's read-only row counts",
   'platform/webhooks/webhooks-host.module.ts':
     "webhooks and retention: the webhooks slice's WEBHOOKS_SYSTEM_PRISMA port (#54): a system-scope endpoint and its deliveries have no organization, so only the bypass client sees them; the delivery purge crosses organizations",
+  'runbooks/schedules/runbook-schedules-tick.handler.ts':
+    "the runbook schedules tick (#66), under the registered reason `runbooks-schedules`: it FINDS the due schedules across organizations; each is claimed, checked and fired inside its own organization's scope",
   'runbooks/engine/logs-compact.handler.ts':
     "the runbook reconcile job (#62), under the registered reason `runbooks-reconcile`: it FINDS lost executors, stuck runs, expired approvals and orphan log chunks across organizations; every change is made inside the owning organization's scope",
   'runbooks/artifacts/artifacts-purge.handler.ts':
