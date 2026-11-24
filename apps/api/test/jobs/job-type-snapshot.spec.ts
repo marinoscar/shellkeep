@@ -32,6 +32,8 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'runbook.target.run': 'Run a runbook on one server',
   'runbook.run.advance': 'Advance a runbook run',
   'runbook.logs.compact': 'Reconcile runbook runs and compact their logs',
+  // Schedules (#66): the minute tick that fires due schedules (system job, server-only).
+  'runbook.schedules.tick': 'Fire due runbook schedules',
   // The jobs slice: its own housekeeping.
   'job.history.purge': 'Job history purge',
   'audit.events.purge': 'Audit log purge',

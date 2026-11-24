@@ -30,6 +30,13 @@ import type { CreateRunDto, RunsQueryDto } from './dto/run.dto';
 
 type RunConfirm = NonNullable<CreateRunDto['confirm']>;
 
+/** What a run launched by a schedule (#66) adds: the schedule it belongs to and whether the schedule carries the approval. */
+export interface ScheduledLaunch {
+  scheduleId?: string;
+  /** The destructive confirmation and the two-person approval were given to the schedule: skip them for this run. */
+  preApproved?: boolean;
+}
+
 /** What starting a run answers: `awaitingApproval` is a destructive run parked behind its second person. */
 export interface LaunchResult {
   runId: string;
@@ -100,7 +107,13 @@ export class RunbookRunsService {
   }
 
   /** Creates a queued run and its start job. */
-  async create(principal: Principal, runbookId: string, dto: CreateRunDto, trigger: 'manual' | 'api' | 'schedule' = 'manual'): Promise<LaunchResult> {
+  async create(
+    principal: Principal,
+    runbookId: string,
+    dto: CreateRunDto,
+    trigger: 'manual' | 'api' | 'schedule' = 'manual',
+    options: ScheduledLaunch = {},
+  ): Promise<LaunchResult> {
     const scope = this.scopeOf(principal);
     await this.requireEnabled(scope.orgId);
     await this.runbooks.requireRun(principal, runbookId); // 404 for a runbook the caller cannot see, 404 for one they may not run
@@ -162,6 +175,7 @@ export class RunbookRunsService {
       strategy,
       requireApproval: !effective.approvals.allowSelfApproval,
       approvalExpirySec: effective.approvals.defaultExpirySec,
+      ...options,
     });
   }
 
@@ -188,13 +202,15 @@ export class RunbookRunsService {
       retryOfRunId?: string;
       requireApproval: boolean;
       approvalExpirySec: number;
-    },
+    } & ScheduledLaunch,
   ): Promise<LaunchResult> {
     const assessment = this.risk.assessDefinition(input.definition);
     const destructive = !input.dryRun && assessment.destructive;
-    const awaitingApproval = destructive && input.requireApproval;
+    // A scheduled run carries the approval the SCHEDULE got (the confirmation when it was created, the second
+    // person when it was approved); the schedule service and the tick re-check it before every launch.
+    const awaitingApproval = destructive && input.requireApproval && !input.preApproved;
 
-    if (destructive) await this.requireConfirmation(principal, input.runbook.name, assessment, input.confirm, input.selector, input.requireApproval);
+    if (destructive && !input.preApproved) await this.requireConfirmation(principal, input.runbook.name, assessment, input.confirm, input.selector, input.requireApproval);
 
     const reasons = [...new Set(assessment.findings.filter((f) => f.destructive).flatMap((f) => f.reasons))];
     const approvalMessage = `Destructive run of "${input.runbook.name}": ${reasons.join('; ')}`.slice(0, 2000);
@@ -209,6 +225,7 @@ export class RunbookRunsService {
           trigger: input.trigger,
           initiatedBy: scope.userId,
           ...(input.retryOfRunId ? { retryOfRunId: input.retryOfRunId } : {}),
+          ...(input.scheduleId ? { scheduleId: input.scheduleId } : {}),
           dryRun: input.dryRun,
           destructive,
           params: input.params as Prisma.InputJsonValue,
@@ -256,9 +273,10 @@ export class RunbookRunsService {
       dryRun: input.dryRun,
       destructive,
       ...(input.retryOfRunId ? { retryOf: input.retryOfRunId } : {}),
+      ...(input.scheduleId ? { scheduleId: input.scheduleId } : {}),
     });
     if (input.dryRun) this.metrics.dryRun();
-    if (destructive) {
+    if (destructive && !input.preApproved) {
       this.metrics.destructiveRun('confirmed');
       await this.audit('runbook_run.destructive_confirmed', scope, created.runId, {
         runbookId: input.runbook.id,
@@ -286,7 +304,7 @@ export class RunbookRunsService {
   }
 
   /** 428 unless `confirm` names the runbook exactly and the count of servers the selector resolves to now. */
-  private async requireConfirmation(
+  async requireConfirmation(
     principal: Principal,
     runbookName: string,
     assessment: DefinitionRisk,

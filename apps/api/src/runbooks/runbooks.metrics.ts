@@ -13,6 +13,11 @@ export const RUNBOOK_COMMANDS_METRIC = 'runbookCommands';
 export const RUNBOOK_APPROVALS_METRIC = 'runbookApprovals';
 export const RUNBOOK_DESTRUCTIVE_RUNS_METRIC = 'runbookDestructiveRuns';
 export const RUNBOOK_DRY_RUNS_METRIC = 'runbookDryRuns';
+export const RUNBOOK_SCHEDULE_FIRES_METRIC = 'runbookScheduleFires';
+
+/** What became of a schedule that was due (#66): never a schedule, run, org or runbook id. */
+export const SCHEDULE_FIRE_OUTCOME_VALUES = ['fired', 'skipped_overlap', 'disabled', 'failed'] as const;
+export type ScheduleFireMetricOutcome = (typeof SCHEDULE_FIRE_OUTCOME_VALUES)[number];
 
 /** What happened to a destructive run launch (#67): never a run, org, server or runbook id. */
 export const DESTRUCTIVE_RUN_OUTCOMES = ['confirmed', 'approved', 'rejected', 'blocked'] as const;
@@ -96,5 +101,14 @@ export const RUNBOOK_APP_METRICS: readonly AppMetricDef[] = [
     unit: '{run}',
     description: 'Runbook dry runs launched.',
     attributes: {},
+  },
+  {
+    key: RUNBOOK_SCHEDULE_FIRES_METRIC,
+    name: 'app.runbooks.schedule_fires',
+    kind: 'counter',
+    unit: '{fire}',
+    description:
+      'Runbook schedules that were due, by outcome: fired (a run was created), skipped_overlap (the previous run was still active), disabled (switched off: permission revoked, approval required) or failed (the run could not be created).',
+    attributes: { outcome: { kind: 'enum', values: SCHEDULE_FIRE_OUTCOME_VALUES } },
   },
 ];

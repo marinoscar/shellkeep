@@ -8,6 +8,8 @@ import {
   RUNBOOK_DRY_RUNS_METRIC,
   type DestructiveRunOutcome,
   RUNBOOK_RUNS_FINISHED_METRIC,
+  RUNBOOK_SCHEDULE_FIRES_METRIC,
+  type ScheduleFireMetricOutcome,
   RUNBOOK_TARGET_DURATION_METRIC,
 } from '../runbooks.metrics';
 
@@ -38,6 +40,10 @@ export class EngineMetricsService {
 
   dryRun(): void {
     this.safely(() => this.metrics?.add(RUNBOOK_DRY_RUNS_METRIC, 1, {}));
+  }
+
+  scheduleFire(outcome: ScheduleFireMetricOutcome): void {
+    this.safely(() => this.metrics?.add(RUNBOOK_SCHEDULE_FIRES_METRIC, 1, { outcome }));
   }
 
   private safely(fn: () => void): void {

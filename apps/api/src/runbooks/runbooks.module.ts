@@ -29,6 +29,11 @@ import { TargetRunHandler } from './engine/target-run.handler';
 import { RunbookAuditController } from './safety/runbook-audit.controller';
 import { RunbookAuditService } from './safety/runbook-audit.service';
 import { RunbookRiskService } from './safety/runbook-risk.service';
+import { RunbookSchedulesController } from './schedules/runbook-schedules.controller';
+import { RunbookSchedulesService } from './schedules/runbook-schedules.service';
+import { RunbookSchedulesTask } from './schedules/runbook-schedules.task';
+import { RunbookSchedulesTickHandler } from './schedules/runbook-schedules-tick.handler';
+import { RunbookWebhooksModule } from './webhooks/runbook-webhooks.module';
 import { RunbookSecretsController } from './runbook-secrets.controller';
 import { RunbooksController } from './runbooks.controller';
 import { RunbooksService } from './runbooks.service';
@@ -44,8 +49,8 @@ import { UserDataHostModule } from '../platform/user-data/user-data-host.module'
  * `runbooks.registrations.ts` (before the registries freeze).
  */
 @Module({
-  imports: [PrismaModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule, UserDataHostModule],
-  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController],
+  imports: [PrismaModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule, UserDataHostModule, RunbookWebhooksModule],
+  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController, RunbookSchedulesController],
   providers: [
     RunbooksService,
     TargetResolverService,
@@ -71,6 +76,10 @@ import { UserDataHostModule } from '../platform/user-data/user-data-host.module'
     LogsCompactHandler,
     RunbookJobSettledListener,
     RunbookReconcileTask,
+    // Schedules (#66): the service, the minute cron that only enqueues and the tick job it queues.
+    RunbookSchedulesService,
+    RunbookSchedulesTask,
+    RunbookSchedulesTickHandler,
     // The delegated half of the user-data purge (#69).
     RunbooksUserDataPurgeHandler,
   ],
