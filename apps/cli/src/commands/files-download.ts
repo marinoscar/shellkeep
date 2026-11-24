@@ -56,6 +56,11 @@ export async function resolveDestination(deps: FilesDeps, dest: string | undefin
   return target;
 }
 
+/** Refuses an existing destination unless `force`. */
+export async function assertWritable(destination: string, force: boolean): Promise<void> {
+  if (!force && (await kind(destination)) !== 'none') throw new CommandExit(`${destination} already exists; use --force to replace it`, 1);
+}
+
 /**
  * Streams `response` to `destination` atomically.
  *
@@ -71,8 +76,7 @@ export async function streamToFile(
   destination: string,
   options: { force: boolean; label: string },
 ): Promise<number> {
-  const exists = (await kind(destination)) !== 'none';
-  if (exists && !options.force) throw new CommandExit(`${destination} already exists; use --force to replace it`, 1);
+  await assertWritable(destination, options.force);
   if (response.body === null) throw new CommandExit('the server sent no body', 1);
 
   const declared = response.headers.get('content-length');

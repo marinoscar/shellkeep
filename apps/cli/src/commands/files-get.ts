@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 
-import { resolveDestination, remoteBaseName, streamToFile } from './files-download.js';
+import { assertWritable, resolveDestination, remoteBaseName, streamToFile } from './files-download.js';
 import { type FilesDeps, formatBytes, readData, requestOk, resolveServer } from './files-http.js';
 import { writeJson } from './output.js';
 
@@ -28,6 +28,7 @@ export async function getFile(
 ): Promise<GetResult> {
   const id = await resolveServer(deps, server);
   const destination = await resolveDestination(deps, dest, remoteBaseName(path));
+  await assertWritable(destination, force);
   const issued = await requestOk(deps, { path: `/server-profiles/${encodeURIComponent(id)}/files/download-token` }, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
