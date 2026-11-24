@@ -171,5 +171,15 @@
   "terminalAi": {
     "redactionMode": "standard",
     "requireConsent": true
+  },
+  "files": {
+    "fullViewMaxBytes": 2097152,
+    "pagedViewMaxBytes": 209715200,
+    "downloadMaxBytes": 2147483648,
+    "uploadMaxBytes": 104857600,
+    "sftpTimeoutSeconds": 30,
+    "contentRequestsPerMinute": 120,
+    "downloadsPerMinute": 20,
+    "maxConcurrentDownloads": 3
   }
 }

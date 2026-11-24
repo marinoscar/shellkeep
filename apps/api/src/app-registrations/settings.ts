@@ -29,6 +29,7 @@ import { ONBOARDING_USER_SETTINGS } from '@marinoscar/platform-api/onboarding';
 
 import { FEATURES_SYSTEM_SETTINGS, UI_SYSTEM_SETTINGS } from '../platform/settings/app-system-settings';
 import { TERMINAL_SYSTEM_SETTINGS } from '../terminal/settings/terminal.system-settings';
+import { FILES_SYSTEM_SETTINGS } from '../files/settings/files.system-settings';
 import { TERMINAL_AI_SYSTEM_SETTINGS, TERMINAL_AI_USER_SETTINGS } from '../terminal-ai/terminal-ai.settings';
 import { DEFAULT_TERMINAL_SETTINGS, TERMINAL_USER_SETTINGS } from '../terminal/settings/terminal.user-settings';
 import {
@@ -50,6 +51,8 @@ export const APP_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] 
  */
 export const APP_TRAILING_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [
   TERMINAL_AI_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // Files over SFTP (#153): size caps and per-user rate limits; appended last so no stored key moves.
+  FILES_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
 /** The app's own optional user settings namespaces, in stored key order. */
