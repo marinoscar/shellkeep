@@ -122,6 +122,17 @@ The gutter is now a sibling `<Box sx={{ height: '30px', flexShrink: 0 }} />` ren
 
 In the workspace (#77) the terminal status bar takes the gutter's place: it is a sibling below the panes, outside every FitAddon host, so the same rule holds.
 
+### Terminal in the Android TWA
+
+The Android app (#74) opens the web app in a Trusted Web Activity: Chrome's own engine, full screen, so every terminal hook runs unchanged. Findings from reading the code against Chrome's TWA behaviour; **none of this was exercised on a phone** (no device or Android SDK in the build environment), so the checks in the last list are still to be done once an APK is signed.
+
+- **`useKeyboardInset`** reads `window.innerHeight - (visualViewport.height + visualViewport.offsetTop)`. Chrome on Android (108+) defaults to the `resizes-visual` keyboard behaviour in a TWA as in a tab: the layout viewport keeps its height and only the visual viewport shrinks, which is exactly the case the formula measures. The 75 px floor ignores the URL-bar and gesture-bar jitter. No change is needed; do not add `interactive-widget=resizes-content` to the viewport meta tag, which would make the inset read 0 while the layout shrinks under FitAddon.
+- **`TerminalKeyShortcutsBar`** is positioned from the same inset (`keyDockOffset` in `TerminalWorkspacePage.tsx`), so it follows the visual viewport. A TWA has no browser chrome, so the bar sits against the real bottom edge; the status-bar and navigation-bar colours come from the identity (`themeColor`, `backgroundColor`), not from the page.
+- **Launch path.** The TWA starts at `/sessions` (`StartUrl.kt` moves the platform's root launch URL there and keeps `?source=twa&appVersion=&appVersionCode=`); `captureTwaLaunch()` runs in `main.tsx` before the router can drop those parameters.
+- **Hardware back** leaves the TWA when the history stack is empty. Because the app now starts at `/sessions`, back from the list exits the app; whether back from an open terminal returns to the list depends on how the workspace pushes history and is one of the on-device checks below.
+
+To verify on a phone: (1) focus the terminal and confirm the shortcut bar rises above the keyboard and the cursor row stays visible; (2) rotate with the keyboard open and confirm one `fit()` settles the row count; (3) open the app from the launcher icon and from a shared `/sessions/<id>` link; (4) confirm the update banner appears only inside the TWA; (5) press back from an open terminal and from the list. Record any difference here.
+
 ## Common Pitfalls
 
 **Never add `overflow: hidden` to the xterm container or its immediate parent.**
