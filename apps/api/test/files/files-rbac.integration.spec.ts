@@ -9,6 +9,7 @@ import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import { authHeader, createMockAdminUser, createMockContributorUser, createMockViewerUser } from '../helpers/auth-mock.helper';
 import { catalogPermissionsOf } from '../fixtures/test-data.factory';
 import { FilesService } from '../../src/files/files.service';
+import { CommandHistoryService } from '../../src/files/command-history/command-history.service';
 
 const ID = '3f2b8d4e-7a1c-4e5d-9b6a-1c2d3e4f5a6b';
 const stub = {
@@ -23,7 +24,10 @@ const stub = {
 describe('files routes RBAC', () => {
   let context: TestContext;
   beforeAll(async () => {
-    context = await createTestApp({ useMockDatabase: true, overrideProviders: [{ provide: FilesService, useValue: stub }] });
+    context = await createTestApp({ useMockDatabase: true, overrideProviders: [
+        { provide: FilesService, useValue: stub },
+        { provide: CommandHistoryService, useValue: { list: jest.fn().mockResolvedValue({ shell: null, entries: [], truncated: false, dropped: 0 }) } },
+      ] });
   });
   afterAll(async () => closeTestApp(context));
   beforeEach(() => {
@@ -37,6 +41,7 @@ describe('files routes RBAC', () => {
     ['stat', (a) => a.get(`/api/server-profiles/${ID}/files/stat?path=~`)],
     ['content', (a) => a.get(`/api/server-profiles/${ID}/files/content?path=a`)],
     ['upload', (a) => a.post(`/api/server-profiles/${ID}/files/upload?path=~&name=a.txt`)],
+    ['command-history', (a) => a.get(`/api/sessions/${ID}/command-history`)],
     ['download-token', (a) => a.post(`/api/server-profiles/${ID}/files/download-token`).send({ path: 'a' })],
   ];
 

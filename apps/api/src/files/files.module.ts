@@ -12,6 +12,8 @@ import { FileArchivePurgeHandler } from './archive/file-archive-purge.handler';
 import { FileArchivesController } from './archive/file-archives.controller';
 import { FileArchivesService } from './archive/file-archives.service';
 import { FileArchiveTask } from './archive/file-archive.task';
+import { CommandHistoryController } from './command-history/command-history.controller';
+import { CommandHistoryService } from './command-history/command-history.service';
 import { DownloadTokenStore } from './download-token.store';
 import { FilesController } from './files.controller';
 import { FilesDownloadController } from './files-download.controller';
@@ -23,10 +25,11 @@ import { SftpService } from './sftp.service';
 /** Files on a server over SFTP (#153): list, stat, ranged text and streamed download. */
 @Module({
   imports: [AuthModule, PrismaModule, StorageModule, StorageProvidersModule, ServerProfilesModule, TerminalModule, SshModule],
-  controllers: [FilesController, FilesDownloadController, FileArchivesController],
+  controllers: [FilesController, CommandHistoryController, FilesDownloadController, FileArchivesController],
   providers: [
     FilesPrincipalResolver,
     FilesService,
+    CommandHistoryService,
     SftpService,
     DownloadTokenStore,
     FilesRateLimiter,

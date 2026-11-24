@@ -803,6 +803,7 @@ export default function TerminalWorkspacePage() {
               groups={keyGroups}
               onClose={closeKeyPanel}
               onInsertSnippet={canWrite ? insertSnippet : undefined}
+              sessionId={activeId ?? undefined}
               onTextEntry={setKeyPanelTextEntry}
               tabRequest={keyPanelTabRequest}
               {...keyHandlers}
@@ -870,6 +871,7 @@ export default function TerminalWorkspacePage() {
               onClose={closeKeyPanel}
               onShowKeyboard={showKeyboard}
               onInsertSnippet={canWrite ? insertSnippet : undefined}
+              sessionId={activeId ?? undefined}
               onTextEntry={setKeyPanelTextEntry}
               tabRequest={keyPanelTabRequest}
               {...keyHandlers}

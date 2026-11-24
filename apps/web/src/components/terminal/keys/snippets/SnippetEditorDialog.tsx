@@ -5,6 +5,8 @@ import { SNIPPET_LIMITS, type SavedSnippet, type Snippet, type SnippetInput } fr
 export interface SnippetEditorDialogProps {
   /** The snippet being edited; omitted for a new one. */
   snippet?: Snippet;
+  /** The text a new snippet starts with (Save as snippet, from the History tab). */
+  initialBody?: string;
   /** Saves; resolves with what the API answered (including the secret warning). */
   onSave: (input: SnippetInput) => Promise<SavedSnippet>;
   /** The editor closed after a save; `saved` carries the warning. */
@@ -18,9 +20,9 @@ function parseTags(text: string): string[] {
 }
 
 /** Create or edit one snippet: a title, the text and tags. The limits are the API's; it validates again. */
-export function SnippetEditorDialog({ snippet, onSave, onDone }: SnippetEditorDialogProps) {
+export function SnippetEditorDialog({ snippet, initialBody, onSave, onDone }: SnippetEditorDialogProps) {
   const [title, setTitle] = useState(snippet?.title ?? '');
-  const [body, setBody] = useState(snippet?.body ?? '');
+  const [body, setBody] = useState(snippet?.body ?? initialBody ?? '');
   const [tags, setTags] = useState((snippet?.tags ?? []).join(', '));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

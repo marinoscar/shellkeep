@@ -11,7 +11,7 @@ import { Injectable } from '@nestjs/common';
 
 import { fileError } from './files-error';
 
-export type FilesBucket = 'content' | 'download' | 'upload';
+export type FilesBucket = 'content' | 'download' | 'upload' | 'history';
 
 @Injectable()
 export class FilesRateLimiter {
