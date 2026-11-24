@@ -16,6 +16,8 @@
 //                    only that job may delete; it deletes the objects, then the rows).
 //   TerminalSession  delete, category `sessions`, inline (children before parents: sessions go first).
 //   TerminalSessionSummary  delete, category `sessions`, inline: the AI summary of a session (redacted text).
+//   Snippet          delete, category `snippets`, inline (#172): the user's saved terminal text. The rows are the only
+//                    copy; there is no object or credential behind them.
 //   Runbook          delete, category `runbooks`, DELEGATED to `runbooks.user_data.purge`: a runbook only
 //                    the user owns goes; one a group owns stays with the group (author link nulled). The
 //                    platform's `keepWhenReferenced` cannot express this (it keeps any row with a
@@ -59,6 +61,7 @@ export const SHELLKEEP_USER_DATA_CATEGORY_IDS = {
   SERVERS: 'servers',
   SESSIONS: 'sessions',
   RUNBOOKS: 'runbooks',
+  SNIPPETS: 'snippets',
 } as const;
 
 /** ShellKeep's categories: the Danger Zone rows and what the scopes select. All `content`. */
@@ -83,6 +86,13 @@ export const APP_USER_DATA_CATEGORIES: readonly UserDataCategoryDef[] = [
     description: 'Runbooks you own, their versions, runs and collected artifacts.',
     content: true,
     order: 62,
+  },
+  {
+    id: SHELLKEEP_USER_DATA_CATEGORY_IDS.SNIPPETS,
+    label: 'Snippets',
+    description: 'Saved terminal snippets from the key panel.',
+    content: true,
+    order: 63,
   },
 ];
 
@@ -112,6 +122,11 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
     // (it cascades from its session; the plan deletes it first so it is counted).
     model: 'TerminalSessionSummary',
     category: SHELLKEEP_USER_DATA_CATEGORY_IDS.SESSIONS,
+  },
+  {
+    // The user's saved terminal text (#172). Deleted inline; nothing outside the row.
+    model: 'Snippet',
+    category: SHELLKEEP_USER_DATA_CATEGORY_IDS.SNIPPETS,
   },
   {
     model: 'Runbook',
@@ -159,6 +174,15 @@ export const APP_USER_DATA_SCOPES: readonly UserDataScopeDef[] = [
     confirmation: 'RUNBOOKS',
     layer: 'specific',
     order: 20,
+  },
+  {
+    id: 'snippets',
+    label: 'Delete my snippets',
+    description: 'Every snippet saved in the key panel. Servers, sessions and runbooks stay.',
+    categories: [SHELLKEEP_USER_DATA_CATEGORY_IDS.SNIPPETS],
+    confirmation: 'SNIPPETS',
+    layer: 'specific',
+    order: 30,
   },
 ];
 

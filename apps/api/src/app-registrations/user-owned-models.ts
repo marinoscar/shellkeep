@@ -48,6 +48,14 @@ export const APP_USER_OWNED_MODELS: readonly Def[] = [
       'The owner’s AI summary of a terminal session (#59): redacted summary text, the commands it lists and redaction counts, never terminal text; deleted with the user and exported to them.',
   },
   {
+    model: 'Snippet',
+    ownerField: 'userId',
+    purge: 'delete',
+    export: 'include',
+    rationale:
+      'The owner’s saved terminal text (#172): a title, the body, tags and an order. The body is user text and may hold a credential the user pasted, so the export carries it only to the owner; deleted with the user.',
+  },
+  {
     model: 'FileArchive',
     ownerField: 'userId',
     purge: 'delete',

@@ -138,6 +138,9 @@ model User {
   // composed from app:shellkeep.server-profiles.prisma
   serverProfiles ServerProfile[]
 
+  // composed from app:shellkeep.snippets.prisma
+  snippets Snippet[]
+
   // composed from app:shellkeep.terminal.prisma
   terminalSessions         TerminalSession[]
   terminalSessionSummaries TerminalSessionSummary[]
@@ -548,6 +551,9 @@ model Organization {
 
   // composed from app:shellkeep.server-profiles.prisma
   serverProfiles ServerProfile[]
+
+  // composed from app:shellkeep.snippets.prisma
+  snippets Snippet[]
 
   // composed from app:shellkeep.terminal.prisma
   terminalSessions TerminalSession[]

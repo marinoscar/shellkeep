@@ -38,6 +38,7 @@ import './notifications';
 import './webhooks';
 import './alerts';
 import { registerFileErrorCodes } from '../files/files.error-codes';
+import { registerSnippetErrorCodes } from '../snippets/snippets.error-codes';
 import { registerFilesRegistrations } from '../files/files.registrations';
 import { registerSshErrorCodes } from '../ssh/ssh.error-codes';
 import { registerTerminalAiErrorCodes } from '../terminal-ai/terminal-ai.error-codes';
@@ -56,6 +57,8 @@ registerSshErrorCodes();
 registerFileErrorCodes();
 // The folder archive expiry sweep's system access reason (#158).
 registerFilesRegistrations();
+// The snippets API codes: SNIPPET_LIMIT_REACHED, SNIPPETS_RATE_LIMITED (#172).
+registerSnippetErrorCodes();
 // The terminal AI safety codes: AI_CONSENT_REQUIRED, AI_OUTPUT_SHARING_DISABLED (#56).
 registerTerminalAiErrorCodes();
 // The runbook error codes and notification events (#61).

@@ -131,6 +131,12 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           'The terminal itself is the WebSocket at `/api/terminal/ws`, which is not part of this document.',
       },
       {
+        name: 'Snippets',
+        description:
+          'Saved terminal text the key panel inserts (never runs): list, create, edit, reorder and delete. ' +
+          'Private to the creator; a body that looks like a credential is saved with a `looks-like-secret` warning.',
+      },
+      {
         name: 'Runbooks',
         description:
           'Versioned multi-step procedures (command, script, package update, file upload, log collection, AI task, ' +

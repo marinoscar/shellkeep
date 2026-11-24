@@ -95,7 +95,7 @@ Authenticate within 5 seconds; re-send `auth` after every token refresh. The Web
 
 ## Rate limits
 
-There is no global HTTP limiter. The files API limits content reads, download tokens and concurrent downloads per user (`files` system settings). Targeted limits belong to the platform: AI (per user, org key and model, `429` with `details.reason: "AI_RATE_LIMITED"`), device-token polling (`slow_down`), member lookup and public link resolution. A run's fan-out is bounded by the `runbooks` system settings (`maxTargetsPerRun`, `maxConcurrency`).
+There is no global HTTP limiter. The files API limits content reads, download tokens and concurrent downloads per user (`files` system settings). The snippets API limits reads (120) and writes (60) per user and minute, in memory (`SNIPPETS_RATE_LIMITED`). Targeted limits belong to the platform: AI (per user, org key and model, `429` with `details.reason: "AI_RATE_LIMITED"`), device-token polling (`slow_down`), member lookup and public link resolution. A run's fan-out is bounded by the `runbooks` system settings (`maxTargetsPerRun`, `maxConcurrency`).
 
 ## Route groups
 
@@ -106,6 +106,7 @@ All under `/api`. Exact routes: `/api/docs`.
 | `server-profiles` | profiles, tags, connection test, host-key scan, trust and forget, facts refresh | `servers:read/write/delete` | [ARCHITECTURE §3.1](ARCHITECTURE.md#31-server-profiles) |
 | `server-profiles/:id/files`, `files/download` | files on a server over SFTP: list, stat, ranged text, single-use download token and streamed download | `sessions:write` plus the right to connect (no `files:*`); `files/download/:token` is public by token | [specs/files.md](specs/files.md) |
 | `sessions` | list, create, rename, terminate, batch-terminate, history download | `sessions:read/write/delete` | [specs/terminal.md](specs/terminal.md) |
+| `snippets`, `snippets/order` | the key panel's saved terminal text: list and search, create, edit, delete, reorder; owner-only; `warning: "looks-like-secret"` on save | `sessions:write` | [specs/terminal.md §5.13](specs/terminal.md#513-snippets) |
 | `dashboard` | Home summary | `sessions:read` | [ARCHITECTURE §3.7](ARCHITECTURE.md#37-dashboard-cli-and-android) |
 | `ai/terminal` | assist, explain (+ `explain/preview`), consent, session summaries (`sessions/:id/summaries`) | `ai:use` | [specs/terminal-ai.md](specs/terminal-ai.md) |
 | `ai/runbooks` | draft a runbook with AI | `ai:use` | [specs/fleet-runbooks.md §7](specs/fleet-runbooks.md#7-ai-step-and-drafting) |

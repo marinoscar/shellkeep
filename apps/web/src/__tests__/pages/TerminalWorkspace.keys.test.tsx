@@ -259,11 +259,11 @@ describe('the accessory row in the workspace (#167)', () => {
     expect(termMock.terminal!.focus).toHaveBeenCalled();
   });
 
-  it('shows the arrow-drag key (#168), hides snippets until #172 and the AI key without AI', async () => {
+  it('shows the arrow-drag (#168) and snippets (#172) keys, and hides the AI key without AI', async () => {
     renderWorkspace();
     await ready();
     expect(within(row()).getByRole('button', { name: 'Arrow drag' })).toBeInTheDocument();
-    expect(within(row()).queryByRole('button', { name: 'Snippets' })).not.toBeInTheDocument();
+    expect(within(row()).getByRole('button', { name: 'Snippets' })).toBeInTheDocument();
     expect(within(row()).queryByRole('button', { name: 'Open AI assistant' })).not.toBeInTheDocument();
   });
 

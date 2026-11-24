@@ -51,7 +51,7 @@ export interface ResolvedGroup {
 /**
  * The layout's groups in order, each entry resolved. An action key is kept only
  * when `availableActions` has it (the AI key needs AI, attach needs
- * `sessions:write`, drag and snippets wait for #168 and #172). Unknown catalog
+ * `sessions:write`, snippets need `sessions:write` too). Unknown catalog
  * ids are skipped; a group left empty is dropped.
  */
 export function resolveKeyGroups(

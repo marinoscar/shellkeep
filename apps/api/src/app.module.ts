@@ -35,6 +35,7 @@ import {
 import { ServerProfilesModule } from './server-profiles/server-profiles.module';
 import { TerminalModule } from './terminal/terminal.module';
 import { FilesModule } from './files/files.module';
+import { SnippetsModule } from './snippets/snippets.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { TerminalAiModule } from './terminal-ai/terminal-ai.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -149,6 +150,7 @@ import configuration from './config/configuration';
     ServerProfilesModule,
     TerminalModule,
     FilesModule,
+    SnippetsModule,
     // Runbooks (#61): versioned procedure definitions, target preview and secret parameters.
     RunbooksModule,
     TerminalAiModule,
