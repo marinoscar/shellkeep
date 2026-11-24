@@ -90,6 +90,19 @@ Endpoints returning lists support pagination with the following query parameters
 
 Binary frames are terminal input and output; `resize` and `ping` are unchanged. Each denial is logged as `ws.auth.denied` with the user id and the reason, never the token.
 
+## Terminal command assist
+
+`POST /api/ai/terminal/assist` (`ai:use` and `sessions:write`, behind the AI kill switch and the organization AI switch). Body `{ "sessionId": "<uuid>", "prompt": "<1..2000 chars>", "includeScreen": true }`. The answer is `text/event-stream`:
+
+| Event | Data | Meaning |
+|---|---|---|
+| `context` | `{ os, shell, cwd, screenLines, findings }` | What was sent: the server facts, the working directory and how many redacted screen lines (0 when `includeScreen` is false or the server profile does not share output) |
+| `delta` | `{ text }` | The raw token stream (`COMMAND: ...` then `WHY: ...`) |
+| `result` | `{ command, explanation, risk, destructive, reasons }` | The command, parsed server-side as one plain line. `risk` (`low`, `medium`, `high`), `destructive` and `reasons` come from `classifyCommand`, never from the model |
+| `error` | `{ code }` | In-band failure after streaming began: `AI_ASSIST_UNPARSEABLE` or an `AiError` code |
+
+A failure before the first event is an ordinary JSON error: `404` for a session that is not the caller's, `403 AI_DISABLED`, `409 AI_CONSENT_REQUIRED`, `429 AI_RATE_LIMITED` with `Retry-After`, and `400 AI_INVALID_REQUEST` when the user has no default model. The command is a suggestion only: nothing on the server or in the web client runs it.
+
 ## Endpoints
 
 ### Authentication

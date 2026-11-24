@@ -167,4 +167,5 @@ Terminal output reaches an AI feature only through `TerminalContextService.forAi
 | Difference | Detail | Resolved by |
 |---|---|---|
 | `POST /api/ai/terminal/consent` is an app route under `/api/ai/*` | It carries `AiEnabledGuard`, `AiOrgEnabledInterceptor` and `ai:use` like every platform consumer route there, so the `ai-kill-switch` and `ai-rbac-matrix` suites cover it | Kept |
+| `POST /api/ai/terminal/assist` is an app route under `/api/ai/*` | It carries `AiEnabledGuard`, `AiOrgEnabledInterceptor`, `ai:use` and `sessions:write` like every platform consumer route there, so the `ai-kill-switch` and `ai-rbac-matrix` suites cover it | Kept |
 | Redaction is best effort | The per-server switch is the hard control; the consent copy says so | Kept |
