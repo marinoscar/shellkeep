@@ -4,6 +4,7 @@ import type { ApiClient } from '@marinoscar/platform-cli/api-client';
 import { Command } from 'commander';
 
 import type { CommandDeps } from '../commands/deps.js';
+import type { RunbookDeps } from '../commands/runbook-http.js';
 import type { BridgeSocket, ProcessEvents, TtyInput, TtyOutput } from '../terminal/bridge.js';
 
 // Test doubles shared by the CLI's tests. Not part of the build (tsconfig.build.json).
@@ -13,6 +14,7 @@ export interface Call {
   method: string;
   path: string;
   options?: unknown;
+  body?: unknown;
 }
 
 type Responder = (call: Call) => unknown;
@@ -20,8 +22,8 @@ type Responder = (call: Call) => unknown;
 /** An `ApiClient` that answers from a function and records what it was asked. */
 export function fakeClient(respond: Responder): { client: ApiClient; calls: Call[] } {
   const calls: Call[] = [];
-  const handle = async (method: string, path: string, options?: unknown): Promise<unknown> => {
-    const call: Call = { method, path, options };
+  const handle = async (method: string, path: string, options?: unknown, body?: unknown): Promise<unknown> => {
+    const call: Call = { method, path, options, ...(body !== undefined ? { body } : {}) };
     calls.push(call);
     const result = respond(call);
     if (result instanceof Error) throw result;
@@ -29,7 +31,7 @@ export function fakeClient(respond: Responder): { client: ApiClient; calls: Call
   };
   const client = {
     get: (path: string, options?: unknown) => handle('GET', path, options),
-    post: (path: string, _body?: unknown, options?: unknown) => handle('POST', path, options),
+    post: (path: string, body?: unknown, options?: unknown) => handle('POST', path, options, body),
   } as unknown as ApiClient;
   return { client, calls };
 }
@@ -128,4 +130,52 @@ export class FakeSocket extends EventEmitter implements BridgeSocket {
   serverBinary(data: Buffer | string): void {
     this.emit('message', Buffer.from(data), true);
   }
+}
+
+/** One recorded raw request (`deps.fetch`). */
+export interface FetchCall {
+  path: string;
+  headers: Record<string, string>;
+}
+
+/** Plays the server for `deps.fetch`: one handler call per request, with the request's ordinal. */
+export type FetchHandler = (call: FetchCall, attempt: number) => Response | Promise<Response>;
+
+/** Runbook deps over a fake client and a fake server for the raw routes; `sleep` records and returns at once. */
+export function fakeRunbookDeps(
+  respond: Responder,
+  handler: FetchHandler = () => new Response('not found', { status: 404 }),
+): { deps: RunbookDeps; calls: Call[]; fetched: FetchCall[]; sleeps: number[]; out: () => string; err: () => string } {
+  const base = fakeDeps(respond);
+  const fetched: FetchCall[] = [];
+  const sleeps: number[] = [];
+  const deps: RunbookDeps = {
+    ...base.deps,
+    fetch: async (path, init) => {
+      const call: FetchCall = { path, headers: { ...(init?.headers ?? {}) } };
+      fetched.push(call);
+      return handler(call, fetched.length - 1);
+    },
+    sleep: async (ms) => {
+      sleeps.push(ms);
+    },
+  };
+  return { deps, calls: base.calls, fetched, sleeps, out: base.out, err: base.err };
+}
+
+/** An SSE response that sends `frames` and then ends (or stays open with `hang`). */
+export function sseResponse(frames: string[], options: { hang?: boolean } = {}): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const frame of frames) controller.enqueue(encoder.encode(frame));
+      if (options.hang !== true) controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+}
+
+/** One SSE frame. */
+export function sseFrame(event: string, data: unknown, id?: string): string {
+  return `${id !== undefined ? `id: ${id}\n` : ''}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
