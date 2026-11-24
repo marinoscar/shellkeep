@@ -103,6 +103,18 @@ Binary frames are terminal input and output; `resize` and `ping` are unchanged. 
 
 A failure before the first event is an ordinary JSON error: `404` for a session that is not the caller's, `403 AI_DISABLED`, `409 AI_CONSENT_REQUIRED`, `429 AI_RATE_LIMITED` with `Retry-After`, and `400 AI_INVALID_REQUEST` when the user has no default model. The command is a suggestion only: nothing on the server or in the web client runs it.
 
+## Terminal session summaries
+
+Summarizing up to 50,000 lines of scrollback outlives a request, so it is a background job (`ai.session.summarize`, server-only). Three routes, all behind the AI kill switch and the organization AI switch, `ai:use` in the declaration plus `sessions:read` checked in the handler:
+
+| Route | Answer |
+|---|---|
+| `POST /api/ai/terminal/sessions/:id/summaries` | `202 { summaryId, jobId, status: "pending" }`. While a summary of the session is pending, another POST answers with that one. |
+| `GET /api/ai/terminal/sessions/:id/summaries` | The newest 20 summaries, newest first. |
+| `GET /api/ai/terminal/sessions/:id/summaries/:summaryId` | One summary. `status` is `pending`, `succeeded` or `failed`; poll it (the web client does every 3 s). |
+
+A summary is `{ id, sessionId, jobId, status, summaryMd, commands: [{ command, outcome? }], findings: [{ kind, count }], sourceChars, truncated, model, errorCode, createdAt, completedAt }`; `summaryMd` is Markdown and must be rendered without HTML. `errorCode` on a failed summary is an `AiError` code or one of `AI_CONSENT_REQUIRED`, `AI_OUTPUT_SHARING_DISABLED`, `SESSION_TERMINATED`, `SESSION_NOT_FOUND`, `SESSION_EMPTY`, `SUMMARY_FAILED`, `SUMMARY_TIMED_OUT`. Failures before queuing are ordinary JSON errors: `404` for a session that is not the caller's, `400 SESSION_TERMINATED`, `409 AI_CONSENT_REQUIRED`, `409 AI_OUTPUT_SHARING_DISABLED`, `403` without `sessions:read`.
+
 ## Endpoints
 
 ### Authentication
