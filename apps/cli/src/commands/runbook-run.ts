@@ -193,14 +193,14 @@ export async function startRun(deps: RunbookDeps, id: string, options: RunOption
 
 /** Adds `run <id>` to the `runbook` group. */
 export function registerRunbookRun(group: Command, deps: RunbookDeps): void {
-  const collect = (value: string, previous: string[]): string[] => [...previous, value];
+  const collect = (value: string, previous: string[] | undefined): string[] => [...(previous ?? []), value];
   group
     .command('run')
     .description('Start a run of a runbook; with --wait, exit 0 only if every target succeeds')
     .argument('<id>', 'runbook id')
     .option('--targets <list>', 'server ids and tag:<name> entries, comma-separated (default: the runbook\'s own targets)')
-    .option('--param <NAME=value>', 'a parameter value (repeatable)', collect, [])
-    .option('--secret-ref <NAME=secret>', 'a secret parameter: the name of a stored runbook secret (repeatable)', collect, [])
+    .option('--param <NAME=value>', 'a parameter value (repeatable)', collect)
+    .option('--secret-ref <NAME=secret>', 'a secret parameter: the name of a stored runbook secret (repeatable)', collect)
     .option('--runbook-version <n>', 'run this version (default: the latest)')
     .option('--dry-run', 'resolve and plan without executing (not available until #67)')
     .option('--wait', 'wait for the run to end')
