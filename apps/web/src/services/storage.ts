@@ -29,6 +29,20 @@ export const storageObjects = createStorageObjectsClient(platformApi);
  * @returns the signed download URL.
  */
 export async function uploadPastedImage(file: Blob, filename: string): Promise<string> {
+  return uploadTerminalFile(file, filename);
+}
+
+/**
+ * Uploads a file from the terminal workspace (a pasted image, or a file the
+ * user picked with "Upload file"), waits until the API has processed it and
+ * returns a time-limited signed URL to it, which the workspace types at the
+ * prompt. The API enforces the type and size limits.
+ *
+ * @param file - the file.
+ * @param filename - the name to store it under.
+ * @returns the signed download URL.
+ */
+export async function uploadTerminalFile(file: Blob, filename: string): Promise<string> {
   const object = await storageObjects.uploadAndWait(file, { filename });
   const { url } = await storageObjects.downloadUrl(object.id);
   return url;

@@ -27,8 +27,7 @@ interface AppOpenApiTagGroup {
 /**
  * Sidebar sections, in render order. Every `@ApiTags(...)` name a controller of
  * the composed app uses appears here, the packaged slices' included: a slice
- * does not register its own tags, the app that mounts it does. A slice adopted
- * later (AI) adds its tags in its own issue.
+ * does not register its own tags, the app that mounts it does. The AI slice's two tags (#55) sit in their own group.
  */
 const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
   {
@@ -252,6 +251,30 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
         description:
           'The email transport (SMTP or SES), sender and the test send, configured at runtime with secrets held in the ' +
           'credential store. Gated on `system_settings:read`/`system_settings:write`.',
+      },
+    ],
+  },
+  {
+    name: 'AI',
+    tags: [
+      {
+        name: 'AI Administration',
+        description:
+          'The AI platform\'s deployment-wide configuration: the kill switch, the key policy, ' +
+          'which providers are enabled, each provider\'s admin (org) key, a connection test, and ' +
+          'the model catalog — which models are enabled, their capability overrides, and catalog ' +
+          'refresh. Gated on `ai_config:read`/`ai_config:write` (Admin only) and reachable while ' +
+          'AI is disabled, so it can always be turned back on. Admin keys are write-only: held ' +
+          'in the encrypted credential store and never returned.',
+      },
+      {
+        name: 'AI',
+        description:
+          'Using AI as a signed-in user: `GET /api/ai/config` (is AI on, which key policy, which ' +
+          'providers — readable by anyone, even while AI is off), your own provider keys (bring ' +
+          'your own key: verified before it is stored, encrypted at rest, write-only), and the ' +
+          'models you can actually call. Everything except `GET /api/ai/config` requires ' +
+          '`ai:use` and answers `403` with `details.reason: "AI_DISABLED"` while AI is disabled.',
       },
     ],
   },

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { render } from '../../../__tests__/utils/test-utils';
+import { render } from '../../../../__tests__/utils/test-utils';
 import { KeyShortcutsSettings } from './KeyShortcutsSettings';
-import type { KeyShortcut } from '../../../types/terminal';
+import type { KeyShortcut } from '../../../../types/terminal';
 
 // ---------------------------------------------------------------------------
 // Props (the page owns the settings hook and hands the list in)

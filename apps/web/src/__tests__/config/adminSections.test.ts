@@ -43,6 +43,22 @@ describe('ADMIN_SECTIONS (#46)', () => {
       // #54: appended to Operations.
       ['Webhooks', '/admin/settings/webhooks'],
       ['Organization webhooks', '/admin/settings/organization-webhooks'],
+      // #55: the AI group, appended after Operations.
+      ['AI', '/admin/settings/ai'],
+      ['AI Models', '/admin/settings/ai/models'],
+      ['AI Usage', '/admin/settings/ai/usage'],
+      ['Organization AI keys', '/admin/settings/ai/organization-keys'],
+    ]);
+  });
+
+  it('gates every AI card behind the kill switch except the AI card itself (#55)', () => {
+    const ai = ADMIN_SECTIONS.find((section) => section.label === 'AI');
+    expect(ai?.cards.map((c) => [c.path, c.feature ?? null])).toEqual([
+      // The page AI is switched ON from: reachable while AI is off.
+      ['/admin/settings/ai', null],
+      ['/admin/settings/ai/models', 'ai'],
+      ['/admin/settings/ai/usage', 'ai'],
+      ['/admin/settings/ai/organization-keys', 'ai'],
     ]);
   });
 
@@ -86,6 +102,14 @@ describe('ADMIN_SECTIONS (#46)', () => {
       '/admin/settings/webhooks': 'system_webhooks:read',
       // GET /api/org/webhooks (org scope, org_admin); writes need org_webhooks:write, gated in the page.
       '/admin/settings/organization-webhooks': 'org_webhooks:read',
+      // /api/admin/ai/* reads (the slice's admin controllers); writes need
+      // ai_config:write, gated in the pages.
+      '/admin/settings/ai': 'ai_config:read',
+      '/admin/settings/ai/models': 'ai_config:read',
+      '/admin/settings/ai/usage': 'ai_config:read',
+      // GET /api/admin/ai/org-keys: an ORG permission (org_admin); writes need
+      // org_ai_config:write, gated in the page.
+      '/admin/settings/ai/organization-keys': 'org_ai_config:read',
     });
   });
 
@@ -103,11 +127,13 @@ describe('ADMIN_SECTIONS (#46)', () => {
 
   it('gates the hub on any card permission', () => {
     expect(ADMIN_HUB_PERMISSIONS.sort()).toEqual([
+      'ai_config:read',
       'alerts:read',
       'broadcasts:read',
       'db_backup:read',
       'jobs:read',
       'nodes:read',
+      'org_ai_config:read',
       'org_broadcasts:read',
       'org_webhooks:read',
       'push:read',
@@ -132,8 +158,10 @@ describe('ADMIN_SECTIONS (#46)', () => {
     ]);
   });
 
-  it('puts the Operations cards in their own section, last', () => {
-    const last = ADMIN_SECTIONS[ADMIN_SECTIONS.length - 1];
+  it('keeps the Operations cards in their own section, before the AI group (#55)', () => {
+    const labels = ADMIN_SECTIONS.map((section) => section.label);
+    expect(labels[labels.length - 1]).toBe('AI');
+    const last = ADMIN_SECTIONS[labels.indexOf('Operations')];
     expect(last.label).toBe('Operations');
     expect(last.cards.map((c) => c.path)).toEqual([
       '/admin/settings/jobs',

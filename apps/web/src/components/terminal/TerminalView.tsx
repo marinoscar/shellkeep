@@ -1,11 +1,14 @@
-import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { Box } from '@mui/material';
+import { useRef, useEffect, useImperativeHandle, forwardRef, useState, useMemo } from 'react';
+import { Box, useTheme } from '@mui/material';
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTouchScroll } from '../../hooks/useTouchScroll';
 import { TerminalScrollButtons } from './TerminalScrollButtons';
 import { HostKeyDialog } from '../server-profiles/HostKeyDialog';
 import { HOST_KEY_MISMATCH_MESSAGE, HOST_KEY_UNTRUSTED_MESSAGE } from '../../services/terminal-ws';
 import type { Terminal } from '@xterm/xterm';
+import type { HostKeyErrorCode } from '../../types/terminal';
+import { DEFAULT_TERMINAL_SETTINGS, type ResolvedTerminalSettings } from '../../lib/terminal/settings';
+import { resolveTerminalTheme } from '../../lib/terminal/appearance';
 import '@xterm/xterm/css/xterm.css';
 
 export interface TerminalViewHandle {
@@ -16,16 +19,41 @@ export interface TerminalViewHandle {
   reconnect: () => void;
 }
 
+/** What the terminal status bar shows about one pane (#77). */
+export interface TerminalViewStatus {
+  /** The heartbeat's last round trip in ms, or `null` while not measured. */
+  latencyMs: number | null;
+  /** The pty size the pane last fitted to, or `null` before the first fit. */
+  cols: number | null;
+  rows: number | null;
+  /**
+   * The last host-key refusal of this pane (#60) until it connects: the key is
+   * unknown or changed. `null` once connected or when there was none.
+   */
+  hostKeyRefusal: HostKeyErrorCode | null;
+}
+
 interface TerminalViewProps {
   sessionId: string;
   onConnectionChange?: (connected: boolean) => void;
   onError?: (error: string) => void;
+  /** The pane's latency, size and host-key state, for the status bar (#77). */
+  onStatusChange?: (status: TerminalViewStatus) => void;
   showScrollButtons?: boolean;
+  /**
+   * The user's terminal preferences (#80): font, size, line height, cursor,
+   * scrollback, theme, bell and copy-on-select. A change applies to the open
+   * terminal in place, without reconnecting. Default: the built-in defaults.
+   */
+  preferences?: ResolvedTerminalSettings;
 }
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
-  function TerminalView({ sessionId, onConnectionChange, onError, showScrollButtons = false }, ref) {
+  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const appMode = useTheme().palette.mode;
+  const appearance = useMemo(() => ({ preferences, appMode }), [preferences, appMode]);
+  const background = resolveTerminalTheme(preferences.theme, appMode).background;
   const {
     isConnected,
     error,
@@ -35,7 +63,10 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
     hostKeyRefusal,
     retryConnect,
     dismissHostKey,
-  } = useTerminal(sessionId, containerRef);
+    latencyMs = null,
+    size = null,
+    bellCount = 0,
+  } = useTerminal(sessionId, containerRef, appearance);
   useTouchScroll(containerRef);
 
   useImperativeHandle(ref, () => ({
@@ -49,6 +80,23 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
   useEffect(() => {
     onConnectionChange?.(isConnected);
   }, [isConnected, onConnectionChange]);
+
+  // The last host-key refusal stays reported (a declined prompt closes the
+  // dialog but the key is still not trusted) until the pane connects.
+  const [lastRefusal, setLastRefusal] = useState<HostKeyErrorCode | null>(null);
+  useEffect(() => {
+    if (hostKeyRefusal) setLastRefusal(hostKeyRefusal.code);
+    else if (isConnected) setLastRefusal(null);
+  }, [hostKeyRefusal, isConnected]);
+
+  useEffect(() => {
+    onStatusChange?.({
+      latencyMs,
+      cols: size?.cols ?? null,
+      rows: size?.rows ?? null,
+      hostKeyRefusal: lastRefusal,
+    });
+  }, [latencyMs, size?.cols, size?.rows, lastRefusal, onStatusChange]);
 
   // Notify parent of errors
   useEffect(() => {
@@ -68,10 +116,11 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
     >
       <Box
         ref={containerRef}
+        data-testid="terminal-xterm-host"
         sx={{
           width: '100%',
           height: '100%',
-          bgcolor: '#1e1e1e',
+          bgcolor: background,
           touchAction: 'none',
           '& .xterm': {
             height: '100%',
@@ -80,6 +129,24 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
           },
         }}
       />
+      {/* The visual bell (#80): a brief flash over the terminal, re-keyed per bell. */}
+      {bellCount > 0 && (
+        <Box
+          key={bellCount}
+          data-testid="terminal-visual-bell"
+          aria-hidden
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            bgcolor: 'text.primary',
+            opacity: 0,
+            '@keyframes terminalBell': { from: { opacity: 0.15 }, to: { opacity: 0 } },
+            animation: 'terminalBell 200ms ease-out',
+            '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+          }}
+        />
+      )}
       <TerminalScrollButtons containerRef={containerRef} visible={showScrollButtons} />
       {/* An unknown or changed host key (#60): trust it, then ask for the session again. */}
       <HostKeyDialog

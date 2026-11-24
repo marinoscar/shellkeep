@@ -496,5 +496,40 @@ describe('TerminalWebSocket', () => {
 
       expect(errorHandler).not.toHaveBeenCalled();
     });
+
+    it('pings once as soon as the session is ready, then every PING_INTERVAL_MS (#77)', () => {
+      const tws = new TerminalWebSocket('session-123', 'my-token');
+      tws.connect();
+      const ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+      ws.simulateMessage(JSON.stringify({ type: 'auth_ok' }));
+      ws.send.mockClear();
+
+      ws.simulateMessage(JSON.stringify({ type: 'session_ready' }));
+      const pings = () => ws.send.mock.calls.filter(([m]) => m === JSON.stringify({ type: 'ping' })).length;
+      expect(pings()).toBe(1);
+      vi.advanceTimersByTime(TerminalWebSocket.PING_INTERVAL_MS);
+      expect(pings()).toBe(2);
+    });
+
+    it('emits the ping-to-pong round trip as latency, once per ping (#77)', () => {
+      const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+      const tws = new TerminalWebSocket('session-123', 'my-token');
+      const latency = vi.fn();
+      tws.on('latency', latency);
+      tws.connect();
+      const ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+      ws.simulateMessage(JSON.stringify({ type: 'auth_ok' }));
+      ws.simulateMessage(JSON.stringify({ type: 'session_ready' }));
+
+      now.mockReturnValue(1023.4);
+      ws.simulateMessage(JSON.stringify({ type: 'pong' }));
+      expect(latency).toHaveBeenCalledWith(23);
+      // An unsolicited pong measures nothing.
+      ws.simulateMessage(JSON.stringify({ type: 'pong' }));
+      expect(latency).toHaveBeenCalledTimes(1);
+      now.mockRestore();
+    });
   });
 });

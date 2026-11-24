@@ -34,6 +34,7 @@ vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
 
 import { TerminalView, type TerminalViewHandle } from '../../../components/terminal/TerminalView';
 import { useTerminal } from '../../../hooks/useTerminal';
+import { DEFAULT_TERMINAL_SETTINGS } from '../../../lib/terminal/settings';
 import { trustHostKey, getServerProfile } from '../../../services/terminal-api';
 import { HOST_KEY_MISMATCH_MESSAGE, HOST_KEY_UNTRUSTED_MESSAGE } from '../../../services/terminal-ws';
 import type { HostKeyRefusal, ServerProfile } from '../../../types';
@@ -62,13 +63,36 @@ describe('TerminalView', () => {
       expect(boxes.length).toBeGreaterThan(0);
     });
 
-    it('should call useTerminal with the provided sessionId', () => {
+    it('should call useTerminal with the provided sessionId and the default preferences', () => {
       render(<TerminalView sessionId="test-session-42" />);
 
       expect(useTerminal).toHaveBeenCalledWith(
         'test-session-42',
         expect.objectContaining({ current: expect.anything() }),
+        expect.objectContaining({ preferences: DEFAULT_TERMINAL_SETTINGS }),
       );
+    });
+
+    it('hands the user preferences to useTerminal and paints the theme background (#80)', () => {
+      const preferences = { ...DEFAULT_TERMINAL_SETTINGS, fontSize: 20, theme: 'solarized-dark' as const };
+      render(<TerminalView sessionId="s-1" preferences={preferences} />);
+
+      expect(useTerminal).toHaveBeenLastCalledWith(
+        's-1',
+        expect.anything(),
+        expect.objectContaining({ preferences }),
+      );
+      expect(screen.getByTestId('terminal-xterm-host')).toHaveStyle({ backgroundColor: '#002b36' });
+    });
+
+    it('flashes for a visual bell', () => {
+      vi.mocked(useTerminal).mockReturnValue({
+        ...vi.mocked(useTerminal)(),
+        bellCount: 1,
+      } as ReturnType<typeof useTerminal>);
+      render(<TerminalView sessionId="s-1" />);
+
+      expect(screen.getByTestId('terminal-visual-bell')).toBeInTheDocument();
     });
   });
 
@@ -305,6 +329,40 @@ describe('TerminalView', () => {
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
       expect(dismissHostKey).toHaveBeenCalledWith(HOST_KEY_MISMATCH_MESSAGE);
+    });
+  });
+
+  describe('status for the status bar (#77)', () => {
+    it('reports latency, size and the last host-key refusal until it connects', () => {
+      const onStatusChange = vi.fn();
+      const refusal = { code: 'HOST_KEY_MISMATCH', presented: { fingerprint: 'SHA256:x', algorithm: 'ssh-ed25519' }, expected: 'SHA256:y', serverProfileId: 'p1' };
+      vi.mocked(useTerminal).mockReturnValue({
+        isConnected: false,
+        error: null,
+        reconnect: mockReconnect,
+        search: mockSearch,
+        sendInput: mockSendInput,
+        terminal: mockTerminalRef as ReturnType<typeof useTerminal>['terminal'],
+        hostKeyRefusal: refusal as HostKeyRefusal,
+        latencyMs: null,
+        size: { cols: 100, rows: 30 },
+      } as unknown as ReturnType<typeof useTerminal>);
+      const { rerender } = render(<TerminalView sessionId="s1" onStatusChange={onStatusChange} />);
+      expect(onStatusChange).toHaveBeenLastCalledWith({ latencyMs: null, cols: 100, rows: 30, hostKeyRefusal: 'HOST_KEY_MISMATCH' });
+
+      vi.mocked(useTerminal).mockReturnValue({
+        isConnected: true,
+        error: null,
+        reconnect: mockReconnect,
+        search: mockSearch,
+        sendInput: mockSendInput,
+        terminal: mockTerminalRef as ReturnType<typeof useTerminal>['terminal'],
+        hostKeyRefusal: null,
+        latencyMs: 17,
+        size: { cols: 100, rows: 30 },
+      } as unknown as ReturnType<typeof useTerminal>);
+      rerender(<TerminalView sessionId="s1" onStatusChange={onStatusChange} />);
+      expect(onStatusChange).toHaveBeenLastCalledWith({ latencyMs: 17, cols: 100, rows: 30, hostKeyRefusal: null });
     });
   });
 });

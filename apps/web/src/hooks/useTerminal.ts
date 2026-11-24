@@ -6,6 +6,14 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { TerminalWebSocket } from '../services/terminal-ws';
 import { api } from '../services/api';
 import type { HostKeyRefusal } from '../types/terminal';
+import { DEFAULT_TERMINAL_SETTINGS, type ResolvedTerminalSettings } from '../lib/terminal/settings';
+import {
+  applyTerminalAppearance,
+  ensureTerminalFont,
+  playTerminalBell,
+  terminalAppearanceOptions,
+  type AppColorMode,
+} from '../lib/terminal/appearance';
 
 /**
  * Apply attributes to the xterm.js helper textarea that suppress the
@@ -51,6 +59,7 @@ function openSocket(
   setIsConnected: (connected: boolean) => void,
   setError: (error: string | null) => void,
   setHostKeyRefusal: (refusal: HostKeyRefusal | null) => void,
+  setLatencyMs: (latency: number | null) => void,
 ): TerminalWebSocket {
   // The socket reads the session's current access token on every (re)connect
   // and re-authenticates in-band after each refresh (#47).
@@ -77,6 +86,12 @@ function openSocket(
 
   ws.on('disconnect', () => {
     setIsConnected(false);
+    setLatencyMs(null);
+  });
+
+  // The heartbeat's round trip (the status bar, #77).
+  ws.on('latency', (latency: number) => {
+    setLatencyMs(latency);
   });
 
   ws.on('error', (err: Error) => {
@@ -91,10 +106,33 @@ function openSocket(
   return ws;
 }
 
-export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivElement | null>) {
+/** How a session terminal looks and behaves: the user's preferences (#80). */
+export interface TerminalAppearance {
+  preferences: ResolvedTerminalSettings;
+  /** The app's colour mode, which the `follow-app` theme follows. */
+  appMode: AppColorMode;
+}
+
+const DEFAULT_APPEARANCE: TerminalAppearance = {
+  preferences: DEFAULT_TERMINAL_SETTINGS,
+  appMode: 'dark',
+};
+
+export function useTerminal(
+  sessionId: string,
+  containerRef: RefObject<HTMLDivElement | null>,
+  appearance: TerminalAppearance = DEFAULT_APPEARANCE,
+) {
+  // Read by the terminal's handlers (bell, selection) and at construction, so a
+  // preference change never re-creates the terminal or its socket.
+  const appearanceRef = useRef(appearance);
+  appearanceRef.current = appearance;
+  const [bellCount, setBellCount] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hostKeyRefusal, setHostKeyRefusal] = useState<HostKeyRefusal | null>(null);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [size, setSize] = useState<{ cols: number; rows: number } | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const wsRef = useRef<TerminalWebSocket | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -110,18 +148,27 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     }
 
     const terminal = new Terminal({
-      cursorBlink: true,
-      fontSize: 14,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      // Font, size, line height, cursor, scrollback and theme: the user's (#80).
+      ...terminalAppearanceOptions(
+        appearanceRef.current.preferences,
+        appearanceRef.current.appMode,
+      ),
       letterSpacing: 0,
-      lineHeight: 1,
-      theme: {
-        background: '#1e1e1e',
-        foreground: '#d4d4d4',
-        cursor: '#d4d4d4',
-      },
-      scrollback: 5000,
       convertEol: true,
+    });
+
+    // The bell (#80): a flash the view draws, or a short beep.
+    const bellSubscription = terminal.onBell?.(() => {
+      const { bell } = appearanceRef.current.preferences;
+      if (bell === 'visual') setBellCount((count) => count + 1);
+      else if (bell === 'sound') playTerminalBell();
+    });
+
+    // Copy on select (#80): a finished selection goes to the clipboard.
+    const selectionSubscription = terminal.onSelectionChange?.(() => {
+      if (!appearanceRef.current.preferences.copyOnSelect || !terminal.hasSelection()) return;
+      const text = terminal.getSelection();
+      if (text) void navigator.clipboard?.writeText(text).catch(() => undefined);
     });
 
     const fitAddon = new FitAddon();
@@ -172,12 +219,14 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     container.addEventListener('focus', handleFocus, true /* capture */);
 
     fitAddon.fit();
+    setSize({ cols: terminal.cols, rows: terminal.rows });
+    const resizeSubscription = terminal.onResize?.(({ cols, rows }) => setSize({ cols, rows }));
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
 
-    const ws = openSocket(sessionId, terminal, setIsConnected, setError, setHostKeyRefusal);
+    const ws = openSocket(sessionId, terminal, setIsConnected, setError, setHostKeyRefusal, setLatencyMs);
     wsRef.current = ws;
 
     // Terminal input -> the CURRENT socket. Subscribed once per terminal, so a
@@ -221,6 +270,9 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
       container.removeEventListener('focus', handleFocus, true);
       dataSubscription?.dispose();
       binarySubscription?.dispose();
+      bellSubscription?.dispose();
+      selectionSubscription?.dispose();
+      resizeSubscription?.dispose();
       wsRef.current?.disconnect();
       terminal.dispose();
       terminalRef.current = null;
@@ -229,6 +281,29 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
       searchAddonRef.current = null;
     };
   }, [sessionId, containerRef]);
+
+  // A preference change applies to the open terminal in place (#80): the
+  // options change, the terminal is refitted and tmux is told the new size.
+  // The socket stays open. A bundled font is loaded before it is measured.
+  const { preferences, appMode } = appearance;
+  useEffect(() => {
+    let cancelled = false;
+    void ensureTerminalFont(preferences.fontFamily).then(() => {
+      const terminal = terminalRef.current;
+      if (cancelled || !terminal) return;
+      if (!applyTerminalAppearance(terminal, preferences, appMode)) return;
+      try {
+        fitAddonRef.current?.fit();
+      } catch {
+        // A terminal that is not laid out yet is fitted by its ResizeObserver.
+      }
+      const ws = wsRef.current;
+      if (ws?.connected) ws.resize(terminal.cols, terminal.rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [preferences, appMode]);
 
   /**
    * Replace the socket with a fresh one (the maintenance alert's Retry, #46).
@@ -242,7 +317,7 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     if (api.getAccessToken() && terminal) {
       // Only the socket is replaced: the terminal's single input subscription
       // already routes to whatever `wsRef.current` is.
-      const ws = openSocket(sessionId, terminal, setIsConnected, setError, setHostKeyRefusal);
+      const ws = openSocket(sessionId, terminal, setIsConnected, setError, setHostKeyRefusal, setLatencyMs);
       wsRef.current = ws;
       ws.connect();
     }
@@ -287,5 +362,11 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     hostKeyRefusal,
     retryConnect,
     dismissHostKey,
+    /** The heartbeat's last round trip in ms, or `null` while not connected (#77). */
+    latencyMs,
+    /** The terminal's columns and rows after the last fit, or `null` before the first. */
+    size,
+    /** Counts bells while `bell` is `visual`, so the view can flash (#80). */
+    bellCount,
   };
 }
