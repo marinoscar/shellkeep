@@ -22,6 +22,9 @@
  *   - Users & Allowlist: the identity slice's card (`users:read`).
  *   - Doctor: `GET /api/admin/doctor`, `system_settings:read` (the packaged
  *     page's descriptor).
+ *   - Setup guide (#70): `GET /api/onboarding`'s admin block and
+ *     `GET /api/admin/onboarding/metrics`, `system_settings:read` (the
+ *     onboarding slice's default admin permission; the packaged descriptor).
  *   - Jobs and Job Insights (#49): `GET /api/admin/jobs` and
  *     `GET /api/admin/jobs/insights`, `jobs:read` (the jobs slice's
  *     `job-admin.controller.ts`); retry, cancel and reset-stuck need
@@ -90,6 +93,7 @@ import ModelTrainingOutlinedIcon from '@mui/icons-material/ModelTrainingOutlined
 import DataUsageOutlinedIcon from '@mui/icons-material/DataUsageOutlined';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
+import { setupGuideSettingsPage } from '@marinoscar/platform-web/onboarding/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
 import { dbBackupAdminSections } from '@marinoscar/platform-web/db-backup/ui';
 import { jobsAdminSections } from '@marinoscar/platform-web/jobs/ui';
@@ -188,6 +192,11 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
       // enforces; every write is gated inside the page on
       // `system_settings:write`. No `feature`.
       { ...androidAppSettingsPage.card, Icon: androidAppSettingsPage.Icon },
+      // #70, appended: the onboarding slice's Setup guide
+      // (`/admin/settings/setup`, `system_settings:read`: the permission
+      // `@marinoscar/platform-api/onboarding` adds the admin block to
+      // `GET /api/onboarding` for and gates the activation metrics on), as data.
+      { ...setupGuideSettingsPage.card, Icon: setupGuideSettingsPage.Icon },
     ],
   },
   {
