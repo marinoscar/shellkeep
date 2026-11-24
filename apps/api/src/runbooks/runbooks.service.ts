@@ -104,6 +104,23 @@ export interface RunbookView {
   latestVersion: RunbookVersionSummary | null;
 }
 
+/** The last run of a runbook, for the list (#65): its status and when it was queued. */
+export interface RunbookLastRun {
+  id: string;
+  status: string;
+  createdAt: Date;
+  finishedAt: Date | null;
+}
+
+/**
+ * A row of `GET /api/runbooks` (#65): the view plus what the Runbooks list draws without a
+ * second request: the step kinds of the latest version (never a command) and the last run.
+ */
+export interface RunbookListItem extends RunbookView {
+  stepKinds: string[];
+  lastRun: RunbookLastRun | null;
+}
+
 export interface RunbookDetail extends Omit<RunbookView, 'latestVersion'> {
   latestVersion: RunbookVersionView | null;
 }
@@ -178,6 +195,14 @@ const viewOf = (
   latestVersion: latest ? summaryOf(latest) : null,
 });
 
+/** The kinds of a stored definition's steps, in order; `[]` for none or a shape it does not know. */
+const stepKindsOf = (definition: unknown): string[] => {
+  const steps = (definition as { steps?: unknown } | null | undefined)?.steps;
+  return Array.isArray(steps)
+    ? steps.map((step) => (step as { kind?: unknown })?.kind).filter((kind): kind is string => typeof kind === 'string')
+    : [];
+};
+
 const isUniqueViolation = (error: unknown): boolean =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 
@@ -249,7 +274,7 @@ export class RunbooksService {
    * The runbooks the caller may see: those they authored, those of a group of theirs and those
    * shared with them or with a group of theirs (`filter`: `all`, `mine`, `shared`).
    */
-  async list(principal: Principal, query: RunbooksQueryDto): Promise<Page<RunbookView>> {
+  async list(principal: Principal, query: RunbooksQueryDto): Promise<Page<RunbookListItem>> {
     const me = await this.principalGroups.enrich(principal);
     const scope = this.scopeOf(me);
     return runInOrg(this.prisma, scope, async (tx) => {
@@ -301,10 +326,25 @@ export class RunbooksService {
         'read',
         rows.map((r) => ({ type: RUNBOOK_RESOURCE, id: r.id })),
       );
+      // The newest run of each listed runbook (one query; `distinct` keeps the first per runbook).
+      const lastRuns = rows.length
+        ? await tx.runbookRun.findMany({
+            where: { orgId: scope.orgId, runbookId: { in: rows.map((r) => r.id) } },
+            orderBy: [{ runbookId: 'asc' }, { createdAt: 'desc' }],
+            distinct: ['runbookId'],
+            select: { id: true, runbookId: true, status: true, createdAt: true, finishedAt: true },
+          })
+        : [];
+      const lastRunOf = new Map(lastRuns.map(({ runbookId, ...run }) => [runbookId, run]));
       return {
-        items: rows.map((r) =>
-          viewOf(r, r.latestVersionId ? byId.get(r.latestVersionId) : null, decisions.get(`${RUNBOOK_RESOURCE}:${r.id}`) ?? null, me.permissions),
-        ),
+        items: rows.map((r) => {
+          const latest = r.latestVersionId ? byId.get(r.latestVersionId) : null;
+          return {
+            ...viewOf(r, latest, decisions.get(`${RUNBOOK_RESOURCE}:${r.id}`) ?? null, me.permissions),
+            stepKinds: stepKindsOf(latest?.definition),
+            lastRun: lastRunOf.get(r.id) ?? null,
+          };
+        }),
         total,
         page: query.page,
         pageSize: query.pageSize,

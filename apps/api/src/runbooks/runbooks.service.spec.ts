@@ -57,6 +57,7 @@ describe('RunbooksService', () => {
     tx = {
       runbook: { create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findFirst: jest.fn(), findFirstOrThrow: jest.fn(), findMany: jest.fn(), count: jest.fn() },
       runbookVersion: { create: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn() },
+      runbookRun: { findMany: jest.fn().mockResolvedValue([]) },
     };
     (global as any).__tx = tx;
     audit = { record: jest.fn().mockResolvedValue(undefined) };
@@ -247,6 +248,27 @@ describe('RunbooksService', () => {
       expect(page.items[0].latestVersion?.version).toBe(1);
       expect(page.items[1].latestVersion).toBeNull();
       expect(page.items[0].latestVersion).not.toHaveProperty('definition');
+      // #65: the step kinds of the latest version (never a command) and no run yet.
+      expect(page.items[0].stepKinds).toEqual(['command']);
+      expect(page.items[0]).not.toHaveProperty('steps');
+      expect(page.items[1].stepKinds).toEqual([]);
+      expect(page.items[0].lastRun).toBeNull();
+    });
+
+    it('carries the newest run of each listed runbook, from one org-scoped query (#65)', async () => {
+      tx.runbook.findMany.mockResolvedValue([row(), row({ id: 'rb-2', latestVersionId: null })]);
+      tx.runbook.count.mockResolvedValue(2);
+      tx.runbookVersion.findMany.mockResolvedValue([ver(1, DEF)]);
+      const run = { id: 'run-1', runbookId: 'rb-1', status: 'failed', createdAt: new Date(1000), finishedAt: new Date(2000) };
+      tx.runbookRun.findMany.mockResolvedValue([run]);
+      const page = await service.list(scope, { page: 1, pageSize: 20, includeArchived: false } as never);
+      expect(tx.runbookRun.findMany).toHaveBeenCalledTimes(1);
+      expect(tx.runbookRun.findMany.mock.calls[0][0]).toMatchObject({
+        where: { orgId: 'org-1', runbookId: { in: ['rb-1', 'rb-2'] } },
+        distinct: ['runbookId'],
+      });
+      expect(page.items[0].lastRun).toEqual({ id: 'run-1', status: 'failed', createdAt: new Date(1000), finishedAt: new Date(2000) });
+      expect(page.items[1].lastRun).toBeNull();
     });
 
     it('asks AccessPolicy before every read and write, and stops at its refusal', async () => {
