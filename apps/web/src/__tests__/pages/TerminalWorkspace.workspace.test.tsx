@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
@@ -23,8 +23,8 @@ const { mockSendInput, layoutMock, prefsMock, mockUpdateTerminal, termMock } = v
   // The user's terminal preferences as the hook resolves them (#80).
   prefsMock: {
     showKeyBar: 'auto' as 'auto' | 'always' | 'never',
-    // The v2 layout's modifier keys (#166): `null` until loaded.
-    keyLayout: null as null | { groups: { keys: { id: string }[] }[] },
+    // The v2 key layout the row draws (#167); `null` until loaded.
+    keyLayout: { groups: [{ keys: [{ id: 'esc' }, { id: 'right' }] }] } as null | { groups: { keys: { id: string }[] }[] },
     haptics: false,
   },
   mockUpdateTerminal: vi.fn(),
@@ -78,10 +78,6 @@ vi.mock('../../hooks/useTerminalSettings', async () => {
     useTerminalSettings: vi.fn(() => ({
       terminal: { ...DEFAULT_TERMINAL_SETTINGS, showKeyBar: prefsMock.showKeyBar },
       actionShortcuts: {},
-      keyShortcuts: [
-        { id: 'k1', label: 'ESC', keystrokes: [{ modifiers: [], key: 'Escape' }] },
-        { id: 'k2', label: '→', keystrokes: [{ modifiers: [], key: 'ArrowRight' }] },
-      ],
       keyLayout: prefsMock.keyLayout,
       keyOptions: { autoHideWithHardwareKeyboard: true, haptics: prefsMock.haptics },
       updateTerminal: mockUpdateTerminal,
@@ -412,7 +408,7 @@ describe('TerminalWorkspacePage: the key bar preference (#80)', () => {
     vi.mocked(getSession).mockImplementation((id: string) => Promise.resolve(SESSIONS[id]));
   });
 
-  const keyBarShown = () => screen.queryByRole('button', { name: 'ESC' }) !== null;
+  const keyBarShown = () => screen.queryByRole('button', { name: 'Esc' }) !== null;
 
   it('auto: hidden on a desktop, shown on a touch screen', async () => {
     const first = renderWorkspace('/sessions/a?tabs=a');
@@ -649,13 +645,13 @@ describe('TerminalWorkspacePage: key bar modifiers (#166)', () => {
     layoutMock.isWide = false;
     layoutMock.isTouch = true;
     prefsMock.showKeyBar = 'auto';
-    prefsMock.keyLayout = { groups: [{ keys: [{ id: 'esc' }, { id: 'ctrl' }, { id: 'alt' }] }] };
+    prefsMock.keyLayout = { groups: [{ keys: [{ id: 'esc' }, { id: 'ctrl' }, { id: 'alt' }] }, { keys: [{ id: 'right' }] }] };
     termMock.terminal = null;
     vi.mocked(getSession).mockImplementation((id: string) => Promise.resolve(SESSIONS[id]));
   });
 
   afterEach(() => {
-    prefsMock.keyLayout = null;
+    prefsMock.keyLayout = { groups: [{ keys: [{ id: 'esc' }, { id: 'right' }] }] };
     termMock.terminal = null;
   });
 
@@ -686,8 +682,12 @@ describe('TerminalWorkspacePage: key bar modifiers (#166)', () => {
     const user = userEvent.setup();
     renderWorkspace('/sessions/a?tabs=a');
     await screen.findByTestId('terminal-key-dock');
-    await user.click(key('Ctrl'));
-    await user.click(key('Ctrl'));
+    // Two synchronous taps: a double tap must land within DOUBLE_TAP_MS, which a
+    // loaded test runner's userEvent round trips can exceed.
+    act(() => {
+      fireEvent.click(key('Ctrl'));
+      fireEvent.click(key('Ctrl'));
+    });
     expect(key('Ctrl')).toHaveAccessibleDescription('locked');
     await user.click(key('Alt'));
     await user.click(key('→'));
