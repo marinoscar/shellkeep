@@ -8,12 +8,14 @@ const cards = USER_SETTINGS_SECTIONS.flatMap((s) => s.cards);
 const routes = parseAppRoutes(readFileSync(join(__dirname, '..', '..', 'App.tsx'), 'utf8'));
 
 describe('USER_SETTINGS_SECTIONS', () => {
-  it('declares the Profile, Appearance, Notifications, Terminal, Keyboard shortcuts, Access Tokens, AI Keys, Webhooks, Groups and Download your data cards', () => {
+  it('declares the Profile, Appearance, Notifications, Getting started, Terminal, Keyboard shortcuts, Access Tokens, AI Keys, Webhooks, Groups and Download your data cards', () => {
     expect(cards.map((c) => [c.title, c.path])).toEqual([
       ['Profile', '/settings/profile'],
       ['Appearance', '/settings/appearance'],
       // #51: appended to Account.
       ['Notifications', '/settings/notifications'],
+      // #70: the onboarding slice's Getting started card, appended to Account.
+      ['Getting started', '/settings/getting-started'],
       ['Terminal', '/settings/terminal'],
       // #80: appended to Workspace.
       ['Keyboard shortcuts', '/settings/shortcuts'],

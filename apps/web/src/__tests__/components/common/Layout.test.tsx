@@ -6,7 +6,9 @@ import { ShellLayout } from '@marinoscar/platform-web/shell/ui';
 import type { ShellNavigation } from '@marinoscar/platform-web/shell/headless';
 import ListIcon from '@mui/icons-material/List';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { http, HttpResponse } from 'msw';
 import { render, mockUser, type MockUser } from '../../utils/test-utils';
+import { server } from '../../mocks/server';
 import { Layout } from '../../../components/common/Layout';
 import { DESTINATIONS, type Destination, type DestinationKey } from '../../../config/destinations';
 import { SHELLKEEP_NAVIGATION } from '../../../config/shell';
@@ -174,5 +176,55 @@ describe('Layout (the platform shell binding)', () => {
     renderShell('/', viewer);
     expect(screen.getByText('ShellKeep')).toBeInTheDocument();
     expect(document.querySelector('main')).toHaveAttribute('data-main-variant', 'padded');
+  });
+});
+
+describe('Layout: onboarding (#70)', () => {
+  const onboarding = (welcomeSeenAt: string | null) => ({
+    settings: { welcomeSeenAt, checklistDismissedAt: null, adminDismissedAt: null, skipped: [] },
+    user: {
+      steps: [
+        {
+          id: 'shellkeep.add-server',
+          audience: 'user',
+          tier: 'required',
+          status: 'todo',
+          title: 'Add a server',
+          description: 'Save a server.',
+          actionLabel: 'Add a server',
+          href: '/servers?new=1',
+          detail: null,
+          blockedReason: null,
+          skippable: false,
+          skipped: false,
+        },
+      ],
+      completed: 0,
+      total: 1,
+      requiredDone: false,
+      allResolved: false,
+    },
+    admin: null,
+  });
+
+  let restore: () => void = () => undefined;
+  afterEach(() => restore());
+
+  it('opens the welcome dialog with the ShellKeep pane while it has not been seen, and shows the banner', async () => {
+    restore = installWidth(1280);
+    server.use(http.get('*/api/onboarding', () => HttpResponse.json({ data: onboarding(null) })));
+    renderShell('/', viewer);
+    const dialog = await screen.findByTestId('welcome-dialog');
+    expect(within(dialog).getByText(/keep running when you close the tab/)).toBeInTheDocument();
+    // The modal hides the page behind it from the accessibility tree.
+    expect(screen.getByRole('heading', { name: /1 of 1 required step left/, hidden: true })).toBeInTheDocument();
+  });
+
+  it('does not open the welcome dialog once it has been seen', async () => {
+    restore = installWidth(1280);
+    server.use(http.get('*/api/onboarding', () => HttpResponse.json({ data: onboarding('2026-01-01T00:00:00.000Z') })));
+    renderShell('/', viewer);
+    expect(await screen.findByRole('heading', { name: /1 of 1 required step left/ })).toBeInTheDocument();
+    expect(screen.queryByTestId('welcome-dialog')).not.toBeInTheDocument();
   });
 });

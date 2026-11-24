@@ -28,6 +28,8 @@ describe('ADMIN_SECTIONS (#46)', () => {
       // #51: appended to General.
       ['Email', '/admin/settings/email'],
       ['Web Push', '/admin/settings/push'],
+      // #70: the onboarding slice's Setup guide, appended to General.
+      ['Setup guide', '/admin/settings/setup'],
       ['Users & Allowlist', '/admin/settings/users'],
       ['Doctor', '/admin/settings/doctor'],
       // #54: appended to Observability.
@@ -80,6 +82,8 @@ describe('ADMIN_SECTIONS (#46)', () => {
       // GET /api/admin/push-config, a pair of its own; key generation,
       // rotation and the test push need push:write, gated in the page.
       '/admin/settings/push': 'push:read',
+      // GET /api/onboarding's admin block and GET /api/admin/onboarding/metrics (#70).
+      '/admin/settings/setup': 'system_settings:read',
       // GET /api/users.
       '/admin/settings/users': 'users:read',
       // GET /api/admin/doctor.
@@ -146,7 +150,7 @@ describe('ADMIN_SECTIONS (#46)', () => {
     expect([...((hub?.permission as readonly string[]) ?? [])].sort()).toEqual(ADMIN_HUB_PERMISSIONS);
   });
 
-  it('appends Storage (#50), then Email and Web Push (#51) to General', () => {
+  it('appends Storage (#50), then Email and Web Push (#51), then the Setup guide (#70) to General', () => {
     const general = ADMIN_SECTIONS.find((section) => section.label === 'General');
     expect(general?.cards.map((c) => c.path)).toEqual([
       '/admin/settings/about',
@@ -155,6 +159,7 @@ describe('ADMIN_SECTIONS (#46)', () => {
       STORAGE_PATH,
       EMAIL_PATH,
       PUSH_PATH,
+      '/admin/settings/setup',
     ]);
   });
 
