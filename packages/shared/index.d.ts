@@ -7,6 +7,9 @@ export declare const CLI_NAME: string;
 /** The GitHub repository as `owner/name` (`repoSlug` in identity.json). */
 export declare const REPO_SLUG: string;
 
+/** The one-line product description (`tagline` in identity.json), or `undefined` when unset. */
+export declare const TAGLINE: string | undefined;
+
 /**
  * The fields the Android companion's identity derives from: pass it to
  * `androidIdentity()` of `@marinoscar/platform-contract/android-app`.

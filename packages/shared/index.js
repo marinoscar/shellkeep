@@ -22,6 +22,9 @@ exports.CLI_NAME = identity.cliName;
 /** The GitHub repository as `owner/name` (`repoSlug`). */
 exports.REPO_SLUG = identity.repoSlug;
 
+/** The one-line product description (`tagline`), or `undefined` when unset. */
+exports.TAGLINE = typeof identity.tagline === 'string' && identity.tagline.trim() !== '' ? identity.tagline : undefined;
+
 /**
  * The fields the Android companion's identity derives from: the product name,
  * the repository slug and the optional `android` block of `identity.json`

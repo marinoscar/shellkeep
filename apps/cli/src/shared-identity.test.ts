@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { APP_NAME, BACKGROUND_COLOR, BRAND, CLI_NAME, REPO_SLUG, THEME_COLOR } from '@shellkeep/shared';
+import { APP_NAME, BACKGROUND_COLOR, BRAND, CLI_NAME, REPO_SLUG, TAGLINE, THEME_COLOR } from '@shellkeep/shared';
 import { describe, expect, it } from 'vitest';
 
 // packages/shared/identity.json is the one place the product name, CLI name and
@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 const identity = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'packages', 'shared', 'identity.json'), 'utf8'),
-) as { productName: string; cliName: string; repoSlug: string; themeColor: string; backgroundColor: string };
+) as { productName: string; cliName: string; repoSlug: string; themeColor: string; backgroundColor: string; tagline: string };
 
 describe('@shellkeep/shared', () => {
   it('exports APP_NAME, CLI_NAME and REPO_SLUG from identity.json', () => {
@@ -23,6 +23,10 @@ describe('@shellkeep/shared', () => {
 
   it('keeps the CLI name a valid executable and config-directory seed', () => {
     expect(CLI_NAME).toMatch(/^[a-z][a-z0-9-]*$/);
+  });
+
+  it('exports TAGLINE from identity.json', () => {
+    expect(TAGLINE).toBe(identity.tagline);
   });
 
   it('exports THEME_COLOR and BACKGROUND_COLOR from identity.json', () => {
