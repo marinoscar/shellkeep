@@ -125,7 +125,7 @@ export function createHeldKeySender(options: HeldKeySenderOptions): KeyHold {
     send(key) {
       if (ended) return;
       const encodeOptions = { modifiers, applicationCursor: options.applicationCursor() };
-      let data = '';
+      let data: string;
       if (typeof key === 'string') {
         try {
           data = encodeKey(key, encodeOptions);
