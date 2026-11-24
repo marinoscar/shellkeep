@@ -10,6 +10,8 @@ import { SessionsService } from './sessions.service';
 import { SshService } from './ssh.service';
 import { SessionHistoryService } from './session-history.service';
 import { LIVE_SESSION_CLOSER } from './live-session-closer';
+import { LiveSessionReconciler } from './live-session-reconciler';
+import { LiveSessionResetListener } from './live-session-reset.listener';
 import { SessionManagerService } from './session-manager.service';
 import { TerminalGateway } from './terminal.gateway';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
@@ -51,6 +53,9 @@ import { LegacySecretsDoctorCheck } from './doctor/legacy-secrets.doctor-check';
     SessionHistoryService,
     SessionManagerService,
     { provide: LIVE_SESSION_CLOSER, useExisting: SessionManagerService },
+    // Closes live streams after a reset or purge job settles (#145).
+    LiveSessionReconciler,
+    LiveSessionResetListener,
     // The `app.terminal.*` recorders and gauges (#53).
     TerminalMetricsService,
     TerminalPrincipalResolver,

@@ -144,6 +144,35 @@ describe('SessionManagerService', () => {
     });
   });
 
+  describe('detachWebSocket', () => {
+    const wsStub = () => Object.assign(new EventEmitter(), { readyState: 1, send: jest.fn() }) as any;
+
+    it('detaches one client; the last one leaves the row detached and the stream open', async () => {
+      const conn = createMockSshConnection();
+      (sshService.connect as jest.Mock).mockResolvedValue(conn);
+      await service.startSession(mockSessionId, mockProfile, mockTmuxSessionId, 80, 24);
+      const a = wsStub();
+      const b = wsStub();
+      service.attachWebSocket(mockSessionId, a);
+      service.attachWebSocket(mockSessionId, b);
+
+      service.detachWebSocket(mockSessionId, a);
+      expect(sessionsService.updateStatus).not.toHaveBeenCalled();
+      service.detachWebSocket(mockSessionId, b);
+      expect(sessionsService.updateStatus).toHaveBeenCalledWith(mockSessionId, 'detached');
+      expect(service.isSessionRunning(mockSessionId)).toBe(true);
+      expect(conn.close).not.toHaveBeenCalled();
+
+      // The later socket close does not detach twice.
+      b.emit('close');
+      expect(sessionsService.updateStatus).toHaveBeenCalledTimes(1);
+    });
+
+    it('is a no-op for an unknown session', () => {
+      expect(() => service.detachWebSocket('nope', wsStub())).not.toThrow();
+    });
+  });
+
   describe('sendInput', () => {
     it('should write to SSH stream for existing session', async () => {
       const mockConn = createMockSshConnection();

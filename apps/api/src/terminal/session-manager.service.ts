@@ -7,6 +7,8 @@ import * as WebSocket from 'ws';
 interface ManagedSession {
   ssh: SshConnection;
   clients: Set<WebSocket>;
+  /** Per attached socket: removes its data pipe and runs the last-client handling. */
+  detachers: Map<WebSocket, () => void>;
   sessionId: string;
 }
 
@@ -44,6 +46,7 @@ export class SessionManagerService implements OnModuleInit {
     const managed: ManagedSession = {
       ssh,
       clients: new Set(),
+      detachers: new Map(),
       sessionId,
     };
 
@@ -79,8 +82,9 @@ export class SessionManagerService implements OnModuleInit {
 
     managed.ssh.stream.on('data', dataHandler);
 
-    // Clean up when WebSocket closes
-    ws.on('close', () => {
+    // Runs once: when the socket closes, or when the gateway detaches it (share revoked).
+    const detach = () => {
+      if (!managed.detachers.delete(ws)) return;
       managed.ssh.stream.removeListener('data', dataHandler);
       managed.clients.delete(ws);
       this.logger.log(`WebSocket detached from session ${sessionId}, ${managed.clients.size} remaining`);
@@ -91,9 +95,24 @@ export class SessionManagerService implements OnModuleInit {
           this.logger.error(`Failed to update session status: ${err.message}`);
         });
       }
-    });
+    };
+    managed.detachers.set(ws, detach);
+    ws.on('close', detach);
 
     return true;
+  }
+
+  /**
+   * Detaches one client without closing its socket or the SSH stream. A session left with no client
+   * is handled as on a normal disconnect (row `detached`, tmux keeps running). A no-op when unknown.
+   */
+  detachWebSocket(sessionId: string, ws: WebSocket): void {
+    this.sessions.get(sessionId)?.detachers.get(ws)?.();
+  }
+
+  /** The ids of the sessions whose SSH stream this process holds. */
+  liveSessionIds(): string[] {
+    return [...this.sessions.keys()];
   }
 
   sendInput(sessionId: string, data: Buffer): void {
