@@ -174,3 +174,12 @@ Intentional schema drift that the drift checks must accept (raw-SQL partial inde
 |---|---|---|
 | `viewer` holds no `ai:use` | The platform grants `ai:use` to `org_admin` and `contributor` only (the same as the reference app); a viewer can read `GET /api/ai/config` but not use AI or store a key | Kept (a platform decision) |
 | `logPromptContent` | Off by default. Turning it on logs prompt text, which for the terminal features is terminal snippets (already redacted by #56) | Kept |
+
+### Terminal AI safety (#56)
+
+Terminal output reaches an AI feature only through `TerminalContextService.forAi` (`apps/api/src/terminal-ai/`): consent, the per-server `aiOutputSharing` switch, ANSI stripping, redaction (`apps/api/src/command-safety/redact.ts`), size caps and one `terminal_ai.request` audit event holding kinds, counts and sizes only. `tmux capture-pane` exists only in `terminal/session-history.service.ts` (`test/terminal-ai/capture-boundary.spec.ts`). The settings namespace `terminalAi` is appended last in both the system list (tighten-only organization layer) and the user list (`consentAcceptedAt`). The new migration adds one column, `server_profiles.ai_output_sharing`.
+
+| Difference | Detail | Resolved by |
+|---|---|---|
+| `POST /api/ai/terminal/consent` is an app route under `/api/ai/*` | It carries `AiEnabledGuard`, `AiOrgEnabledInterceptor` and `ai:use` like every platform consumer route there, so the `ai-kill-switch` and `ai-rbac-matrix` suites cover it | Kept |
+| Redaction is best effort | The per-server switch is the hard control; the consent copy says so | Kept |
