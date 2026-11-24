@@ -19,6 +19,56 @@ export const APPROVAL_KIND_LABELS: Record<string, string> = {
   destructive_run: 'Destructive run',
 };
 
+interface AiCommandPayload {
+  command?: string;
+  reason?: string;
+}
+interface AiPlanPayload {
+  summary?: string;
+  commands?: { command: string; reason?: string; refused?: string | null }[];
+}
+
+const MONO = { fontFamily: 'monospace', fontSize: 13, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', m: 0, p: 1.5, borderRadius: 1, bgcolor: 'action.hover', maxHeight: 240, overflow: 'auto' } as const;
+
+/** What an AI approval asks for (#64): the (engine-redacted) command, or the plan's commands with the refused ones marked. */
+export function AiApprovalPayload({ kind, payload }: { kind: string; payload: unknown }) {
+  if (!payload || typeof payload !== 'object') return null;
+  if (kind === 'ai_command') {
+    const { command, reason } = payload as AiCommandPayload;
+    if (!command) return null;
+    return (
+      <Box data-testid="ai-command-payload">
+        <Box component="pre" sx={MONO}>
+          {command}
+        </Box>
+        {reason && (
+          <Typography variant="body2" sx={{ mt: 0.5 }}>
+            Why: {reason}
+          </Typography>
+        )}
+      </Box>
+    );
+  }
+  if (kind === 'ai_plan') {
+    const { summary, commands } = payload as AiPlanPayload;
+    return (
+      <Box data-testid="ai-plan-payload">
+        {summary && <Typography variant="body2">{summary}</Typography>}
+        <Box component="ol" sx={{ ...MONO, pl: 4, mt: 0.5 }}>
+          {(commands ?? []).map((c, i) => (
+            <li key={i}>
+              {c.command}
+              {c.refused ? ` [refused by the policy: ${c.refused}; it will not run]` : ''}
+              {c.reason ? ` — ${c.reason}` : ''}
+            </li>
+          ))}
+        </Box>
+      </Box>
+    );
+  }
+  return null;
+}
+
 export const SELF_APPROVAL_REASON = 'You started this run. Your organization requires someone else to approve it.';
 
 export interface ApprovalCardProps {
@@ -104,7 +154,8 @@ export function ApprovalCard({ approval, canApprove, isSelf, allowSelfApproval, 
           {' · '}Step {approval.stepIndex >= 0 ? approval.stepIndex + 1 : 'canary'}
           {' · '}Requested by {isSelf ? 'you' : approval.initiatedByName ?? 'another user'}
         </Typography>
-        {approval.message && (
+        <AiApprovalPayload kind={approval.kind} payload={approval.payload} />
+        {approval.message && !approval.payload && (
           <Box
             component="pre"
             sx={{

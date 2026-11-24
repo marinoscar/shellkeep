@@ -257,7 +257,6 @@ export default function RunbooksPage() {
           Create runbook
         </Button>
       )}
-      {/* TODO(#64): "Draft with AI" (shown while AI is on) once the drafting route ships. */}
     </Box>
   );
 
