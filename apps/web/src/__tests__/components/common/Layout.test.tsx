@@ -1,594 +1,178 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { render, mockUser } from '../../utils/test-utils';
+import { Route, Routes } from 'react-router-dom';
+import { ShellLayout } from '@marinoscar/platform-web/shell/ui';
+import type { ShellNavigation } from '@marinoscar/platform-web/shell/headless';
+import ListIcon from '@mui/icons-material/List';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { render, mockUser, type MockUser } from '../../utils/test-utils';
 import { Layout } from '../../../components/common/Layout';
+import { DESTINATIONS, type Destination, type DestinationKey } from '../../../config/destinations';
+import { SHELLKEEP_NAVIGATION } from '../../../config/shell';
 
-// Mock the child components
-vi.mock('../../../components/navigation/AppBar', () => ({
-  AppBar: vi.fn(({ onMenuClick }) => (
-    <div data-testid="mock-appbar">
-      <button onClick={onMenuClick} data-testid="menu-toggle-button">
-        Toggle Menu
-      </button>
-    </div>
-  )),
-}));
-
-vi.mock('../../../components/navigation/Sidebar', () => ({
-  Sidebar: vi.fn(({ open, onClose }) => (
-    <div data-testid="mock-sidebar" data-open={open}>
-      <button onClick={onClose} data-testid="sidebar-close-button">
-        Close Sidebar
-      </button>
-    </div>
-  )),
-}));
-
-// Mock react-router-dom Outlet
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
-  return {
-    ...actual,
-    Outlet: vi.fn(() => <div data-testid="outlet-content">Page Content</div>),
+/**
+ * The shell binding (#76) at the three window classes: 360 (phone), 768
+ * (medium, collapsed rail) and 1280 (expanded rail). `matchMedia` answers
+ * min/max-width queries against the simulated width, so the platform's own
+ * gates decide what mounts; `Layout` reads none.
+ */
+function installWidth(width: number): () => void {
+  const original = window.matchMedia;
+  const evaluate = (query: string) => {
+    const mins = [...query.matchAll(/\(min-width:\s*([\d.]+)px\)/g)].map((m) => parseFloat(m[1]));
+    const maxs = [...query.matchAll(/\(max-width:\s*([\d.]+)px\)/g)].map((m) => parseFloat(m[1]));
+    if (mins.length === 0 && maxs.length === 0) return false;
+    return mins.every((min) => width >= min) && maxs.every((max) => width <= max);
   };
+  window.matchMedia = ((query: string) => ({
+    matches: evaluate(query),
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia;
+  return () => {
+    window.matchMedia = original;
+  };
+}
+
+const admin: MockUser = {
+  ...mockUser,
+  id: 'admin-id',
+  displayName: 'Person A',
+  roles: [{ name: 'admin' }],
+  permissions: [
+    'user_settings:read',
+    'user_settings:write',
+    'sessions:read',
+    'servers:read',
+    'system_settings:read',
+    'users:read',
+  ],
+};
+
+const viewer: MockUser = {
+  ...mockUser,
+  permissions: ['user_settings:read', 'user_settings:write', 'sessions:read', 'servers:read'],
+};
+
+function renderShell(route: string, user: MockUser, element = <Layout />) {
+  return render(
+    <Routes>
+      <Route element={element}>
+        <Route path="*" element={<div data-testid="page">Page</div>} />
+      </Route>
+    </Routes>,
+    { wrapperOptions: { route, user } },
+  );
+}
+
+/** The rail: the shell's `nav` in either mode. */
+const rail = () =>
+  screen.queryByRole('navigation', { name: 'Main navigation' }) ??
+  screen.queryByRole('navigation', { name: 'Console navigation' });
+/** The phone bottom bar (MUI BottomNavigation). */
+const bottomBar = () => document.querySelector<HTMLElement>('.MuiBottomNavigation-root');
+
+let restore: (() => void) | undefined;
+afterEach(() => {
+  restore?.();
+  restore = undefined;
 });
 
-// Mock the identity slice's usePermissions hook for Sidebar
-vi.mock('@marinoscar/platform-web/identity/headless', async () => ({
-  ...(await vi.importActual('@marinoscar/platform-web/identity/headless')),
-  usePermissions: vi.fn(() => ({
-    permissions: new Set(),
-    roles: new Set(),
-    hasPermission: vi.fn(),
-    hasAnyPermission: vi.fn(),
-    hasAllPermissions: vi.fn(),
-    hasRole: vi.fn(),
-    hasAnyRole: vi.fn(),
-    isAdmin: false,
-  })),
-}));
-
-// Import mocked components to access their mock functions
-import { AppBar } from '../../../components/navigation/AppBar';
-import { Sidebar } from '../../../components/navigation/Sidebar';
-import { Outlet } from 'react-router-dom';
-
-describe('Layout', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('Rendering', () => {
-    it('should render the Layout component', () => {
-      const { container } = render(<Layout />);
-
-      expect(container).toBeInTheDocument();
+describe('Layout (the platform shell binding)', () => {
+  describe('at 360px (phone)', () => {
+    it('draws the bottom bar and no rail: exactly one navigation surface', () => {
+      restore = installWidth(360);
+      renderShell('/', viewer);
+      expect(rail()).toBeNull();
+      const bar = bottomBar();
+      expect(bar).not.toBeNull();
+      const labels = within(bar!).getAllByRole('button').map((b) => b.textContent);
+      expect(labels).toEqual(['Home', 'Sessions', 'Servers']);
+      expect(screen.getByTestId('page')).toBeInTheDocument();
     });
 
-    it('should render AppBar component', () => {
-      render(<Layout />);
-
-      expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
+    it('gives an administrator Console as the fourth tab while four destinations fit', () => {
+      restore = installWidth(360);
+      renderShell('/', admin);
+      const labels = within(bottomBar()!).getAllByRole('button').map((b) => b.textContent);
+      expect(labels).toEqual(['Home', 'Sessions', 'Servers', 'Console']);
     });
 
-    it('should render Sidebar component', () => {
-      render(<Layout />);
+    it('with six visible destinations shows three tabs plus More, and More holds Runbooks, Runs and Console', async () => {
+      restore = installWidth(360);
+      // The shape #65 will append (Runbooks and Runs before the pinned Console).
+      const extra: Destination[] = [
+        { key: 'runbooks', label: 'Runbooks', compactLabel: 'Runbooks', Icon: ListIcon, path: '/runbooks' },
+        { key: 'runs', label: 'Runs', compactLabel: 'Runs', Icon: PlayArrowIcon, path: '/runs' },
+      ];
+      const six: ShellNavigation<DestinationKey> = {
+        ...SHELLKEEP_NAVIGATION,
+        destinations: [...DESTINATIONS.slice(0, 3), ...extra, DESTINATIONS[3]],
+        destinationRoutes: { ...SHELLKEEP_NAVIGATION.destinationRoutes!, runbooks: ['/runbooks'], runs: ['/runs'] },
+      };
+      renderShell('/', admin, <ShellLayout navigation={six} brand="ShellKeep" />);
+      const bar = bottomBar()!;
+      const tabs = within(bar).getAllByRole('button');
+      expect(tabs.map((b) => b.textContent)).toEqual(['Home', 'Sessions', 'Servers', 'More']);
 
-      expect(screen.getByTestId('mock-sidebar')).toBeInTheDocument();
-    });
-
-    it('should render Outlet for nested routes', () => {
-      render(<Layout />);
-
-      expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
-      expect(vi.mocked(Outlet)).toHaveBeenCalled();
-    });
-
-    it('should render all major layout sections', () => {
-      render(<Layout />);
-
-      expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
-      expect(screen.getByTestId('mock-sidebar')).toBeInTheDocument();
-      expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
+      await userEvent.click(within(bar).getByRole('button', { name: 'More destinations' }));
+      const sheet = await screen.findByRole('navigation', { name: 'More destinations' });
+      const rows = within(sheet).getAllByRole('link').map((row) => row.textContent);
+      expect(rows).toEqual(['Runbooks', 'Runs', 'Console']);
     });
   });
 
-  describe('Sidebar State Management', () => {
-    it('should initialize with sidebar closed', () => {
-      render(<Layout />);
-
-      const sidebar = screen.getByTestId('mock-sidebar');
-      expect(sidebar).toHaveAttribute('data-open', 'false');
-    });
-
-    it('should open sidebar when menu button is clicked', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      const menuButton = screen.getByTestId('menu-toggle-button');
-      await user.click(menuButton);
-
-      await waitFor(() => {
-        const sidebar = screen.getByTestId('mock-sidebar');
-        expect(sidebar).toHaveAttribute('data-open', 'true');
-      });
-    });
-
-    it('should close sidebar when close button is clicked', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      // First open the sidebar
-      const menuButton = screen.getByTestId('menu-toggle-button');
-      await user.click(menuButton);
-
-      await waitFor(() => {
-        const sidebar = screen.getByTestId('mock-sidebar');
-        expect(sidebar).toHaveAttribute('data-open', 'true');
-      });
-
-      // Then close it
-      const closeButton = screen.getByTestId('sidebar-close-button');
-      await user.click(closeButton);
-
-      await waitFor(() => {
-        const sidebar = screen.getByTestId('mock-sidebar');
-        expect(sidebar).toHaveAttribute('data-open', 'false');
-      });
-    });
-
-    it('should toggle sidebar state on multiple clicks', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      const menuButton = screen.getByTestId('menu-toggle-button');
-      const sidebar = screen.getByTestId('mock-sidebar');
-
-      // Initially closed
-      expect(sidebar).toHaveAttribute('data-open', 'false');
-
-      // Open
-      await user.click(menuButton);
-      await waitFor(() => {
-        expect(sidebar).toHaveAttribute('data-open', 'true');
-      });
-
-      // Close
-      await user.click(menuButton);
-      await waitFor(() => {
-        expect(sidebar).toHaveAttribute('data-open', 'false');
-      });
-
-      // Open again
-      await user.click(menuButton);
-      await waitFor(() => {
-        expect(sidebar).toHaveAttribute('data-open', 'true');
-      });
+  describe('at 768px (medium)', () => {
+    it('draws the collapsed rail and no bottom bar, Console pinned at its foot', () => {
+      restore = installWidth(768);
+      renderShell('/', admin);
+      expect(bottomBar()).toBeNull();
+      const nav = rail();
+      expect(nav).not.toBeNull();
+      const names = within(nav!).getAllByRole('link').map((link) => link.getAttribute('aria-label') ?? link.textContent);
+      expect(names[names.length - 1]).toContain('Console');
     });
   });
 
-  describe('Component Integration', () => {
-    it('should pass onMenuClick handler to AppBar', () => {
-      render(<Layout />);
-
-      expect(vi.mocked(AppBar)).toHaveBeenCalledWith(
-        expect.objectContaining({
-          onMenuClick: expect.any(Function),
-        }),
-        undefined
-      );
+  describe('at 1280px (expanded)', () => {
+    it('draws the expanded rail with Home, Sessions, Servers and Console last', () => {
+      restore = installWidth(1280);
+      renderShell('/', admin);
+      expect(bottomBar()).toBeNull();
+      const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+      const texts = within(nav).getAllByRole('link').map((link) => link.textContent);
+      expect(texts).toEqual(['Home', 'Sessions', 'Servers', 'Console']);
     });
 
-    it('should pass open state to Sidebar', () => {
-      render(<Layout />);
-
-      expect(vi.mocked(Sidebar)).toHaveBeenCalledWith(
-        expect.objectContaining({
-          open: false,
-          onClose: expect.any(Function),
-        }),
-        undefined
-      );
+    it('hides Console from a viewer without an admin permission', () => {
+      restore = installWidth(1280);
+      renderShell('/', viewer);
+      const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+      expect(within(nav).queryByText('Console')).toBeNull();
     });
 
-    it('should update Sidebar open prop when state changes', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      // Initially closed
-      expect(vi.mocked(Sidebar)).toHaveBeenCalledWith(
-        expect.objectContaining({ open: false }),
-        undefined
-      );
-
-      const menuButton = screen.getByTestId('menu-toggle-button');
-      await user.click(menuButton);
-
-      // After click, should be open
-      await waitFor(() => {
-        expect(vi.mocked(Sidebar)).toHaveBeenCalledWith(
-          expect.objectContaining({ open: true }),
-          undefined
-        );
-      });
+    it('switches the rail to Console mode on /admin/settings, with a way back to ShellKeep', () => {
+      restore = installWidth(1280);
+      renderShell('/admin/settings', admin);
+      expect(screen.queryByRole('navigation', { name: 'Main navigation' })).toBeNull();
+      const consoleNav = screen.getByRole('navigation', { name: 'Console navigation' });
+      const back = within(consoleNav).getByRole('link', { name: 'Back to ShellKeep' });
+      expect(back).toHaveAttribute('href', '/');
+      expect(within(consoleNav).getByRole('link', { name: 'About' })).toBeInTheDocument();
+      expect(within(consoleNav).getByRole('link', { name: 'Users & Allowlist' })).toBeInTheDocument();
     });
   });
 
-  describe('Layout Structure', () => {
-    it('should have flexbox layout container', () => {
-      const { container } = render(<Layout />);
-
-      const mainContainer = container.firstChild as HTMLElement;
-      expect(mainContainer).toBeInTheDocument();
-    });
-
-    it('should render main content area', () => {
-      render(<Layout />);
-
-      // Check that outlet content is within main element
-      const outletContent = screen.getByTestId('outlet-content');
-      const mainElement = outletContent.closest('main');
-
-      expect(mainElement).toBeInTheDocument();
-    });
-
-    it('should have proper component hierarchy', () => {
-      const { container } = render(<Layout />);
-
-      // Check the hierarchy: Container > AppBar + Content Row > Sidebar + Main
-      const appBar = screen.getByTestId('mock-appbar');
-      const sidebar = screen.getByTestId('mock-sidebar');
-      const outlet = screen.getByTestId('outlet-content');
-
-      expect(container.contains(appBar)).toBe(true);
-      expect(container.contains(sidebar)).toBe(true);
-      expect(container.contains(outlet)).toBe(true);
-    });
-  });
-
-  describe('Main Content Area', () => {
-    it('should render main element with component prop', () => {
-      render(<Layout />);
-
-      const outletContent = screen.getByTestId('outlet-content');
-      const mainElement = outletContent.closest('main');
-
-      expect(mainElement).toBeInTheDocument();
-      expect(mainElement?.tagName).toBe('MAIN');
-    });
-
-    it('should render outlet content within main area', () => {
-      render(<Layout />);
-
-      const outletContent = screen.getByTestId('outlet-content');
-      const mainElement = outletContent.closest('main');
-
-      expect(mainElement).toContainElement(outletContent);
-    });
-
-    it('should apply padding to main content area', () => {
-      render(<Layout />);
-
-      const outletContent = screen.getByTestId('outlet-content');
-      const mainElement = outletContent.closest('main');
-
-      // MUI applies padding via sx prop, verify element exists
-      expect(mainElement).toBeInTheDocument();
-    });
-  });
-
-  describe('Responsive Behavior', () => {
-    it('should render all components on mobile viewport', () => {
-      render(<Layout />);
-
-      expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
-      expect(screen.getByTestId('mock-sidebar')).toBeInTheDocument();
-      expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
-    });
-
-    it('should render all components on desktop viewport', () => {
-      render(<Layout />);
-
-      expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
-      expect(screen.getByTestId('mock-sidebar')).toBeInTheDocument();
-      expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
-    });
-
-    it('should handle sidebar toggle on any viewport size', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      const menuButton = screen.getByTestId('menu-toggle-button');
-      const sidebar = screen.getByTestId('mock-sidebar');
-
-      await user.click(menuButton);
-
-      await waitFor(() => {
-        expect(sidebar).toHaveAttribute('data-open', 'true');
-      });
-    });
-  });
-
-  describe('Styling and Theme', () => {
-    it('should apply background color from theme', () => {
-      const { container } = render(<Layout />);
-
-      const mainContainer = container.firstChild as HTMLElement;
-      expect(mainContainer).toBeInTheDocument();
-      // Theme background color is applied via MUI sx prop
-    });
-
-    it('should use theme palette for styling', () => {
-      const { container } = render(<Layout />);
-
-      // Layout should be rendered and styled
-      expect(container.firstChild).toBeInTheDocument();
-    });
-
-    it('should have minimum height of 100vh', () => {
-      const { container } = render(<Layout />);
-
-      const mainContainer = container.firstChild as HTMLElement;
-      expect(mainContainer).toBeInTheDocument();
-      // minHeight: 100vh is applied via MUI sx prop
-    });
-
-    it('should have flex column layout', () => {
-      const { container } = render(<Layout />);
-
-      const mainContainer = container.firstChild as HTMLElement;
-      expect(mainContainer).toBeInTheDocument();
-      // flexDirection: column is applied via MUI sx prop
-    });
-  });
-
-  describe('Outlet Rendering', () => {
-    it('should render child route content via Outlet', () => {
-      render(<Layout />);
-
-      expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
-      expect(screen.getByText('Page Content')).toBeInTheDocument();
-    });
-
-    it('should call Outlet component', () => {
-      render(<Layout />);
-
-      expect(vi.mocked(Outlet)).toHaveBeenCalled();
-    });
-
-    it('should render Outlet without props', () => {
-      render(<Layout />);
-
-      expect(vi.mocked(Outlet)).toHaveBeenCalledWith({}, undefined);
-    });
-  });
-
-  describe('Event Handlers', () => {
-    it('should have handleSidebarToggle function', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      const menuButton = screen.getByTestId('menu-toggle-button');
-      const sidebar = screen.getByTestId('mock-sidebar');
-
-      // Test toggle behavior
-      expect(sidebar).toHaveAttribute('data-open', 'false');
-
-      await user.click(menuButton);
-
-      await waitFor(() => {
-        expect(sidebar).toHaveAttribute('data-open', 'true');
-      });
-    });
-
-    it('should have handleSidebarClose function', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      // Open sidebar first
-      const menuButton = screen.getByTestId('menu-toggle-button');
-      await user.click(menuButton);
-
-      await waitFor(() => {
-        const sidebar = screen.getByTestId('mock-sidebar');
-        expect(sidebar).toHaveAttribute('data-open', 'true');
-      });
-
-      // Close it
-      const closeButton = screen.getByTestId('sidebar-close-button');
-      await user.click(closeButton);
-
-      await waitFor(() => {
-        const sidebar = screen.getByTestId('mock-sidebar');
-        expect(sidebar).toHaveAttribute('data-open', 'false');
-      });
-    });
-
-    it('should handle rapid toggle clicks', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      const menuButton = screen.getByTestId('menu-toggle-button');
-
-      // Rapid clicks
-      await user.click(menuButton);
-      await user.click(menuButton);
-      await user.click(menuButton);
-
-      await waitFor(() => {
-        const sidebar = screen.getByTestId('mock-sidebar');
-        expect(sidebar).toHaveAttribute('data-open', 'true');
-      });
-    });
-  });
-
-  describe('Accessibility', () => {
-    it('should render semantic HTML structure', () => {
-      render(<Layout />);
-
-      const outletContent = screen.getByTestId('outlet-content');
-      const mainElement = outletContent.closest('main');
-
-      expect(mainElement).toBeInTheDocument();
-    });
-
-    it('should have proper landmark structure', () => {
-      render(<Layout />);
-
-      // Main content should be within <main> element
-      const outletContent = screen.getByTestId('outlet-content');
-      const mainElement = outletContent.closest('main');
-
-      expect(mainElement).toBeInTheDocument();
-      expect(mainElement?.tagName).toBe('MAIN');
-    });
-
-    it('should be keyboard navigable through menu toggle', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      const menuButton = screen.getByTestId('menu-toggle-button');
-
-      // Focus and activate with keyboard
-      menuButton.focus();
-      expect(menuButton).toHaveFocus();
-
-      await user.keyboard('{Enter}');
-
-      await waitFor(() => {
-        const sidebar = screen.getByTestId('mock-sidebar');
-        expect(sidebar).toHaveAttribute('data-open', 'true');
-      });
-    });
-  });
-
-  describe('Integration with Theme Context', () => {
-    it('should render with light theme', () => {
-      render(<Layout />, {
-        wrapperOptions: { theme: 'light' },
-      });
-
-      expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
-      expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
-    });
-
-    it('should render with dark theme', () => {
-      render(<Layout />, {
-        wrapperOptions: { theme: 'dark' },
-      });
-
-      expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
-      expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
-    });
-
-    it('should apply theme colors to layout', () => {
-      const { container } = render(<Layout />);
-
-      const mainContainer = container.firstChild as HTMLElement;
-      expect(mainContainer).toBeInTheDocument();
-      // Theme colors are applied via useTheme hook and MUI sx prop
-    });
-  });
-
-  describe('Integration with Auth Context', () => {
-    it('should render with authenticated user', () => {
-      render(<Layout />, {
-        wrapperOptions: { authenticated: true, user: mockUser },
-      });
-
-      expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
-      expect(screen.getByTestId('mock-sidebar')).toBeInTheDocument();
-      expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
-    });
-
-    it('should render when not authenticated', () => {
-      render(<Layout />, {
-        wrapperOptions: { authenticated: false, user: null },
-      });
-
-      expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
-      expect(screen.getByTestId('mock-sidebar')).toBeInTheDocument();
-      expect(screen.getByTestId('outlet-content')).toBeInTheDocument();
-    });
-  });
-
-  describe('Performance', () => {
-    it('should not re-render unnecessarily', () => {
-      const { rerender } = render(<Layout />);
-
-      const initialCallCount = vi.mocked(AppBar).mock.calls.length;
-
-      // Re-render with same props
-      rerender(<Layout />);
-
-      // Component should handle re-renders gracefully
-      expect(vi.mocked(AppBar).mock.calls.length).toBeGreaterThanOrEqual(
-        initialCallCount
-      );
-    });
-
-    it('should handle state updates efficiently', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      const menuButton = screen.getByTestId('menu-toggle-button');
-
-      // Multiple state updates
-      await user.click(menuButton); // Open
-      await user.click(menuButton); // Close
-      await user.click(menuButton); // Open
-
-      await waitFor(() => {
-        const sidebar = screen.getByTestId('mock-sidebar');
-        expect(sidebar).toHaveAttribute('data-open', 'true');
-      });
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('should handle missing onMenuClick gracefully', () => {
-      render(<Layout />);
-
-      // Component should render even if handlers are called
-      expect(screen.getByTestId('mock-appbar')).toBeInTheDocument();
-    });
-
-    it('should handle sidebar state changes while closed', async () => {
-      const user = userEvent.setup();
-
-      render(<Layout />);
-
-      const sidebar = screen.getByTestId('mock-sidebar');
-      expect(sidebar).toHaveAttribute('data-open', 'false');
-
-      // Try to close already closed sidebar
-      const closeButton = screen.getByTestId('sidebar-close-button');
-      await user.click(closeButton);
-
-      // Should remain closed
-      expect(sidebar).toHaveAttribute('data-open', 'false');
-    });
-
-    it('should maintain sidebar state during route changes', () => {
-      const { rerender } = render(<Layout />);
-
-      // Simulate route change by re-rendering
-      rerender(<Layout />);
-
-      // Sidebar should maintain its closed state
-      const sidebar = screen.getByTestId('mock-sidebar');
-      expect(sidebar).toHaveAttribute('data-open', 'false');
-    });
+  it('brands the AppBar ShellKeep and draws the padded main by default', () => {
+    restore = installWidth(1280);
+    renderShell('/', viewer);
+    expect(screen.getByText('ShellKeep')).toBeInTheDocument();
+    expect(document.querySelector('main')).toHaveAttribute('data-main-variant', 'padded');
   });
 });

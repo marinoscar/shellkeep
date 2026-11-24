@@ -1,54 +1,151 @@
 import { describe, it, expect } from 'vitest';
-import { DESTINATIONS, isDestinationVisible, type AppDestination } from '../../config/destinations';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  DESTINATIONS,
+  DESTINATION_ROUTES,
+  UNOWNED_ROUTES,
+  isDestinationVisible,
+  owns,
+  resolveActiveDestination,
+} from '../../config/destinations';
+import { SHELLKEEP_NAVIGATION } from '../../config/shell';
+import { ADMIN_SECTIONS } from '../../config/adminSections';
 
-const Icon = () => null;
+/**
+ * The destination table (#76). The platform's `settings-route-ownership`
+ * conformance suite checks the general invariants; this file pins ShellKeep's
+ * own data: the order, the gates, and that the table and `App.tsx` agree.
+ */
+const HERE = dirname(fileURLToPath(import.meta.url));
+const APP_TSX = readFileSync(resolve(HERE, '../../App.tsx'), 'utf8');
+
+/** Every `<Route path="...">` of `App.tsx`, except the catch-all. */
+const ROUTED_PATHS = [...APP_TSX.matchAll(/<Route\s+path="([^"]+)"/g)]
+  .map((m) => m[1])
+  .filter((p) => p !== '*');
+
+const holds =
+  (...granted: string[]) =>
+  (permission: string) =>
+    granted.includes(permission);
 
 describe('DESTINATIONS', () => {
-  it('declares the navigation destinations in display order', () => {
-    expect(DESTINATIONS.map((d) => [d.id, d.label, d.path])).toEqual([
-      ['dashboard', 'Dashboard', '/'],
-      ['sessions', 'Sessions', '/sessions'],
-      ['servers', 'Servers', '/servers'],
-      ['user-management', 'User Management', '/admin/users'],
+  it('declares Home, Sessions, Servers and the pinned Console, in that order', () => {
+    expect(DESTINATIONS.map((d) => [d.key, d.label, d.compactLabel, d.path])).toEqual([
+      ['home', 'Home', 'Home', '/'],
+      ['sessions', 'Sessions', 'Sessions', '/sessions'],
+      ['servers', 'Servers', 'Servers', '/servers'],
+      ['console', 'Console', 'Console', '/admin/settings'],
     ]);
+    expect(DESTINATIONS.filter((d) => d.pinned).map((d) => d.key)).toEqual(['console']);
   });
 
-  it('has unique ids and paths', () => {
-    expect(new Set(DESTINATIONS.map((d) => d.id)).size).toBe(DESTINATIONS.length);
-    expect(new Set(DESTINATIONS.map((d) => d.path)).size).toBe(DESTINATIONS.length);
-  });
-
-  it('gates each destination on the permission its API enforces', () => {
-    expect(DESTINATIONS.map((d) => [d.id, d.permission])).toEqual([
-      ['dashboard', undefined],
-      ['sessions', 'sessions:read'],
-      ['servers', 'servers:read'],
-      ['user-management', 'users:read'],
+  it('gates on the exact strings the API enforces, never on a role', () => {
+    expect(DESTINATIONS.map((d) => [d.key, d.permission ?? null, d.anyPermission ?? null])).toEqual([
+      ['home', null, null],
+      ['sessions', 'sessions:read', null],
+      ['servers', 'servers:read', null],
+      ['console', null, ['system_settings:read', 'users:read']],
     ]);
-  });
-
-  it('gates nothing on a role name', () => {
     for (const d of DESTINATIONS) expect(d).not.toHaveProperty('role');
+  });
+
+  it('declares no Runbooks or Runs until #61 ships their API (#65 appends them)', () => {
+    const keys = DESTINATIONS.map((d) => d.key);
+    expect(keys).not.toContain('runbooks');
+    expect(keys).not.toContain('runs');
+    expect(DESTINATION_ROUTES.runbooks).toEqual([]);
+    expect(DESTINATION_ROUTES.runs).toEqual([]);
+  });
+
+  it('shows a viewer only what their permissions reach', () => {
+    const visible = (granted: string[]) =>
+      DESTINATIONS.filter((d) => isDestinationVisible(d, holds(...granted))).map((d) => d.key);
+    expect(visible([])).toEqual(['home']);
+    expect(visible(['sessions:read', 'servers:read'])).toEqual(['home', 'sessions', 'servers']);
+    expect(visible(['sessions:read', 'servers:read', 'users:read'])).toEqual([
+      'home',
+      'sessions',
+      'servers',
+      'console',
+    ]);
+    expect(visible(['system_settings:read'])).toEqual(['home', 'console']);
   });
 });
 
-describe('isDestinationVisible', () => {
-  const holds = (...perms: string[]) => (p: string) => perms.includes(p);
-
-  it('shows an ungated destination to any viewer', () => {
-    const d: AppDestination = { id: 'a', label: 'A', path: '/a', icon: Icon };
-    expect(isDestinationVisible(d, holds())).toBe(true);
+describe('route ownership', () => {
+  it('finds the routes of App.tsx (the scan is not vacuous)', () => {
+    expect(ROUTED_PATHS).toContain('/');
+    expect(ROUTED_PATHS).toContain('/sessions/:id');
+    expect(ROUTED_PATHS).toContain('/admin/settings');
+    expect(ROUTED_PATHS.length).toBeGreaterThan(20);
   });
 
-  it('requires the declared permission', () => {
-    const d: AppDestination = { id: 'a', label: 'A', path: '/a', icon: Icon, permission: 'x:read' };
-    expect(isDestinationVisible(d, holds())).toBe(false);
-    expect(isDestinationVisible(d, holds('x:read'))).toBe(true);
+  it('routes every DESTINATION_ROUTES prefix and every destination path in App.tsx', () => {
+    const prefixes = Object.values(DESTINATION_ROUTES).flat();
+    for (const prefix of prefixes) {
+      expect(
+        ROUTED_PATHS.some((path) => owns(prefix, path)),
+        `${prefix} owns no route of App.tsx`,
+      ).toBe(true);
+    }
+    for (const d of DESTINATIONS) expect(ROUTED_PATHS).toContain(d.path);
   });
 
-  it('shows User Management to a holder of users:read whatever the role names', () => {
-    const d = DESTINATIONS.find((x) => x.id === 'user-management')!;
-    expect(isDestinationVisible(d, holds('users:read'))).toBe(true);
-    expect(isDestinationVisible(d, holds('sessions:read', 'servers:read'))).toBe(false);
+  it('owns every routed path exactly once, or lists it as unowned', () => {
+    const failures: string[] = [];
+    for (const path of ROUTED_PATHS) {
+      const owners = Object.entries(DESTINATION_ROUTES)
+        .filter(([, prefixes]) => prefixes.some((prefix) => owns(prefix, path)))
+        .map(([key]) => key);
+      if (UNOWNED_ROUTES.includes(path)) {
+        if (owners.length > 0) failures.push(`${path} is unowned but claimed by ${owners.join(', ')}`);
+      } else if (owners.length !== 1) {
+        failures.push(`${path} has owners [${owners.join(', ')}]`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it('lights the right destination', () => {
+    expect(resolveActiveDestination('/')).toBe('home');
+    expect(resolveActiveDestination('/sessions')).toBe('sessions');
+    expect(resolveActiveDestination('/sessions/abc')).toBe('sessions');
+    expect(resolveActiveDestination('/terminal/abc')).toBe('sessions');
+    expect(resolveActiveDestination('/servers')).toBe('servers');
+    expect(resolveActiveDestination('/admin')).toBe('console');
+    expect(resolveActiveDestination('/admin/settings/users')).toBe('console');
+    expect(resolveActiveDestination('/admin/users')).toBe('console');
+    // The per-user settings sit with Home (they are reached from the user menu).
+    expect(resolveActiveDestination('/settings/profile')).toBe('home');
+    expect(resolveActiveDestination('/login')).toBeNull();
+    expect(resolveActiveDestination('/sessionsfoo')).toBeNull();
+  });
+
+  it('keeps the sign-in flow unowned', () => {
+    expect(UNOWNED_ROUTES).toEqual(['/login', '/auth/callback', '/auth/error', '/activate', '/testing/login']);
+    for (const path of UNOWNED_ROUTES) expect(resolveActiveDestination(path)).toBeNull();
+  });
+});
+
+describe('SHELLKEEP_NAVIGATION', () => {
+  it('binds the destination table and both settings surfaces, Console first', () => {
+    expect(SHELLKEEP_NAVIGATION.destinations).toBe(DESTINATIONS);
+    expect(SHELLKEEP_NAVIGATION.destinationRoutes).toBe(DESTINATION_ROUTES);
+    expect(SHELLKEEP_NAVIGATION.settingsSurfaces?.map((s) => [s.hubPath, s.hubTitle])).toEqual([
+      ['/admin/settings', 'Console'],
+      ['/settings', 'Settings'],
+    ]);
+  });
+
+  it('turns on Console mode under /admin, with a way back to ShellKeep', () => {
+    expect(SHELLKEEP_NAVIGATION.console).toEqual({
+      prefix: '/admin',
+      sections: ADMIN_SECTIONS,
+      back: { label: 'Back to ShellKeep', path: '/' },
+    });
+    expect(typeof SHELLKEEP_NAVIGATION.useRailPreference).toBe('function');
   });
 });
