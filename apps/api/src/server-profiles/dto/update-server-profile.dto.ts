@@ -12,6 +12,7 @@ export const updateServerProfileSchema = createServerProfileSchema
   .extend({
     port: createServerProfileSchema.shape.port.removeDefault(),
     tags: z.array(z.string()).optional(),
+    aiOutputSharing: z.boolean().optional(),
     color: createServerProfileSchema.shape.color.removeDefault(),
   })
   .partial();
