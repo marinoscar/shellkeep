@@ -80,6 +80,106 @@ export function lineColumnAt(text: string, position: number): { line: number; co
   return { line: lines.length, column: lines[lines.length - 1]!.length + 1 };
 }
 
+/**
+ * The character position of the first JSON syntax error, or `null` when the
+ * scan finds none (a recursive-descent pass that only locates; `JSON.parse`
+ * stays the judge of validity).
+ */
+export function jsonErrorPosition(text: string): number | null {
+  let i = 0;
+  const ws = () => {
+    while (i < text.length && /[ \t\n\r]/.test(text[i]!)) i += 1;
+  };
+  const fail = (): never => {
+    throw i;
+  };
+  const literal = (word: string) => {
+    if (text.startsWith(word, i)) i += word.length;
+    else fail();
+  };
+  const string = () => {
+    i += 1;
+    while (i < text.length) {
+      const c = text[i]!;
+      if (c === '"') {
+        i += 1;
+        return;
+      }
+      if (c === '\\') {
+        i += 1;
+        if (text[i] === 'u') {
+          if (!/^[0-9a-fA-F]{4}$/.test(text.slice(i + 1, i + 5))) fail();
+          i += 5;
+        } else if (/["\\/bfnrt]/.test(text[i] ?? '')) i += 1;
+        else fail();
+      } else if (c < ' ') fail();
+      else i += 1;
+    }
+    fail();
+  };
+  const number = () => {
+    const match = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/.exec(text.slice(i));
+    if (!match) fail();
+    i += match![0].length;
+  };
+  const value = (): void => {
+    ws();
+    const c = text[i];
+    if (c === '{') {
+      i += 1;
+      ws();
+      if (text[i] === '}') {
+        i += 1;
+        return;
+      }
+      for (;;) {
+        ws();
+        if (text[i] !== '"') fail();
+        string();
+        ws();
+        if (text[i] !== ':') fail();
+        i += 1;
+        value();
+        ws();
+        if (text[i] === ',') i += 1;
+        else if (text[i] === '}') {
+          i += 1;
+          return;
+        } else fail();
+      }
+    }
+    if (c === '[') {
+      i += 1;
+      ws();
+      if (text[i] === ']') {
+        i += 1;
+        return;
+      }
+      for (;;) {
+        value();
+        ws();
+        if (text[i] === ',') i += 1;
+        else if (text[i] === ']') {
+          i += 1;
+          return;
+        } else fail();
+      }
+    }
+    if (c === '"') return string();
+    if (c === 't') return literal('true');
+    if (c === 'f') return literal('false');
+    if (c === 'n') return literal('null');
+    return number();
+  };
+  try {
+    value();
+    ws();
+    return i < text.length ? i : null;
+  } catch (position) {
+    return typeof position === 'number' ? Math.min(position, text.length) : null;
+  }
+}
+
 /** Parses `text` as JSON: the pretty-printed form, or the error with its line and column. */
 export function checkJson(text: string, indent = 2): JsonCheck {
   try {
@@ -96,8 +196,10 @@ export function checkJson(text: string, indent = 2): JsonCheck {
       const { line, column } = lineColumnAt(text, Number(position[1]));
       return { ok: false, message, line, column };
     }
-    if (text.trim() === '' || /end of (JSON )?input/i.test(raw)) {
-      const { line, column } = lineColumnAt(text, text.length);
+    // Some engine messages carry no position ("Unexpected token '}', ... is not valid JSON").
+    const found = jsonErrorPosition(text);
+    if (found !== null) {
+      const { line, column } = lineColumnAt(text, found);
       return { ok: false, message, line, column };
     }
     return { ok: false, message, line: null, column: null };
