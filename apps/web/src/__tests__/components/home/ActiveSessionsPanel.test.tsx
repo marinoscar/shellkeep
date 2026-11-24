@@ -41,6 +41,6 @@ describe('ActiveSessionsPanel', () => {
 
   it('links to adding a first server when the caller has none', () => {
     render(<ActiveSessionsPanel total={0} sessions={[]} hasServers={false} />);
-    expect(screen.getByRole('link', { name: 'Add your first server' })).toHaveAttribute('href', '/servers');
+    expect(screen.getByRole('link', { name: 'Add your first server' })).toHaveAttribute('href', '/servers?new=1');
   });
 });
