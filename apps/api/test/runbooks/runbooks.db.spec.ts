@@ -3,16 +3,15 @@
 // =============================================================================
 //
 // Boots the full `AppModule` against the migrated and seeded database and proves what a
-// mocked client cannot: forced row-level security isolates runbooks and versions between
-// organizations, the live-name index is case-insensitive and per organization, versions are
+// mocked client cannot: the live-name index is case-insensitive and per organization, versions are
 // append-only through the API, and the stale-If-Match and identical-definition rules hold end
-// to end. Passes when POSTGRES_USER is the ordinary application role (`shellkeep_app`).
+// to end. Row-level isolation is proven in `runbooks-rls.db.spec.ts`, over its own database owned by an
+// ordinary role, because a superuser ignores policies.
 // Run with `npm run test:db`.
 // =============================================================================
 
 import { randomBytes } from 'node:crypto';
 import request from 'supertest';
-import { runInOrg } from '@marinoscar/platform-api/core';
 
 import { closeTestApp, createTestApp, TestContext } from '../helpers/test-app.helper';
 
@@ -102,49 +101,5 @@ describe('Runbooks (real database)', () => {
     expect(restore.body.code).toBe('RUNBOOK_NAME_TAKEN');
     await request(server()).delete(`/api/runbooks/${second.body.data.id}`).set(bearer(user.token)).expect(204);
     await request(server()).post(`/api/runbooks/${first.body.data.id}/restore`).set(bearer(user.token)).expect(200);
-  });
-
-  it('isolates runbooks and versions between organizations under row-level security', async () => {
-    const user = await login('isolation');
-    const created = await request(server()).post('/api/runbooks').set(bearer(user.token)).send({ name: `rb-${RUN}-iso`, definition: DEF }).expect(201);
-    const id = created.body.data.id as string;
-    // Single-organization mode: the runbook lives in the default organization.
-    const orgA = (await context.prisma.organization.findFirstOrThrow({ where: { isDefault: true } })).id;
-
-    const orgB = await bypass((tx) => tx.organization.create({ data: { name: `Org B ${RUN}`, slug: `org-b-${RUN}` } }));
-    orgIds.push(orgB.id);
-
-    const prisma = context.prisma;
-    const seenFromA = await runInOrg(prisma, { orgId: orgA }, async (tx) => ({
-      runbooks: await tx.runbook.findMany({ where: { id } }),
-      versions: await tx.runbookVersion.findMany({ where: { runbookId: id } }),
-    }));
-    expect(seenFromA.runbooks).toHaveLength(1);
-    expect(seenFromA.versions).toHaveLength(1);
-
-    // Org B's scope sees nothing of it, even asking by id, and cannot touch it.
-    const seenFromB = await runInOrg(prisma, { orgId: orgB.id }, async (tx) => ({
-      runbooks: await tx.runbook.findMany({ where: { id } }),
-      versions: await tx.runbookVersion.findMany({ where: { runbookId: id } }),
-      count: await tx.runbook.count(),
-      archived: await tx.runbook.updateMany({ where: { id }, data: { archivedAt: new Date() } }),
-      removed: await tx.runbookVersion.deleteMany({ where: { runbookId: id } }),
-    }));
-    expect(seenFromB.runbooks).toEqual([]);
-    expect(seenFromB.versions).toEqual([]);
-    expect(seenFromB.count).toBe(0);
-    expect(seenFromB.archived.count).toBe(0);
-    expect(seenFromB.removed.count).toBe(0);
-
-    // A row cannot be written into another organization's scope.
-    await expect(
-      runInOrg(prisma, { orgId: orgB.id }, (tx) =>
-        tx.runbook.create({ data: { orgId: orgA, name: `rb-${RUN}-forged` } }),
-      ),
-    ).rejects.toThrow();
-
-    // The runbook is untouched.
-    const intact = await bypass((tx) => tx.runbook.findUniqueOrThrow({ where: { id } }));
-    expect(intact.archivedAt).toBeNull();
   });
 });
