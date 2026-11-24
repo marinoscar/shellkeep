@@ -126,7 +126,7 @@ describe('TerminalPage', () => {
 
   function renderTerminalPage(sessionId = 'session-1') {
     return render(<TerminalPage />, {
-      wrapperOptions: { route: `/sessions/${sessionId}/terminal` },
+      wrapperOptions: { route: `/sessions/${sessionId}` },
     });
   }
 
@@ -229,7 +229,7 @@ describe('TerminalPage', () => {
   });
 
   describe('Open in new tab', () => {
-    it('should open a new window/tab pointing to the full terminal route', async () => {
+    it('should open a new window/tab pointing to the session route', async () => {
       const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
 
       renderTerminalPage();
@@ -240,7 +240,7 @@ describe('TerminalPage', () => {
 
       await userEvent.click(screen.getByTestId('OpenInNewIcon').closest('button')!);
 
-      expect(openSpy).toHaveBeenCalledWith('/terminal/session-1', '_blank');
+      expect(openSpy).toHaveBeenCalledWith('/sessions/session-1', '_blank');
       openSpy.mockRestore();
     });
   });

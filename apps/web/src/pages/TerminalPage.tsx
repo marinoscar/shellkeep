@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, IconButton, Tooltip, Snackbar, Alert } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useShellMainVariant } from '@marinoscar/platform-web/shell/headless';
 import { TerminalView } from '../components/terminal/TerminalView';
 import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { TerminalToolbar } from '../components/terminal/TerminalToolbar';
@@ -18,6 +19,8 @@ import { useKeyboardInset } from '../hooks/useKeyboardInset';
 export default function TerminalPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // The terminal fills the shell's main area edge to edge, with no banners.
+  useShellMainVariant('full-bleed');
   const terminalViewRef = useRef<TerminalViewHandle>(null);
   const [session, setSession] = useState<TerminalSession | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -88,7 +91,7 @@ export default function TerminalPage() {
 
   const handleOpenNewTab = useCallback(() => {
     if (id) {
-      window.open(`/terminal/${id}`, '_blank');
+      window.open(`/sessions/${id}`, '_blank');
     }
   }, [id]);
 
@@ -186,7 +189,7 @@ export default function TerminalPage() {
 
   const handleCreateNewSession = useCallback(async (data: CreateSessionData) => {
     const newSession = await createSession(data);
-    window.open(`/terminal/${newSession.id}`, '_blank');
+    window.open(`/sessions/${newSession.id}`, '_blank');
   }, []);
 
   if (!id || !session) {
@@ -194,11 +197,19 @@ export default function TerminalPage() {
   }
 
   return (
+    // Full-bleed inside the shell (#76, `useShellMainVariant` above): the shell
+    // owns the viewport height and `<main>` gives this page the space left
+    // under the AppBar (and above the phone bottom bar). The page takes it with
+    // `flex: 1` and draws its content in an absolutely positioned box, so the
+    // terminal never sizes the page from its own rows and the document never
+    // scrolls (docs/SCROLLING.md: `minHeight: 0` along the flex chain, and no
+    // `overflow: hidden` on the xterm container or its parent).
+    <Box sx={{ flex: 1, minHeight: 0, position: 'relative' }}>
     <Box sx={{
+      position: 'absolute',
+      inset: 0,
       display: 'flex',
       flexDirection: 'column',
-      height: 'calc(100vh - 64px)',
-      m: -3, // counteract Layout's p:3
       overflow: 'hidden',
       boxSizing: 'border-box',
       paddingBottom: `${keyboardInset}px`,
@@ -275,6 +286,7 @@ export default function TerminalPage() {
           {snackbar.message}
         </Alert>
       </Snackbar>
+    </Box>
     </Box>
   );
 }

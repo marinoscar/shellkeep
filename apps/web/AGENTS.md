@@ -4,11 +4,12 @@ Root rules ([AGENTS.md](../../AGENTS.md)) apply. This file is what to get right 
 
 ## Layout
 
-- `src/pages/`, `src/components/` (`terminal/`, `server-profiles/`, `navigation/`, `common/`), `src/hooks/`, `src/contexts/`, `src/services/api.ts`, `src/theme/`, `src/platform/` (the packaged `PlatformHostProvider` binding, #48).
+- `src/pages/`, `src/components/` (`terminal/`, `server-profiles/`, `home/`, `common/`), `src/hooks/`, `src/services/api.ts`, `src/config/` (the registries), `src/platform/` (the packaged `PlatformHostProvider` binding, #48; the shell themes, `shellTheme.ts`, #76).
+- The shell is the platform's (`@marinoscar/platform-web/shell`, since #76): `components/common/Layout.tsx` binds `ShellLayout` (brand, the notification bell, the user menu, the banners) and reads NO breakpoint (`__tests__/config/breakpointGates.test.ts`). Navigation is `config/destinations.ts` (`DESTINATIONS`, `DESTINATION_ROUTES`, `UNOWNED_ROUTES`) bound in `config/shell.ts` (`SHELLKEEP_NAVIGATION`, Console mode under `/admin`). A new route is owned by one destination or listed as unowned. A page that needs the whole main area (the session terminal at `/sessions/:id`) calls `useShellMainVariant('full-bleed')`.
 - Settings are the platform's (`@marinoscar/platform-web/settings`, since #48): `/settings` is the packaged `SettingsHub` over `src/config/userSettingsSections.tsx`, with the packaged Profile and Appearance pages and the terminal domain's Terminal page. Read terminal preferences only through `useTerminalSettings` (`src/hooks/`): the API omits the `terminal` namespace until it is stored, and the hook applies the defaults (`src/lib/terminal/settings.ts`).
 - Identity is the platform's (`@marinoscar/platform-web/identity`, since #47): `src/identity/` binds `AuthProvider`, the adapters and the branded `LoginPage`; read the user with `useAuth()` and gate on `usePermissions().hasPermission('<the exact API string>')`, never on a role name. The terminal socket re-sends `auth` after each token refresh (`services/terminal-ws.ts`).
-- Notifications are the platform's (`@marinoscar/platform-web/notifications`, since #51): `src/platform/notifications.ts` configures the slice, `NotificationProvider` is mounted at the root and the bell in the app bar. The service worker is the app's `src/sw.ts` (`injectManifest`, checked by `tsconfig.worker.json`): it must never call the API or cache anything under `/api`, and it imports the push handlers from `/notifications/service-worker`, never the `/headless` barrel.
-- Target *(from #76)*: `src/config/` holds the registries (`adminSections.tsx`, `userSettingsSections.tsx`, `destinations.ts`); most features come from `@marinoscar/platform-web/<slice>` and the app binds them. Fix a packaged page in the platform, not by copying it here.
+- Notifications are the platform's (`@marinoscar/platform-web/notifications`, since #51): `src/platform/notifications.ts` configures the slice, `NotificationProvider` wraps the signed-in shell (`ShellProviders` in `App.tsx`) and the bell is the shell AppBar's `actions`. The service worker is the app's `src/sw.ts` (`injectManifest`, checked by `tsconfig.worker.json`): it must never call the API or cache anything under `/api`, and it imports the push handlers from `/notifications/service-worker`, never the `/headless` barrel.
+- `src/config/` holds the registries (`adminSections.tsx`, `userSettingsSections.tsx`, `destinations.ts`, `shell.ts`); most features come from `@marinoscar/platform-web/<slice>` and the app binds them. Fix a packaged page in the platform, not by copying it here.
 - Tests: `src/__tests__/` (Vitest + RTL) and beside components. Run `npm run test:run` and `npm run typecheck` in this folder.
 
 ## Terminal components that must survive every refactor
@@ -23,7 +24,7 @@ These carry the phone experience; the shell and UI epics (#37, #77) rework aroun
 | `useTouchScroll` | `src/hooks/useTouchScroll.ts` | Turns touch swipes into xterm wheel events |
 | `useKeyboardInset` | `src/hooks/useKeyboardInset.ts` | Pixels covered by the on-screen keyboard (VisualViewport) |
 
-## Settings UI Pattern (rules in root AGENTS.md, applies from #76)
+## Settings UI Pattern (rules in root AGENTS.md, in force since #76)
 
 1. A new settings page is a card appended to `ADMIN_SECTIONS` or `USER_SETTINGS_SECTIONS`, plus its route. No route without a card.
 2. Never add a settings page as a tab of another settings page.
