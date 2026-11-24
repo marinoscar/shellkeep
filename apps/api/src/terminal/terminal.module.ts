@@ -7,6 +7,7 @@ import { SshModule } from '../ssh/ssh.module';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { SshService } from './ssh.service';
+import { SessionHistoryService } from './session-history.service';
 import { SessionManagerService } from './session-manager.service';
 import { TerminalGateway } from './terminal.gateway';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
@@ -42,6 +43,8 @@ import { LegacySecretsDoctorCheck } from './doctor/legacy-secrets.doctor-check';
   providers: [
     SessionsService,
     SshService,
+    // The only reader of a tmux pane (#56).
+    SessionHistoryService,
     SessionManagerService,
     // The `app.terminal.*` recorders and gauges (#53).
     TerminalMetricsService,
@@ -62,6 +65,6 @@ import { LegacySecretsDoctorCheck } from './doctor/legacy-secrets.doctor-check';
     SessionsReaperDoctorCheck,
     LegacySecretsDoctorCheck,
   ],
-  exports: [SessionsService],
+  exports: [SessionsService, SessionHistoryService],
 })
 export class TerminalModule {}

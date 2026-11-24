@@ -100,7 +100,7 @@ describe('SshService', () => {
     it('returns stdout on success', async () => {
       const { service, factory } = setup();
       factory.exec.mockResolvedValue({ stdout: 'scrollback', stderr: '', exitCode: 0, signal: null });
-      await expect(service.execForOutput(profile, 'tmux capture-pane')).resolves.toBe('scrollback');
+      await expect(service.execForOutput(profile, 'tmux show-buffer')).resolves.toBe('scrollback');
     });
 
     it('rejects with the trimmed stderr when the command failed and wrote to stderr', async () => {
