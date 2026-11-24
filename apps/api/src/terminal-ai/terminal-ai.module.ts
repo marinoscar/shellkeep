@@ -4,6 +4,8 @@ import { AiModule } from '../platform/ai/ai.config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TerminalModule } from '../terminal/terminal.module';
 import { TerminalAiConsentController } from './terminal-ai-consent.controller';
+import { TerminalAssistController } from './terminal-assist.controller';
+import { TerminalAssistService } from './terminal-assist.service';
 import { TerminalContextService } from './terminal-context.service';
 
 /**
@@ -12,8 +14,8 @@ import { TerminalContextService } from './terminal-context.service';
  */
 @Module({
   imports: [PrismaModule, TerminalModule, AiModule],
-  controllers: [TerminalAiConsentController],
-  providers: [TerminalContextService],
+  controllers: [TerminalAiConsentController, TerminalAssistController],
+  providers: [TerminalContextService, TerminalAssistService],
   exports: [TerminalContextService],
 })
 export class TerminalAiModule {}

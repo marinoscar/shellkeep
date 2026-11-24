@@ -146,4 +146,13 @@ describe('TerminalKeyShortcutsBar', () => {
       expect(screen.queryAllByRole('button')).toHaveLength(0);
     });
   });
+
+  it('draws an AI key only when the assistant is available, and it opens the assistant', async () => {
+    const onAiAssist = vi.fn();
+    const { rerender } = render(<TerminalKeyShortcutsBar open shortcuts={[shortcut1]} onSend={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Open AI assistant' })).not.toBeInTheDocument();
+    rerender(<TerminalKeyShortcutsBar open shortcuts={[shortcut1]} onSend={vi.fn()} onAiAssist={onAiAssist} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open AI assistant' }));
+    expect(onAiAssist).toHaveBeenCalledTimes(1);
+  });
 });

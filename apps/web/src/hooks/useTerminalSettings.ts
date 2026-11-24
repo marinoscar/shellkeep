@@ -32,6 +32,7 @@ import {
 } from '../lib/terminal/settings';
 import { publishTerminalSettings, subscribeTerminalSettings } from '../lib/terminal/settingsSync';
 import type {
+  ActionShortcuts,
   KeyShortcut,
   TerminalUserSettingsDocument,
   TerminalUserSettingsUpdate,
@@ -43,7 +44,7 @@ export type ResolvedTerminalUserSettingsDocument = Omit<
   'terminal' | 'shortcuts'
 > & {
   terminal: ResolvedTerminalSettings;
-  shortcuts: { keyShortcuts: KeyShortcut[] };
+  shortcuts: { keyShortcuts: KeyShortcut[]; actions?: ActionShortcuts };
 };
 
 /** A change to the terminal preferences and/or the shortcut list. */
@@ -59,6 +60,8 @@ export interface UseTerminalSettingsResult {
   terminal: ResolvedTerminalSettings | null;
   /** The resolved key shortcuts, or `null` until loaded. */
   keyShortcuts: KeyShortcut[] | null;
+  /** Rebound app-action shortcuts (#57); `{}` when none. */
+  actionShortcuts: ActionShortcuts;
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
@@ -118,7 +121,11 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
   const settings = useMemo<ResolvedTerminalUserSettingsDocument | null>(
     () =>
       stored && terminal && keyShortcuts
-        ? { ...stored, terminal, shortcuts: { keyShortcuts } }
+        ? {
+            ...stored,
+            terminal,
+            shortcuts: { keyShortcuts, ...(stored.shortcuts?.actions ? { actions: stored.shortcuts.actions } : {}) },
+          }
         : null,
     [stored, terminal, keyShortcuts],
   );
@@ -130,11 +137,15 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
         body.terminal = terminalPatch(terminal ?? DEFAULT_TERMINAL_SETTINGS, change.terminal);
       }
       if (change.shortcuts) {
-        body.shortcuts = { keyShortcuts: normalizeKeyShortcuts(change.shortcuts.keyShortcuts) };
+        // Writing the list must not drop the rebound app actions stored beside it.
+        body.shortcuts = {
+          keyShortcuts: normalizeKeyShortcuts(change.shortcuts.keyShortcuts),
+          ...(stored?.shortcuts?.actions ? { actions: stored.shortcuts.actions } : {}),
+        };
       }
       await patch(body);
     },
-    [patch, terminal],
+    [patch, terminal, stored],
   );
 
   const updateTerminal = useCallback(
@@ -151,6 +162,7 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
     settings,
     terminal,
     keyShortcuts,
+    actionShortcuts: stored?.shortcuts?.actions ?? {},
     isLoading,
     isSaving,
     error,

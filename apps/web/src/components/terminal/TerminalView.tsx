@@ -46,13 +46,15 @@ interface TerminalViewProps {
    * terminal in place, without reconnecting. Default: the built-in defaults.
    */
   preferences?: ResolvedTerminalSettings;
+  /** Keys the page handles itself (the AI assist shortcut); they never reach the PTY (#57). */
+  isReservedKey?: (event: KeyboardEvent) => boolean;
 }
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
-  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS }, ref) {
+  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS, isReservedKey }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appMode = useTheme().palette.mode;
-  const appearance = useMemo(() => ({ preferences, appMode }), [preferences, appMode]);
+  const appearance = useMemo(() => ({ preferences, appMode, isReservedKey }), [preferences, appMode, isReservedKey]);
   const background = resolveTerminalTheme(preferences.theme, appMode).background;
   const {
     isConnected,

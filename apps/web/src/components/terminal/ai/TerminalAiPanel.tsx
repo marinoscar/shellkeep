@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import {
   Alert,
   Box,
   Button,
   Drawer,
   IconButton,
-  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -14,9 +13,8 @@ import {
 import {
   AutoAwesomeOutlined as AssistantIcon,
   Close as CloseIcon,
-  ContentCopy as CopyIcon,
-  KeyboardReturn as InsertIcon,
 } from '@mui/icons-material';
+import { CommandAssistPanel } from './CommandAssistPanel';
 
 /** The panel's three actions (#57, #58, #59). */
 export type TerminalAiMode = 'suggest' | 'explain' | 'summarize';
@@ -39,11 +37,10 @@ export interface TerminalAiPanelProps {
    * page implements it with `insertSuggestedCommand`.
    */
   onInsert: (command: string) => void;
-  /**
-   * The last "Suggest command" answer, or `null`. Owned by the page; #57 sets
-   * it from the API. The user may edit it before inserting.
-   */
-  suggestion?: string | null;
+  /** The active session's id; "Suggest command" asks about it. `null` disables asking. */
+  sessionId?: string | null;
+  /** Changes when the keyboard shortcut asks to focus the prompt (#57). */
+  focusRequest?: number;
 }
 
 const MODES: Array<{ value: TerminalAiMode; label: string }> = [
@@ -51,43 +48,6 @@ const MODES: Array<{ value: TerminalAiMode; label: string }> = [
   { value: 'explain', label: 'Explain' },
   { value: 'summarize', label: 'Summarize session' },
 ];
-
-/** A suggested command with Insert and Copy. Exported for tests. */
-export function AiSuggestionCard({ command, onInsert }: { command: string; onInsert: (command: string) => void }) {
-  const [value, setValue] = useState(command);
-  useEffect(() => setValue(command), [command]);
-  return (
-    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, display: 'grid', gap: 1 }}>
-      <Typography variant="caption" color="text.secondary">
-        Suggested command
-      </Typography>
-      <TextField
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        size="small"
-        multiline
-        slotProps={{ htmlInput: { 'aria-label': 'Suggested command', spellCheck: false, style: { fontFamily: 'monospace' } } }}
-      />
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        <Button
-          variant="contained"
-          size="small"
-          startIcon={<InsertIcon />}
-          disabled={!value.trim()}
-          onClick={() => onInsert(value)}
-        >
-          Insert into terminal
-        </Button>
-        <Button size="small" startIcon={<CopyIcon />} onClick={() => void navigator.clipboard?.writeText(value)}>
-          Copy
-        </Button>
-      </Box>
-      <Typography variant="caption" color="text.secondary">
-        Insert never runs it. You press Enter.
-      </Typography>
-    </Box>
-  );
-}
 
 function ComingSoon({ action }: { action: string }) {
   return (
@@ -102,27 +62,12 @@ function ComingSoon({ action }: { action: string }) {
   );
 }
 
-function PanelBody({ onClose, onInsert, suggestion }: Omit<TerminalAiPanelProps, 'open' | 'variant'>) {
+function PanelBody({ onClose, onInsert, sessionId = null, focusRequest = 0 }: Omit<TerminalAiPanelProps, 'open' | 'variant'>) {
   const [mode, setMode] = useState<TerminalAiMode>('suggest');
-  const [ask, setAsk] = useState('');
 
   let body: ReactNode;
   if (mode === 'suggest') {
-    body = (
-      <>
-        <TextField
-          value={ask}
-          onChange={(e) => setAsk(e.target.value)}
-          placeholder="Describe what you want to do"
-          size="small"
-          multiline
-          minRows={2}
-          slotProps={{ htmlInput: { 'aria-label': 'Describe a command' } }}
-        />
-        <ComingSoon action="Suggest" />
-        {suggestion && <AiSuggestionCard command={suggestion} onInsert={onInsert} />}
-      </>
-    );
+    body = <CommandAssistPanel sessionId={sessionId} onInsert={onInsert} focusRequest={focusRequest} />;
   } else if (mode === 'explain') {
     body = (
       <>
@@ -187,12 +132,11 @@ function PanelBody({ onClose, onInsert, suggestion }: Omit<TerminalAiPanelProps,
  * it is a bottom sheet. The page renders it only when `useTerminalAiAvailable`
  * says so (the `ai` feature on and `ai:use`).
  *
- * Until #57, #58 and #59 ship their APIs the three actions render disabled
- * with {@link AI_COMING_SOON}; no endpoint is called. The Insert path is
- * live: a suggestion's Insert hands the (editable) command to `onInsert`,
- * which types it without a newline. Nothing is ever run automatically.
+ * "Suggest command" is live (#57, `CommandAssistPanel`); Explain and Summarize still render
+ * disabled with {@link AI_COMING_SOON} until #58 and #59. Insert hands the command to
+ * `onInsert`, which pastes it without a newline. Nothing is ever run automatically.
  */
-export function TerminalAiPanel({ open, onClose, variant, onInsert, suggestion = null }: TerminalAiPanelProps) {
+export function TerminalAiPanel({ open, onClose, variant, onInsert, sessionId = null, focusRequest = 0 }: TerminalAiPanelProps) {
   const [width, setWidth] = useState(AI_PANEL_DEFAULT_WIDTH);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -209,7 +153,7 @@ export function TerminalAiPanel({ open, onClose, variant, onInsert, suggestion =
           } as object,
         }}
       >
-        <PanelBody onClose={onClose} onInsert={onInsert} suggestion={suggestion} />
+        <PanelBody onClose={onClose} onInsert={onInsert} sessionId={sessionId} focusRequest={focusRequest} />
       </Drawer>
     );
   }
@@ -270,7 +214,7 @@ export function TerminalAiPanel({ open, onClose, variant, onInsert, suggestion =
           '&:hover, &:focus-visible': { bgcolor: 'primary.main', opacity: 0.6, outline: 'none' },
         }}
       />
-      <PanelBody onClose={onClose} onInsert={onInsert} suggestion={suggestion} />
+      <PanelBody onClose={onClose} onInsert={onInsert} sessionId={sessionId} focusRequest={focusRequest} />
     </Box>
   );
 }
