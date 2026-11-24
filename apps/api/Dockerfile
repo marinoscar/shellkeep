@@ -7,8 +7,20 @@
 # -----------------------------------------------------------------------------
 FROM node:24-alpine AS base
 WORKDIR /app
-# Install OpenSSL for Prisma compatibility
-RUN apk add --no-cache openssl openssl-dev
+# Install OpenSSL for Prisma compatibility.
+#
+# `postgresql17-client` is pg_dump, pg_restore and psql, for the platform database backup
+# and restore (#52). It is in the BASE stage so `development` and `production` both ship
+# it: a backup that only works in one of them is exercised first on the night it is needed.
+#
+# THE MAJOR IS PINNED EXPLICITLY. The floating `postgresql-client` meta-package tracks
+# whatever major the Alpine release under `node:24-alpine` ships, so a base-image refresh
+# could move the client without a line of this repository changing, and `pg_dump` REFUSES
+# to dump a server newer than itself. 17 is the platform's floor (MIN_PG_CLIENT_MAJOR in
+# `@marinoscar/platform-api/db-backup`); a 17 client dumps and restores a 14 to 17 server,
+# and CI and the rehearsals run PostgreSQL 16. `test/pg-client-version.spec.ts` holds this
+# number equal to the constant. To bump the pair: docs/runbooks/postgres-client-version.md.
+RUN apk add --no-cache openssl openssl-dev postgresql17-client
 RUN corepack enable
 
 # -----------------------------------------------------------------------------

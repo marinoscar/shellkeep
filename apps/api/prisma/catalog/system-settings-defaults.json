@@ -80,5 +80,20 @@
   },
   "ssh": {
     "hostKeyPolicy": "tofu_prompt"
+  },
+  "databaseBackup": {
+    "enabled": false,
+    "frequency": "daily",
+    "dayOfWeek": 0,
+    "dayOfMonth": 1,
+    "timeOfDay": "02:00",
+    "timezone": "UTC",
+    "retentionCount": 7,
+    "storageProvider": "",
+    "runStaleMinutes": 120,
+    "compressionLevel": 6,
+    "restoreRollbackMode": "retain_database",
+    "oldDatabaseRetentionHours": 48,
+    "nodeOffloadEnabled": false
   }
 }

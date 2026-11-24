@@ -59,6 +59,17 @@ Web: `platform/notifications.ts` calls `configureNotificationsWeb` before the fi
 | The runbook events are defined but not registered | `registerRunbookNotifications()` (`notifications-registry/runbooks.notifications.ts`) registers `runbooks.run_finished`, `runbooks.run_failed` and `runbooks.approval_requested` and their templates; Fleet Runbooks calls it when its module is mounted, so the preferences matrix does not list events that cannot fire | #61 |
 | The reaped-session notification is one per owner per pass | `SessionReapHandler.process()` calls `notify` after `reap()` returned (its updates are autocommitted statements, never inside a `$transaction`), listing up to ten sessions (longest idle first) and counting the rest | Kept |
 
+### Database backup and restore, and the application role (#52)
+
+`DbBackupModule.forRoot` (`platform/db-backup/db-backup.config.ts`, host ports in `db-backup-host.module.ts`) is mounted after the storage routes: `/api/admin/db-backup`, the job types `db.backup.run`, `db.backup.sweep`, `db.restore.run` and `db.restore.old-db-drop`, the `databaseBackup` system namespace and four Doctor checks. Self-hosted: restore is on. The target is the storage slice's active provider under `database-backups/`; no mirror. No environment variable was added.
+
+| Decision | Detail | Removed by |
+|---|---|---|
+| **No `RestoreCarryOver` is registered** | ShellKeep keeps no deployment state outside the database that a restore must carry across the swap. The slice carries the backup catalog (`database_backup_runs`) and the restore's own job row itself. Server profiles and terminal sessions are ordinary rows in the archive; SSH secrets are ciphertext in the credential store and open again with the same `SECRETS_ENCRYPTION_KEY`, which lives outside the database (an archive restored under another key keeps every profile but cannot connect). Add one only if a later slice keeps state that must survive a restore | Revisit when a slice adds such state |
+| The API connects as `shellkeep_app` | `POSTGRES_USER` / `POSTGRES_PASSWORD` name the role; there is no second set of variables for the restore: its cluster-admin connection (a short-lived client on the `postgres` database, outside the Prisma pool) uses the same login, so the role carries `CREATEDB` (`create-app-role.sql`, `-v createdb=off` to withhold it). The bootstrap superuser is used only by the operator: extensions, the role script, a manual restore | Kept |
+| `PrismaSystemService` is injected by an allowlist | `test/tenancy/system-injection-boundary.spec.ts`: the storage host module, the backup host module (Doctor `backup.rls-bypass`) and `main.ts` (startup count of `org_credentials`). The same spec lists the files of ShellKeep's own code that name an org table | Kept |
+| `infra/deploy/*.sh` take no backup | `DEPLOY.md` describes a manual `pg_dump`, now superseded by the admin page | #72 replaces the deploy scripts |
+
 ### Identity ports bound by the host (#46)
 
 `IDENTITY_METRICS` is bound to the host core's `AppMetricsService` and `IDENTITY_EVENT_BUS` to its event bus (`platform/identity/identity-host.module.ts`), so the identity slice records its metrics and invalidates its principal cache across replicas (`EVENT_BUS_ADAPTER=postgres`). `IDENTITY_AUTH_CREDENTIALS` (bound to the deployment `CredentialsService`; Google still reads the environment) and the host port `SYSTEM_SETTINGS_STORE` (bound to the settings slice's `SystemSettingsService`) were bound by #48.
@@ -114,7 +125,7 @@ What ShellKeep declares itself because the platform has no equivalent. None is r
 |---|---|---|
 | `server_profiles.encrypted_password`, `encrypted_private_key` and `encrypted_passphrase` are LEGACY | Never read or written since #48; they hold the secrets as the old build left them (AES-256-GCM under the legacy `ENCRYPTION_KEY`), so the previous build still works for a rollback. `ENCRYPTION_KEY` stays in the environment for `npm run ssh:migrate-secrets` only ([runbook](../runbooks/ssh-secret-reencryption.md)) | #84 (a migration drops the columns after production verification; `ENCRYPTION_KEY` leaves the environment and `server-profiles/migrate/` is deleted) |
 | SSH secrets of 8+ characters get a platform display hint | SSH secrets of 8+ characters get a platform display hint (last 4 characters) stored in clear in `user_credentials.hint`; ShellKeep never reads or returns it | Removed when EnterpriseAppBase#1218 lands (per-purpose `hint: 'none'`) |
-| `server_profiles` and `terminal_sessions` carry `org_id` but are not under row-level security | Single organization only: the tables are not isolated per organization, and the API still connects as the bootstrap superuser (the `shellkeep_app` role exists but is not switched, #52). Every row's `org_id` is the default organization | A future multi-organization epic |
+| `server_profiles` and `terminal_sessions` carry `org_id` but are not under row-level security | Single organization only: the tables are not isolated per organization, and the API connects as the ordinary `shellkeep_app` role since #52, which only matters for the platform's org tables. Every row's `org_id` is the default organization | A future multi-organization epic |
 
 The `MonoRepo` rollback tag exists on `95145d0d850a4a53757b65d289158d58e34fc33d`.
 
