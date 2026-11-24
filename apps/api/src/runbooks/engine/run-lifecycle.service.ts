@@ -15,7 +15,7 @@
 // command, an output, a host or a credential (the templates cannot carry one).
 // =============================================================================
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { runInOrg } from '@marinoscar/platform-api/core';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
@@ -29,6 +29,7 @@ import {
 } from '../../notifications-registry/runbooks.notifications';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
+import { RunbookWebhooksService } from '../webhooks/runbook-webhooks.service';
 import { EngineMetricsService } from './engine-metrics.service';
 import type { AdvanceOutcome } from './run-coordinator.service';
 import { RunEventsService } from './run-events.service';
@@ -44,6 +45,7 @@ export class RunLifecycleService {
     private readonly notifications: NotificationsService,
     private readonly prisma: PrismaService,
     private readonly metrics: EngineMetricsService,
+    @Optional() private readonly webhooks?: RunbookWebhooksService,
   ) {}
 
   async afterCommit(outcome: AdvanceOutcome): Promise<void> {
@@ -72,10 +74,14 @@ export class RunLifecycleService {
               finished.targetsFailed,
             ),
           );
+          await this.webhooks?.runCompleted({ runId: finished.runId, orgId: finished.orgId });
         }
         await this.notifyFinished(finished);
       }
-      for (const approval of outcome.approvals) await this.notifyApprovers(approval);
+      for (const approval of outcome.approvals) {
+        await this.notifyApprovers(approval);
+        await this.webhooks?.approvalRequested(approval);
+      }
     } catch (error) {
       this.logger.warn(`post-commit hooks failed for a run: ${error instanceof Error ? error.name : 'error'}`);
     }
@@ -108,6 +114,23 @@ export class RunLifecycleService {
         ? RUN_FINISHED_NOTIFICATION
         : RUNBOOK_RUN_FAILED_EVENT;
     await this.notifications.notify(event, finished.initiatedBy, data);
+    // A scheduled run also tells the person who owns the schedule, when that is not the person it ran as (a
+    // "run now" by someone else).
+    if (finished.trigger === 'schedule' && !finished.dryRun) {
+      const owner = await this.scheduleOwner(finished.orgId, finished.runId);
+      if (owner && owner !== finished.initiatedBy) await this.notifications.notify(event, owner, data);
+    }
+  }
+
+  private async scheduleOwner(orgId: string, runId: string): Promise<string | null> {
+    try {
+      const row = await runInOrg(this.prisma, { orgId }, (tx) =>
+        tx.runbookRun.findFirst({ where: { id: runId, orgId }, select: { schedule: { select: { runAsUserId: true } } } }),
+      );
+      return row?.schedule?.runAsUserId ?? null;
+    } catch {
+      return null;
+    }
   }
 
   async notifyApprovers(approval: AdvanceOutcome['approvals'][number]): Promise<void> {

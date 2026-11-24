@@ -8,12 +8,15 @@
 //
 //   registerTerminalWebhookEvents   terminal.session.created, terminal.session.terminated,
 //                                   server_profile.host_key_changed
+//   registerRunbookWebhookEvents    runbook.run.completed, runbook.approval.requested (#66)
 //
 // The slice's channel, email template and notification event are in `notifications.ts`; the
 // signing-secret credential purposes in `credentials.ts`; the slice's metrics in
 // `platform/host-app-metrics.ts`. ShellKeep's alert rule kinds are in `alerts.ts`.
 // =============================================================================
 
+import { registerRunbookWebhookEvents } from '../runbooks/webhooks/runbooks.webhooks';
 import { registerTerminalWebhookEvents } from '../terminal/webhooks/terminal.webhook-events';
 
 registerTerminalWebhookEvents();
+registerRunbookWebhookEvents();
