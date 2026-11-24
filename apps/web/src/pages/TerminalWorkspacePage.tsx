@@ -52,7 +52,11 @@ import {
 } from '../components/terminal/workspace/workspaceLayout';
 import { getServerProfile, getSession, updateSession } from '../services/terminal-api';
 import type { KeyShortcut, ServerProfile, TerminalSession } from '../types';
-import { encodeShortcut } from '../lib/terminal/encodeKeystroke';
+import { createModifierInputInterceptor, encodeBarShortcut } from '../lib/terminal/keys/modifiedInput';
+import { encodeChord, type ActiveModifiers } from '../lib/terminal/keys/encodeKey';
+import type { Chord } from '../lib/terminal/keys/keyModel';
+import { toBarModifierKeys } from '../lib/terminal/keys/legacyAdapter';
+import { useModifierState } from '../hooks/useModifierState';
 import { useTerminalSettings } from '../hooks/useTerminalSettings';
 import { DEFAULT_TERMINAL_SETTINGS, isKeyBarVisible } from '../lib/terminal/settings';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
@@ -127,8 +131,16 @@ export default function TerminalWorkspacePage() {
     terminal: preferences,
     keyShortcuts: storedShortcuts,
     actionShortcuts,
+    keyLayout,
+    keyOptions,
     updateTerminal,
   } = useTerminalSettings();
+  // The key bar's Ctrl, Alt and Shift (#166): one state for every pane, applied
+  // to bar keys here and to typed input inside each pane's terminal.
+  const modifiers = useModifierState();
+  const consumeModifiers = modifiers.consume;
+  const inputModifiers = useMemo(() => createModifierInputInterceptor(modifiers.store), [modifiers.store]);
+  const modifierKeys = useMemo(() => (keyLayout ? toBarModifierKeys(keyLayout) : []), [keyLayout]);
   const showScrollButtons = preferences?.showScrollButtons ?? DEFAULT_TERMINAL_SETTINGS.showScrollButtons;
   const keyShortcuts = storedShortcuts ?? [];
   // Mod+Shift+A (or the user's rebinding) opens the assistant with the prompt focused; the
@@ -310,15 +322,29 @@ export default function TerminalWorkspacePage() {
     [notify],
   );
 
-  const handleSendShortcut = useCallback(
-    (shortcut: KeyShortcut) => {
-      const data = encodeShortcut(shortcut);
+  // A bar key or a pop-up entry: encoded with the active modifiers (which
+  // releases the one-shots) and the pane's cursor-key mode (#166).
+  const sendEncoded = useCallback(
+    (encode: (options: { modifiers: ActiveModifiers; applicationCursor: boolean }) => string) => {
       const view = getView();
-      if (!data || !view) return;
+      if (!view) return;
+      const applicationCursor = view.getTerminal()?.modes?.applicationCursorKeysMode ?? false;
+      const data = encode({ modifiers: consumeModifiers(), applicationCursor });
+      if (!data) return;
       view.sendInput(data);
       view.focus();
     },
-    [getView],
+    [getView, consumeModifiers],
+  );
+
+  const handleSendShortcut = useCallback(
+    (shortcut: KeyShortcut) => sendEncoded((options) => encodeBarShortcut(shortcut, options)),
+    [sendEncoded],
+  );
+
+  const handleSendChord = useCallback(
+    (chord: Chord) => sendEncoded((options) => encodeChord(chord, options)),
+    [sendEncoded],
   );
 
   const handleToggleScrollButtons = useCallback(() => {
@@ -369,6 +395,7 @@ export default function TerminalWorkspacePage() {
         onExplainSelection={aiAvailable ? onExplainPaneSelection : undefined}
         fileLinksProfileId={fileLinksProfileIdOf(sessionId)}
         onShowInFileBrowser={canWrite ? showInFileBrowser : undefined}
+        inputModifiers={inputModifiers}
         registerView={registerView}
         onStatus={onPaneStatus}
       />
@@ -382,6 +409,7 @@ export default function TerminalWorkspacePage() {
       fileLinksProfileIdOf,
       canWrite,
       showInFileBrowser,
+      inputModifiers,
       registerView,
       onPaneStatus,
     ],
@@ -619,6 +647,11 @@ export default function TerminalWorkspacePage() {
             shortcuts={keyShortcuts}
             onSend={handleSendShortcut}
             onAiAssist={aiAvailable ? openAssistant : undefined}
+            modifierKeys={modifierKeys}
+            modifierState={modifiers.state}
+            onToggleModifier={modifiers.tap}
+            onSendChord={handleSendChord}
+            haptics={keyOptions?.haptics ?? false}
           />
         </Box>
       </Box>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fromLegacyShortcuts, toLegacyBarKeys } from './legacyAdapter';
+import { fromLegacyShortcuts, toBarModifierKeys, toLegacyBarKeys } from './legacyAdapter';
 import { DEFAULT_KEY_LAYOUT, type KeyLayout } from './keyModel';
 import { encodeShortcut } from '../encodeKeystroke';
 import { DEFAULT_KEY_SHORTCUTS } from '../settings';
@@ -50,5 +50,25 @@ describe('toLegacyBarKeys', () => {
 
   it('is empty for an empty layout', () => {
     expect(toLegacyBarKeys({ groups: [] })).toEqual([]);
+  });
+});
+
+describe('toBarModifierKeys (#166)', () => {
+  it('lists the default layout modifiers in layout order', () => {
+    expect(toBarModifierKeys(DEFAULT_KEY_LAYOUT as KeyLayout)).toEqual(['ctrl', 'alt']);
+  });
+
+  it('keeps each modifier once and skips other keys', () => {
+    const layout: KeyLayout = {
+      groups: [
+        { keys: [{ id: 'shift' }, { id: 'esc' }, { id: 'ai' }] },
+        { keys: [{ id: 'ctrl' }, { id: 'shift' }] },
+      ],
+    };
+    expect(toBarModifierKeys(layout)).toEqual(['shift', 'ctrl']);
+  });
+
+  it('is empty for a layout converted from v1 shortcuts', () => {
+    expect(toBarModifierKeys(fromLegacyShortcuts(DEFAULT_KEY_SHORTCUTS as KeyShortcut[]))).toEqual([]);
   });
 });

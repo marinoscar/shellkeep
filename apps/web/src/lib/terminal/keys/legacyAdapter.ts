@@ -51,6 +51,26 @@ export function toLegacyBarKeys(layout: KeyLayout): KeyShortcut[] {
   return out;
 }
 
+/** The modifier keys a bar can toggle (#166). */
+export type BarModifierId = 'ctrl' | 'alt' | 'shift';
+
+/**
+ * The modifier keys (`ctrl`, `alt`, `shift`) of a layout, in layout order and
+ * once each: the bar draws them as toggles until #167 draws the whole layout.
+ */
+export function toBarModifierKeys(layout: KeyLayout): BarModifierId[] {
+  const out: BarModifierId[] = [];
+  for (const group of layout.groups) {
+    for (const entry of group.keys) {
+      if (isInlineEntry(entry)) continue;
+      if (getCatalogKey(entry.id)?.kind !== 'modifier') continue;
+      const id = entry.id as BarModifierId;
+      if (!out.includes(id)) out.push(id);
+    }
+  }
+  return out;
+}
+
 /** The v2 layout holding exactly a v1 shortcut list (the inverse of `toLegacyBarKeys` for it). */
 export function fromLegacyShortcuts(shortcuts: readonly KeyShortcut[]): KeyLayout {
   return legacyShortcutsToLayout(shortcuts);

@@ -21,7 +21,12 @@ const { mockSendInput, layoutMock, prefsMock, mockUpdateTerminal, termMock } = v
   termMock: { terminal: null as null | { hasSelection: () => boolean; getSelection: () => string; paste: (t: string) => void; focus: () => void }, hasSelection: false },
   layoutMock: { isPhone: false, isWide: true, isTouch: false },
   // The user's terminal preferences as the hook resolves them (#80).
-  prefsMock: { showKeyBar: 'auto' as 'auto' | 'always' | 'never' },
+  prefsMock: {
+    showKeyBar: 'auto' as 'auto' | 'always' | 'never',
+    // The v2 layout's modifier keys (#166): `null` until loaded.
+    keyLayout: null as null | { groups: { keys: { id: string }[] }[] },
+    haptics: false,
+  },
   mockUpdateTerminal: vi.fn(),
 }));
 
@@ -73,7 +78,12 @@ vi.mock('../../hooks/useTerminalSettings', async () => {
     useTerminalSettings: vi.fn(() => ({
       terminal: { ...DEFAULT_TERMINAL_SETTINGS, showKeyBar: prefsMock.showKeyBar },
       actionShortcuts: {},
-      keyShortcuts: [{ id: 'k1', label: 'ESC', keystrokes: [{ modifiers: [], key: 'Escape' }] }],
+      keyShortcuts: [
+        { id: 'k1', label: 'ESC', keystrokes: [{ modifiers: [], key: 'Escape' }] },
+        { id: 'k2', label: '→', keystrokes: [{ modifiers: [], key: 'ArrowRight' }] },
+      ],
+      keyLayout: prefsMock.keyLayout,
+      keyOptions: { autoHideWithHardwareKeyboard: true, haptics: prefsMock.haptics },
       updateTerminal: mockUpdateTerminal,
     })),
   };
@@ -631,3 +641,106 @@ describe('TerminalWorkspacePage: explain (#58)', () => {
     expect(mockSendInput).not.toHaveBeenCalled();
   });
 });
+
+describe('TerminalWorkspacePage: key bar modifiers (#166)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    layoutMock.isPhone = true;
+    layoutMock.isWide = false;
+    layoutMock.isTouch = true;
+    prefsMock.showKeyBar = 'auto';
+    prefsMock.keyLayout = { groups: [{ keys: [{ id: 'esc' }, { id: 'ctrl' }, { id: 'alt' }] }] };
+    termMock.terminal = null;
+    vi.mocked(getSession).mockImplementation((id: string) => Promise.resolve(SESSIONS[id]));
+  });
+
+  afterEach(() => {
+    prefsMock.keyLayout = null;
+    termMock.terminal = null;
+  });
+
+  const key = (name: string) => screen.getByRole('button', { name });
+
+  it('draws the layout modifiers as toggles', async () => {
+    renderWorkspace('/sessions/a?tabs=a');
+    await screen.findByTestId('terminal-key-dock');
+    expect(key('Ctrl')).toHaveAttribute('aria-pressed', 'false');
+    expect(key('Alt')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Shift' })).not.toBeInTheDocument();
+  });
+
+  it('Ctrl then → sends CSI 1;5C, and the one-shot releases after the bar key', async () => {
+    const user = userEvent.setup();
+    renderWorkspace('/sessions/a?tabs=a');
+    await screen.findByTestId('terminal-key-dock');
+    await user.click(key('Ctrl'));
+    expect(key('Ctrl')).toHaveAccessibleDescription('armed');
+    await user.click(key('→'));
+    expect(mockSendInput).toHaveBeenLastCalledWith('\x1b[1;5C');
+    expect(key('Ctrl')).toHaveAttribute('aria-pressed', 'false');
+    await user.click(key('→'));
+    expect(mockSendInput).toHaveBeenLastCalledWith('\x1b[C');
+  });
+
+  it('a double-tapped Ctrl stays locked across keys; Ctrl+Alt combine', async () => {
+    const user = userEvent.setup();
+    renderWorkspace('/sessions/a?tabs=a');
+    await screen.findByTestId('terminal-key-dock');
+    await user.click(key('Ctrl'));
+    await user.click(key('Ctrl'));
+    expect(key('Ctrl')).toHaveAccessibleDescription('locked');
+    await user.click(key('Alt'));
+    await user.click(key('→'));
+    expect(mockSendInput).toHaveBeenLastCalledWith('\x1b[1;7C');
+    await user.click(key('→'));
+    expect(mockSendInput).toHaveBeenLastCalledWith('\x1b[1;5C');
+    expect(key('Ctrl')).toHaveAccessibleDescription('locked');
+    expect(key('Alt')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('a bare arrow follows the terminal application cursor mode', async () => {
+    const user = userEvent.setup();
+    termMock.terminal = {
+      hasSelection: () => false,
+      getSelection: () => '',
+      paste: vi.fn(),
+      focus: vi.fn(),
+      modes: { applicationCursorKeysMode: true },
+    } as unknown as typeof termMock.terminal;
+    renderWorkspace('/sessions/a?tabs=a');
+    await screen.findByTestId('terminal-key-dock');
+    await user.click(key('→'));
+    expect(mockSendInput).toHaveBeenLastCalledWith('\x1bOC');
+    await user.click(key('Ctrl'));
+    await user.click(key('→'));
+    expect(mockSendInput).toHaveBeenLastCalledWith('\x1b[1;5C');
+  });
+
+  it('a pop-up entry sends its chord with the armed modifiers and releases them', async () => {
+    const user = userEvent.setup();
+    renderWorkspace('/sessions/a?tabs=a');
+    await screen.findByTestId('terminal-key-dock');
+    await user.click(key('Alt'));
+    await user.pointer({ keys: '[MouseRight]', target: key('Ctrl') });
+    await user.click(await screen.findByRole('menuitem', { name: 'Ctrl+R' }));
+    expect(mockSendInput).toHaveBeenLastCalledWith('\x1b\x12');
+    expect(key('Alt')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('hands every pane the input interceptor, which releases a one-shot after a typed char', async () => {
+    const user = userEvent.setup();
+    renderWorkspace('/sessions/a?tabs=a');
+    await screen.findByTestId('terminal-key-dock');
+    const options = vi.mocked(useTerminal).mock.calls.at(-1)![3] as {
+      inputModifiers: { transform: (d: string, app: boolean) => string };
+    };
+    await user.click(key('Ctrl'));
+    let out = '';
+    act(() => {
+      out = options.inputModifiers.transform('r', false);
+    });
+    expect(out).toBe('\x12');
+    expect(key('Ctrl')).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
