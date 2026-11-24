@@ -3,9 +3,10 @@
  * layout in a 4-column grid, one group per grid row, each key spanning 1 or 2
  * cells. Two placements, chosen by the workspace through `useTerminalLayout`:
  *
- * - `side` (wide screens): beside the terminal panes, like the Files and AI
- *   panels. The phone keyboard stays up and the terminal keeps its focus.
- * - `dock` (narrow phones): in the key dock under the accessory row, at the
+ * - `side` (anything but a phone: tablets, landscape, unfolded foldables):
+ *   beside the terminal panes. The phone keyboard stays up and the terminal
+ *   keeps its focus.
+ * - `dock` (phones): in the key dock under the accessory row, at the
  *   keyboard's last height, replacing it. The keyboard button brings it back.
  *
  * A tab strip heads the panel: "Keys" today; snippets (#172) and history (#173)
@@ -28,8 +29,13 @@ import { KEY_GAP, TouchKey, useKeyPopup, type TouchKeyHandlers } from './TouchKe
 export const KEY_PANEL_TABS = [{ id: 'keys', label: 'Keys' }] as const;
 export type KeyPanelTabId = (typeof KEY_PANEL_TABS)[number]['id'];
 
-/** The side panel's width: four 44 px targets, their gaps and the padding, with room. */
-export const KEY_PANEL_SIDE_WIDTH = 320;
+/**
+ * The side panel's width: 320 px (four 44 px targets, their gaps and padding,
+ * with room), but never more than 40% of the workspace, so a ~600 px tablet or
+ * foldable keeps most of its width for the terminal. CSS `min()`, not a
+ * breakpoint read.
+ */
+export const KEY_PANEL_SIDE_WIDTH = 'min(320px, 40%)';
 /** The editor the Customize button opens (#169 replaces the page behind it). */
 export const KEY_PANEL_CUSTOMIZE_ROUTE = '/settings/shortcuts';
 
@@ -73,7 +79,7 @@ export const TerminalKeyPanel = forwardRef<HTMLDivElement, TerminalKeyPanelProps
         flexShrink: 0,
         bgcolor: 'background.paper',
         ...(variant === 'side'
-          ? { width: KEY_PANEL_SIDE_WIDTH, borderLeft: 1, borderColor: 'divider' }
+          ? { width: KEY_PANEL_SIDE_WIDTH, minWidth: 0, borderLeft: 1, borderColor: 'divider' }
           : { height, borderBottom: 1, borderColor: 'divider' }),
       }}
     >

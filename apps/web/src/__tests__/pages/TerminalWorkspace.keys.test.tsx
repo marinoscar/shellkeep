@@ -12,8 +12,9 @@ import type { KeyLayout } from '../../lib/terminal/keys/keyModel';
 // =============================================================================
 // The accessory row and the full key panel in the workspace (#167): the bytes
 // every key kind sends (normal and application cursor mode), the modifiers
-// through the row and the panel, the panel as a side panel on wide layouts and
-// in place of the phone keyboard on narrow ones (`useTerminalLayout` mocked),
+// through the row and the panel, the panel as a side panel off a phone (sm
+// tablets, foldables, desktop) and in place of the keyboard on a phone
+// (`useTerminalLayout` mocked),
 // the keyboard button, Customize, Escape, the AI and attach-file actions, and
 // the turns the key panel takes with the Files and AI panels.
 // =============================================================================
@@ -125,6 +126,7 @@ vi.mock('../../hooks/useTerminalSettings', async () => {
 import TerminalWorkspacePage, { KEY_PANEL_DEFAULT_HEIGHT, keyPanelDockHeight } from '../../pages/TerminalWorkspacePage';
 import { getSession } from '../../services/terminal-api';
 import { RemoteUploadError } from '../../services/files-api';
+import { KEY_PANEL_SIDE_WIDTH } from '../../components/terminal/keys/TerminalKeyPanel';
 
 const session = (id: string): TerminalSession => ({
   id,
@@ -253,7 +255,7 @@ describe('the accessory row in the workspace (#167)', () => {
   });
 });
 
-describe('the key panel on a narrow phone (#167)', () => {
+describe('the key panel on a phone (#167)', () => {
   it('replaces the keyboard in the key dock, blurring the terminal', async () => {
     const user = userEvent.setup();
     renderWorkspace();
@@ -397,6 +399,40 @@ describe('the key panel on a narrow phone (#167)', () => {
     expect(keyPanelDockHeight(0)).toBe(KEY_PANEL_DEFAULT_HEIGHT);
     expect(keyPanelDockHeight(100)).toBe(KEY_PANEL_DEFAULT_HEIGHT);
     expect(keyPanelDockHeight(320)).toBe(320);
+  });
+});
+
+describe('the key panel on an sm tablet or unfolded foldable (#167)', () => {
+  beforeEach(() => {
+    // Below `md` but not a phone: the AI and Files panels are sheets here.
+    layoutMock.isPhone = false;
+    layoutMock.isWide = false;
+  });
+
+  it('opens beside the panes with the keyboard still up, at most 40% of the width', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await ready();
+    await user.click(screen.getByRole('button', { name: 'Key panel' }));
+    const side = screen.getByTestId('terminal-key-panel-side');
+    expect(screen.getByTestId('terminal-body')).toContainElement(side);
+    expect(screen.queryByTestId('terminal-key-panel-dock')).not.toBeInTheDocument();
+    expect(termMock.terminal!.blur).not.toHaveBeenCalled();
+    expect(within(side).queryByRole('button', { name: 'Show keyboard' })).not.toBeInTheDocument();
+    // jsdom drops CSS min(), so the width is checked at its source.
+    expect(KEY_PANEL_SIDE_WIDTH).toBe('min(320px, 40%)');
+  });
+
+  it('Escape gives the terminal its focus back', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await ready();
+    await user.click(screen.getByRole('button', { name: 'Key panel' }));
+    within(panel()).getByRole('tab', { name: 'Keys' }).focus();
+    termMock.terminal!.focus.mockClear();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('region', { name: 'Key panel' })).not.toBeInTheDocument();
+    expect(termMock.terminal!.focus).toHaveBeenCalled();
   });
 });
 

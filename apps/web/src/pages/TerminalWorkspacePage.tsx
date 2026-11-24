@@ -394,9 +394,11 @@ export default function TerminalWorkspacePage() {
     () => (keyLayout ? resolveKeyGroups(keyLayout, availableActions) : null),
     [keyLayout, availableActions],
   );
-  // Wide (`md` and up, the AI and Files panels' rule): a side panel, the phone
-  // keyboard stays up. Narrow: the panel replaces the keyboard in the key dock.
-  const keyPanelVariant: 'side' | 'dock' = isWide ? 'side' : 'dock';
+  // Anything but a phone (`sm` and up: tablets, landscape, an unfolded foldable):
+  // a side panel, the phone keyboard stays up. A phone: the panel replaces the
+  // keyboard in the key dock. (The AI and Files panels keep their own `isWide` rule.)
+  const keyPanelSide = !isPhone;
+  const keyPanelVariant: 'side' | 'dock' = keyPanelSide ? 'side' : 'dock';
   const keyPanelShown = keyPanelOpen && keyShortcutsOpen;
   const keyPanelDocked = keyPanelShown && keyPanelVariant === 'dock';
   const keyPanelId = useId();
@@ -413,7 +415,7 @@ export default function TerminalWorkspacePage() {
     }
     setAiOpen(false);
     setFilesOpen(false);
-    if (!isWide) {
+    if (!keyPanelSide) {
       // Take the keyboard's place: its height, then dismiss it by blurring xterm's textarea.
       setKeyPanelHeight(keyPanelDockHeight(lastKeyboardHeight.current));
       keyboardReplaced.current = true;
@@ -422,18 +424,18 @@ export default function TerminalWorkspacePage() {
       if (focused instanceof HTMLElement && focused.closest('.xterm')) focused.blur();
     }
     setKeyPanelOpen(true);
-  }, [keyPanelOpen, isWide, getView]);
+  }, [keyPanelOpen, keyPanelSide, getView]);
 
   const closeKeyPanel = useCallback(() => {
     setKeyPanelOpen(false);
-    if (isWide) {
+    if (keyPanelSide) {
       // The side panel never took the terminal's focus for long: give it back.
       getView()?.focus();
     } else {
       // Without raising the keyboard: focus goes back to the panel's toggle.
       document.getElementById(`${keyPanelId}-toggle`)?.focus();
     }
-  }, [isWide, getView, keyPanelId]);
+  }, [keyPanelSide, getView, keyPanelId]);
 
   // The keyboard button: close the docked panel and bring the phone keyboard back.
   const showKeyboard = useCallback(() => {

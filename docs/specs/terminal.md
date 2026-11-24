@@ -285,10 +285,10 @@ Issue #167 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Co
 
 | Layout | Placement |
 |---|---|
-| Wide (`isWide`, `md` and up, the rule of the AI and Files panels) | A side panel beside the panes, 320 px. The phone keyboard stays up: the terminal is not blurred and keeps its focus, and Escape gives it back |
-| Narrow | In the key dock under the row, replacing the keyboard at its last height above the page (280 px when none was seen). Opening blurs the xterm textarea to dismiss the OS keyboard and focuses the Keys tab; a keyboard button closes the panel and refocuses the terminal; the keyboard coming back (a tap on the terminal) closes the panel; Escape returns focus to the toggle |
+| Not a phone (`!isPhone`, `sm` and up: tablets, landscape, an unfolded foldable, desktop) | A side panel beside the panes, `min(320px, 40%)` wide so a ~600 px screen keeps most of its width for the terminal. The phone keyboard stays up: the terminal is not blurred and keeps its focus, and Escape gives it back |
+| Phone (`isPhone`, below `sm`) | In the key dock under the row, replacing the keyboard at its last height above the page (280 px when none was seen). Opening blurs the xterm textarea to dismiss the OS keyboard and focuses the Keys tab; a keyboard button closes the panel and refocuses the terminal; the keyboard coming back (a tap on the terminal) closes the panel; Escape returns focus to the toggle |
 
-The key panel takes turns with the Files and AI panels: opening one closes the others.
+The key panel's rule is deliberately not the AI and Files panels' (`isWide`, `md`): an unfolded foldable in portrait is under 900 px, and the side panel with the keyboard still up is what epic #171 asks for there. The key panel takes turns with the Files and AI panels: opening one closes the others.
 
 **Attach.** The `attach-file` key opens a file picker and uploads the file into the session's working directory: `stat .` with the session resolves the folder, then `uploadRemoteFile` sends it ([files.md](files.md)). It never replaces an existing file: a `FILE_EXISTS` answer tells the user to use the Files panel, which asks.
 
