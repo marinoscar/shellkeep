@@ -75,3 +75,21 @@ describe('RunbookApprovalsService.list (#65 inbox fields)', () => {
     expect(page.items[0]).toMatchObject({ targetName: null, initiatedByName: 'person-b@example.test' });
   });
 });
+
+describe('runs query `since` (#65: Home links /runs?status=failed&since=24h)', () => {
+  // Imported here so the approvals spec above stays about approvals.
+  const { runsQuerySchema, sinceToDate } = jest.requireActual('./dto/run.dto') as typeof import('./dto/run.dto');
+
+  it('accepts a number and m, h or d, and refuses anything else', () => {
+    expect(runsQuerySchema.parse({ since: '24h' }).since).toBe('24h');
+    expect(runsQuerySchema.safeParse({ since: '24 hours' }).success).toBe(false);
+    expect(runsQuerySchema.safeParse({ since: '1w' }).success).toBe(false);
+  });
+
+  it('turns the window into its start', () => {
+    const now = Date.UTC(2026, 0, 2);
+    expect(sinceToDate('24h', now).toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    expect(sinceToDate('30m', now).getTime()).toBe(now - 30 * 60_000);
+    expect(sinceToDate('7d', now).getTime()).toBe(now - 7 * 86_400_000);
+  });
+});

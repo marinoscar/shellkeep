@@ -25,6 +25,7 @@ import { RunbooksService } from '../runbooks.service';
 import { RUNBOOK_SECRET_PURPOSE } from '../runbooks.credentials';
 import { runStrategySchema, type RunbookDefinition, targetSelectorSchema } from '../schema/runbook-definition.schema';
 import type { CreateRunDto, RunsQueryDto } from './dto/run.dto';
+import { sinceToDate } from './dto/run.dto';
 import { FAILURE_CODES, RUNBOOK_JOB_REASON, RUNBOOK_RUN_START_TYPE, RUNBOOK_RUN_SUBJECT } from './engine.constants';
 import { RUNBOOK_RUN_ERROR_CODES } from './engine.error-codes';
 import { RunCoordinatorService, type AdvanceOutcome } from './run-coordinator.service';
@@ -167,6 +168,7 @@ export class RunbookRunsService {
         ...(query.status ? { status: query.status } : {}),
         ...(query.trigger ? { trigger: query.trigger } : {}),
         ...(query.initiatedBy ? { initiatedBy: query.initiatedBy } : {}),
+        ...(query.since ? { createdAt: { gte: sinceToDate(query.since) } } : {}),
       };
       const [total, rows] = await Promise.all([
         tx.runbookRun.count({ where }),
