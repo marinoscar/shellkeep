@@ -167,7 +167,10 @@ export function FileBrowser({
   const canFollow = Boolean(sessionId);
   const [follow, setFollow] = useState(() => canFollow && defaultFollow && !reveal);
   const [path, setPath] = useState(() => reveal?.dir ?? initialPath);
-  const [pendingSelect, setPendingSelect] = useState<string | null>(reveal?.select ?? null);
+  // The entry to select in the next listing to arrive (`after`: the listing on screen when asked).
+  const [pendingSelect, setPendingSelect] = useState<{ name: string; after: unknown } | null>(
+    reveal?.select ? { name: reveal.select, after: null } : null,
+  );
   const [selected, setSelected] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
   const [filter, setFilter] = useState('');
@@ -178,7 +181,10 @@ export function FileBrowser({
   const following = follow && canFollow;
   const requestPath = following ? '.' : path;
   const { listing, loading, error, refresh, lastRequestAt } = useDirectoryListing(profileId, requestPath, sessionId);
-  const currentDir = listing?.path ?? (requestPath === '.' ? '' : requestPath);
+  // Rows act on the folder that was listed; the location (breadcrumbs, Up, a typed
+  // relative path) is the folder asked for, which differs while it loads or failed.
+  const listedDir = listing?.path ?? '';
+  const currentDir = requestPath.startsWith('/') ? requestPath : listedDir;
   const [pathInput, setPathInput] = useState(currentDir);
   const rootRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLElement>());
@@ -188,6 +194,8 @@ export function FileBrowser({
     if (listing) setPathInput(listing.path);
   }, [listing]);
 
+  const listingRef = useRef(listing);
+  listingRef.current = listing;
   // A new reveal after mount ("Show in file browser" again).
   const lastReveal = useRef(reveal?.seq ?? null);
   useEffect(() => {
@@ -195,19 +203,20 @@ export function FileBrowser({
     lastReveal.current = reveal.seq;
     setFollow(false);
     setPath(reveal.dir);
-    setPendingSelect(reveal.select ?? null);
+    setPendingSelect(reveal.select ? { name: reveal.select, after: listingRef.current } : null);
     setFilter('');
   }, [reveal]);
 
   const rows = useMemo(
-    () => visibleEntries(listing?.entries ?? [], { showHidden, filter, sort }),
-    [listing, showHidden, filter, sort],
+    // A failed listing shows its error, not the previous folder's rows.
+    () => (error ? [] : visibleEntries(listing?.entries ?? [], { showHidden, filter, sort })),
+    [listing, error, showHidden, filter, sort],
   );
 
   // Select the revealed entry once its folder is listed (a dotfile turns hidden files on).
   useEffect(() => {
-    if (!pendingSelect || !listing) return;
-    const found = listing.entries.find((e) => e.name === pendingSelect);
+    if (!pendingSelect || !listing || listing === pendingSelect.after) return;
+    const found = listing.entries.find((e) => e.name === pendingSelect.name);
     setPendingSelect(null);
     if (!found) return;
     if (found.name.startsWith('.')) setShowHidden(true);
@@ -246,7 +255,7 @@ export function FileBrowser({
     const from = currentDir;
     navigate(parentRemotePath(from));
     // Land on the folder we came from.
-    setPendingSelect(from.slice(from.lastIndexOf('/') + 1));
+    setPendingSelect({ name: from.slice(from.lastIndexOf('/') + 1), after: listing });
   };
 
   const submitPath = (event: FormEvent) => {
@@ -257,7 +266,7 @@ export function FileBrowser({
     navigate(absolute);
   };
 
-  const pathOf = (entry: RemoteDirEntry) => joinRemotePath(currentDir, entry.name);
+  const pathOf = (entry: RemoteDirEntry) => joinRemotePath(listedDir, entry.name);
 
   const activate = (entry: RemoteDirEntry) => {
     setSelected(entry.name);
@@ -481,7 +490,7 @@ export function FileBrowser({
 
       <Box
         role="list"
-        aria-label={currentDir ? `Files in ${currentDir}` : 'Files'}
+        aria-label={listedDir ? `Files in ${listedDir}` : 'Files'}
         onKeyDown={onListKeyDown}
         sx={{ flex: 1, minHeight: 0, overflowY: 'auto', pb: 1 }}
       >
