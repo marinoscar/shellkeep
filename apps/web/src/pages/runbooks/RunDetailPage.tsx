@@ -40,6 +40,7 @@ import { RunCardList } from '../../features/runbooks/components/RunCardList';
 import { LogDrawer } from '../../features/runbooks/components/LogDrawer';
 import { StatusChip } from '../../features/runbooks/components/StatusChip';
 import { AuditPanel } from '../../features/runbooks/components/AuditPanel';
+import { ArtifactsPanel } from '../../features/runbooks/components/ArtifactsPanel';
 
 type SortKey = 'position' | 'status' | 'duration';
 
@@ -131,7 +132,7 @@ export default function RunDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const [tab, setTab] = useState<'servers' | 'audit'>('servers');
+  const [tab, setTab] = useState<'servers' | 'artifacts' | 'audit'>('servers');
 
   const finished = run ? isRunFinished(run.status) : false;
   useEffect(() => {
@@ -270,8 +271,7 @@ export default function RunDetailPage() {
               Retry failed
             </Button>
           )}
-          {/* TODO(#64): "Stop AI" while an ai_task step runs. TODO(#63): the artifacts panel
-              (download and share). */}
+          {/* TODO(#64): "Stop AI" while an ai_task step runs. */}
         </Stack>
       </Stack>
 
@@ -326,9 +326,24 @@ export default function RunDetailPage() {
           id="run-tab-servers"
           aria-controls="run-panel-servers"
         />
+        <Tab
+          value="artifacts"
+          label="Artifacts"
+          id="run-tab-artifacts"
+          aria-controls="run-panel-artifacts"
+        />
         <Tab value="audit" label="Audit" id="run-tab-audit" aria-controls="run-panel-audit" />
       </Tabs>
-      {tab === 'audit' ? (
+      {tab === 'artifacts' ? (
+        <Box role="tabpanel" id="run-panel-artifacts" aria-labelledby="run-tab-artifacts" sx={{ mt: 2 }}>
+          <ArtifactsPanel
+            runId={run.id}
+            runbookName={run.runbookName}
+            finished={finished && !run.dryRun}
+            canShare={!!user && run.initiatedBy === user.id && hasPermission('sharing:write') && !run.dryRun}
+          />
+        </Box>
+      ) : tab === 'audit' ? (
         <Box role="tabpanel" id="run-panel-audit" aria-labelledby="run-tab-audit" sx={{ mt: 2 }}>
           <AuditPanel runId={run.id} />
         </Box>

@@ -1530,6 +1530,8 @@ manifest.json                                    { manifestVersion, generatedAt,
 
 **Retention.** The `runbookArtifacts` policy (`retention.runbookArtifacts`, "Runbook logs and artifacts": 30 days, on by default, 1 to 365) queues the system job `runbook.artifacts.purge` nightly. For every run that finished before the window it deletes the stored archives, the bundle and the step logs (objects first, then the rows and the step's `log_storage_key`); the run rows, their exit codes and output tails stay. A run whose objects could not all be deleted is retried the next night. With the policy off nothing is purged.
 
+**Web.** The run page `/runs/:id` has an Artifacts tab (`features/runbooks/components/ArtifactsPanel.tsx`): the archives by server, Build bundle with a poll while `building`, Download bundle, and "Share link…" (a link-only dialog over the packaged `useLinkGrants`) for the person who started the run when they hold `sharing:write`. The public `/s#lnk_…` page (the packaged `PublicLinkPage`) renders a `runbook_run` link with `PublicRunBundle`, which calls the public route with the token in `x-link-token`. Presigned URLs are opened and dropped, never logged.
+
 **Metrics.** `app.runbooks.artifact_bytes` (histogram, `kind`: `target_archive`, `bundle`), `app.runbooks.bundle_builds` (counter, `outcome`: `built`, `empty`, `failed`); the sharing slice adds `app.sharing.link_resolutions`. **Audit events:** `runbook_artifact.downloaded`, `runbook_artifact.link_created`. **Failure code:** `ARTIFACT_TOO_LARGE`.
 
 ### Runbook safety
