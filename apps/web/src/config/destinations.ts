@@ -38,6 +38,7 @@ import {
 } from '@marinoscar/platform-web/shell/headless';
 import type { ShellDestination } from '@marinoscar/platform-web/shell/headless';
 import { USER_HUB_PATH } from './userSettingsSections';
+import { SessionSwitcherPane } from '../components/terminal/workspace/SessionSwitcherPane';
 
 /**
  * Every destination key. `runbooks` and `runs` are reserved for #65 (they need
@@ -106,13 +107,15 @@ export const DESTINATIONS: readonly Destination[] = [
     path: '/',
   },
   {
-    // `contextPane` (the session list beside the expanded rail) is added by #77.
     key: 'sessions',
     label: 'Sessions',
     compactLabel: 'Sessions',
     Icon: TerminalIcon,
     path: '/sessions',
     permission: 'sessions:read',
+    // The session switcher beside the EXPANDED rail (#77); below it the
+    // workspace toolbar shows the same list as a menu.
+    contextPane: SessionSwitcherPane,
   },
   {
     key: 'servers',

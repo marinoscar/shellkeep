@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../../utils/test-utils';
 import { TerminalToolbar } from '../../../components/terminal/TerminalToolbar';
@@ -289,6 +289,60 @@ describe('TerminalToolbar', () => {
 
       expect(onRename).not.toHaveBeenCalled();
       expect(screen.getByText('Old Name')).toBeInTheDocument();
+    });
+  });
+
+  describe('Phone width (compact, #94)', () => {
+    const allActions = {
+      onCopyAll: vi.fn(),
+      onPaste: vi.fn(),
+      onDownload: vi.fn(),
+      onUpload: vi.fn(),
+      onNewSession: vi.fn(),
+      onToggleKeyShortcuts: vi.fn(),
+      onRequestRename: vi.fn(),
+    };
+
+    it('keeps three controls in the row and every action in the "More actions" menu', async () => {
+      render(<TerminalToolbar {...defaultProps} {...allActions} compact serverProfileName="Server A" />);
+
+      const toolbar = screen.getByRole('toolbar', { name: 'Terminal tools' });
+      // The row: Paste, the key bar toggle and the overflow button only.
+      expect(within(toolbar).getAllByRole('button')).toHaveLength(3);
+
+      await userEvent.click(screen.getByRole('button', { name: 'More actions' }));
+      const labels = screen.getAllByRole('menuitem').map((item) => item.textContent);
+      expect(labels).toEqual([
+        'Copy',
+        'Paste',
+        'Download history',
+        'Upload file',
+        'Show scroll buttons',
+        'Show key shortcuts',
+        'Rename session',
+        'New session',
+        'Open in new tab',
+        'Disconnect',
+      ]);
+    });
+
+    it('downloads the history from the overflow menu', async () => {
+      render(<TerminalToolbar {...defaultProps} {...allActions} compact />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'More actions' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Download history' }));
+
+      expect(allActions.onDownload).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('asks for a rename dialog instead of the inline editor', async () => {
+      render(<TerminalToolbar {...defaultProps} {...allActions} compact />);
+
+      expect(screen.queryByTestId('EditIcon')).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'More actions' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Rename session' }));
+      expect(allActions.onRequestRename).toHaveBeenCalledTimes(1);
     });
   });
 });
