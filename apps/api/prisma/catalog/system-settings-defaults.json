@@ -126,5 +126,42 @@
     "ai": {
       "agentEnabled": true
     }
+  },
+  "ai": {
+    "enabled": false,
+    "keyPolicy": "byok",
+    "providers": {
+      "openai": {
+        "enabled": false
+      },
+      "anthropic": {
+        "enabled": false
+      },
+      "gemini": {
+        "enabled": false
+      },
+      "azure-openai": {
+        "enabled": false
+      },
+      "openai-compatible": {
+        "enabled": false
+      }
+    },
+    "defaults": {
+      "allowBackgroundRuns": true,
+      "allowRealtime": false
+    },
+    "logPromptContent": false,
+    "usageRetentionDays": 180,
+    "hostedTools": {
+      "web_search": false,
+      "file_search": false,
+      "code_interpreter": false,
+      "image_generation": false,
+      "mcp": false,
+      "mcpAllowedHosts": []
+    },
+    "limits": {},
+    "deploymentKeyServesOrgs": true
   }
 }

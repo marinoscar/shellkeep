@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { RequireAuth, RequirePermission } from '@marinoscar/platform-web/identity/headless';
+import { AiConfigProvider, AiWebAdaptersProvider } from '@marinoscar/platform-web/ai/headless';
+import { RequireAiEnabled } from '@marinoscar/platform-web/ai/ui/require-ai-enabled';
 import { ShellProviders } from '@marinoscar/platform-web/shell/headless';
 import type { ShellProvider } from '@marinoscar/platform-web/shell/headless';
 import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
@@ -14,6 +16,11 @@ import { APP_NAME } from './config/app';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
 import { AppPlatformHostProvider } from './platform/platformHost';
 import { JobsNodesProviders } from './platform/jobsAdapters';
+import { appAiAdapters } from './platform/aiAdapters';
+import { platformApi } from './services/api';
+// The deployment feature map (#55): registers `ai` for the cards and the
+// destination that carry `feature: 'ai'`. Imported for its side effect.
+import './platform/settingsFeatures';
 // The notifications web slice (#51): its configuration first, for its side
 // effect, before the first render.
 import './platform/notifications';
@@ -98,6 +105,13 @@ const PushConfigPage = lazy(() =>
 const BroadcastsPage = lazy(() =>
   import('@marinoscar/platform-web/notifications/ui').then((m) => ({ default: m.BroadcastsPage })),
 );
+// AI (issue #55): the packaged admin, user and Playground pages.
+const AiConfigPage = lazy(() => import('@marinoscar/platform-web/ai/ui/config-page'));
+const AiModelsPage = lazy(() => import('@marinoscar/platform-web/ai/ui/models-page'));
+const AiUsagePage = lazy(() => import('@marinoscar/platform-web/ai/ui/usage-page'));
+const OrgAiKeysPage = lazy(() => import('@marinoscar/platform-web/ai/ui'));
+const UserAiKeysPage = lazy(() => import('@marinoscar/platform-web/ai/ui/keys-page'));
+const AiPlaygroundPage = lazy(() => import('@marinoscar/platform-web/ai/ui/playground-page'));
 // Database backup and restore (issue #52): the packaged admin page.
 const DbBackupPage = lazy(() => import('@marinoscar/platform-web/db-backup/ui'));
 // Webhooks and alerts (issue #54): the packaged pages. One webhooks page, routed once per scope.
@@ -139,12 +153,31 @@ function JobsNodesShellProvider({ children }: { children: ReactNode }) {
 }
 
 /**
+ * `GET /api/ai/config` once for the whole shell (#55): the kill switch the
+ * `feature: 'ai'` cards, the Playground destination and `RequireAiEnabled`
+ * all read.
+ */
+function AiConfigShellProvider({ children }: { children: ReactNode }) {
+  return <AiConfigProvider api={platformApi}>{children}</AiConfigProvider>;
+}
+
+/** The app's spinner for the packaged AI pages (#55). */
+function AiAdaptersShellProvider({ children }: { children: ReactNode }) {
+  return <AiWebAdaptersProvider adapters={appAiAdapters}>{children}</AiWebAdaptersProvider>;
+}
+
+/**
  * The providers around the signed-in shell, outermost first (`ShellProviders`,
  * #76). Inside `RequireAuth`: the notification centre (#51) wraps the SHELL
  * because the bell lives in its AppBar and one mount means one live stream
  * per tab; the jobs and nodes adapters serve the Console's Operations pages.
  */
-const SHELL_PROVIDERS: readonly ShellProvider[] = [NotificationProvider, JobsNodesShellProvider];
+const SHELL_PROVIDERS: readonly ShellProvider[] = [
+  NotificationProvider,
+  AiConfigShellProvider,
+  AiAdaptersShellProvider,
+  JobsNodesShellProvider,
+];
 
 function AppRoutes() {
   return (
@@ -218,6 +251,33 @@ function AppRoutes() {
                 <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
                 <Route path="/settings/notifications" element={<UserNotificationsPage />} />
                 <Route path="/settings/tokens" element={<UserTokensPage />} />
+                {/* AI keys (#55): `ai:use` is what the `/api/ai/keys` controller
+                    enforces, a grant a deployment can withhold from a role (it is
+                    seeded to org_admin and contributor, not viewer). Behind
+                    `RequireAiEnabled`: every call the page makes is refused while
+                    AI is off. */}
+                <Route
+                  path="/settings/ai"
+                  element={
+                    <RequirePermission permission="ai:use" fallback={HOME}>
+                      <RequireAiEnabled>
+                        <UserAiKeysPage />
+                      </RequireAiEnabled>
+                    </RequirePermission>
+                  }
+                />
+                {/* The Playground destination (#55): `ai:use` and AI on, the
+                    gates of the `ai` destination in `config/destinations.ts`. */}
+                <Route
+                  path="/ai"
+                  element={
+                    <RequirePermission permission="ai:use" fallback={HOME}>
+                      <RequireAiEnabled>
+                        <AiPlaygroundPage />
+                      </RequireAiEnabled>
+                    </RequirePermission>
+                  }
+                />
                 {/* Webhooks (#54): the caller's own endpoints, gated on the string
                     `/api/webhooks` enforces. Writes are gated inside the page. */}
                 <Route
@@ -238,7 +298,7 @@ function AppRoutes() {
                 <Route
                   path="/admin/settings"
                   element={
-                    <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read', 'db_backup:read', 'alerts:read', 'system_webhooks:read', 'org_webhooks:read']} fallback={HOME}>
+                    <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read', 'db_backup:read', 'alerts:read', 'system_webhooks:read', 'org_webhooks:read', 'ai_config:read', 'org_ai_config:read']} fallback={HOME}>
                       <AdminSettingsHubPage />
                     </RequirePermission>
                   }
@@ -320,6 +380,53 @@ function AppRoutes() {
                   element={
                     <RequirePermission permission="db_backup:read" fallback={HOME}>
                       <DbBackupPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* AI (#55). `ai_config:read` is what the admin AI controllers
+                    enforce on their reads; saving, storing a key and editing a
+                    model need `ai_config:write`, gated inside the pages.
+                    `/admin/settings/ai` is deliberately NOT behind
+                    `RequireAiEnabled`: it is where AI is switched on. The
+                    others are, matching their cards' `feature: 'ai'`. */}
+                <Route
+                  path="/admin/settings/ai"
+                  element={
+                    <RequirePermission permission="ai_config:read" fallback={HOME}>
+                      <AiConfigPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/admin/settings/ai/models"
+                  element={
+                    <RequirePermission permission="ai_config:read" fallback={HOME}>
+                      <RequireAiEnabled>
+                        <AiModelsPage />
+                      </RequireAiEnabled>
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/admin/settings/ai/usage"
+                  element={
+                    <RequirePermission permission="ai_config:read" fallback={HOME}>
+                      <RequireAiEnabled>
+                        <AiUsagePage />
+                      </RequireAiEnabled>
+                    </RequirePermission>
+                  }
+                />
+                {/* `org_ai_config:read` is the ORG permission the AI slice's
+                    `org-keys.controller.ts` enforces on `GET /api/admin/ai/org-keys`;
+                    writes are gated inside the page. */}
+                <Route
+                  path="/admin/settings/ai/organization-keys"
+                  element={
+                    <RequirePermission permission="org_ai_config:read" fallback={HOME}>
+                      <RequireAiEnabled>
+                        <OrgAiKeysPage />
+                      </RequireAiEnabled>
                     </RequirePermission>
                   }
                 />

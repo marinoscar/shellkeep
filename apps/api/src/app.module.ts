@@ -19,6 +19,7 @@ import { credentialsModules } from './platform/credentials/credentials.config';
 import { emailModule } from './platform/email/email.config';
 import { BroadcastsModule, notificationsModule } from './platform/notifications/notifications.config';
 import { dbBackupModule } from './platform/db-backup/db-backup.config';
+import { AiModule } from './platform/ai/ai.config';
 import { alertsModule } from './platform/alerts/alerts.config';
 import { webhooksModule } from './platform/webhooks/webhooks.config';
 import { jobsModule, nodeCredentialModule, nodesModule } from './platform/jobs/jobs.config';
@@ -118,6 +119,10 @@ import configuration from './config/configuration';
     // Alerts (#54): rules over the terminal metrics, node events and fleet health, incidents and
     // their notifications (`/api/admin/alerts`). After telemetry, notifications and webhooks.
     alertsModule,
+    // The platform AI slice (#55): `GET /api/ai/config`, `/api/ai/*` behind the kill switch and `ai:use`,
+    // `/api/admin/ai/*`, the `ai.*` job types and the key stores. No provider key in the environment.
+    // Feature modules import this same `AiModule`, never the platform's.
+    AiModule,
     ServerProfilesModule,
     TerminalModule,
     // Runbooks (#61): versioned procedure definitions, target preview and secret parameters.

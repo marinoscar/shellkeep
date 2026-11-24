@@ -11,7 +11,8 @@
 //   - the permission ids are the generated catalog the API seeds from
 //     (`apps/api/prisma/catalog/permissions.json`), so a card or destination
 //     can only name a permission the API really has.
-// #81 extends it.
+// #81 extends it. The `settings-ai-cards` suite runs (#55): every `feature: 'ai'`
+// card sits behind the kill switch and the AI card itself does not.
 // =============================================================================
 
 import { readFileSync } from 'node:fs';
@@ -58,12 +59,6 @@ runPlatformWebConformance({
     owns,
     resolveActive: resolveActiveDestination,
     destinations: DESTINATIONS.map((destination) => ({ key: destination.key, path: destination.path })),
-  },
-  suites: {
-    'settings-ai-cards': {
-      skip:
-        "ShellKeep has not adopted the AI slice yet: the catalog carries the platform's ai:* permissions, but neither registry has an AI card or route. #55 adopts the slice and removes this skip.",
-    },
   },
 });
 

@@ -104,7 +104,7 @@ Create clean, frequent commits, then land the work through a pull request. Assum
 
 ## MANDATORY: AI Platform Rules
 
-**Applies from #55.** The AI slice is the platform's (`@marinoscar/platform-api/ai`). ShellKeep has no AI code yet; these bind every AI change.
+**Applies from #55.** The AI slice is the platform's (`@marinoscar/platform-api/ai`). The slice is mounted (`apps/api/src/platform/ai/`, features in `apps/api/src/app-registrations/ai.ts`); these bind every AI change.
 
 1. **Never import a provider SDK outside `@marinoscar/platform-ai-providers`** (`packages/platform-ai-providers/src/<provider>/`) or a provider folder the app declares to the `ai-no-sdk-leak` suite. A feature imports `AiModule`, injects `AiService` and calls `AiService.forUser(userId, { orgId, feature })`, never an SDK client.
 2. **Never call AI from the browser; keys never leave the server.** No route, log line, span, error or usage row carries key material. Only a realtime session's ephemeral secret may be returned.

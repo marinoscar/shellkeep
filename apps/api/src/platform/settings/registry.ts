@@ -12,6 +12,7 @@
 // =============================================================================
 
 import { DATABASE_BACKUP_SYSTEM_SETTINGS } from '@marinoscar/platform-api/db-backup';
+import { AI_SYSTEM_SETTINGS, AI_USER_SETTINGS } from '@marinoscar/platform-api/ai';
 import { MAINTENANCE_SYSTEM_SETTINGS } from '@marinoscar/platform-api/host';
 import {
   JOBS_SYSTEM_SETTINGS,
@@ -55,7 +56,7 @@ export const PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespa
 /**
  * The platform's system namespaces appended AFTER the app's own, so the stored key order
  * of the `global` row stays the app's own namespaces first, then the platform's additions:
- * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49), `storage` (#50), `notifications` (#51), `ssh` (#60), `databaseBackup` (#52) and `telemetry` (#53). Registered here, before `SettingsModule.forRoot()`
+ * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49), `storage` (#50), `notifications` (#51), `ssh` (#60), `databaseBackup` (#52), `telemetry` (#53), `runbooks` (#61) and `ai` (#55). Registered here, before `SettingsModule.forRoot()`
  * composes the request bodies, so the host core does not have to (its `forRoot()` registers
  * the namespace only when nothing did).
  */
@@ -79,11 +80,16 @@ export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettin
   TELEMETRY_SYSTEM_SETTINGS as SystemSettingsNamespace,
   // The runbooks policy (#61), with a tighten-only org layer; appended after `telemetry` so no stored key moves.
   RUNBOOKS_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The AI slice's deployment policy (#55): kill switch, providers, key policy, limits. Organizations
+  // may tighten it (the namespace's own org layer). Appended last so no stored key moves.
+  AI_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
 /** The platform's optional user namespaces this app registers: the notification preferences (#51). */
 export const PLATFORM_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [
   NOTIFICATIONS_USER_SETTINGS as UserSettingsNamespace,
+  // The user's AI preferences (#55): the default model.
+  AI_USER_SETTINGS as UserSettingsNamespace,
 ];
 
 /** The final, ordered system list. */

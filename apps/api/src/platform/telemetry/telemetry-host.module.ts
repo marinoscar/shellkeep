@@ -6,7 +6,7 @@
 //   TELEMETRY_SETTINGS_STORE   -> telemetry-settings-store.adapter.ts
 //   TELEMETRY_CREDENTIAL_STORE -> telemetry-credentials.adapter.ts (purpose `telemetry_greptime`)
 //   TELEMETRY_JOBS             -> telemetry-jobs.adapter.ts (the platform queue)
-//   TELEMETRY_AI               -> telemetry-ai.adapter.ts   PLATFORM-ADOPTION-SHIM(#55)
+//   TELEMETRY_AI               -> telemetry-ai.adapter.ts   (the platform AI slice, #55)
 //   TELEMETRY_APP_INFO         -> telemetry-app-info.adapter.ts
 //
 // `CredentialsModule` is imported explicitly (it is not global, so the list of code
@@ -26,6 +26,7 @@ import {
   TELEMETRY_SETTINGS_STORE,
 } from '@marinoscar/platform-api/telemetry';
 
+import { AiModule } from '../ai/ai.config';
 import { TelemetryAiAdapter } from './telemetry-ai.adapter';
 import { TelemetryAppInfoAdapter } from './telemetry-app-info.adapter';
 import { TelemetryCredentialsAdapter } from './telemetry-credentials.adapter';
@@ -42,7 +43,7 @@ const PORTS = [
 ];
 
 @Module({
-  imports: [CredentialsModule],
+  imports: [CredentialsModule, AiModule],
   providers: PORTS,
   exports: PORTS.map((port) => port.provide),
 })

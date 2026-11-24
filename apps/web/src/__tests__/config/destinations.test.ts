@@ -32,12 +32,14 @@ const holds =
     granted.includes(permission);
 
 describe('DESTINATIONS', () => {
-  it('declares Home, Sessions, Servers and the pinned Console, in that order', () => {
+  it('declares Home, Sessions, Servers, the pinned Console and the AI Playground, in that order', () => {
     expect(DESTINATIONS.map((d) => [d.key, d.label, d.compactLabel, d.path])).toEqual([
       ['home', 'Home', 'Home', '/'],
       ['sessions', 'Sessions', 'Sessions', '/sessions'],
       ['servers', 'Servers', 'Servers', '/servers'],
       ['console', 'Console', 'Console', '/admin/settings'],
+      // #55: appended, so the existing destinations keep their positions.
+      ['ai', 'AI Playground', 'AI', '/ai'],
     ]);
     expect(DESTINATIONS.filter((d) => d.pinned).map((d) => d.key)).toEqual(['console']);
   });
@@ -48,7 +50,10 @@ describe('DESTINATIONS', () => {
       ['sessions', 'sessions:read', null],
       ['servers', 'servers:read', null],
       ['console', null, ['system_settings:read', 'users:read']],
+      ['ai', 'ai:use', null],
     ]);
+    // Hidden while the AI kill switch is off.
+    expect(DESTINATIONS.filter((d) => d.feature).map((d) => [d.key, d.feature])).toEqual([['ai', 'ai']]);
     for (const d of DESTINATIONS) expect(d).not.toHaveProperty('role');
   });
 
@@ -72,6 +77,15 @@ describe('DESTINATIONS', () => {
       'console',
     ]);
     expect(visible(['system_settings:read'])).toEqual(['home', 'console']);
+  });
+
+  it('shows the AI Playground only with ai:use and AI switched on (#55)', () => {
+    const keys = (granted: string[], features: { ai?: boolean }) =>
+      DESTINATIONS.filter((d) => isDestinationVisible(d, holds(...granted), features)).map((d) => d.key);
+    expect(keys(['ai:use'], { ai: true })).toEqual(['home', 'ai']);
+    expect(keys(['ai:use'], { ai: false })).toEqual(['home']);
+    expect(keys(['ai:use'], {})).toEqual(['home']);
+    expect(keys([], { ai: true })).toEqual(['home']);
   });
 });
 
