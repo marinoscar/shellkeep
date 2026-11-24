@@ -924,7 +924,7 @@ Baselines change only on purpose. A diff on a screen your change did not touch i
 
 ### The `visual` CI job
 
-`ci.yml`'s `visual` job runs the suite in the pinned image with no database, API or SSH server. It fails on any diff or missing baseline and uploads `visual-playwright-report` (expected, actual and diff images) even on failure.
+`ci.yml`'s `visual` job runs the suite in the pinned image with no database, API or SSH server. It fails on any diff or missing baseline. On failure only, it uploads `visual-report` (expected, actual and diff images), then regenerates every baseline in the same image and uploads them as `visual-baselines` (the contents of `tests/visual/__screenshots__/`). The job stays failed and CI commits nothing; a reviewer takes the baselines from the failed run, reviews them and commits them.
 
 ## E2E Testing with Playwright
 

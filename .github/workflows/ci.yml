@@ -291,13 +291,34 @@ jobs:
       # playwright.config.ts builds the harness and serves it itself (webServer).
       # A pixel diff, or a missing baseline, fails the job; no retries.
       - run: tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts
-      # Uploaded even on failure: the report embeds the expected, actual and diff
-      # image of every failed assertion.
+      # Everything below runs ONLY when the comparison above failed, and none of
+      # it can turn the job green: the job has already failed.
+      #
+      # The report first, before the regeneration below rewrites it: it embeds
+      # the expected, actual and diff image of every failed assertion.
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: failure()
         with:
-          name: visual-playwright-report
+          name: visual-report
           path: tests/visual/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+      # Regenerate every baseline in this same pinned image and offer them as an
+      # artifact, so a reviewer can take them from a failed run. They are never
+      # committed or applied by CI (a red `visual` job must not heal itself);
+      # a person reviews the images and commits them. Same command as the
+      # manual visual-baselines.yml workflow.
+      - name: Regenerate the baselines (artifact only, the job stays failed)
+        if: failure()
+        run: tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts --update-snapshots
+      # The artifact root is the contents of tests/visual/__screenshots__/: unzip
+      # it into that directory.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-baselines
+          path: tests/visual/__screenshots__/
+          if-no-files-found: ignore
           retention-days: 14
 
   build:
