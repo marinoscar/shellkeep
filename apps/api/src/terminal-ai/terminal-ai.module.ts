@@ -6,6 +6,8 @@ import { TerminalModule } from '../terminal/terminal.module';
 import { TerminalAiConsentController } from './terminal-ai-consent.controller';
 import { TerminalAssistController } from './terminal-assist.controller';
 import { TerminalAssistService } from './terminal-assist.service';
+import { TerminalExplainController } from './terminal-explain.controller';
+import { TerminalExplainService } from './terminal-explain.service';
 import { TerminalContextService } from './terminal-context.service';
 
 /**
@@ -14,8 +16,8 @@ import { TerminalContextService } from './terminal-context.service';
  */
 @Module({
   imports: [PrismaModule, TerminalModule, AiModule],
-  controllers: [TerminalAiConsentController, TerminalAssistController],
-  providers: [TerminalContextService, TerminalAssistService],
+  controllers: [TerminalAiConsentController, TerminalAssistController, TerminalExplainController],
+  providers: [TerminalContextService, TerminalAssistService, TerminalExplainService],
   exports: [TerminalContextService],
 })
 export class TerminalAiModule {}
