@@ -44,4 +44,40 @@ export const APP_MODEL_OWNERSHIP: readonly Def[] = [
     orgField: 'orgId',
     rationale: 'An immutable version of an organization-owned runbook: isolated by forced row-level security on org_id.',
   },
+  {
+    model: 'RunbookRun',
+    kind: 'org',
+    orgField: 'orgId',
+    rationale: 'A run of an organization-owned runbook (initiated_by is only who started it): isolated by forced row-level security on org_id.',
+  },
+  {
+    model: 'RunbookRunTarget',
+    kind: 'org',
+    orgField: 'orgId',
+    rationale: 'One server of a run: isolated by forced row-level security on org_id.',
+  },
+  {
+    model: 'RunbookRunStep',
+    kind: 'org',
+    orgField: 'orgId',
+    rationale: 'One step on one target of a run: isolated by forced row-level security on org_id.',
+  },
+  {
+    model: 'RunbookRunLogChunk',
+    kind: 'org',
+    orgField: 'orgId',
+    rationale: 'A buffered chunk of a step output: isolated by forced row-level security on org_id.',
+  },
+  {
+    model: 'RunbookCommandExecution',
+    kind: 'org',
+    orgField: 'orgId',
+    rationale: 'The audit row of one command a runbook sent over SSH: isolated by forced row-level security on org_id.',
+  },
+  {
+    model: 'RunbookApproval',
+    kind: 'org',
+    orgField: 'orgId',
+    rationale: 'An approval request of a run: isolated by forced row-level security on org_id.',
+  },
 ];
