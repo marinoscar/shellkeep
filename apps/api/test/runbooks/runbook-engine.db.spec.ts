@@ -289,21 +289,23 @@ describeWithDb('Runbook engine (real Postgres, real shell)', () => {
     expect(snap.run.targets.map((t) => t.status)).toEqual(['succeeded', 'succeeded', 'succeeded']);
   }, 120_000);
 
-  it('fails file_upload with DEST_EXISTS when the file is there and overwrite is off; package_update with PACKAGE_MANAGER_UNKNOWN', async () => {
+  it('fails file_upload with DEST_EXISTS when the file is there and overwrite is off; package_update with PACKAGE_MANAGER_UNKNOWN; collect_logs with no match succeeds', async () => {
     const object = '0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b';
     const { runbookId } = await h.addRunbook('files', {
       schemaVersion: 1,
       steps: [
         { id: 'up', name: 'Upload', kind: 'file_upload', storageObjectId: object, destPath: '/tmp', overwrite: false, continueOnError: true },
         { id: 'pkg', name: 'Update', kind: 'package_update', packages: 'all', continueOnError: true },
-        { id: 'ai', name: 'Ask', kind: 'ai_task', goal: 'check', approvalMode: 'plan', continueOnError: true },
+        { id: 'logs', name: 'Logs', kind: 'collect_logs', paths: ['/nonexistent-dir-for-tests/*.log'], continueOnError: true },
       ],
     } as never);
     h.files.next = { name: 'a.txt', size: 1, stream: Readable.from(['x']) };
     const runId = await start(runbookId, [servers[0]!]);
     await h.drain();
     const { steps } = await h.snapshot(runId);
-    expect(steps.map((s) => s.errorCode)).toEqual(['DEST_EXISTS', 'PACKAGE_MANAGER_UNKNOWN', 'STEP_KIND_NOT_AVAILABLE']);
+    // `collect_logs` (#63) is implemented: a glob that matches nothing succeeds (it is no longer STEP_KIND_NOT_AVAILABLE).
+    expect(steps.map((s) => s.errorCode)).toEqual(['DEST_EXISTS', 'PACKAGE_MANAGER_UNKNOWN', null]);
+    expect(steps.map((s) => s.status)).toEqual(['failed', 'failed', 'succeeded']);
   }, 60_000);
 
   it('streams a snapshot, replays chunks after Last-Event-ID, then live events, with heartbeats', async () => {

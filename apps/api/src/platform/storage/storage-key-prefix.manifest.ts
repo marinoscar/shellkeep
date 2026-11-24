@@ -13,6 +13,7 @@
 // so nothing moves.
 // =============================================================================
 
+import { registerAndroidAppKeyPrefixes } from '@marinoscar/platform-api/android-app';
 import { DB_BACKUP_KEY_PREFIX } from '@marinoscar/platform-api/db-backup';
 import { EXPORTS_KEY_PREFIXES } from '@marinoscar/platform-api/exports';
 import { STORAGE_SLICE_KEY_PREFIXES, registerStorageKeyPrefixes } from '@marinoscar/platform-api/storage';
@@ -28,5 +29,9 @@ registerStorageKeyPrefixes([DB_BACKUP_KEY_PREFIX]);
 // The exports slice's `exports/users/` and `exports/orgs/` (#68), so `npm run storage:purge` and
 // offboarding reach the files; `ExportsModule.forRoot()` registers the same objects, idempotently.
 registerStorageKeyPrefixes(EXPORTS_KEY_PREFIXES);
+
+// The Android companion's `android-releases/` (#74, scope `deployment`, kept by a factory reset).
+// `AndroidAppModule.forRoot()` registers the same object, idempotently.
+registerAndroidAppKeyPrefixes();
 
 registerStorageKeyPrefixes(APP_STORAGE_KEY_PREFIXES);

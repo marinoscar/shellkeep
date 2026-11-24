@@ -388,7 +388,7 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
       case 'collect_logs':
         return this.runCollectLogs(seg, index, step, rowId);
       case 'ai_task':
-        return this.failStep(seg, index, rowId, FAILURE_CODES.STEP_KIND_NOT_AVAILABLE, `${step.kind} steps are not available yet`);
+        return this.runAiTask(seg, index, rowId);
     }
   }
 
@@ -445,6 +445,22 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
     this.metrics.command('step', outcome.status === 'succeeded' ? 'succeeded' : outcome.status === 'timed_out' ? 'timed_out' : outcome.status === 'cancelled' ? 'cancelled' : 'failed');
     await this.finishStep(seg, index, rowId, sink, 'running', outcome.status, { ...(outcome.code ? { code: outcome.code } : {}), exitCode: outcome.exitCode, durationMs: Date.now() - started });
     return { status: outcome.status, ...(outcome.code ? { code: outcome.code } : {}) };
+  }
+
+  /**
+   * An `ai_task` step (#64): the work is the `ai.runbook.agent` job's (`ai/runbook-agent.handler.ts`). This segment
+   * marks the step running, parks the target `waiting` and queues that job, in one transaction; the agent job
+   * queues the next segment when the step ends.
+   */
+  private async runAiTask(seg: Segment, index: number, rowId: string): Promise<StepOutcome> {
+    await this.setStep(seg, index, rowId, 'pending', 'running', { startedAt: new Date() });
+    await this.inOrg(seg.orgId, async (tx) => {
+      assertTransition('target', 'running', 'waiting');
+      await tx.runbookRunTarget.update({ where: { id: seg.targetId }, data: { status: 'waiting' } });
+      await this.coordinator.enqueueAiAgent(tx, { orgId: seg.orgId, runId: seg.runId, targetId: seg.targetId, stepIndex: index, phase: 'start' });
+    });
+    await this.events.publish({ type: 'target', runId: seg.runId, targetId: seg.targetId, status: 'waiting' });
+    return { status: 'waiting_approval' };
   }
 
   /** A step that cannot run: started and failed at once, with one system line saying why. */

@@ -43,7 +43,7 @@ const CASES: Case[] = [
     legal: [
       ['pending', 'running'], ['pending', 'skipped'], ['pending', 'cancelled'], ['pending', 'failed'],
       ['running', 'waiting_approval'], ['running', 'succeeded'], ['running', 'failed'], ['running', 'timed_out'], ['running', 'cancelled'],
-      ['waiting_approval', 'succeeded'], ['waiting_approval', 'failed'], ['waiting_approval', 'cancelled'],
+      ['waiting_approval', 'running'], ['waiting_approval', 'succeeded'], ['waiting_approval', 'failed'], ['waiting_approval', 'cancelled'],
     ],
   },
 ];

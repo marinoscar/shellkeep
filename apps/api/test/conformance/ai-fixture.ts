@@ -20,6 +20,7 @@ import { createOpenApiDocument } from '../../src/openapi/document';
 import { catalogPermissionsOf, MOCK_DEFAULT_ORG_ID } from '../fixtures/test-data.factory';
 import { createMockTestUser } from '../helpers/auth-mock.helper';
 import { closeTestApp, createTestApp, type TestContext } from '../helpers/test-app.helper';
+import { RunbookAgentHandler } from '../../src/runbooks/ai/runbook-agent.handler';
 import { SessionSummarizeHandler } from '../../src/terminal-ai/jobs/session-summarize.handler';
 import { createAiHttpTestApp } from '../ai/ai-http.helper';
 
@@ -41,13 +42,19 @@ export const aiConformanceFixture: AiConformanceFixture = {
 /**
  * The fixture of the `ai-kill-switch` suite. That suite keeps a hard-coded payload table of the
  * platform's own `ai.*` job types and fails on any other it finds, with no extension point for an app's
- * type. So its app boots without ShellKeep's `ai.session.summarize` handler (the provider is replaced by an
- * inert object, which registers nothing); the handler's own kill-switch proof, zero provider calls and no
- * pane read with AI off, is `test/terminal-ai/session-summary.integration.spec.ts`. Every other suite,
- * `ai-jobs-server-only` included, boots the full app and sees the type.
+ * type. So its app boots without ShellKeep's `ai.session.summarize` and `ai.runbook.agent` handlers (each
+ * provider is replaced by an inert object, which registers nothing); the handlers' own kill-switch proofs, zero
+ * provider calls and no pane read or SSH connection with AI off, are
+ * `test/terminal-ai/session-summary.integration.spec.ts` and `test/runbooks/runbook-ai.db.spec.ts`. Every other
+ * suite, `ai-jobs-server-only` included, boots the full app and sees both types.
  */
 export const aiKillSwitchFixture: AiConformanceFixture = {
   ...aiConformanceFixture,
   createAiApp: (options) =>
-    createAiHttpTestApp(options, { overrideProviders: [{ provide: SessionSummarizeHandler, useValue: {} }] }),
+    createAiHttpTestApp(options, {
+      overrideProviders: [
+        { provide: SessionSummarizeHandler, useValue: {} },
+        { provide: RunbookAgentHandler, useValue: {} },
+      ],
+    }),
 };

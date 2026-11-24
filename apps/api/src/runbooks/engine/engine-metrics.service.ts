@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { AppMetricsService } from '@marinoscar/platform-api/host';
 
 import {
+  RUNBOOK_AI_TOOL_CALLS_METRIC,
   RUNBOOK_APPROVALS_METRIC,
   RUNBOOK_ARTIFACT_BYTES_METRIC,
   RUNBOOK_BUNDLE_BUILDS_METRIC,
@@ -46,6 +47,10 @@ export class EngineMetricsService {
 
   bundleBuild(outcome: BundleOutcome): void {
     this.safely(() => this.metrics?.add(RUNBOOK_BUNDLE_BUILDS_METRIC, 1, { outcome }));
+  }
+
+  aiToolCall(tool: string, decision: string): void {
+    this.safely(() => this.metrics?.add(RUNBOOK_AI_TOOL_CALLS_METRIC, 1, { tool, decision }));
   }
 
   dryRun(): void {
