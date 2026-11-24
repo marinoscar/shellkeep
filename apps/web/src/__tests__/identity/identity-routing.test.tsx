@@ -130,7 +130,7 @@ describe('identity routing (#47)', () => {
   it('sends a viewer away from /admin/users', async () => {
     signIn(VIEWER);
     renderAt('/admin/users');
-    expect(await screen.findByText(/ShellKeep Control Center/i, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.queryByText('Users & Allowlist')).not.toBeInTheDocument();
   });
 

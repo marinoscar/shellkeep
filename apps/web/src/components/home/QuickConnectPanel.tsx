@@ -89,6 +89,7 @@ export function QuickConnectPanel() {
                 }}
               >
                 <ListItemText
+                  sx={{ minWidth: 0, pr: 12 }}
                   primary={profile.name}
                   secondary={`${profile.username}@${profile.hostname}:${profile.port}`}
                   slotProps={{

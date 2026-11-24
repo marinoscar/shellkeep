@@ -1,7 +1,5 @@
-// =============================================================================
-// JOB TYPE STRINGS ARE PERMANENT (issue #49): ShellKeep's snapshot
-// =============================================================================
-//
+// ======================================================================// JOB TYPE STRINGS ARE PERMANENT (issue #49): ShellKeep's snapshot
+// ======================================================================//
 // A `Job.type` is written into every row the queue holds. Once rows of a type
 // exist, renaming or dropping the string strands them: no handler claims the
 // pending ones and the Jobs page can no longer label the history. So the set of
@@ -15,8 +13,7 @@
 //
 // Labels may legitimately change; update the entry in the same pull request.
 // Types may not.
-// =============================================================================
-
+// ======================================================================
 import request from 'supertest';
 import { JobHandlerRegistry, jobTypeLabel } from '@marinoscar/platform-api/jobs';
 
@@ -29,6 +26,12 @@ import { authHeader, createMockAdminUser } from '../helpers/auth-mock.helper';
 const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   // ShellKeep's own (#49): the session reaper, queued by an enqueue-only cron.
   'terminal.session.reap': 'Reap idle terminal sessions',
+  // The runbook engine (#62): start (resolve and snapshot), one segment on one server (server-only, one attempt),
+  // advance (the coordinator) and the reconcile sweep.
+  'runbook.run.start': 'Start a runbook run',
+  'runbook.target.run': 'Run a runbook on one server',
+  'runbook.run.advance': 'Advance a runbook run',
+  'runbook.logs.compact': 'Reconcile runbook runs and compact their logs',
   // The jobs slice: its own housekeeping.
   'job.history.purge': 'Job history purge',
   'audit.events.purge': 'Audit log purge',
@@ -78,6 +81,10 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'ai.usage.purge': 'AI usage purge',
   // Terminal AI (#59): a session summary, written in the background. Server-only, like every ai.* type.
   'ai.session.summarize': 'Summarize terminal session',
+  // The exports slice (#68): the export run (a user's own data, through the bypass client) and the expiry purge of
+  // its files. Both are server-only (no nodeResultSchema), and both type strings are permanent.
+  'export.run': 'Data export',
+  'export.purge': 'Export expiry',
 };
 
 /**
@@ -121,6 +128,16 @@ describe('job type strings are permanent (#49)', () => {
     const unlisted = [...registered].filter((type) => !known.has(type)).sort();
 
     expect(unlisted).toEqual([]);
+  });
+
+  it('keeps both export job types server-only: no node result schema, no node persistence (#68)', () => {
+    const registry = context.app.get(JobHandlerRegistry);
+    for (const type of ['export.run', 'export.purge']) {
+      const handler = registry.get(type);
+      expect(handler).toBeDefined();
+      expect(handler).not.toHaveProperty('nodeResultSchema');
+      expect(handler).not.toHaveProperty('persistNodeResult');
+    }
   });
 
   it('keeps every label, read from the handlers themselves', () => {

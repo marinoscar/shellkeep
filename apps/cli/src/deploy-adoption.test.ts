@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -30,10 +30,40 @@ let appsRoot: string;
 let root: string;
 let stdout: string;
 let stderr: string;
+let dockerLog: string;
+let fetchCalls: string[];
+
+// `deploy status` is the platform's own command and `createCli` registers it
+// with no injection seam, so it runs the real `docker compose ps` (through
+// `PATH`) and the real `fetch` (through `globalThis`) against localhost. On a
+// machine with Docker that is a daemon round trip plus three 10 s-timeout
+// probes, which is slower than vitest's 5 s per test. These two stand-ins make
+// the fixture's truth ("nothing is running") the only thing the test depends on:
+// a `docker` that reports no containers and records each call, and a `fetch`
+// that is refused the way a closed port is.
+function installFakeDocker(dir: string): void {
+  const bin = join(dir, 'bin');
+  mkdirSync(bin, { recursive: true });
+  dockerLog = join(dir, 'docker-calls.log');
+  const script = join(bin, 'docker');
+  writeFileSync(script, `#!/bin/sh\necho "$@" >> '${dockerLog}'\nexit 0\n`);
+  chmodSync(script, 0o755);
+  vi.stubEnv('PATH', `${bin}:${process.env['PATH'] ?? ''}`);
+}
+
+function installRefusingFetch(): void {
+  fetchCalls = [];
+  vi.stubGlobal('fetch', async (url: unknown) => {
+    fetchCalls.push(String(url));
+    throw Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }) });
+  });
+}
 
 beforeEach(() => {
   resetCliForTests();
   work = mkdtempSync(join(tmpdir(), 'shellkeep-adopt-'));
+  installFakeDocker(work);
+  installRefusingFetch();
   appsRoot = join(work, 'apps');
   root = join(appsRoot, 'shellkeep');
   mkdirSync(join(root, 'repo', '.git'), { recursive: true });
@@ -50,6 +80,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   rmSync(work, { recursive: true, force: true });
   resetCliForTests();
 });
@@ -89,6 +121,9 @@ describe('an install made by the old scripts', () => {
     expect(code).not.toBe(0);
     expect(JSON.parse(stdout.split('\n')[0] as string)).toMatchObject({ healthy: false });
     expect(stderr).toContain('not healthy');
+    // Hermetic: the probes went to the stand-ins, and only they.
+    expect(fetchCalls.length).toBeGreaterThan(0);
+    expect(readFileSync(dockerLog, 'utf8')).toContain('compose');
   });
 });
 

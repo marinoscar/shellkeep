@@ -1409,7 +1409,7 @@ Permission `servers:write`. Probes the server now (one fixed read-only command) 
 
 ### Runbooks
 
-Versioned, reusable multi-step procedures (#61). Definitions can hold sensitive commands, so every route requires a runbook permission in the caller's organization: `runbooks:read` for reads and target preview, `runbooks:write` for everything that changes a runbook, validates a definition or touches a secret. (`runbooks:run` and `runbooks:approve` are enforced by the run engine and the approvals inbox, #62.)
+Versioned, reusable multi-step procedures (#61). Definitions can hold sensitive commands, so every route requires a runbook permission in the caller's organization: `runbooks:read` for reads and target preview, `runbooks:write` for everything that changes a runbook, validates a definition or touches a secret. (`runbooks:run` and `runbooks:approve` are enforced by the run engine and the approvals inbox, see Runbook runs and approvals below.)
 
 | Route | Permission | Notes |
 |-------|------------|-------|
@@ -1437,6 +1437,37 @@ Versioned, reusable multi-step procedures (#61). Definitions can hold sensitive 
 
 **Settings.** The `runbooks` system namespace (`enabled`, `maxTargetsPerRun` 200, `maxConcurrency` 20, `defaultStepTimeoutSec` 600, `maxLogBytesPerStep` 5 MiB, `approvals.allowSelfApproval` false, `approvals.defaultExpirySec` 86400, `ai.agentEnabled` true) can be tightened, never loosened, per organization through `/api/org-settings`.
 
+### Runbook runs and approvals
+
+The execution engine (#62). A run executes one runbook version on a set of servers as the person who started it; every step of every server is a queue job (`runbook.run.start`, `runbook.target.run`, `runbook.run.advance`, `runbook.logs.compact`; the target job is server-only and runs one segment of steps per server over ONE SSH connection opened through the host-key-verifying factory).
+
+| Route | Permission | Notes |
+|-------|------------|-------|
+| `POST /api/runbooks/:id/runs` | `runbooks:run` | `{ version?, params, secretRefs?, targets?, strategy? }`; `202 { runId }`. Params are checked against the definition (types, required, enum, pattern: `422 RUNBOOK_PARAMS_INVALID` with `details.issues`), each `secretRefs` name must exist (`422 RUNBOOK_SECRET_REF_UNKNOWN`); `503 RUNBOOKS_DISABLED` while `runbooks.enabled` is off |
+| `GET /api/runbook-runs` | `runbooks:read` | Paginated; filters `runbookId`, `status`, `trigger`, `initiatedBy` |
+| `GET /api/runbook-runs/:id` | `runbooks:read` | The run, its targets with their step matrix, and `counts` |
+| `GET /api/runbook-runs/:id/targets/:targetId/steps/:stepIndex/log` | `runbooks:read` | `text/plain`, redacted; from storage once the step ended, else from the chunks; `?tail=N` lines |
+| `GET /api/runbook-runs/:id/logs/stream` | `runbooks:read` | SSE: `snapshot`, then `chunk` (id `<stepRowId>:<seq>`), `step`, `target`, `run`, `approval` and a `heartbeat` every 15 s. `Last-Event-ID` replays the chunks after it. `.../targets/:targetId/logs/stream` filters to one server. Send `Authorization: Bearer`, so use a fetch-based reader, not `EventSource` |
+| `POST /api/runbook-runs/:id/cancel` | `runbooks:run` | `202`; pending targets are cancelled, running ones stop within seconds (INT, then KILL after 10 s) |
+| `POST /api/runbook-runs/:id/targets/:targetId/cancel` | `runbooks:run` | One server |
+| `POST /api/runbook-runs/:id/retry` | `runbooks:run` | `{ only: 'failed' \| 'all' }`; a NEW run with the same version, params, secret references and strategy on those servers; only for a finished run |
+| `POST /api/runbook-runs/:id/resume` | `runbooks:run` + `runbooks:approve` | Releases a run paused after its canary batch (an approval decision) |
+| `GET /api/runbook-approvals` | `runbooks:read` | The inbox; `status=pending` by default (`approved`, `rejected`, `expired`, `all`) |
+| `POST /api/runbook-approvals/:id/decision` | `runbooks:approve` | `{ decision: 'approve' \| 'reject', comment? }`. `403 RUNBOOK_SELF_APPROVAL` for the person who started the run unless `runbooks.approvals.allowSelfApproval`; `409 RUNBOOK_APPROVAL_NOT_PENDING` |
+
+**Run statuses:** `queued resolving running paused cancelling succeeded failed partially_failed aborted cancelled`. **Target:** `pending queued running waiting succeeded failed skipped cancelled`. **Step:** `pending running waiting_approval succeeded failed skipped timed_out cancelled`. Every status column has a CHECK constraint; the transitions are `engine/state-machine.ts`.
+
+**Strategy.** `concurrency` targets in flight (a sliding window; capped by `runbooks.maxConcurrency`), or waves of `batchSize` that start only when the whole previous wave is settled. More failed targets than `maxFailures` (`{count}` or `{percent}` of the resolved servers, rounded up; `{count: 0}` is fail-fast) aborts the run: pending targets are cancelled and, with `abortInFlight`, running ones are asked to cancel. `pauseAfterFirstBatch` pauses after the first wave and creates a run-scope approval of kind `gate`. Final status: `succeeded` (all succeeded or skipped), `failed` (none succeeded), `partially_failed`; `aborted` and `cancelled` stay.
+
+**Steps.** `when` (`on_success`, `on_failure`, `always`) is decided from the steps that failed WITHOUT `continueOnError`. A `command` or `script` runs as `bash -s` (`sh -s`, `python3 -`; `sudo -n [-u user] ...` with `runAs.sudo`); the command, the parameters (environment variables) and the secrets travel on stdin, never in argv. `package_update` renders the manager's commands (apt, dnf, yum, apk, zypper, brew; `auto` uses the server facts; `securityOnly` is apt and dnf/yum only, else `UNSUPPORTED_OPTION`). `file_upload` streams the storage object over SFTP to `<destPath>.shellkeep-tmp`, verifies its sha256 on the server, then `chmod`, `chown` and `mv` (`DEST_EXISTS` without `overwrite`). `approval_gate` parks the target `waiting` on a run-scope (one row for the run) or target-scope approval and notifies `runbooks:approve` holders (`runbooks.approval_requested`, after the commit). `collect_logs` and `ai_task` answer `STEP_KIND_NOT_AVAILABLE` until #63 and #64.
+
+**Logs and secrets.** Output is redacted before it is stored or published: the shared patterns plus the exact secret values of the run (shown as `[REDACTED:literal]`). It is stored in 4 KiB chunks, capped at `runbooks.maxLogBytesPerStep` (then one `[output truncated]` line), and moved to `runbook-artifacts/<orgId>/<runId>/<targetId>/<stepIndex>.log` when the step ends. A secret value lives in the memory of the target job only: not in a payload, a run row, a log, an event, a span or a command preview.
+
+**Failure codes** (on `error_code` of a target or step): `PERMISSION_REVOKED` (the starter lost `runbooks:run` or the server since the run was queued), `HOST_KEY_UNKNOWN`, `HOST_KEY_MISMATCH`, `SSH_UNREACHABLE`, `SSH_AUTH_FAILED`, `STEP_FAILED`, `STEP_TIMED_OUT`, `SUDO_PASSWORD_REQUIRED`, `PACKAGE_MANAGER_UNKNOWN`, `UNSUPPORTED_OPTION`, `DEST_EXISTS`, `FILE_TOO_LARGE`, `UPLOAD_CHECKSUM_MISMATCH`, `SECRET_UNAVAILABLE`, `APPROVAL_REJECTED`, `APPROVAL_EXPIRED`, `EXECUTOR_LOST` (the reconcile sweep found a running target whose job is gone), `CANCELLED`.
+
+**Reconcile.** A cron queues `runbook.logs.compact` every minute: it fails lost executors, advances stuck runs, expires approvals past `expires_at` (same effect as a rejection, code `APPROVAL_EXPIRED`) and moves log chunks older than an hour to storage.
+
+**Audit events:** `runbook_run.created`, `runbook_run.cancelled`, `runbook_run.target_cancelled`, `runbook_approval.decided`. **Metrics:** `app.runbooks.runs_finished`, `app.runbooks.target_duration`, `app.runbooks.commands`, `app.runbooks.approvals` (bounded labels only). **Nginx:** the stream paths need buffering off (`infra/nginx/app.d/locations/runbook-streams.conf`).
 ### Sharing: groups, shared servers and shared runbooks
 
 Server profiles and runbooks are private to their owner until shared (#71). The sharing slice (`@marinoscar/platform-api/sharing`) provides the routes; ShellKeep registers two resource types, `server_profile` and `runbook`, and every decision is `AccessPolicy`'s. A record the caller may not see is **404, never 403**, so existence is never disclosed; a missing RBAC permission (for example `sessions:write` to connect) is a 403 naming it. A grant carries a **role, never a credential**.
@@ -1462,6 +1493,50 @@ Server profiles and runbooks are private to their owner until shared (#71). The 
 - `DELETE /api/server-profiles/:id` (the owner) removes the grants on it in the same transaction.
 
 **Audit events.** The slice audits shares, revocations and group membership. ShellKeep adds `server_profile.connect_as_grantee` (actor, profile id, `ownerUserId`, `ownerGroupId`, `purpose`: `connect`, `test`, `history` or `run`; never a secret) whenever a credential is read for a caller who did not save it. Metric: `app.sharing.access_decisions` (`resource_type`, `outcome`, `via`).
+
+### Dashboard
+
+The Home page's one read (#78). `GET /api/dashboard/summary` requires `sessions:read`; it is read-only and bounded (a fixed number of counts plus the five most recent rows, no N+1).
+
+```json
+{
+  "data": {
+    "servers": { "total": 14, "reachable": 0, "unreachable": 0, "unknown": 14, "hostKeyUntrusted": 3 },
+    "sessions": {
+      "active": 5, "attached": 2, "detached": 3,
+      "recent": [{ "id": "…", "name": "deploy-hotfix", "status": "active", "serverProfileId": "…", "serverName": "server-a", "lastActivityAt": "…", "createdAt": "…" }]
+    },
+    "runs": null
+  }
+}
+```
+
+- **Scope.** `servers` counts the profiles the caller may see (own, owned by a group of theirs, shared with them; the sharing slice's `accessibleWhere`) and is `null` without `servers:read`. `sessions` covers the caller's own non-terminated sessions in the request's organization; `recent` is newest activity first, at most five, and carries the server's name, never its hostname.
+- **Reachability.** Counted from stored connection-test results only, and the dashboard never opens SSH. No result is stored yet, so every visible server is `unknown`; `hostKeyUntrusted` counts servers with no trusted fingerprint (#60).
+- **Runs.** `null` without `runbooks:read`, and `null` until the runbook engine (#62) binds `DASHBOARD_RUNS_SOURCE` (`apps/api/src/dashboard/dashboard-runs.source.ts`), after which it is `{ running, failedLast24h, recent: [{ id, runbookId, runbookName, status, targets: { total, succeeded, failed, running }, startedAt }] }`.
+- The response is validated against `dashboardSummarySchema` (`apps/api/src/dashboard/dashboard.schema.ts`). One span per request, `dashboard.summary`; no hostname in a log or span.
+
+---
+
+### Data export
+
+Every signed-in user can download their own data (#68). The exports slice (`@marinoscar/platform-api/exports`) provides the routes; the work runs as the server-only job `export.run` and the file expires through `export.purge` (7 days). **No credential ever leaves the server**: no SSH password, private key, passphrase or credential ciphertext (`encryptedPassword`, `encryptedPrivateKey`, `encryptedPassphrase` included), and no tmux scrollback or log content. Another user's export is **404, never 403**.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /api/exports/sources` | any signed-in user | The sources the caller may use, with their formats and request fields; each source is listed only to a caller holding its permission |
+| `POST /api/exports` | the source's permission | `{ source, format, request? }`; `202` with a `pending` export. `400` for an unknown source or format or a request the source refuses; `429` at three exports in flight |
+| `GET /api/exports` | any signed-in user | The caller's own exports, newest first |
+| `GET /api/exports/:id` | any signed-in user | One export; when `ready` it carries a 5-minute signed URL with `Content-Disposition: attachment` |
+
+| Source | Permission | Request | Contents |
+|---|---|---|---|
+| `user-data` | `user_settings:read` | none | The caller's whole record, one dataset per user-owned model (server profiles without any credential, terminal sessions, runbooks the caller authored with their versions, settings, tokens' metadata) |
+| `server-profiles` | `servers:read` | `{ includeShared?: boolean }` | Name, host, port, user, auth method, tags, color, host key fingerprint, timestamps. `includeShared` adds profiles other people shared with the caller (decided by the sharing slice), with the same columns |
+| `terminal-sessions` | `sessions:read` | `{ from, to, status? }` (`YYYY-MM-DD`, both days inclusive, in the caller's time zone, by creation day) | Metadata only: name, status, tmux session name, size, server profile id, timestamps |
+| `runbook-runs` | `runbooks:read` | `{ from, to, runbookId? }` | Run, target and step status, timings, exit codes and artifact object ids (the run tables arrive with #62; until then the file has no dataset). Log contents are never exported |
+
+Formats: `json`, `csv` (a zip of one CSV per dataset) and `xlsx`. Audit: `export:create` after the job commits. Metrics: `app.exports`, `app.export.duration`, `app.export.size` (no user id label). Notifications: `export.ready` and `export.failed` (a fixed message).
 
 ---
 
@@ -1558,6 +1633,13 @@ Readiness check - includes database connectivity test.
 | `PRECONDITION_FAILED` | 412 | A stale `If-Match` (for example replacing a runbook definition that has a newer version) |
 | `RUNBOOK_DEFINITION_INVALID` | 422 | The runbook definition failed validation; `details.issues` lists each problem with its path |
 | `RUNBOOK_TARGET_GROUPS_UNAVAILABLE` | 422 | The target selector names server groups, which are not available yet |
+| `RUNBOOKS_DISABLED` | 503 | Runbooks are switched off (`runbooks.enabled`) |
+| `RUNBOOK_PARAMS_INVALID` | 422 | A run parameter failed the definition; `details.issues` |
+| `RUNBOOK_SECRET_REF_UNKNOWN` | 422 | A secret reference names a runbook secret that does not exist |
+| `RUNBOOK_NO_TARGETS` | 422 | Nothing to retry or no server to run on |
+| `RUNBOOK_SELF_APPROVAL` | 403 | The person who started a run may not approve it |
+| `RUNBOOK_APPROVAL_NOT_PENDING` | 409 | The approval was already decided or expired |
+| `RUNBOOK_RUN_STATE` | 409 | The run is not in a state that allows this action |
 | `RUNBOOK_NAME_TAKEN` | 409 | Another live runbook in the organization has this name |
 | `RUNBOOK_ARCHIVED` | 409 | The runbook is archived; restore it before changing it |
 | `RUNBOOK_IF_MATCH_REQUIRED` | 428 | Replacing a definition needs an `If-Match` header |
