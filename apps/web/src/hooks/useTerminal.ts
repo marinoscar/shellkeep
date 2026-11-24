@@ -111,6 +111,11 @@ export interface TerminalAppearance {
   preferences: ResolvedTerminalSettings;
   /** The app's colour mode, which the `follow-app` theme follows. */
   appMode: AppColorMode;
+  /**
+   * Keys the app handles itself (#57: the AI assist shortcut). Return `true` to keep the
+   * key from reaching the terminal and so the PTY; the page's own listener acts on it.
+   */
+  isReservedKey?: (event: KeyboardEvent) => boolean;
 }
 
 const DEFAULT_APPEARANCE: TerminalAppearance = {
@@ -155,6 +160,11 @@ export function useTerminal(
       ),
       letterSpacing: 0,
       convertEol: true,
+    });
+
+    // App shortcuts never reach the PTY (#57).
+    terminal.attachCustomKeyEventHandler?.((event) => {
+      return !(event.type === 'keydown' && appearanceRef.current.isReservedKey?.(event));
     });
 
     // The bell (#80): a flash the view draws, or a short beep.

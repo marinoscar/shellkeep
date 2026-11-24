@@ -65,6 +65,7 @@ vi.mock('../../hooks/useTerminalSettings', async () => {
   return {
     useTerminalSettings: vi.fn(() => ({
       terminal: { ...DEFAULT_TERMINAL_SETTINGS, showKeyBar: prefsMock.showKeyBar },
+      actionShortcuts: {},
       keyShortcuts: [{ id: 'k1', label: 'ESC', keystrokes: [{ modifiers: [], key: 'Escape' }] }],
       updateTerminal: mockUpdateTerminal,
     })),
@@ -472,7 +473,7 @@ describe('TerminalWorkspacePage: the AI panel gate', () => {
     expect(screen.queryByRole('button', { name: 'AI' })).not.toBeInTheDocument();
   });
 
-  it('opens as a side panel with AI on and ai:use, its actions disabled until their APIs ship', async () => {
+  it('opens as a side panel with AI on and ai:use; Suggest is live, Explain and Summarize wait for their APIs', async () => {
     renderWorkspace('/sessions/a?tabs=a', {
       wrap: aiOn,
       user: { ...writer, permissions: [...writer.permissions, 'ai:use'] },
@@ -480,8 +481,32 @@ describe('TerminalWorkspacePage: the AI panel gate', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'AI' }));
     const panel = screen.getByTestId('terminal-ai-panel');
     expect(within(panel).getByRole('button', { name: 'Suggest' })).toBeDisabled();
+    await userEvent.click(within(panel).getByRole('button', { name: 'Explain' }));
     expect(within(panel).getAllByText('Coming with Terminal AI').length).toBeGreaterThan(0);
     await userEvent.click(within(panel).getByRole('button', { name: 'Close assistant' }));
+    expect(screen.queryByTestId('terminal-ai-panel')).not.toBeInTheDocument();
+  });
+
+  it('Ctrl+Shift+A opens the assistant with the prompt focused, and only when AI is available', async () => {
+    renderWorkspace('/sessions/a?tabs=a', {
+      wrap: aiOn,
+      user: { ...writer, permissions: [...writer.permissions, 'ai:use'] },
+    });
+    await waitFor(() => expect(tabs()).toHaveLength(1));
+    expect(screen.queryByTestId('terminal-ai-panel')).not.toBeInTheDocument();
+    const event = new KeyboardEvent('keydown', { key: 'A', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    const panel = await screen.findByTestId('terminal-ai-panel');
+    await waitFor(() => expect(within(panel).getByLabelText('Describe a command')).toHaveFocus());
+  });
+
+  it('the shortcut does nothing without ai:use', async () => {
+    renderWorkspace('/sessions/a?tabs=a', { wrap: aiOn });
+    await waitFor(() => expect(tabs()).toHaveLength(1));
+    const event = new KeyboardEvent('keydown', { key: 'A', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
     expect(screen.queryByTestId('terminal-ai-panel')).not.toBeInTheDocument();
   });
 });
