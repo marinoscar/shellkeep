@@ -11,6 +11,7 @@
   "scripts": {
     "api": "npm -w apps/api",
     "web": "npm -w apps/web",
+    "cli": "npm -w apps/cli",
     "api:dev": "npm -w apps/api run start:dev",
     "web:dev": "npm -w apps/web run dev",
     "api:test": "npm -w apps/api test",
