@@ -6,7 +6,7 @@
 // must be `@Global()`: the slice's `JwtAuthGuard` is instantiated in EVERY module
 // whose controllers use `@Auth()`, so the ports it injects have to resolve there.
 //
-//   IDENTITY_NOTIFIER         -> log only               PLATFORM-ADOPTION-SHIM(#51)
+//   IDENTITY_NOTIFIER         -> NotificationsService (#51)
 //   IDENTITY_JOBS             -> the platform queue (#49)
 //   IDENTITY_NODE_CREDENTIALS -> the nodes slice's NodeCredentialService (#49)
 //   IDENTITY_PROFILE_IMAGES   -> the stored `profile` user setting

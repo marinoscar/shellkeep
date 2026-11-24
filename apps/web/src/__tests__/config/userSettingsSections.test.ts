@@ -8,10 +8,12 @@ const cards = USER_SETTINGS_SECTIONS.flatMap((s) => s.cards);
 const routes = parseAppRoutes(readFileSync(join(__dirname, '..', '..', 'App.tsx'), 'utf8'));
 
 describe('USER_SETTINGS_SECTIONS', () => {
-  it('declares the Profile, Appearance and Terminal cards', () => {
+  it('declares the Profile, Appearance, Notifications and Terminal cards', () => {
     expect(cards.map((c) => [c.title, c.path])).toEqual([
       ['Profile', '/settings/profile'],
       ['Appearance', '/settings/appearance'],
+      // #51: appended to Account.
+      ['Notifications', '/settings/notifications'],
       ['Terminal', '/settings/terminal'],
     ]);
   });

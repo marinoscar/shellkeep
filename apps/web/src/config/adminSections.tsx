@@ -36,6 +36,20 @@
  *     `storage:read`: that pair gates object access and every role holds it.
  *     Saving, testing, creating the bucket and starting a migration need
  *     `storage_config:write`, gated inside the packaged page.
+ *   - Email (#51): `GET /api/email-settings`, `system_settings:read` (the
+ *     email slice's controller); saving and the test send need
+ *     `system_settings:write`, gated inside the packaged page.
+ *   - Web Push (#51): `GET /api/admin/push-config`, `push:read` (the
+ *     notifications slice's `push-config.controller.ts`, a pair of its own:
+ *     generating or rotating the VAPID keys silences every subscriber until
+ *     it re-subscribes); generating, enabling, rotating and the test push
+ *     need `push:write`, gated inside the packaged page.
+ *   - Broadcasts (#51): `/api/admin/broadcasts`, ANY OF `broadcasts:read`
+ *     (system scope) and `org_broadcasts:read` (org scope, `org_admin`): the
+ *     packaged `broadcasts.controller.ts` declares
+ *     `@Auth({ anyPermissions: [...] })`, and the hub admits a holder of
+ *     either. Composing, scheduling and cancelling need the matching
+ *     `:write`, gated inside the packaged page.
  *
  * The composition root: the `Terminal` card is the terminal domain's
  * (`components/terminal/settings/TerminalSystemSettingsPage.tsx`), declared
@@ -46,6 +60,9 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import BuildCircleOutlinedIcon from '@mui/icons-material/BuildCircleOutlined';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
+import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
+import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
+import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
@@ -63,6 +80,12 @@ export const MAINTENANCE_PATH = '/admin/settings/maintenance';
 export const TERMINAL_SYSTEM_SETTINGS_PATH = '/admin/settings/terminal';
 /** The route of the Storage page (the packaged `StorageConfigPage`). */
 export const STORAGE_PATH = '/admin/settings/storage';
+/** The route of the Email page (the packaged `EmailSettingsPage`). */
+export const EMAIL_PATH = '/admin/settings/email';
+/** The route of the Web Push page (the packaged `PushConfigPage`). */
+export const PUSH_PATH = '/admin/settings/push';
+/** The route of the Broadcasts page (the packaged `BroadcastsPage`). */
+export const BROADCASTS_PATH = '/admin/settings/broadcasts';
 
 /** The admin settings sections, in hub order. */
 export const ADMIN_SECTIONS: SettingsSectionDef[] = [
@@ -102,6 +125,25 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         path: STORAGE_PATH,
         permission: 'storage_config:read',
       },
+      {
+        // #51: appended. How the application sends mail, configured at
+        // runtime (no environment variable).
+        title: 'Email',
+        description:
+          'Choose how the application sends email, and send a test message to prove it works.',
+        Icon: EmailOutlinedIcon,
+        path: EMAIL_PATH,
+        permission: 'system_settings:read',
+      },
+      {
+        // #51: appended. The VAPID key pair, configured at runtime.
+        title: 'Web Push',
+        description:
+          'Generate a VAPID key pair, enable or rotate it, and control whether this deployment can send browser push notifications.',
+        Icon: VpnKeyOutlinedIcon,
+        path: PUSH_PATH,
+        permission: 'push:read',
+      },
     ],
   },
   {
@@ -128,7 +170,20 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
     // (`/admin/settings/jobs`, `jobs:read`), `Job Insights`
     // (`/admin/settings/jobs/insights`, `jobs:read`, nested under the Jobs
     // path) and `Worker Nodes` (`/admin/settings/workers`, `nodes:read`).
-    cards: [...jobsAdminSections.operations],
+    cards: [
+      ...jobsAdminSections.operations,
+      {
+        // #51: appended. An announcement to every user is running-system
+        // work, so Operations. One destination for both scopes, so one card
+        // with the permission list the controller accepts.
+        title: 'Broadcasts',
+        description:
+          'Write an announcement and send it to every active user now or at a scheduled time, then watch it go out.',
+        Icon: CampaignOutlinedIcon,
+        path: BROADCASTS_PATH,
+        permission: ['broadcasts:read', 'org_broadcasts:read'],
+      },
+    ],
   },
 ];
 

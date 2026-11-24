@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && tsc -p tsconfig.worker.json --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "lint": "cd ../.. && eslint \"apps/web/src/**/*.{ts,tsx}\"",
     "test": "vitest",
     "test:run": "vitest run",
@@ -51,6 +51,9 @@
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.12",
-    "vitest-axe": "^1.0.0-pre.5"
+    "vitest-axe": "^1.0.0-pre.5",
+    "workbox-core": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1"
   }
 }

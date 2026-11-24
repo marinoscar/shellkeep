@@ -1,0 +1,18 @@
+{
+  // The service worker's own type check (#51). `src/sw.ts` runs in a
+  // ServiceWorkerGlobalScope: checked against `tsconfig.json`'s DOM lib it
+  // would see the document's `self`, not the worker's. So `tsconfig.json`
+  // excludes it and this file checks it alone, without DOM. Checking only:
+  // vite-plugin-pwa builds the worker and does not read this file.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "WebWorker"],
+    "types": ["vite/client", "vite-plugin-pwa/client"]
+  },
+  // `files`, not `include`: the inherited `exclude` lists `src/sw.ts` and
+  // filters `include`, which would check nothing. `include: []` stops the
+  // base's `["src"]` from dragging the React tree in.
+  "files": ["src/sw.ts"],
+  "include": [],
+  "references": []
+}

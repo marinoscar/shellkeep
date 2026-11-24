@@ -5,9 +5,9 @@ description: Add a notification event to the platform notifications slice - writ
 
 # Add a notification
 
-**Applies from #51** (email, notifications, broadcasts and Web Push from the platform). Before that, do not add a second dispatcher.
+Email, notifications, broadcasts and Web Push are the platform's since #51. Do not add a second dispatcher.
 
-Email and notifications are the platform's slices: `@marinoscar/platform-api/email` and `@marinoscar/platform-api/notifications`; on the web `@marinoscar/platform-web/notifications/{headless,ui}`. ShellKeep owns three things: **email templates** (`apps/api/src/email-templates/`, *target*), **event registrations** (`apps/api/src/notifications-registry/`, *target*) and **the call sites**. The contract is the TSDoc in `node_modules/@marinoscar/platform-api/dist/notifications/` and `dist/email/templates/`.
+Email and notifications are the platform's slices: `@marinoscar/platform-api/email` and `@marinoscar/platform-api/notifications`; on the web `@marinoscar/platform-web/notifications/{headless,ui}`. ShellKeep owns three things: **email templates** (`apps/api/src/email-templates/`), **event registrations** (`apps/api/src/notifications-registry/`) and **the call sites**. The contract is the TSDoc in `node_modules/@marinoscar/platform-api/dist/notifications/` and `dist/email/templates/`.
 
 No migration and no preference row: the sparse `notifications` user setting treats an absent key as the event's default.
 
@@ -19,7 +19,7 @@ No migration and no preference row: the sparse `notifications` user setting trea
    ```
    Build the body with the `html` tag so every interpolation is escaped, pass it to `renderLayout`, put any link through `safeUrl`, hand-write the `text` part. Declare the data type with `declare module '@marinoscar/platform-api/email' { interface EmailTemplateDataMap { 'name': NameEmailData } }` and register the renderer in the app's template list. A platform template (`role-changed`, `broadcast`, `job-failed`, `node-offline`, `backup-failed`, `restore-completed`, `test-email`) is not rewritten; bind the event to it by name. A template name is persisted in deliveries: never rename one.
 2. **Declare the event** in `apps/api/src/notifications-registry/<domain>.notifications.ts` as a `NotificationRegistration`: a stable dotted lowercase `key` (`runbook.run_completed`), `label`, `description`, the `channels` it can really use (`email`, `browser`, `push`), `defaultEnabled`, and `mandatory: true` only for events a user must not silence (a security change such as `server.host_key_changed`). Add `emailTemplate` (and optional `browserTemplate`, with a root-relative `link`).
-3. **Add the array to the manifest**: `registerNotifications([...])` in `apps/api/src/platform/notifications/notification.manifest.ts` *(target)*. Array order is the order of the preferences matrix. The registry validates atomically and freezes after bootstrap.
+3. **Add the array to the manifest**: `registerNotifications([...])` in `apps/api/src/app-registrations/notifications.ts` (not under `platform/`: base folders may not name the domain), and the template in `SHELLKEEP_EMAIL_TEMPLATES` (`email-templates/index.ts`). A runbook event goes through `registerRunbookNotifications()` instead. Array order is the order of the preferences matrix. The registry validates atomically and freezes after bootstrap.
 4. **Call `notify()` at the real trigger**, from a service that injects `NotificationsService`:
    ```ts
    await this.notifications.notify('runbook.run_completed', userId, payload satisfies RunCompletedEmailData);

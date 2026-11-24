@@ -28,7 +28,7 @@ interface AppOpenApiTagGroup {
  * Sidebar sections, in render order. Every `@ApiTags(...)` name a controller of
  * the composed app uses appears here, the packaged slices' included: a slice
  * does not register its own tags, the app that mounts it does. A slice adopted
- * later (notifications, AI) adds its tags in its own issue.
+ * later (AI) adds its tags in its own issue.
  */
 const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
   {
@@ -160,6 +160,35 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           'The worker fleet that executes node-eligible jobs: registration, heartbeats, health, and ' +
           'draining a node before it is retired. Gated on `nodes:read`/`nodes:write`, separately ' +
           'from the queue itself.',
+      },
+    ],
+  },
+  {
+    name: 'Notifications',
+    tags: [
+      {
+        name: 'Notifications',
+        description:
+          'The calling user\'s inbox (list, unread count, mark read, dismiss), the preferences matrix of events and ' +
+          'channels, the live SSE stream, and the browser\'s Web Push subscriptions. Every route acts on the caller\'s own notifications.',
+      },
+      {
+        name: 'Notification Broadcasts',
+        description:
+          'Administrator announcements to every user (or one organization): compose, schedule, cancel and review ' +
+          'delivery. Gated on `broadcasts:read`/`broadcasts:write`.',
+      },
+      {
+        name: 'Push Configuration',
+        description:
+          'Web Push (VAPID) keys, generated and rotated at runtime with the private key held in the credential store, and ' +
+          'a test push. Never an environment variable. Gated on `push:read`/`push:write`.',
+      },
+      {
+        name: 'Email Settings',
+        description:
+          'The email transport (SMTP or SES), sender and the test send, configured at runtime with secrets held in the ' +
+          'credential store. Gated on `system_settings:read`/`system_settings:write`.',
       },
     ],
   },
