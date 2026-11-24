@@ -145,6 +145,10 @@ runPlatformConformance({
           file: 'platform/sharing/sharing-access.ts',
           why: 'The sharing slice\'s EXISTS form of `accessibleWhere` (more than 1,000 shared records): SELECT r.id FROM <a fixed table> r WHERE <the slice\'s own parameterised fragment>; the table is a plain-identifier constant of the caller, never request input (#71)',
         },
+        {
+          file: 'platform/onboarding/onboarding-data.adapter.ts',
+          why: 'The onboarding slice\'s activation metrics (`GET /api/admin/onboarding/metrics`, `system_settings:read`): ONE read-only aggregate the slice builds (`buildOnboardingMetricsSql`) from developer-authored step and milestone expressions, its values bound as positional parameters; never request-derived SQL, no row content (#70)',
+        },
       ],
       registerIn: 'src/app-registrations/user-owned-models.ts',
     },
