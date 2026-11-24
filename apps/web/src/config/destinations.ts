@@ -31,6 +31,7 @@ import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import {
   isDestinationVisible,
   owns,
@@ -43,7 +44,7 @@ import { USER_HUB_PATH } from './userSettingsSections';
  * Every destination key. `runbooks` and `runs` are reserved for #65 (they need
  * the runbooks API of #61, not merged yet); no destination declares them today.
  */
-export type DestinationKey = 'home' | 'sessions' | 'servers' | 'runbooks' | 'runs' | 'console';
+export type DestinationKey = 'home' | 'sessions' | 'servers' | 'runbooks' | 'runs' | 'console' | 'ai';
 
 /** A navigation destination: the shell's `ShellDestination` over this app's keys. */
 export type Destination = ShellDestination<DestinationKey>;
@@ -77,6 +78,9 @@ export const DESTINATION_ROUTES: Readonly<Record<DestinationKey, readonly string
   runbooks: [],
   runs: [],
   console: ['/admin'],
+  // The AI Playground (#55) owns `/ai` only: the user's AI Keys page lives at
+  // `/settings/ai` (Home) and the admin AI pages at `/admin/settings/ai` (Console).
+  ai: ['/ai'],
 };
 
 /**
@@ -135,6 +139,20 @@ export const DESTINATIONS: readonly Destination[] = [
     anyPermission: ['system_settings:read', 'users:read'],
     // A mode at the rail's foot, not a peer of the library destinations.
     pinned: true,
+  },
+  {
+    // #55, appended after `console` so the existing destinations keep their
+    // positions (declaration order is navigation order). `ai:use` is the string
+    // the consumer `/api/ai/*` controllers enforce, and `feature: 'ai'` hides it
+    // while AI is off, when every call it makes answers 403 AI_DISABLED. On the
+    // phone bar it lands in "More" once the bar is full.
+    key: 'ai',
+    label: 'AI Playground',
+    compactLabel: 'AI',
+    Icon: AutoAwesomeIcon,
+    path: '/ai',
+    permission: 'ai:use',
+    feature: 'ai',
   },
 ];
 

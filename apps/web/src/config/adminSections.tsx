@@ -56,6 +56,14 @@
  *     `db_backup:write`, restoring needs `db_backup:restore`; the packaged
  *     page disables each control, the card gate is about reachability.
  *
+ *   - AI (#55): `/api/admin/ai/*`, `ai_config:read` (system scope, `admin`
+ *     only) for AI, AI Models and AI Usage; `/api/admin/ai/org-keys`,
+ *     `org_ai_config:read` (org scope, `org_admin`) for Organization AI keys.
+ *     Saving, storing a key and editing a model need the matching `:write`,
+ *     gated inside the pages. Every AI card but the first carries
+ *     `feature: 'ai'`: the AI card is where AI is switched on, so it stays
+ *     reachable while AI is off.
+ *
  * The composition root: the `Terminal` card is the terminal domain's
  * (`components/terminal/settings/TerminalSystemSettingsPage.tsx`), declared
  * here so the base code never names the domain.
@@ -68,6 +76,9 @@ import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import ModelTrainingOutlinedIcon from '@mui/icons-material/ModelTrainingOutlined';
+import DataUsageOutlinedIcon from '@mui/icons-material/DataUsageOutlined';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
@@ -92,6 +103,8 @@ export const EMAIL_PATH = '/admin/settings/email';
 export const PUSH_PATH = '/admin/settings/push';
 /** The route of the Broadcasts page (the packaged `BroadcastsPage`). */
 export const BROADCASTS_PATH = '/admin/settings/broadcasts';
+/** The route of the AI page (the packaged `AiConfigPage`); the other AI pages nest under it. */
+export const AI_PATH = '/admin/settings/ai';
 
 /** The admin settings sections, in hub order. */
 export const ADMIN_SECTIONS: SettingsSectionDef[] = [
@@ -192,6 +205,54 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
       // #52: appended. The packaged card (`Database Backup`,
       // `/admin/settings/db-backup`, `db_backup:read`), as data.
       ...dbBackupAdminSections.operations,
+    ],
+  },
+  {
+    // #55: a fifth group, APPENDED after Operations (append-only: the hub, the
+    // rail and the drill-down list render this array in declaration order).
+    label: 'AI',
+    cards: [
+      {
+        // NO `feature`, deliberately: this is the page an administrator
+        // switches AI ON from. Gating it on AI being on would make the switch
+        // unreachable in exactly the state it exists to change.
+        title: 'AI',
+        description:
+          'Switch AI on for this deployment, choose whose keys pay for calls, and configure each provider.',
+        Icon: AutoAwesomeOutlinedIcon,
+        path: AI_PATH,
+        permission: 'ai_config:read',
+      },
+      {
+        // Nested under the AI route, so `settingsPageTitle`'s longest-prefix
+        // rule titles it "AI Models" rather than "AI".
+        title: 'AI Models',
+        description:
+          'Review the models each provider offers, classify what they can do, and choose which ones users may call.',
+        Icon: ModelTrainingOutlinedIcon,
+        path: `${AI_PATH}/models`,
+        permission: 'ai_config:read',
+        feature: 'ai',
+      },
+      {
+        title: 'AI Usage',
+        description:
+          "See who is calling AI, which models they use, and how much of it the organization's key pays for.",
+        Icon: DataUsageOutlinedIcon,
+        path: `${AI_PATH}/usage`,
+        permission: 'ai_config:read',
+        feature: 'ai',
+      },
+      {
+        // The active organization's own provider keys and effective AI policy:
+        // an ORG permission, held through the `org_admin` membership role.
+        title: 'Organization AI keys',
+        description: "Set your organization's own AI provider keys and see its effective AI policy.",
+        Icon: VpnKeyOutlinedIcon,
+        path: `${AI_PATH}/organization-keys`,
+        permission: 'org_ai_config:read',
+        feature: 'ai',
+      },
     ],
   },
 ];
