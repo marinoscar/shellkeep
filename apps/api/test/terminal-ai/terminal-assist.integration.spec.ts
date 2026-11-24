@@ -89,7 +89,7 @@ describe('POST /api/ai/terminal/assist', () => {
     const history = new SessionHistoryService(
       { findOne } as never,
       { execForOutput: exec } as never,
-      { getDecryptedProfile: jest.fn().mockResolvedValue({ id: 'prof-1' }) } as never,
+      { getDecryptedProfileForSession: jest.fn().mockResolvedValue({ id: 'prof-1' }) } as never,
     );
 
     const moduleRef = await withoutAuthGuards(
