@@ -119,8 +119,8 @@ runPlatformConformance({
         contents: existsSync(catalogPath) ? readFileSync(catalogPath, 'utf8') : undefined,
         staleMessage: SETTINGS_CATALOG_STALE_MESSAGE,
       },
-      // ui, features, terminal, maintenance, jobs, nodes and retention.
-      minSystemNamespaces: 7,
+      // ui, features, terminal, maintenance, jobs, nodes, retention and ssh.
+      minSystemNamespaces: 8,
     },
     // Every credential purpose has a platform or app owner, every user purpose's fallback
     // address resolves (`ssh` has none), and no credential presentation schema carries a
@@ -136,9 +136,9 @@ runPlatformConformance({
     // storage provider that refuses writes: none may write, throw, time out or return an invalid
     // outcome. The platform registers 13 (the host's `core.*`, `db.*`, `secrets.*`,
     // `maintenance.mode` and `network.egress`, and the identity slice's `auth.*` and
-    // `tenancy.mode`); the terminal adds four (`terminal.ssh.client`, `terminal.tmux.probe`,
-    // `terminal.sessions.reaper`, `terminal.ssh.legacy-secrets`). The fifth terminal item,
+    // `tenancy.mode`); the terminal adds five (`terminal.ssh.client`, `terminal.tmux.probe`,
+    // `terminal.sessions.reaper`, `terminal.ssh.legacy-secrets`, and the SSH slice's `ssh.host_key_policy`). The last item,
     // `terminal.ssh.egress`, is an egress contributor graded by `network.egress`.
-    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 17 },
+    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 18 },
   },
 });
