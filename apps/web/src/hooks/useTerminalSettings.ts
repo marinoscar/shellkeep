@@ -83,6 +83,12 @@ export interface UseTerminalSettingsResult {
   updateTerminal: (changes: Partial<ResolvedTerminalSettings>) => Promise<void>;
   /** Replaces the key shortcut list (stored in the `shortcuts` namespace). */
   updateShortcuts: (keyShortcuts: readonly KeyShortcut[]) => Promise<void>;
+  /**
+   * Saves the key layout and/or options (#169): the PATCH carries only `layout`
+   * and `options` under `shortcuts`, never `keyShortcuts` (the API keeps the
+   * stored v1 list and the rebound actions).
+   */
+  updateKeys: (change: { layout?: KeyLayout; options?: KeyOptions }) => Promise<void>;
   /** Saves both namespaces of `change` in one write. */
   updateSettings: (change: TerminalSettingsChange) => Promise<void>;
   /** Reloads the document. */
@@ -188,6 +194,17 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
     [updateSettings],
   );
 
+  const updateKeys = useCallback(
+    async (change: { layout?: KeyLayout; options?: KeyOptions }) => {
+      const shortcuts: { layout?: KeyLayout; options?: KeyOptions } = {};
+      if (change.layout) shortcuts.layout = change.layout;
+      if (change.options) shortcuts.options = change.options;
+      // The namespace's merge keeps every field the patch leaves out.
+      await patch({ shortcuts });
+    },
+    [patch],
+  );
+
   return {
     settings,
     terminal,
@@ -200,6 +217,7 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
     error,
     updateTerminal,
     updateShortcuts,
+    updateKeys,
     updateSettings,
     refresh,
   };

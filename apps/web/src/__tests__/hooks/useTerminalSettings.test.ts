@@ -142,6 +142,35 @@ describe('useTerminalSettings', () => {
     expect(result.current.keyShortcuts.slice(-2)).toEqual([custom, other]);
   });
 
+  it('saves the key layout and options without keyShortcuts (#169)', async () => {
+    let body: unknown = null;
+    server.use(
+      http.patch('*/api/user-settings', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({
+          data: { ...mockUserSettings, ...(body as object), version: mockUserSettings.version + 1 },
+        });
+      }),
+    );
+    const { result } = renderHook(() => useTerminalSettings());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const layout = { groups: [{ keys: [{ id: 'esc' }] }] };
+    const options = { autoHideWithHardwareKeyboard: false, haptics: true };
+    await act(async () => {
+      await result.current.updateKeys({ layout, options });
+    });
+
+    expect(body).toEqual({ shortcuts: { layout, options } });
+    expect(result.current.keyLayout).toEqual(layout);
+    expect(result.current.keyOptions).toEqual(options);
+
+    await act(async () => {
+      await result.current.updateKeys({ options: { ...options, haptics: false } });
+    });
+    expect(body).toEqual({ shortcuts: { options: { ...options, haptics: false } } });
+  });
+
   it('hands a saved document to the other open instances without a refetch', async () => {
     server.use(
       http.patch('*/api/user-settings', async ({ request }) => {

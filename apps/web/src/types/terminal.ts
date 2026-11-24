@@ -101,7 +101,8 @@ export interface TerminalUserSettingsDocument extends UserSettingsResponseBase {
 export interface TerminalUserSettingsUpdate {
   /** The whole namespace (`null` removes it, so the defaults apply). */
   terminal?: Omit<TerminalUserSettings, 'keyShortcuts'> | null;
-  shortcuts?: ShortcutsUserSettings | null;
+  /** A partial namespace: the API's merge keeps every field left out (#169). */
+  shortcuts?: Partial<ShortcutsUserSettings> | null;
 }
 
 // Server Profiles
