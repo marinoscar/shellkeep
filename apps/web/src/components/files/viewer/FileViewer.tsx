@@ -53,8 +53,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import CodeIcon from '@mui/icons-material/Code';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import type { EditorView } from '@uiw/react-codemirror';
-import { openSearchPanel } from '@codemirror/search';
+import type { FileEditorHandle } from './FileEditor';
 import {
   createDownloadToken,
   downloadRemoteFile,
@@ -368,7 +367,7 @@ export function FileViewer({ profileId, path, sessionId, line, headerActions }: 
   const [revealed, setRevealed] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const [showSource, setShowSource] = useState(false);
-  const [view, setView] = useState<EditorView | null>(null);
+  const [editor, setEditor] = useState<FileEditorHandle | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -517,7 +516,7 @@ export function FileViewer({ profileId, path, sessionId, line, headerActions }: 
                   line={line}
                   scrollToEndKey={file.endKey > 0 ? file.endKey : undefined}
                   ariaLabel={`Contents of ${name}`}
-                  onView={setView}
+                  onReady={setEditor}
                 />
               </Suspense>
             </Box>
@@ -558,7 +557,7 @@ export function FileViewer({ profileId, path, sessionId, line, headerActions }: 
             <ToolButton label="Copy" onClick={() => void copy()}>
               <ContentCopyIcon fontSize="small" />
             </ToolButton>
-            <ToolButton label="Search in loaded text" onClick={() => view && openSearchPanel(view)} disabled={!view}>
+            <ToolButton label="Search in loaded text" onClick={() => editor?.openSearch()} disabled={!editor}>
               <SearchIcon fontSize="small" />
             </ToolButton>
             <ToolButton label="Wrap lines" pressed={wrap} onClick={() => setWrap((w) => !w)}>

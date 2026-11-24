@@ -23,6 +23,7 @@ import CodeMirror, {
   type ViewUpdate,
 } from '@uiw/react-codemirror';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { openSearchPanel } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 import { alpha, useTheme, type Theme } from '@mui/material/styles';
 import type { FileLanguage } from '../../../lib/files/viewer/language';
@@ -42,8 +43,17 @@ export interface FileEditorProps {
   scrollToEndKey?: number;
   /** The accessible name of the editor's content. */
   ariaLabel: string;
-  /** Receives the editor view once it exists (search, tests). */
-  onView?: (view: EditorView | null) => void;
+  /** Receives the editor's handle once it exists, `null` when it goes. */
+  onReady?: (handle: FileEditorHandle | null) => void;
+}
+
+/**
+ * What the viewer may do with the editor. A handle rather than the view, so
+ * the viewer's own chunk never imports CodeMirror (a download card or an
+ * image never loads it).
+ */
+export interface FileEditorHandle {
+  openSearch: () => void;
 }
 
 /** The editor chrome, from the MUI palette. */
@@ -130,7 +140,7 @@ export default function FileEditor({
   line,
   scrollToEndKey,
   ariaLabel,
-  onView,
+  onReady,
 }: FileEditorProps) {
   const theme = useTheme();
   const ref = useRef<ReactCodeMirrorRef>(null);
@@ -164,9 +174,9 @@ export default function FileEditor({
   );
 
   useEffect(() => {
-    onView?.(view);
-  }, [view, onView]);
-  useEffect(() => () => onView?.(null), [onView]);
+    onReady?.(view ? { openSearch: () => openSearchPanel(view) } : null);
+  }, [view, onReady]);
+  useEffect(() => () => onReady?.(null), [onReady]);
 
   // Jump to the requested line, once per (line, document) the view shows.
   const jumpedRef = useRef<number | null>(null);
