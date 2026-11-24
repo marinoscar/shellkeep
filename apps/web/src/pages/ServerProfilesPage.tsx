@@ -73,6 +73,7 @@ import { ServerDetailDrawer } from '../components/server-profiles/ServerDetailDr
 import { BulkDeleteDialog, BulkTagDialog, BulkTestDialog } from '../components/server-profiles/ServerBulkDialogs';
 import { RunRunbookDialog } from '../components/server-profiles/RunRunbookDialog';
 import { ShareResourceDialog } from '../components/common/ShareResourceDialog';
+import { ExportServersButton } from '../components/server-profiles/ExportServersButton';
 
 /** The columns the API sorts by, keyed by column id. */
 const SORTABLE: Record<string, 'name' | 'health' | 'lastSession'> = {
@@ -369,6 +370,12 @@ export default function ServerProfilesPage() {
             </Typography>
             <Typography sx={{ color: 'text.secondary' }}>SSH server profiles you own or that are shared with you</Typography>
           </Box>
+          {/* #68: the packaged export dialog preset to `server-profiles` (no credential is ever exported). */}
+          <ExportServersButton
+            onCreated={() =>
+              show('Export started. You will be notified when it is ready; find it under Settings, Download your data.', 'success')
+            }
+          />
           {canCreate && (
             <Button
               variant="contained"
@@ -492,7 +499,6 @@ export default function ServerProfilesPage() {
           selection={{ selectedIds, onSelectionChange: setSelectedIds }}
           rowActions={rowActions}
           bulkActions={bulkActions}
-          csvExport={{ filename: 'servers' }}
         />
       </Box>
 
