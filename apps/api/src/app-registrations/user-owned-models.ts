@@ -8,7 +8,8 @@
 // this list and `prisma/schema/` disagree). The registration itself is
 // `registrations.ts`; this file only declares.
 //
-// PURGE FOLLOWS `onDelete`: both models cascade with the user, so `delete`.
+// PURGE FOLLOWS `onDelete`: the server profile and the terminal session cascade with the user,
+// so `delete`; the runbook tables (#61) are SET NULL, so `detach` (the organization keeps them).
 // =============================================================================
 
 import type { Prisma } from '@prisma/client';
@@ -34,5 +35,24 @@ export const APP_USER_OWNED_MODELS: readonly Def[] = [
     purge: 'delete',
     export: 'include',
     rationale: 'The owner’s terminal session record (tmux session name, size, status); deleted with the user and exported to them.',
+  },
+  {
+    model: 'Runbook',
+    ownerField: 'ownerUserId',
+    ownerRelation: 'owner',
+    // `owner_user_id` is ON DELETE SET NULL: the organization keeps the runbook when its author goes.
+    purge: 'detach',
+    export: 'exclude',
+    rationale:
+      'An organization-owned runbook records its author; the author leaving detaches the runbook (the organization keeps it), and the definition is not part of a personal export.',
+  },
+  {
+    model: 'RunbookVersion',
+    actorFields: ['createdBy'],
+    // `created_by` is ON DELETE SET NULL: a version is immutable history and outlives its author.
+    purge: 'detach',
+    export: 'exclude',
+    rationale:
+      'An immutable runbook version records who saved it; the author leaving detaches the version (it is never rewritten or deleted) and it is not part of a personal export.',
   },
 ];

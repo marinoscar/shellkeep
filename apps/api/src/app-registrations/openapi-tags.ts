@@ -125,6 +125,13 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           'Persistent tmux-backed terminal sessions on a server profile: create, list, rename and terminate. ' +
           'The terminal itself is the WebSocket at `/api/terminal/ws`, which is not part of this document.',
       },
+      {
+        name: 'Runbooks',
+        description:
+          'Versioned multi-step procedures (command, script, package update, file upload, log collection, AI task, ' +
+          'approval gate) with parameters and target selectors: create, version with `If-Match`, archive, validate, ' +
+          'preview targets, and manage write-only secret parameters. Gated on `runbooks:read` and `runbooks:write`.',
+      },
     ],
   },
   {

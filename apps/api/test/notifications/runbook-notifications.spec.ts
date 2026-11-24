@@ -3,10 +3,9 @@
 // =============================================================================
 //
 // Defined and tested here so keys and copy are reviewed once; Fleet Runbooks (#61)
-// calls `registerRunbookNotifications()` when it mounts. Until then the preferences
-// matrix must not list them. The "not registered" case runs FIRST in this file: the
-// registries are process singletons per Jest module registry, so this file's own
-// registration cannot leak into another spec.
+// calls `registerRunbookNotifications()` when it mounts: `runbooks/runbooks.registrations.ts`
+// does, imported by `app-registrations/registrations.ts`, so the events are in the
+// preferences matrix from the moment the runbooks module exists.
 // =============================================================================
 
 import '../../src/shellkeep.manifest';
@@ -53,13 +52,13 @@ const approval = {
 };
 
 describe('runbook notifications', () => {
-  it('are NOT registered until registerRunbookNotifications() runs', () => {
+  it('are registered by the app registrations, because the runbooks module is mounted (#61)', () => {
     for (const key of KEYS) {
-      expect(findEvent(key)).toBeUndefined();
-      expect(notificationEventRegistry.has(key)).toBe(false);
-      expect(listNotificationEvents().map((event) => event.key)).not.toContain(key);
+      expect(findEvent(key)).toBeDefined();
+      expect(notificationEventRegistry.has(key)).toBe(true);
+      expect(listNotificationEvents().map((event) => event.key)).toContain(key);
     }
-    for (const name of TEMPLATES) expect(emailTemplateRegistry.has(name)).toBe(false);
+    for (const name of TEMPLATES) expect(emailTemplateRegistry.has(name)).toBe(true);
   });
 
   it('declare the three permanent keys with in-app, email and push', () => {

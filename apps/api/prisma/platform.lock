@@ -280,5 +280,24 @@
     }
   ],
   "platformVersion": "1.0.0",
-  "rawSqlIndexes": []
+  "rawSqlIndexes": [
+    {
+      "definition": "CREATE UNIQUE INDEX runbooks_org_name_live_uniq_idx ON public.runbooks USING btree (org_id, lower((name)::text)) WHERE (archived_at IS NULL)",
+      "name": "runbooks_org_name_live_uniq_idx"
+    }
+  ],
+  "rlsPolicies": [
+    {
+      "checkSha256": "83e7bb1689b1bd0427e7061bf085f69c35922ba56bedf6275925f52e58cb440b",
+      "name": "runbooks_org_isolation",
+      "table": "runbooks",
+      "usingSha256": "83e7bb1689b1bd0427e7061bf085f69c35922ba56bedf6275925f52e58cb440b"
+    },
+    {
+      "checkSha256": "83e7bb1689b1bd0427e7061bf085f69c35922ba56bedf6275925f52e58cb440b",
+      "name": "runbook_versions_org_isolation",
+      "table": "runbook_versions",
+      "usingSha256": "83e7bb1689b1bd0427e7061bf085f69c35922ba56bedf6275925f52e58cb440b"
+    }
+  ]
 }

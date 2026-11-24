@@ -136,7 +136,7 @@ describe('admin settings routing (#46)', () => {
   it('shows an administrator the admin hub', async () => {
     signIn(ADMIN, ['admin']);
     renderAt('/admin/settings');
-    expect(await screen.findByRole('heading', { name: 'System Settings' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Console' }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText('Doctor')).toBeInTheDocument();
     expect(screen.getByText('Maintenance')).toBeInTheDocument();
     // #49: the Operations cards.
@@ -201,6 +201,13 @@ describe('admin settings routing (#46)', () => {
     signIn(ADMIN, ['admin']);
     const read: string[] = [];
     server.use(
+      // The config has a deep shape this routing test does not need: answer it with
+      // an error so the page renders its config alert instead of reading a list as a
+      // config. The runs request still proves the page reads its API.
+      http.get('*/api/admin/db-backup/config', ({ request }) => {
+        read.push(new URL(request.url).pathname);
+        return HttpResponse.json({ statusCode: 404, code: 'NOT_FOUND', message: 'not configured' }, { status: 404 });
+      }),
       http.get('*/api/admin/db-backup*', ({ request }) => {
         read.push(new URL(request.url).pathname);
         return HttpResponse.json({ data: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 } });
@@ -219,7 +226,7 @@ describe('admin settings routing (#46)', () => {
       ),
     );
     renderAt('/admin/settings');
-    expect(await screen.findByRole('heading', { name: 'System Settings' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Console' }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText('Broadcasts')).toBeInTheDocument();
     expect(screen.queryByText('Web Push')).not.toBeInTheDocument();
     expect(screen.queryByText('Email')).not.toBeInTheDocument();
@@ -294,7 +301,7 @@ describe('admin settings routing (#46)', () => {
     ]) {
       const { unmount } = renderAt(path);
       expect(await screen.findByText(/ShellKeep Control Center/i, {}, { timeout: 5000 })).toBeInTheDocument();
-      expect(screen.queryByRole('heading', { name: 'System Settings' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Console' })).not.toBeInTheDocument();
       unmount();
     }
   });

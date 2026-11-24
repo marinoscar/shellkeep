@@ -79,6 +79,46 @@ export const APP_PERMISSIONS = {
   },
 } as const satisfies Readonly<Record<string, PermissionDeclaration>>;
 
+// -----------------------------------------------------------------------------
+// Runbooks (issue #61)
+// -----------------------------------------------------------------------------
+//
+// Reusable, versioned multi-step procedures run against fleets of servers.
+// `runbooks:read` lets a member see definitions (which can contain sensitive commands)
+// and preview targets; `runbooks:write` creates and versions them and manages their
+// secret parameters; `runbooks:run` and `runbooks:approve` are enforced from the run
+// engine (#62) and the approvals inbox. Only `org_admin` approves.
+//
+// Grouped apart from `APP_PERMISSIONS` so the registration reads as a feature set.
+// -----------------------------------------------------------------------------
+
+export const RUNBOOK_PERMISSIONS = {
+  RUNBOOKS_READ: {
+    id: 'runbooks:read',
+    description: 'View runbooks, their versions, runs and logs',
+    scope: 'org',
+    defaultGrants: ALL_ORG_ROLES,
+  },
+  RUNBOOKS_WRITE: {
+    id: 'runbooks:write',
+    description: 'Create and version runbooks and manage their secret parameters',
+    scope: 'org',
+    defaultGrants: ORG_WRITERS,
+  },
+  RUNBOOKS_RUN: {
+    id: 'runbooks:run',
+    description: 'Start, cancel and retry runbook runs',
+    scope: 'org',
+    defaultGrants: ORG_WRITERS,
+  },
+  RUNBOOKS_APPROVE: {
+    id: 'runbooks:approve',
+    description: 'Decide runbook approval requests',
+    scope: 'org',
+    defaultGrants: ['org_admin'],
+  },
+} as const satisfies Readonly<Record<string, PermissionDeclaration>>;
+
 /**
  * PLATFORM-ADOPTION-SHIM(#55): `ai:use`, mirrored from the platform's `AI_PERMISSIONS.AI_USE`.
  *

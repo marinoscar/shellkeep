@@ -9,7 +9,7 @@ describe('AdminSettingsHubPage (#46)', () => {
       wrapperOptions: { route: '/admin/settings', user: mockAdminUser },
     });
 
-    expect(await screen.findByRole('heading', { name: 'System Settings' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Console' })).toBeInTheDocument();
     for (const title of ['About', 'Maintenance', 'Terminal', 'Users & Allowlist', 'Doctor']) {
       expect(screen.getByText(title)).toBeInTheDocument();
     }

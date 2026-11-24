@@ -1,7 +1,6 @@
 import { ReactElement, ReactNode } from 'react';
 import { render, RenderOptions, RenderResult } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { CssBaseline } from '@mui/material';
 import { vi } from 'vitest';
 
 // The packaged auth context (identity slice, issue #47) and the app's theme
@@ -10,7 +9,8 @@ import {
   type AuthContextValue,
   type AuthProviderInfo as AuthProviderType,
 } from '@marinoscar/platform-web/identity/headless';
-import { ThemeContextProvider } from '../../contexts/ThemeContext';
+import { ShellRoot } from '@marinoscar/platform-web/shell/ui';
+import { SHELLKEEP_THEMES } from '../../platform/shellTheme';
 import { AppPlatformHostProvider } from '../../platform/platformHost';
 
 interface WrapperOptions {
@@ -118,8 +118,7 @@ function createWrapper(options: WrapperOptions = {}) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <MemoryRouter initialEntries={[route]}>
-        <ThemeContextProvider>
-          <CssBaseline />
+        <ShellRoot themes={SHELLKEEP_THEMES}>
           <MockAuthProvider
             authenticated={authenticated}
             user={user}
@@ -130,7 +129,7 @@ function createWrapper(options: WrapperOptions = {}) {
                 components in the shell (the maintenance banner, #46) read it. */}
             <AppPlatformHostProvider>{children}</AppPlatformHostProvider>
           </MockAuthProvider>
-        </ThemeContextProvider>
+        </ShellRoot>
       </MemoryRouter>
     );
   };

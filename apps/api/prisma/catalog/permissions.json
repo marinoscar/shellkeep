@@ -296,6 +296,26 @@
       "name": "ai:use",
       "description": "Call AI models using a saved key",
       "scope": "org"
+    },
+    {
+      "name": "runbooks:read",
+      "description": "View runbooks, their versions, runs and logs",
+      "scope": "org"
+    },
+    {
+      "name": "runbooks:write",
+      "description": "Create and version runbooks and manage their secret parameters",
+      "scope": "org"
+    },
+    {
+      "name": "runbooks:run",
+      "description": "Start, cancel and retry runbook runs",
+      "scope": "org"
+    },
+    {
+      "name": "runbooks:approve",
+      "description": "Decide runbook approval requests",
+      "scope": "org"
     }
   ],
   "rolePermissions": {
@@ -346,7 +366,10 @@
       "sessions:read",
       "sessions:write",
       "sessions:delete",
-      "ai:use"
+      "ai:use",
+      "runbooks:read",
+      "runbooks:write",
+      "runbooks:run"
     ],
     "viewer": [
       "user_settings:read",
@@ -355,7 +378,8 @@
       "webhooks:read",
       "webhooks:write",
       "servers:read",
-      "sessions:read"
+      "sessions:read",
+      "runbooks:read"
     ],
     "org_admin": [
       "user_settings:read",
@@ -380,7 +404,11 @@
       "sessions:read",
       "sessions:write",
       "sessions:delete",
-      "ai:use"
+      "ai:use",
+      "runbooks:read",
+      "runbooks:write",
+      "runbooks:run",
+      "runbooks:approve"
     ]
   }
 }

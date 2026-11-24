@@ -6,7 +6,7 @@ import { join, posix, relative, sep } from 'node:path';
  * Base-to-domain boundary guard, web half (issue #44; the API half is
  * apps/api/test/architecture/base-domain-boundary.spec.ts).
  *
- * The base web modules (components/{common,navigation}, contexts, identity,
+ * The base web modules (components/common, identity,
  * platform, services/api.ts) must not know the terminal domain: no import from
  * a domain module, no `servers:` or `sessions:` permission string, no mention
  * of `terminal`. The domain reaches the base through the registries in
@@ -21,9 +21,9 @@ const SRC = join(__dirname, '..', '..');
 
 /** Directories (recursive) and single files, relative to `src/`. */
 const BASE_PATHS = [
+  // The platform shell binding (`Layout.tsx`, issue #76; `components/navigation`
+  // and `contexts` were deleted for the packaged shell).
   'components/common',
-  'components/navigation',
-  'contexts',
   // The identity slice's bindings (issue #47; `components/auth` was deleted with it).
   'identity',
   // The platform host binding (issue #48; `components/settings` and
@@ -108,8 +108,8 @@ describe('base-domain boundary (web)', () => {
   it('scans the base modules', () => {
     const rels = files.map((f) => f.rel);
     expect(rels).toContain('services/api.ts');
-    expect(rels).toContain('components/navigation/Sidebar.tsx');
-    expect(rels).toContain('contexts/ThemeContext.tsx');
+    expect(rels).toContain('components/common/Layout.tsx');
+    expect(rels).toContain('platform/shellTheme.ts');
     expect(rels).toContain('identity/IdentityProviders.tsx');
     expect(rels).toContain('platform/platformHost.tsx');
     expect(files.length).toBeGreaterThan(10);
@@ -126,7 +126,7 @@ describe('base-domain boundary (web)', () => {
 
   describe('detection', () => {
     /** Detection lines are checked as if they were in this base file. */
-    const FAKE_BASE_FILE = 'components/navigation/Example.tsx';
+    const FAKE_BASE_FILE = 'components/common/Example.tsx';
 
     it.each([
       ["import { KeyShortcutsSettings } from '../terminal/settings/KeyShortcutsSettings';"],

@@ -157,7 +157,7 @@ runPlatformConformance({
         staleMessage: SETTINGS_CATALOG_STALE_MESSAGE,
       },
       // ui, features, terminal, maintenance, jobs, nodes, retention, storage, notifications, ssh, databaseBackup and telemetry.
-      minSystemNamespaces: 12,
+      minSystemNamespaces: 13,
     },
     // Every credential purpose has a platform or app owner, every user purpose's fallback
     // address resolves (`ssh` has none), and no credential presentation schema carries a
@@ -180,7 +180,6 @@ runPlatformConformance({
     // Every metric group (the platform's six and the app's "Terminal") is well formed, computes on
     // an empty schema without throwing, and every telemetry route declares its permission.
     telemetry: {},
-    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 34 },
     // The webhooks slice (#54): exact route permissions on its three tiers, signing and rotation, the egress
     // guard (private targets, DNS rebinding), secrecy (no secret, signature or URL query in a response, row
     // or log line), nothing sent inline, and visibility across owners and organizations.
@@ -189,5 +188,6 @@ runPlatformConformance({
     // one-open-incident partial index (on the raw-SQL list), idempotent evaluation, dispatch after the
     // committed write.
     alerts: { rawSqlIndexNames: RAW_SQL_INDEXES.map((index) => index.name) },
+    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 34 },
   },
 });

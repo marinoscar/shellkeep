@@ -29,7 +29,7 @@ import {
 
 import { APP_MODEL_OWNERSHIP } from './model-ownership';
 import { ADOPTED_PLATFORM_SLICES } from './platform-slices';
-import { AI_USE_SHIM_PERMISSIONS, APP_PERMISSIONS } from './permissions';
+import { AI_USE_SHIM_PERMISSIONS, APP_PERMISSIONS, RUNBOOK_PERMISSIONS } from './permissions';
 import { APP_USER_OWNED_MODELS } from './user-owned-models';
 import { registerShellkeepCredentialPurposes } from './credentials';
 // Channels, email templates and notification events (#51); registers itself at import.
@@ -38,12 +38,15 @@ import './notifications';
 import './webhooks';
 import './alerts';
 import { registerSshErrorCodes } from '../ssh/ssh.error-codes';
+import { registerRunbookRegistrations } from '../runbooks/runbooks.registrations';
 
 registerPlatformPermissions({
   slices: [...ADOPTED_PLATFORM_SLICES],
-  app: { permissions: [APP_PERMISSIONS, AI_USE_SHIM_PERMISSIONS] },
+  app: { permissions: [APP_PERMISSIONS, AI_USE_SHIM_PERMISSIONS, RUNBOOK_PERMISSIONS] },
 });
 registerPlatformUserOwnedModels(APP_USER_OWNED_MODELS);
 registerPlatformModelOwnership(APP_MODEL_OWNERSHIP);
 registerShellkeepCredentialPurposes();
 registerSshErrorCodes();
+// The runbook error codes and notification events (#61).
+registerRunbookRegistrations();
