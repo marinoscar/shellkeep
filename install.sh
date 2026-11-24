@@ -140,7 +140,7 @@ SHELLKEEP_REF="${SHELLKEEP_REF:-main}"
 # the CODE lives, nothing else.
 #
 # An explicit SHELLKEEP_HOME / SHELLKEEP_BIN_DIR still wins over both branches, so
-# bootstrap-vps.sh (which sets SHELLKEEP_BIN_DIR=/usr/local/bin) is unaffected.
+# apps/cli/bootstrap-vps.sh (which sets SHELLKEEP_BIN_DIR=/usr/local/bin) is unaffected.
 if [[ "$(id -u)" -eq 0 ]]; then
   SHELLKEEP_HOME="${SHELLKEEP_HOME:-/usr/local/lib/shellkeep}"
   SHELLKEEP_BIN_DIR="${SHELLKEEP_BIN_DIR:-/usr/local/bin}"
@@ -467,20 +467,16 @@ fi
 
 # The repository's environment template, kept beside the CLI.
 #
-# The install wizard has to know which variables to ask about BEFORE it clones
-# anything, so on a first install it reads this file from the REMOTE through
-# the GitHub CLI. That credential is per-user, this installer deliberately
-# supports running as root, and root's `gh` is commonly logged out - at which
-# point the wizard had no template, asked no questions about the database, the
-# secrets, the OAuth client or the administrator, and refused to install.
+# Older engines read this copy before cloning anything, so a first install on
+# a root shell with a logged-out `gh` still knew its questions. The engine this
+# repository pins (@marinoscar/platform-cli 0.1.0-next.39) no longer does: the
+# wizard reads the generated .env.example of the repository it clones. The copy
+# is kept because it is one small file and harmless; the test in
+# apps/cli/src/install-sh.test.ts pins what this block writes and that the
+# pinned engine has no reader of it.
 #
-# We are holding the file right now. Keeping one small text file costs nothing
-# and removes the network and the credential from the ordinary first install.
-#
-# source.json records WHICH repository it came from, and the CLI refuses to use
-# the copy for any other one: a template belongs to the repository that
-# declared it, and handing one repository's variable list to another is the
-# very bug this whole resolution chain exists to avoid.
+# source.json records WHICH repository it came from, so a reader can refuse the
+# copy for any other one.
 TEMPLATE_SRC="$TMP_DIR/infra/compose/.env.example"
 if [[ -f "$TEMPLATE_SRC" ]]; then
   # The URL git itself would push to, so a local-source install records the
