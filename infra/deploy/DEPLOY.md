@@ -65,8 +65,9 @@ APP_URL=https://shellkeep.marin.cr
 # Database (cloud PostgreSQL)
 POSTGRES_HOST=<your-cloud-postgres-host>
 POSTGRES_PORT=5432
-POSTGRES_USER=<your-postgres-user>
-POSTGRES_PASSWORD=<your-postgres-password>
+# The application role (shellkeep_app, NOSUPERUSER NOBYPASSRLS), never a superuser: docs/runbooks/application-role.md
+POSTGRES_USER=shellkeep_app
+POSTGRES_PASSWORD=<the application role's password>
 POSTGRES_DB=shellkeep
 POSTGRES_SSL=true
 
@@ -183,10 +184,10 @@ The script pulls latest code, rebuilds images, runs migrations, and restarts ser
 
 ## Database Backup
 
-Since ShellKeep uses an external PostgreSQL server, back up the database directly:
+Backups are taken from Admin, Database Backup (schedule, retention, verify, signed download and restore: `docs/runbooks/database-backup-restore.md`); object storage must be configured first. Until the deploy scripts are replaced (#72) a manual dump is still possible, but it must carry both `--enable-row-security` and `PGOPTIONS=-c app.rls_bypass=on` (the admin page does) or the archive holds no org-table rows:
 
 ```bash
-pg_dump -h <postgres-host> -U postgres -d shellkeep > /opt/infra/backups/shellkeep-$(date +%Y%m%d).sql
+PGOPTIONS='-c app.rls_bypass=on' pg_dump --enable-row-security -Fc -h <postgres-host> -U <superuser> -d shellkeep -f /opt/infra/backups/shellkeep-$(date +%Y%m%d).dump
 ```
 
 ## Troubleshooting

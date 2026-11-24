@@ -110,17 +110,33 @@ jobs:
       - name: Migrations equal the composed schema
         run: npm run db:drift --workspace=api
       - name: Create the application role (idempotent ownership transfer)
-        run: psql -v ON_ERROR_STOP=1 -v app=shellkeep_app -v app_password="$(openssl rand -hex 24)" -f prisma/sql/create-app-role.sql
+        run: |
+          APP_PW="$(openssl rand -hex 24)"
+          echo "::add-mask::$APP_PW"
+          echo "APP_ROLE_PASSWORD=$APP_PW" >> "$GITHUB_ENV"
+          psql -v ON_ERROR_STOP=1 -v app=shellkeep_app -v app_password="$APP_PW" -f prisma/sql/create-app-role.sql
         working-directory: apps/api
         env:
           PGHOST: 127.0.0.1
           PGPORT: '5432'
           PGUSER: postgres
           PGDATABASE: shellkeep
-      - name: Real-database tests
+      # Two tiers run the same suites (#52). The first connects as the bootstrap
+      # superuser, which ignores row-level security; the second as the ordinary
+      # application role, under which the forced policies apply. Suites that must
+      # create roles or databases or replay the whole migration history reach the
+      # cluster through TEST_DB_ADMIN_USER, never through POSTGRES_USER.
+      - name: Real-database tests (bootstrap superuser)
         run: npm run test:db --workspace=api
         env:
           NODE_ENV: test
+      - name: Real-database tests (application role shellkeep_app)
+        run: npm run test:db --workspace=api
+        env:
+          NODE_ENV: test
+          POSTGRES_USER: shellkeep_app
+          POSTGRES_PASSWORD: ${{ env.APP_ROLE_PASSWORD }}
+          TEST_DB_ADMIN_USER: postgres
 
   openapi:
     name: OpenAPI

@@ -30,6 +30,7 @@ import {
 import { APP_OPENAPI } from './openapi/document';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
+import { PrismaSystemService } from './prisma/prisma-system.service';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -58,12 +59,18 @@ async function bootstrap() {
   // a server profile. It asks the database whether any credential is stored (the
   // deployment's, a user's or an organization's), so a fresh deployment without the
   // key still boots. The key itself is read by the platform cipher, not by this app.
+  //
+  // `org_credentials` forces row-level security, so the count runs on the bypass client
+  // (one read-only transaction, reason `admin-aggregate`): on the tenant client an
+  // unscoped count is 0 under the application role (#52) and a deployment that holds
+  // only organization credentials would boot without the key.
   const prisma = app.get(PrismaService);
+  const system = app.get(PrismaSystemService);
   await verifyEncryptionKeyAtStartup(
     async () =>
       (await prisma.credential.count()) +
       (await prisma.userCredential.count()) +
-      (await prisma.orgCredential.count()),
+      (await system.runAsSystem('admin-aggregate', (tx) => tx.orgCredential.count())),
     logger,
   );
 
