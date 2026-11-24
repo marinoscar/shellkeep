@@ -45,7 +45,7 @@ Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, a
 | Difference from the previous build | Detail | Resolved by |
 |---|---|---|
 | The reaper's counts are logged, not stored on the job | `JobHandler.process` returns nothing and the `jobs` table has no result column, so the Jobs page shows the run (status, attempts, duration) and the API log carries the three counts. `SessionReapHandler.reap()` returns them with the terminated session ids | Kept; since #51 the handler sends the reaped-session notification from the sessions `reap()` returns |
-| The retention namespace lists policies of slices not adopted yet | `retention` carries `notifications`, `notificationDeliveries`, `auditEvents` and `aiRuns` from the platform. `auditEvents` (`audit.events.purge`, ships disabled) and, since #51, `notifications` and `notificationDeliveries` (`notifications.inbox.purge`, `notifications.deliveries.purge`) have handlers mounted; `aiRuns` takes effect when the AI slice is adopted | #55 |
+| The retention namespace lists policies of slices not adopted yet | `retention` carries `notifications`, `notificationDeliveries`, `auditEvents` and `aiRuns` from the platform. `auditEvents` (`audit.events.purge`, ships disabled), `notifications` and `notificationDeliveries` (#51) and, since #55, `aiRuns` (`ai.runs.purge`; the AI slice also registers `ai.usage.purge`) have handlers mounted | Resolved by #55 |
 
 ### Email and notifications (#51)
 
@@ -136,3 +136,13 @@ Intentional schema drift that the drift checks must accept (raw-SQL partial inde
 | Entry | Reason | Added by |
 |---|---|---|
 | _none yet_ | | |
+
+### The AI slice (#55)
+
+`AiModule.forRoot({ imports: [AiHostModule] })` (`platform/ai/ai.config.ts`) is mounted after the db-backup slice and before the domain modules; a feature module imports that same `AiModule`, never the platform's. No environment variable and no provider key in the repository: keys are stored at runtime in `user_ai_keys` (a user's own), `org_credentials` or `credentials` (encrypted with `SECRETS_ENCRYPTION_KEY`), AI is off until an administrator enables it at `/admin/settings/ai`, and the tables came with platform migration `add_ai_platform` (no new migration). `AiHostModule` binds `AI_SYSTEM_PRISMA` (the bypass client, allowlisted in `system-injection-boundary.spec.ts`), `AI_OBJECT_STORE` (a view over the storage slice), `AI_METRICS` and `DefaultAiTargetResolver` (the platform order; ShellKeep has no resolver of its own). The five features (`terminal_assist`, `terminal_explain`, `session_summary`, `runbook_agent`, `runbook_draft`) are registered by `app-registrations/ai.ts`; the `ai` permission slice, the AI credential purpose, the `ai` system namespace (appended last, organization-overridable) and the user namespace are registered with the other manifests. The eight `ai.*` job types are pinned in `test/jobs/job-type-snapshot.spec.ts` and are server-only. The seven `ai-*` conformance suites run with no skip.
+
+| Difference | Detail | Resolved by |
+|---|---|---|
+| `viewer` holds no `ai:use` | The platform grants `ai:use` to `org_admin` and `contributor` only (the same as the reference app); a viewer can read `GET /api/ai/config` but not use AI or store a key | Kept (a platform decision) |
+| Telemetry assistant shim | The `TELEMETRY_AI` disabled adapter shim marked `#55` lives on the telemetry branch (#53), not here; once this slice is merged it can be replaced by the real adapter over `AiService` | A follow-up after #53 and #55 merge |
+| `logPromptContent` | Off by default. Turning it on logs prompt text, which for the terminal features is terminal snippets (already redacted by #56) | Kept |
