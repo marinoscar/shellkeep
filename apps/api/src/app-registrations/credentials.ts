@@ -7,6 +7,7 @@
 // under it. `ssh` is permanent.
 //
 //   smtp, email_ses, push_vapid  the deployment's mail and Web Push secrets (#51)
+//   runbook_secret  an organization's runbook secret parameters (#61, org tier only)
 //   ssh  a user's SSH secrets, one credential per field of a server profile
 //        (`profile.<profileId>.password | private_key | passphrase`)
 //
@@ -31,6 +32,7 @@ import { SES_CREDENTIAL_PURPOSE_DEF, SMTP_CREDENTIAL_PURPOSE_DEF } from '@marino
 import { PUSH_VAPID_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/notifications';
 import { STORAGE_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/storage';
 
+import { RUNBOOK_SECRET_PURPOSE_DEF } from '../runbooks/runbooks.credentials';
 import { SSH_CREDENTIAL_PURPOSE } from '../server-profiles/ssh-credentials';
 
 /** The user credential purposes ShellKeep stores (kinds of key a user brings). */
@@ -72,6 +74,8 @@ export function registerShellkeepCredentialPurposes(): void {
   registerCredentialPurpose(SMTP_CREDENTIAL_PURPOSE_DEF);
   registerCredentialPurpose(SES_CREDENTIAL_PURPOSE_DEF);
   registerCredentialPurpose(PUSH_VAPID_CREDENTIAL_PURPOSE_DEF);
+  // The organization's runbook secret parameters (#61): write-only, org tier only.
+  registerCredentialPurpose(RUNBOOK_SECRET_PURPOSE_DEF);
   for (const def of APP_CREDENTIAL_PURPOSES) registerCredentialPurpose(def);
   for (const def of APP_USER_CREDENTIAL_PURPOSES) registerUserCredentialPurpose(def);
 }

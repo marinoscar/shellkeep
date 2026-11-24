@@ -153,7 +153,7 @@ runPlatformConformance({
         staleMessage: SETTINGS_CATALOG_STALE_MESSAGE,
       },
       // ui, features, terminal, maintenance, jobs, nodes, retention, storage, notifications, ssh, databaseBackup and telemetry.
-      minSystemNamespaces: 12,
+      minSystemNamespaces: 13,
     },
     // Every credential purpose has a platform or app owner, every user purpose's fallback
     // address resolves (`ssh` has none), and no credential presentation schema carries a

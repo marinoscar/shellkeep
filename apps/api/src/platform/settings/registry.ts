@@ -41,6 +41,7 @@ import {
   APP_USER_SETTINGS_NAMESPACES,
 } from '../../app-registrations/settings';
 import { APP_RETENTION_POLICIES } from '../../app-registrations/jobs';
+import { RUNBOOKS_SYSTEM_SETTINGS } from '../../runbooks/settings/runbooks.system-settings';
 import { SSH_SYSTEM_SETTINGS } from '../../ssh/ssh.system-settings';
 import { TELEMETRY_SYSTEM_SETTINGS } from '../telemetry/telemetry.system-settings';
 
@@ -76,6 +77,8 @@ export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettin
   // The telemetry slice's policy (#53): collection, retention, query bounds and the assistant.
   // The package ships the schema, defaults and merge; the declaration is the app's.
   TELEMETRY_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The runbooks policy (#61), with a tighten-only org layer; appended after `telemetry` so no stored key moves.
+  RUNBOOKS_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
 /** The platform's optional user namespaces this app registers: the notification preferences (#51). */
