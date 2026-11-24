@@ -62,8 +62,8 @@ describeWithDb('admin.factory_reset over ShellKeep data (real Postgres, RLS on)'
     const job = await runningJob(db, 'admin.factory_reset', { actorUserId: mine.userId });
     await svc.factory.process(job);
 
-    expect(await shellkeepCounts(db, mine)).toMatchObject({ profiles: 0, sessions: 0, sshCredentials: 0, ownRunbooks: 0, groupRunbooks: 0, grants: 0, objects: 0, user: 1 });
-    expect(await shellkeepCounts(db, bob)).toMatchObject({ profiles: 0, sessions: 0, sshCredentials: 0, ownRunbooks: 0, groupRunbooks: 0, grants: 0, objects: 0, user: 0 });
+    expect(await shellkeepCounts(db, mine)).toMatchObject({ profiles: 0, sessions: 0, sshCredentials: 0, ownRunbooks: 0, groupRunbooks: 0, ownRuns: 0, groupRuns: 0, grants: 0, objects: 0, user: 1 });
+    expect(await shellkeepCounts(db, bob)).toMatchObject({ profiles: 0, sessions: 0, sshCredentials: 0, ownRunbooks: 0, groupRunbooks: 0, ownRuns: 0, groupRuns: 0, grants: 0, objects: 0, user: 0 });
 
     const after = await sys(db, async (tx) => ({
       users: (await tx.user.findMany({ select: { id: true } })).map((u: { id: string }) => u.id),

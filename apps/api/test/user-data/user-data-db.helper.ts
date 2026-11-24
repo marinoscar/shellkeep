@@ -78,7 +78,7 @@ export function userDataServices(db: RlsDatabase): UserDataDb {
     runner,
     factory: new FactoryResetHandler(registry as never, port, storage as never, plans, runner, sink as never, resolved),
     servers: new ServersUserDataPurgeHandler(registry as never, credentials, port),
-    runbooks: new RunbooksUserDataPurgeHandler(registry as never, port),
+    runbooks: new RunbooksUserDataPurgeHandler(registry as never, port, storage as never),
     credentials,
     jobs,
     storage,
@@ -134,9 +134,14 @@ export interface SeededUser {
   sessionIds: string[];
   /** The `ssh` credential names saved for the user. */
   credentialNames: string[];
-  /** A runbook only the user owns (with two versions) and one a group owns. */
+  /** A runbook only the user owns (with two versions) and one a group owns, each with a run the user started. */
   ownRunbookId: string;
   groupRunbookId: string;
+  ownRunId: string;
+  groupRunId: string;
+  /** The step log objects of the two runs (raw keys, no `storage_objects` row). */
+  ownLogKey: string;
+  groupLogKey: string;
   /** The user's storage object keys (a profile image and a log, uploaded by them). */
   objectKeys: string[];
 }
@@ -173,6 +178,10 @@ export async function seedShellkeepUser(
   const sessionIds = [randomUUID(), randomUUID()];
   const ownRunbookId = randomUUID();
   const groupRunbookId = randomUUID();
+  const ownRunId = randomUUID();
+  const groupRunId = randomUUID();
+  const ownLogKey = `runbook-artifacts/${orgId}/${ownRunId}/${tag}/0.log`;
+  const groupLogKey = `runbook-artifacts/${orgId}/${groupRunId}/${tag}/0.log`;
 
   await sys(db, async (tx) => {
     const viewer = (await tx.role.findFirst({ where: { name: 'viewer' } })) ?? (await tx.role.create({ data: { name: 'viewer', description: 'viewer', scope: 'org' } }));
@@ -196,6 +205,28 @@ export async function seedShellkeepUser(
         });
       }
     }
+    // One run per runbook, started by the user, with a target, a step that has a saved log (a key), a
+    // buffered chunk, a command audit row and an approval the user decided.
+    for (const [runId, runbookId, logKey] of [[ownRunId, ownRunbookId, ownLogKey], [groupRunId, groupRunbookId, groupLogKey]] as const) {
+      await tx.runbookRun.create({
+        data: { id: runId, orgId, runbookId, version: 1, initiatedBy: userId, params: {}, secretRefs: {}, targetSelector: {}, strategy: {} },
+      });
+      const targetId = randomUUID();
+      const stepId = randomUUID();
+      await tx.runbookRunTarget.create({
+        data: { id: targetId, orgId, runId, position: 0, serverName: 'Server run', hostname: 'run.example.test', port: 22, username: 'ops' },
+      });
+      await tx.runbookRunStep.create({
+        data: { id: stepId, orgId, runId, runTargetId: targetId, stepIndex: 0, stepId: 'c1', kind: 'command', name: 'Disk', logStorageKey: logKey },
+      });
+      await tx.runbookRunLogChunk.create({ data: { orgId, runId, runStepId: stepId, seq: 1, stream: 'stdout', data: 'ok', bytes: 2 } });
+      await tx.runbookCommandExecution.create({
+        data: { orgId, runStepId: stepId, origin: 'step', commandSha256: 'b'.repeat(64), commandPreview: 'df -h' },
+      });
+      await tx.runbookApproval.create({
+        data: { orgId, runId, scopeKey: 'run', scope: 'run', kind: 'gate', stepIndex: 0, stepName: 'Gate', expiresAt: new Date(Date.now() + 3_600_000), status: 'approved', decidedBy: userId },
+      });
+    }
     for (const [resourceType, resourceId] of [
       [SERVER_PROFILE_RESOURCE, profileIds[0]!],
       [SERVER_PROFILE_RESOURCE, groupProfileId],
@@ -216,7 +247,7 @@ export async function seedShellkeepUser(
     await svc.credentials.setSecret(userId, SSH_CREDENTIAL_PURPOSE, name, ['pw', randomUUID()].join('-'));
     credentialNames.push(name);
   }
-  return { userId, email, orgId, profileIds, groupProfileId, sessionIds, credentialNames, ownRunbookId, groupRunbookId, objectKeys };
+  return { userId, email, orgId, profileIds, groupProfileId, sessionIds, credentialNames, ownRunbookId, groupRunbookId, ownRunId, groupRunId, ownLogKey, groupLogKey, objectKeys };
 }
 
 /** What of a user's ShellKeep data remains, read on the bypass pool. */
@@ -232,6 +263,18 @@ export async function shellkeepCounts(db: RlsDatabase, user: SeededUser) {
     groupRunbooks: await tx.runbook.count({ where: { id: user.groupRunbookId } }),
     groupRunbookVersions: await tx.runbookVersion.count({ where: { runbookId: user.groupRunbookId } }),
     groupRunbookAuthored: await tx.runbook.count({ where: { id: user.groupRunbookId, ownerUserId: userId } }),
+    ownRuns: await tx.runbookRun.count({ where: { id: user.ownRunId } }),
+    ownRunRows: {
+      targets: await tx.runbookRunTarget.count({ where: { runId: user.ownRunId } }),
+      steps: await tx.runbookRunStep.count({ where: { runId: user.ownRunId } }),
+      chunks: await tx.runbookRunLogChunk.count({ where: { runId: user.ownRunId } }),
+      approvals: await tx.runbookApproval.count({ where: { runId: user.ownRunId } }),
+    },
+    groupRuns: await tx.runbookRun.count({ where: { id: user.groupRunId } }),
+    groupRunStarted: await tx.runbookRun.count({ where: { id: user.groupRunId, initiatedBy: userId } }),
+    groupRunSteps: await tx.runbookRunStep.count({ where: { runId: user.groupRunId } }),
+    groupApprovalsDecided: await tx.runbookApproval.count({ where: { runId: user.groupRunId, decidedBy: userId } }),
+    groupApprovals: await tx.runbookApproval.count({ where: { runId: user.groupRunId } }),
     grants: await tx.grant.count({ where: { resourceId: { in: resources } } }),
     objects: await tx.storageObject.count({ where: { uploadedById: userId } }),
     user: await tx.user.count({ where: { id: userId } }),

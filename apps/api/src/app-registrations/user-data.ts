@@ -17,19 +17,25 @@
 //                    the user owns goes; one a group owns stays with the group (author link nulled). The
 //                    platform's `keepWhenReferenced` cannot express this (it keeps any row with a
 //                    version), so ownership is decided by the delegate.
-//   RunbookVersion   not an owner model (`created_by` is an actor): it follows its runbook (cascade). The
-//                    hint exists so the factory reset's organization step and the Danger Zone know it.
+//   RunbookVersion, RunbookRun, RunbookRunTarget, RunbookRunStep, RunbookRunLogChunk,
+//   RunbookCommandExecution, RunbookApproval
+//                    not owner models (`created_by`, `initiated_by` and `decided_by` are actors, set null):
+//                    they follow their runbook (every key to it cascades), so a runbook only the user owns
+//                    takes its versions, runs, targets, steps, log chunks, command audit rows and approvals
+//                    with it. Runs the user started and approvals they decided on a runbook that stays are
+//                    kept with the actor id nulled. The hints record the decision for the factory reset's
+//                    organization step and for the Danger Zone; the work is in `runbooks.user_data.purge`.
 //
-// STORAGE OBJECTS. The user's `StorageObject` rows (every object they uploaded, session logs and runbook
-// artifacts included, since each is owned by its uploader) are deleted by the platform's `files` category.
-// No ShellKeep model carries a column naming such an object yet (`TerminalSession` has no session-log
-// column and the run tables are not in this branch), so no `storageObjectColumns` is declared. When a model
-// gains one, name it here: the purge collects the ids BEFORE the row goes.
+// STORAGE OBJECTS. The user's `StorageObject` rows (every object they uploaded) are deleted by the
+// platform's `files` category. No ShellKeep model has a column naming a `StorageObject` ID, so no
+// `storageObjectColumns` is declared: `TerminalSession` records no session log yet, and a run step records
+// the KEY of its log (`log_storage_key`, no `storage_objects` row), which `runbooks.user_data.purge`
+// deletes itself. When a model gains an object-id column, name it here: the purge collects the ids BEFORE
+// the row goes.
 //
-// EXTENSION POINT (the runbook engine, #62, PR #118): the run tables (`RunbookRun`, `RunbookRunTarget`,
-// steps, log chunks, command executions, approvals) are added here with their decisions, in the PR that
-// lands them. Runs started by the user on a group-owned runbook are kept with the actor id nulled; the
-// delegate `runbooks.user_data.purge` is where that happens.
+// SESSION LOGS. No writer of the `session-logs/` prefix exists yet. When one lands, its objects either get
+// a `StorageObject` row (then an object-id column on `TerminalSession` and `storageObjectColumns` here) or
+// are keyed like the step logs (then `servers.user_data.purge` deletes them). Add the decision with it.
 // =============================================================================
 
 import type {
@@ -97,10 +103,18 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
     // keeps; this one is deleted, so the line is documentation of the rule the job applies.
     summary: 'Runbooks owned by a group stay with the group.',
   },
-  {
-    model: 'RunbookVersion',
-    category: SHELLKEEP_USER_DATA_CATEGORY_IDS.RUNBOOKS,
-  },
+  // The rows below follow their runbook (see the header); the decision is recorded, the work is the delegate's.
+  ...(
+    [
+      'RunbookVersion',
+      'RunbookRun',
+      'RunbookRunTarget',
+      'RunbookRunStep',
+      'RunbookRunLogChunk',
+      'RunbookCommandExecution',
+      'RunbookApproval',
+    ] as const
+  ).map((model): UserDataModelHint<Prisma.ModelName> => ({ model, category: SHELLKEEP_USER_DATA_CATEGORY_IDS.RUNBOOKS })),
 ];
 
 /** ShellKeep's narrow scopes (the "Delete specific data" rows). The phrase is the id upper-cased. */
@@ -117,7 +131,8 @@ export const APP_USER_DATA_SCOPES: readonly UserDataScopeDef[] = [
   {
     id: 'runbooks',
     label: 'Delete my runbooks and run history',
-    description: 'Every runbook only you own, with its versions and runs. Runbooks owned by a group stay with the group.',
+    description:
+      'Every runbook only you own, with its versions, runs and saved step logs. Runbooks owned by a group stay with the group, and so do their runs.',
     categories: [SHELLKEEP_USER_DATA_CATEGORY_IDS.RUNBOOKS],
     confirmation: 'RUNBOOKS',
     layer: 'specific',

@@ -9,8 +9,9 @@
 //
 //   servers     the user's profiles (a group-owned one the user created too), their sessions, their saved
 //               ssh credentials and the grants on the profiles are gone; runbooks and files stay;
-//   runbooks    the runbook only the user owns goes with its versions and grants; a group's runbook stays
-//               with the group, its author link nulled, its versions and grants intact;
+//   runbooks    the runbook only the user owns goes with its versions, runs, step logs (the bytes in storage
+//               too) and grants; a group's runbook stays with the group, its author link nulled, its versions,
+//               grants and runs intact, the runs the user started and the approvals they decided detached;
 //   everything  all of it, plus the user's files (bytes deleted through the provider); the account, the
 //               organization membership and the group membership stay;
 //   always      another user's rows are untouched and no hostname, user name or secret is written to the log.
@@ -67,6 +68,10 @@ describeWithDb('user.data.purge of ShellKeep data (real Postgres, RLS on)', () =
       ownRunbookVersions: 2,
       groupRunbooks: 1,
       groupRunbookVersions: 2,
+      ownRuns: 1,
+      groupRuns: 1,
+      groupRunStarted: 1,
+      groupApprovalsDecided: 1,
       grants: 4,
       objects: 2,
       user: 1,
@@ -79,6 +84,7 @@ describeWithDb('user.data.purge of ShellKeep data (real Postgres, RLS on)', () =
     const user = await seed('servers');
     const other = await seed('servers-other');
     const otherBefore = await shellkeepCounts(db, other);
+    svc.storage.deleted.length = 0;
 
     const { result, delegatedTypes } = await runPurge(db, svc, user.userId, 'servers');
 
@@ -89,7 +95,8 @@ describeWithDb('user.data.purge of ShellKeep data (real Postgres, RLS on)', () =
     // Grants on the profiles went; grants on the runbooks stay.
     expect(after.grants).toBe(2);
     // Not in the scope: runbooks, files, the account and the memberships.
-    expect(after).toMatchObject({ ownRunbooks: 1, groupRunbooks: 1, objects: 2, user: 1, membership: 1, groupMember: 1 });
+    expect(after).toMatchObject({ ownRunbooks: 1, groupRunbooks: 1, ownRuns: 1, objects: 2, user: 1, membership: 1, groupMember: 1 });
+    expect(svc.storage.deleted).toEqual([]);
     expect(await shellkeepCounts(db, other)).toEqual(otherBefore);
   });
 
@@ -105,14 +112,19 @@ describeWithDb('user.data.purge of ShellKeep data (real Postgres, RLS on)', () =
     const user = await seed('runbooks');
     const other = await seed('runbooks-other');
     const otherBefore = await shellkeepCounts(db, other);
+    svc.storage.deleted.length = 0;
 
     const { delegatedTypes } = await runPurge(db, svc, user.userId, 'runbooks');
 
     expect(delegatedTypes).toEqual(['runbooks.user_data.purge']);
     const after = await shellkeepCounts(db, user);
-    expect(after).toMatchObject({ ownRunbooks: 0, ownRunbookVersions: 0 });
+    expect(after).toMatchObject({ ownRunbooks: 0, ownRunbookVersions: 0, ownRuns: 0, ownRunRows: { targets: 0, steps: 0, chunks: 0, approvals: 0 } });
     // The group's runbook stays, with its versions and its grant, and no author link to the user.
     expect(after).toMatchObject({ groupRunbooks: 1, groupRunbookVersions: 2, groupRunbookAuthored: 0 });
+    // Its run stays as history, the user detached from it: no starter, no decider; the step is kept.
+    expect(after).toMatchObject({ groupRuns: 1, groupRunStarted: 0, groupRunSteps: 1, groupApprovals: 1, groupApprovalsDecided: 0 });
+    // The saved log of the deleted runbook's run went from storage; the kept run's log stays.
+    expect(svc.storage.deleted).toEqual([user.ownLogKey]);
     // Grants: the two on the profiles and the one on the group's runbook remain.
     expect(after.grants).toBe(3);
     // Not in the scope: servers, sessions, credentials, files.
@@ -130,9 +142,10 @@ describeWithDb('user.data.purge of ShellKeep data (real Postgres, RLS on)', () =
 
     expect(delegatedTypes).toEqual(['runbooks.user_data.purge', 'servers.user_data.purge']);
     expect(result.storageObjectsFailed).toBe(0);
-    expect(svc.storage.deleted.sort()).toEqual([...user.objectKeys].sort());
+    // The user's files and the saved log of the run on the runbook they owned; the group's run log stays.
+    expect(svc.storage.deleted.sort()).toEqual([...user.objectKeys, user.ownLogKey].sort());
     const after = await shellkeepCounts(db, user);
-    expect(after).toMatchObject({ profiles: 0, sessions: 0, sshCredentials: 0, ownRunbooks: 0, ownRunbookVersions: 0, objects: 0, groupRunbooks: 1, groupRunbookAuthored: 0 });
+    expect(after).toMatchObject({ profiles: 0, sessions: 0, sshCredentials: 0, ownRunbooks: 0, ownRunbookVersions: 0, ownRuns: 0, objects: 0, groupRunbooks: 1, groupRunbookAuthored: 0, groupRunStarted: 0 });
     // Only the group runbook's own grant is left; every grant on a deleted record went.
     expect(after.grants).toBe(1);
     expect(after).toMatchObject({ user: 1, membership: 1, groupMember: 1 });

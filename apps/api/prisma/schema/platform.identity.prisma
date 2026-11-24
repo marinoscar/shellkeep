@@ -124,6 +124,10 @@ model User {
   ownedRunbooks     Runbook[]        @relation("RunbookOwner")
   runbookVersions   RunbookVersion[] @relation("RunbookVersionAuthor")
 
+  // composed from app:shellkeep.runbooks.prisma
+  initiatedRunbookRuns    RunbookRun[]      @relation("RunbookRunInitiator")
+  decidedRunbookApprovals RunbookApproval[] @relation("RunbookApprovalDecider")
+
   // composed from app:shellkeep.server-profiles.prisma
   serverProfiles ServerProfile[]
 
@@ -516,6 +520,14 @@ model Organization {
   // composed from app:shellkeep.runbooks.prisma
   runbooks        Runbook[]
   runbookVersions RunbookVersion[]
+
+  // composed from app:shellkeep.runbooks.prisma
+  runbookRuns              RunbookRun[]
+  runbookRunTargets        RunbookRunTarget[]
+  runbookRunSteps          RunbookRunStep[]
+  runbookRunLogChunks      RunbookRunLogChunk[]
+  runbookCommandExecutions RunbookCommandExecution[]
+  runbookApprovals         RunbookApproval[]
 
   // composed from app:shellkeep.server-profiles.prisma
   serverProfiles ServerProfile[]

@@ -51,7 +51,9 @@ import configuration from './config/configuration';
     ScheduleModule.forRoot(),
 
     // Event emitter for async events
-    EventEmitterModule.forRoot(),
+    // maxListeners: the platform slices and the runbook engine (#62) each listen to `job.settled`; the default of 10
+    // trips eventemitter2's leak warning, which is a listener count and not a leak.
+    EventEmitterModule.forRoot({ maxListeners: 30 }),
 
     // Database
     PrismaModule,

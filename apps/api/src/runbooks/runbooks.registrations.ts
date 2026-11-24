@@ -9,7 +9,11 @@
 // `app-registrations/credentials.ts`. Imported by `app-registrations/registrations.ts`.
 // =============================================================================
 
+import { registerSystemAccessReason } from '@marinoscar/platform-api/core';
+
 import { registerRunbookNotifications } from '../notifications-registry/runbooks.notifications';
+import { RUNBOOKS_RECONCILE_REASON } from './engine/engine.constants';
+import { registerRunbookRunErrorCodes } from './engine/engine.error-codes';
 import { registerRunbookErrorCodes } from './runbooks.error-codes';
 
 let registered = false;
@@ -19,5 +23,11 @@ export function registerRunbookRegistrations(): void {
   if (registered) return;
   registered = true;
   registerRunbookErrorCodes();
+  registerRunbookRunErrorCodes();
+  registerSystemAccessReason({
+    id: RUNBOOKS_RECONCILE_REASON,
+    description:
+      'The runbook reconcile job (runbook.logs.compact) finds stuck runs, lost executors, expired approvals and orphan log chunks across every organization.',
+  });
   registerRunbookNotifications();
 }
