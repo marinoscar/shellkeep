@@ -7,6 +7,7 @@ import { ServerProfilesModule } from '../server-profiles/server-profiles.module'
 import { SshModule } from '../ssh/ssh.module';
 import { TerminalModule } from '../terminal/terminal.module';
 import { FileArchiveHandler } from './archive/file-archive.handler';
+import { ARCHIVE_OBJECT_LISTER, DriverArchiveObjectLister } from './archive/archive-object-lister';
 import { FileArchivePurgeHandler } from './archive/file-archive-purge.handler';
 import { FileArchivesController } from './archive/file-archives.controller';
 import { FileArchivesService } from './archive/file-archives.service';
@@ -33,6 +34,7 @@ import { SftpService } from './sftp.service';
     FileArchivesService,
     FileArchiveHandler,
     FileArchivePurgeHandler,
+    { provide: ARCHIVE_OBJECT_LISTER, useClass: DriverArchiveObjectLister },
     FileArchiveTask,
   ],
 })

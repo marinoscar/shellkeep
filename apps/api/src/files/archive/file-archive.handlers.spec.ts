@@ -31,7 +31,7 @@ const none = new Proxy({}, { get: () => async () => undefined }) as never;
 
 const archiveHandler = () => new FileArchiveHandler(new JobHandlerRegistry(), stubPrisma, none, none, none, none, none, none, none);
 const purgeHandler = () =>
-  new FileArchivePurgeHandler(new JobHandlerRegistry(), { runAsSystem: async (_reason: string, fn: (t: unknown) => Promise<unknown>) => fn(tx) } as never, none);
+  new FileArchivePurgeHandler(new JobHandlerRegistry(), { runAsSystem: async (_reason: string, fn: (t: unknown) => Promise<unknown>) => fn(tx) } as never, none, none);
 
 describeJobHandlerConformance(FILES_ARCHIVE_JOB_TYPE, archiveHandler, {
   payloads: [
@@ -54,7 +54,7 @@ describe('node eligibility of the archive jobs', () => {
   it('keeps both server-only, permanently', () => {
     const registry = new JobHandlerRegistry();
     const archive = new FileArchiveHandler(registry, stubPrisma, none, none, none, none, none, none, none);
-    const purge = new FileArchivePurgeHandler(registry, none, none);
+    const purge = new FileArchivePurgeHandler(registry, none, none, none);
     registry.register(archive);
     registry.register(purge);
     expect(registry.serverOnlyTypes()).toEqual(expect.arrayContaining([FILES_ARCHIVE_JOB_TYPE, FILES_ARCHIVE_PURGE_JOB_TYPE]));
@@ -100,7 +100,7 @@ describe('FileArchivePurgeHandler (expiry)', () => {
         deletedKeys.push(key);
       },
     };
-    const handler = new FileArchivePurgeHandler(new JobHandlerRegistry(), system as never, storage as never);
+    const handler = new FileArchivePurgeHandler(new JobHandlerRegistry(), system as never, storage as never, none);
     return { handler, store, deletedKeys };
   }
 
@@ -128,8 +128,110 @@ describe('FileArchivePurgeHandler (expiry)', () => {
   it('selects only archives whose expires_at passed', async () => {
     let seen: any;
     const system = { runAsSystem: async (_r: string, fn: any) => fn({ fileArchive: { findMany: async (args: any) => ((seen = args), []), deleteMany: async () => ({ count: 0 }) } }) };
-    await new FileArchivePurgeHandler(new JobHandlerRegistry(), system as never, none).purgeExpired(NOW);
+    await new FileArchivePurgeHandler(new JobHandlerRegistry(), system as never, none, none).purgeExpired(NOW);
     expect(seen.where.expiresAt).toEqual({ lt: NOW });
+  });
+});
+
+describe('FileArchivePurgeHandler (orphan objects)', () => {
+  const NOW = new Date('2026-11-25T12:00:00Z');
+  const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const keyOf = (n: number) => `file-archives/11111111-2222-4333-8444-555555555555/${id(n)}/archive.tar.gz`;
+
+  function build(options: { keys: string[]; rows: number[]; createdAt?: Record<string, string>; noList?: boolean }) {
+    const deleted: string[] = [];
+    const queries: string[][] = [];
+    const system = {
+      runAsSystem: async (_r: string, fn: any) =>
+        fn({
+          fileArchive: {
+            findMany: async ({ where }: any) => {
+              if (where.id?.in) {
+                queries.push(where.id.in);
+                return where.id.in.filter((i: string) => options.rows.some((n) => id(n) === i)).map((i: string) => ({ id: i }));
+              }
+              return [];
+            },
+            deleteMany: async () => ({ count: 0 }),
+          },
+        }),
+    };
+    const storage = {
+      getMetadata: async (key: string) => (options.createdAt?.[key] ? { 'created-at': options.createdAt[key] } : null),
+      deleteMany: async (keys: string[]) => (deleted.push(...keys), { deleted: keys, failed: [] }),
+      delete: async (key: string) => void deleted.push(key),
+    };
+    const listed: string[] = [];
+    const lister = {
+      listKeys: async (prefix: string) =>
+        options.noList
+          ? null
+          : (async function* () {
+              expect(prefix).toBe('file-archives/');
+              for (const key of options.keys) {
+                listed.push(key);
+                yield key;
+              }
+            })(),
+    };
+    const handler = new FileArchivePurgeHandler(new JobHandlerRegistry(), system as never, storage as never, lister as never);
+    return { handler, deleted, queries, listed };
+  }
+
+  it('deletes objects whose archive has no row and keeps the ones that have one', async () => {
+    const { handler, deleted } = build({ keys: [keyOf(1), keyOf(2), keyOf(3)], rows: [2] });
+    expect(await handler.sweepOrphans(NOW)).toBe(2);
+    expect(deleted.sort()).toEqual([keyOf(1), keyOf(3)]);
+  });
+
+  it('leaves an orphan younger than one hour, and treats one with no age as old', async () => {
+    const { handler, deleted } = build({
+      keys: [keyOf(1), keyOf(2), keyOf(3)],
+      rows: [],
+      createdAt: { [keyOf(1)]: '2026-11-25T11:30:00Z', [keyOf(2)]: '2026-11-25T10:59:00Z' },
+    });
+    expect(await handler.sweepOrphans(NOW)).toBe(2);
+    expect(deleted.sort()).toEqual([keyOf(2), keyOf(3)]);
+  });
+
+  it('ignores keys that are not an archive object', async () => {
+    const { handler, deleted, queries } = build({ keys: ['file-archives/stray.txt', 'file-archives/a/b/c/d'], rows: [] });
+    expect(await handler.sweepOrphans(NOW)).toBe(0);
+    expect(deleted).toEqual([]);
+    expect(queries).toEqual([]);
+  });
+
+  it('checks the table in bounded batches', async () => {
+    const keys = Array.from({ length: 450 }, (_, i) => keyOf(i + 1));
+    const { handler, queries } = build({ keys, rows: [] });
+    await handler.sweepOrphans(NOW);
+    expect(queries.map((q) => q.length)).toEqual([200, 200, 50]);
+  });
+
+  it('examines a bounded number of keys per run and resumes after the last one, then wraps', async () => {
+    const keys = Array.from({ length: 2500 }, (_, i) => keyOf(i + 1)).sort();
+    const { handler, deleted } = build({ keys, rows: [] });
+    expect(await handler.sweepOrphans(NOW)).toBe(2000);
+    expect(deleted).toHaveLength(2000);
+    // The second run continues where the first stopped and reaches the end.
+    expect(await handler.sweepOrphans(NOW)).toBe(500);
+    expect(new Set(deleted).size).toBe(2500);
+    // The listing is exhausted: the next run starts from the beginning again.
+    const again = await handler.sweepOrphans(NOW);
+    expect(again).toBe(2000);
+  });
+
+  it('skips the sweep when the storage driver cannot list', async () => {
+    const { handler, deleted } = build({ keys: [keyOf(1)], rows: [], noList: true });
+    expect(await handler.sweepOrphans(NOW)).toBe(0);
+    expect(deleted).toEqual([]);
+  });
+
+  it('never fails the expiry job when the listing fails', async () => {
+    const system = { runAsSystem: async (_r: string, fn: any) => fn({ fileArchive: { findMany: async () => [], deleteMany: async () => ({ count: 0 }) } }) };
+    const lister = { listKeys: async () => { throw new Error('boom'); } };
+    const handler = new FileArchivePurgeHandler(new JobHandlerRegistry(), system as never, none, lister as never);
+    await expect(handler.process({ id: 'j' } as never)).resolves.toBeUndefined();
   });
 });
 

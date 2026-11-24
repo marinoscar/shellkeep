@@ -62,6 +62,7 @@ import {
   ARCHIVE_TTL_MS,
   FILES_ARCHIVE_JOB_TYPE,
   FILE_ARCHIVES_KEY_PREFIX,
+  ARCHIVE_CREATED_AT_METADATA,
   type ArchiveFailureCode,
 } from './archive.constants';
 import { buildTarCommand, splitArchivePath } from './tar-command';
@@ -283,7 +284,7 @@ export class FileArchiveHandler implements JobHandler, OnModuleInit {
       );
 
       try {
-        await this.storage.upload(key, counter, { mimeType: 'application/gzip' });
+        await this.storage.upload(key, counter, { mimeType: 'application/gzip', metadata: { [ARCHIVE_CREATED_AT_METADATA]: new Date().toISOString() } });
       } catch (error) {
         exec.destroy();
         if (error instanceof ArchiveFailure) throw error;

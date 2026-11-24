@@ -38,3 +38,12 @@ export const ARCHIVE_FAILURE = {
   INTERNAL: 'ARCHIVE_FAILED',
 } as const;
 export type ArchiveFailureCode = (typeof ARCHIVE_FAILURE)[keyof typeof ARCHIVE_FAILURE];
+
+/** An object younger than this is never swept as an orphan (it may belong to a build the sweep cannot see yet). */
+export const ORPHAN_MIN_AGE_MS = 60 * 60 * 1000;
+/** Keys examined per purge run: a big backlog is spread over runs (the next run resumes after the last key). */
+export const ORPHAN_SCAN_LIMIT = 2000;
+/** Keys checked against the table per query. */
+export const ORPHAN_BATCH = 200;
+/** The object metadata key holding the ISO time the object was written. */
+export const ARCHIVE_CREATED_AT_METADATA = 'created-at';

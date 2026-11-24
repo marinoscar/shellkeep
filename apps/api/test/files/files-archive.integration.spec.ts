@@ -372,6 +372,7 @@ describe('folder archives over SSH', () => {
         [`${base}/`, `${base}/a b.txt`, `${base}/it's.log`, `${base}/sub dir/`, `${base}/sub dir/$(x).txt`].sort(),
       );
 
+      expect((app.get(STORAGE_PROVIDER) as any).upload).toHaveBeenCalledWith(key, expect.anything(), expect.objectContaining({ metadata: { 'created-at': expect.any(String) } }));
       const row = rows.get(body.archiveId)!;
       expect(row).toMatchObject({ status: 'ready', storageKey: key, warning: null, errorCode: null });
       expect(row.sizeBytes).toBe(BigInt(stored.length));
