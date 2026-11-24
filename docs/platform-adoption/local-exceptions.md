@@ -29,7 +29,6 @@ Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, a
 | Storage status answered by the web host | `apps/web/src/platform/platformHost.tsx` (`hostApi`) | The packaged profile page (`UserProfilePage`) reads `GET /api/storage/status`, which ShellKeep does not serve yet, and the API refuses `imageSource: 'upload'` (see `ShellkeepSettingsProfileImages`). The host transport answers that one route with `{ configured: false }`, so the page shows the "storage is not configured" notice instead of an upload control that would fail; every other call goes to the app client | #50 (storage slice serves the route and the avatar upload) |
 | `NoNodeObjectStore` and `NoNodeJobInputs` (`NODE_OBJECT_STORE`, `NODE_JOB_INPUTS`) | `apps/api/src/platform/jobs/node-ports.shim.ts` | The nodes data plane's two ports. ShellKeep registers no node-eligible job type (every job is server-only; an SSH credential is never brokered to a node), so no node ever holds a job with bytes to move and neither is reached. They refuse (an error, and the data plane's named "no input" 422) instead of minting a URL from ShellKeep's own S3 module | #50 (storage: `nodeObjectStoreBinding` and the input resolver) |
 | `DefaultOrgResolver` | `apps/api/src/prisma/default-org.resolver.ts`, used by `ObjectsService` only (storage objects, whose platform model requires `org_id`) | Reads the default organization's id once and caches it, so every new storage object is stamped with it. The domain (server profiles, terminal sessions) takes the organization from the request since #47 | #50 (storage slice) |
-| `fingerprintOf` / `sameFingerprint` and the probe's own SSH exchange | `apps/api/src/terminal/doctor/host-key-fingerprint.ts`, `apps/api/src/terminal/doctor/tmux-probe.ts` | The Doctor's `terminal.tmux.probe` (#46) verifies a profile's pinned `SHA256:` fingerprint inside ssh2's `hostVerifier`, before authenticating, with its own two-line fingerprint function and its own one-shot connection, because the host-key trust flow and the single SSH connection factory do not exist yet | #60 (host-key verification: the canonical `fingerprintOf` and the connection factory replace both) |
 
 ### Conformance exemptions (`apps/api/test/conformance.spec.ts`)
 
@@ -82,7 +81,8 @@ Web: `platform/notifications.ts` calls `configureNotificationsWeb` before the fi
 |---|---|---|
 | A 400 validation error carries `details.issues` | The platform exception filter names each offending field (`path`) and the validator's message, never a submitted value; the forked filter returned only `statusCode`, `code`, `message`, `timestamp` and `path`. The web client reads `message` and `code`, so nothing breaks | Kept (the platform's contract) |
 | A maintenance 503 has `code: "ERROR"` and `details.reason: "MAINTENANCE_MODE"` | The filter derives `code` from the status; the marker the web keys on is `details.reason` (and the `Retry-After: 30` header) | Kept |
-| `common/logger` and `common/exceptions` stay | The host core has no Pino logger or seed exception; nothing injects `LoggerService` and nothing references `DatabaseSeedException`, so both are dead code | Deleted with the telemetry adoption (#53) and the seed review (#84) |
+| `common/exceptions` stays | The host core has no seed exception and nothing references `DatabaseSeedException`, so it is dead code. `common/logger` was deleted with the telemetry adoption (#53) | Deleted with the seed review (#84) |
+| The telemetry compose and collector files are copies | `infra/compose/telemetry.compose.yml`, `infra/otel/otel-collector-config.yaml` and `infra/otel/app-collector.yaml` are copied from `@marinoscar/platform-infra` with a `PLATFORM-ADOPTION-SHIM(#73)` header | #73 |
 | `@stoplight/spectral-cli` is a root dev dependency | The OpenAPI CI job lints the dumped document with the platform's Spectral ruleset (`.spectral.yaml`) | Kept |
 
 ### Storage (#50)
@@ -144,5 +144,4 @@ Intentional schema drift that the drift checks must accept (raw-SQL partial inde
 | Difference | Detail | Resolved by |
 |---|---|---|
 | `viewer` holds no `ai:use` | The platform grants `ai:use` to `org_admin` and `contributor` only (the same as the reference app); a viewer can read `GET /api/ai/config` but not use AI or store a key | Kept (a platform decision) |
-| Telemetry assistant shim | The `TELEMETRY_AI` disabled adapter shim marked `#55` lives on the telemetry branch (#53), not here; once this slice is merged it can be replaced by the real adapter over `AiService` | A follow-up after #53 and #55 merge |
 | `logPromptContent` | Off by default. Turning it on logs prompt text, which for the terminal features is terminal snippets (already redacted by #56) | Kept |
