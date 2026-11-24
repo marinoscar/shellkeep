@@ -1,17 +1,35 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Alert, Box, IconButton, Snackbar, Tooltip } from '@mui/material';
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Box, IconButton, Snackbar, Tooltip, Typography } from '@mui/material';
+import { ArrowBack as ArrowBackIcon, Close as CloseIcon } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useShellMainVariant } from '@marinoscar/platform-web/shell/headless';
-import { TerminalView } from '../components/terminal/TerminalView';
+import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
 import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { TerminalToolbar } from '../components/terminal/TerminalToolbar';
 import { TerminalKeyShortcutsBar } from '../components/terminal/TerminalKeyShortcutsBar';
-import { TerminalConnectionAlert } from '../components/terminal/TerminalConnectionAlert';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
+import { TERMINAL_WRITE_PERMISSION } from '../components/terminal/TerminalAccessGate';
 import { useTerminalActions } from '../components/terminal/useTerminalActions';
 import type { TerminalActionNotice } from '../components/terminal/useTerminalActions';
 import { useTerminalLayout } from '../components/terminal/useTerminalLayout';
+import { SplitLayout } from '../components/terminal/workspace/SplitLayout';
+import { SplitControls } from '../components/terminal/workspace/SplitControls';
+import { WorkspaceTabs } from '../components/terminal/workspace/WorkspaceTabs';
+import { WorkspacePane } from '../components/terminal/workspace/WorkspacePane';
+import type { PaneStatus } from '../components/terminal/workspace/WorkspacePane';
+import { RenameSessionDialog } from '../components/terminal/workspace/RenameSessionDialog';
+import { useWorkspaceLayout } from '../components/terminal/workspace/useWorkspaceLayout';
+import {
+  activateTab,
+  closePane,
+  closeTab,
+  moveTab,
+  openTab,
+  setSplitDirection,
+  splitWith,
+  unsplit,
+  visiblePanes,
+} from '../components/terminal/workspace/workspaceLayout';
 import { getSession, updateSession } from '../services/terminal-api';
 import type { KeyShortcut, TerminalSession } from '../types';
 import { encodeShortcut } from '../lib/terminal/encodeKeystroke';
@@ -30,37 +48,55 @@ export function keyDockOffset(keyboardInset: number, gapBelowPage: number): numb
 }
 
 /**
- * The terminal workspace at `/sessions/:id` (issue #77). It fills the shell's
- * full-bleed `<main>` (`useShellMainVariant`): no negative margins and no
- * height computed from the AppBar. Layout chain (docs/SCROLLING.md, "CSS
- * Layout Requirements"):
+ * The terminal workspace at `/sessions/:id` (issue #77): open sessions as tabs,
+ * two of them as a split, every pane its own `TerminalView` and WebSocket. It
+ * fills the shell's full-bleed `<main>` (`useShellMainVariant`): no negative
+ * margins and no height computed from the AppBar. Layout chain
+ * (docs/SCROLLING.md, "CSS Layout Requirements"):
  *
  *   <main> (flex column) → root (flex: 1, minHeight: 0, relative)
  *     → frame (absolute; bottom = the key dock offset; flex column)
- *       → toolbar, panes (flexGrow: 1, minHeight: 0), status, key bar
+ *       → tabs, toolbar, SplitLayout (flex: 1, minHeight: 0) → panes → TerminalView,
+ *         the gutter, the key bar
  *
  * Nothing in the frame is in flow for the page, so the terminal never sizes
  * the document and the document never scrolls.
  */
 export default function TerminalWorkspacePage() {
-  const { id } = useParams<{ id: string }>();
+  const { id: routeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   useShellMainVariant('full-bleed');
   const { isPhone } = useTerminalLayout();
+  const { user } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canWrite = hasPermission(TERMINAL_WRITE_PERMISSION);
 
-  const viewRef = useRef<TerminalViewHandle>(null);
-  const [session, setSession] = useState<TerminalSession | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [terminalError, setTerminalError] = useState<string | null>(null);
+  const { layout, commit, current } = useWorkspaceLayout(routeId, user?.id ?? null);
+  const [sessions, setSessions] = useState<Record<string, TerminalSession>>({});
+  const [status, setStatus] = useState<Record<string, PaneStatus>>({});
+  const [ratio, setRatio] = useState(50);
   const [notice, setNotice] = useState<(TerminalActionNotice & { open: boolean }) | null>(null);
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const { settings, updateSettings } = useTerminalSettings();
   const showScrollButtons = settings?.terminal?.showScrollButtons ?? true;
   const keyShortcuts = settings?.terminal?.keyShortcuts ?? [];
   // Open by default on a phone, where there is no Esc, Tab or Ctrl key.
   const [keyShortcutsOpen, setKeyShortcutsOpen] = useState(isPhone);
 
-  // The key bar sits on the keyboard: the frame's bottom follows the inset.
+  // ---- the panes' handles --------------------------------------------------
+  const views = useRef(new Map<string, TerminalViewHandle>());
+  const registerView = useCallback((sessionId: string, handle: TerminalViewHandle | null) => {
+    if (handle) views.current.set(sessionId, handle);
+    else views.current.delete(sessionId);
+  }, []);
+  const onPaneStatus = useCallback((sessionId: string, next: PaneStatus) => {
+    setStatus((prev) => (prev[sessionId]?.connected === next.connected ? prev : { ...prev, [sessionId]: next }));
+  }, []);
+  const activeId = layout?.active ?? null;
+  const getView = useCallback(() => (activeId ? (views.current.get(activeId) ?? null) : null), [activeId]);
+
+  // ---- the key bar sits on the keyboard ------------------------------------
   const rootRef = useRef<HTMLDivElement>(null);
   const keyboardInset = useKeyboardInset();
   const [dockOffset, setDockOffset] = useState(0);
@@ -70,62 +106,148 @@ export default function TerminalWorkspacePage() {
     setDockOffset(keyDockOffset(keyboardInset, gap));
   }, [keyboardInset]);
 
+  // ---- the open sessions' details --------------------------------------------
+  const tabsKey = layout?.tabs.join(',') ?? '';
+  const requested = useRef(new Set<string>());
+  useEffect(() => {
+    const ids = tabsKey ? tabsKey.split(',') : [];
+    for (const sessionId of ids) {
+      if (requested.current.has(sessionId)) continue;
+      requested.current.add(sessionId);
+      getSession(sessionId)
+        .then((loaded) => setSessions((prev) => ({ ...prev, [sessionId]: loaded })))
+        .catch(() => {
+          // Gone, or never ours: drop the tab (the last one leaves the workspace).
+          requested.current.delete(sessionId);
+          const now = current();
+          if (now) commit(closeTab(now, sessionId));
+        });
+    }
+  }, [tabsKey, commit, current]);
+
+  // Focus the session the user just switched to. Not on load, and not on a
+  // phone, where focusing raises the on-screen keyboard uninvited.
+  const previousActive = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousActive.current;
+    previousActive.current = activeId;
+    if (!activeId || !previous || previous === activeId || isPhone) return;
+    const timer = setTimeout(() => views.current.get(activeId)?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [activeId, isPhone]);
+
   const notify = useCallback((next: TerminalActionNotice) => setNotice({ ...next, open: true }), []);
-  const getView = useCallback(() => viewRef.current, []);
+  const activeSession = activeId ? (sessions[activeId] ?? null) : null;
   const actions = useTerminalActions({
     getView,
-    session,
+    session: activeSession,
     notify,
-    onSessionCreated: (created) => navigate(`/sessions/${created.id}`),
+    onSessionCreated: (created) => {
+      setSessions((prev) => ({ ...prev, [created.id]: created }));
+      const now = current();
+      if (now) commit(openTab(now, created.id));
+    },
   });
 
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-    getSession(id)
-      .then((loaded) => {
-        if (!cancelled) setSession(loaded);
-      })
-      .catch(() => {
-        if (!cancelled) navigate('/sessions');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id, navigate]);
+  // ---- layout transitions ----------------------------------------------------
+  const update = useCallback(
+    (fn: (l: NonNullable<typeof layout>) => NonNullable<typeof layout> | null) => {
+      const now = current();
+      if (now) commit(fn(now));
+    },
+    [commit, current],
+  );
+
+  const handleRename = useCallback(
+    async (sessionId: string, name: string) => {
+      try {
+        const updated = await updateSession(sessionId, { name });
+        setSessions((prev) => ({ ...prev, [sessionId]: updated }));
+      } catch {
+        notify({ message: 'Could not rename the session', severity: 'error' });
+      }
+    },
+    [notify],
+  );
+
+  const handleSendShortcut = useCallback(
+    (shortcut: KeyShortcut) => {
+      const data = encodeShortcut(shortcut);
+      const view = getView();
+      if (!data || !view) return;
+      view.sendInput(data);
+      view.focus();
+    },
+    [getView],
+  );
 
   const handleToggleScrollButtons = useCallback(() => {
     void updateSettings({ terminal: { showScrollButtons: !showScrollButtons } });
   }, [showScrollButtons, updateSettings]);
 
-  const handleSendShortcut = useCallback((shortcut: KeyShortcut) => {
-    const data = encodeShortcut(shortcut);
-    if (!data) return;
-    viewRef.current?.sendInput(data);
-    viewRef.current?.focus();
-  }, []);
-
-  const handleConnectionChange = useCallback((connected: boolean) => {
-    setIsConnected(connected);
-    // A (re)connected session clears whatever went wrong before.
-    if (connected) setTerminalError(null);
-  }, []);
-
-  const handleRename = useCallback(
-    async (newName: string) => {
-      if (!id) return;
-      try {
-        setSession(await updateSession(id, { name: newName }));
-      } catch {
-        notify({ message: 'Could not rename the session', severity: 'error' });
-      }
-    },
-    [id, notify],
+  const renderPane = useCallback(
+    (sessionId: string) => (
+      <WorkspacePane
+        sessionId={sessionId}
+        showScrollButtons={showScrollButtons}
+        registerView={registerView}
+        onStatus={onPaneStatus}
+      />
+    ),
+    [showScrollButtons, registerView, onPaneStatus],
   );
 
-  if (!id || !session) {
-    return null;
-  }
+  const tabs = useMemo(
+    () =>
+      (layout?.tabs ?? []).map((sessionId) => ({
+        id: sessionId,
+        session: sessions[sessionId] ?? null,
+        connected: status[sessionId]?.connected ?? false,
+      })),
+    [layout?.tabs, sessions, status],
+  );
+
+  if (!layout || !activeId) return null;
+
+  // A phone shows one pane; a split stays in the URL for a wider screen.
+  const visible = isPhone ? [activeId] : visiblePanes(layout);
+  const splitOnScreen = visible.length > 1 && layout.split ? layout.split.dir : null;
+  const splitCandidates = layout.tabs
+    .filter((t) => t !== activeId)
+    .map((t) => ({ id: t, label: sessions[t]?.name ?? t }));
+  const sessionName = (sessionId: string) => sessions[sessionId]?.name ?? '';
+
+  const renderHeader = (sessionId: string, index: number) => (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 1,
+        minHeight: 28,
+        flexShrink: 0,
+        bgcolor: 'background.paper',
+        borderBottom: 1,
+        borderColor: 'divider',
+      }}
+    >
+      <Typography variant="caption" sx={{ fontWeight: 600 }}>
+        {index + 1}
+      </Typography>
+      <Typography variant="caption" noWrap sx={{ flex: 1, fontFamily: 'monospace', color: 'text.secondary' }}>
+        {sessionName(sessionId)}
+        {sessions[sessionId] ? ` · ${sessions[sessionId].serverProfile.name}` : ''}
+      </Typography>
+      <IconButton
+        size="small"
+        aria-label={`Close pane ${index + 1}`}
+        onClick={() => update((l) => closePane(l, sessionId))}
+        sx={{ p: 0.25 }}
+      >
+        <CloseIcon sx={{ fontSize: 14 }} />
+      </IconButton>
+    </Box>
+  );
 
   return (
     <Box ref={rootRef} data-testid="terminal-workspace" sx={{ flex: 1, minHeight: 0, position: 'relative' }}>
@@ -143,6 +265,25 @@ export default function TerminalWorkspacePage() {
           boxSizing: 'border-box',
         }}
       >
+        <WorkspaceTabs
+          variant={isPhone ? 'chips' : 'tabs'}
+          tabs={tabs}
+          activeId={activeId}
+          onActivate={(sessionId) => update((l) => activateTab(l, sessionId))}
+          onClose={(sessionId) => update((l) => closeTab(l, sessionId))}
+          onRename={(sessionId) => setRenaming(sessionId)}
+          onReorder={(from, to) => update((l) => moveTab(l, from, to))}
+          onNewSession={canWrite ? () => setNewSessionDialogOpen(true) : undefined}
+          trailing={
+            <SplitControls
+              current={splitOnScreen}
+              candidates={splitCandidates}
+              onSplit={(dir, other) => update((l) => splitWith(l, dir, other))}
+              onSetDirection={(dir) => update((l) => setSplitDirection(l, dir))}
+              onUnsplit={() => update(unsplit)}
+            />
+          }
+        />
         <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, bgcolor: 'background.default' }}>
           <Tooltip title="Back to sessions">
             <IconButton onClick={() => navigate('/sessions')} sx={{ ml: 1 }} aria-label="Back to sessions">
@@ -151,11 +292,11 @@ export default function TerminalWorkspacePage() {
           </Tooltip>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <TerminalToolbar
-              sessionName={session.name}
-              isConnected={isConnected}
-              onOpenNewTab={() => window.open(`/sessions/${id}`, '_blank')}
+              sessionName={activeSession?.name ?? ''}
+              isConnected={status[activeId]?.connected ?? false}
+              onOpenNewTab={() => window.open(`/sessions/${activeId}`, '_blank')}
               onDisconnect={() => navigate('/sessions')}
-              onRename={handleRename}
+              onRename={(name) => void handleRename(activeId, name)}
               showScrollButtons={showScrollButtons}
               onToggleScrollButtons={handleToggleScrollButtons}
               onCopyAll={actions.copyAll}
@@ -163,33 +304,29 @@ export default function TerminalWorkspacePage() {
               isDownloading={actions.isDownloading}
               onPaste={actions.paste}
               onUpload={actions.uploadFile}
-              onNewSession={() => setNewSessionDialogOpen(true)}
-              serverProfileName={session.serverProfile.name}
-              serverProfileColor={session.serverProfile.color}
+              onNewSession={canWrite ? () => setNewSessionDialogOpen(true) : undefined}
+              serverProfileName={activeSession?.serverProfile.name}
+              serverProfileColor={activeSession?.serverProfile.color}
               keyShortcutsOpen={keyShortcutsOpen}
               onToggleKeyShortcuts={() => setKeyShortcutsOpen((o) => !o)}
             />
           </Box>
         </Box>
 
-        {/* The panes. Never `overflow: hidden` here (docs/SCROLLING.md). */}
-        <Box data-testid="terminal-panes" sx={{ flexGrow: 1, minHeight: 0, position: 'relative' }}>
-          <TerminalView
-            ref={viewRef}
-            sessionId={id}
-            onConnectionChange={handleConnectionChange}
-            onError={setTerminalError}
-            showScrollButtons={showScrollButtons}
-          />
-          <TerminalConnectionAlert
-            error={terminalError}
-            onDismiss={() => setTerminalError(null)}
-            onRetry={() => {
-              setTerminalError(null);
-              viewRef.current?.reconnect();
-            }}
-          />
-        </Box>
+        {/* Never `overflow: hidden` between here and the xterm (docs/SCROLLING.md). */}
+        <SplitLayout
+          paneIds={layout.tabs}
+          visible={visible}
+          direction={layout.split?.dir ?? 'v'}
+          ratio={ratio}
+          onRatioChange={setRatio}
+          focusedId={activeId}
+          onFocusPane={(sessionId) => {
+            if (sessionId !== activeId) update((l) => activateTab(l, sessionId));
+          }}
+          renderHeader={renderHeader}
+          renderPane={renderPane}
+        />
         {/* The bottom gutter, outside the FitAddon host (docs/SCROLLING.md). */}
         <Box sx={{ height: '30px', flexShrink: 0 }} aria-hidden />
 
@@ -203,6 +340,13 @@ export default function TerminalWorkspacePage() {
         open={newSessionDialogOpen}
         onClose={() => setNewSessionDialogOpen(false)}
         onCreate={actions.createNewSession}
+      />
+      <RenameSessionDialog
+        name={renaming ? sessionName(renaming) : null}
+        onClose={() => setRenaming(null)}
+        onSave={(name) => {
+          if (renaming) void handleRename(renaming, name);
+        }}
       />
       <Snackbar
         open={notice?.open ?? false}

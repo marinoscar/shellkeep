@@ -132,13 +132,14 @@ describe('TerminalWorkspacePage', () => {
   }
 
   describe('Loading / session fetch', () => {
-    it('should render null while the session is loading', () => {
+    it('connects the pane while the session details load (the tab says Loading)', () => {
       // Never resolve so we stay in loading state
       vi.mocked(getSession).mockReturnValue(new Promise(() => {}));
 
       const { container } = renderTerminalPage();
 
-      expect(container.firstChild).toBeNull();
+      expect(container.querySelector('[data-testid="terminal-view"]')).not.toBeNull();
+      expect(screen.getByRole('tab', { name: /loading/i })).toBeInTheDocument();
     });
 
     it('should render the toolbar and terminal after the session loads', async () => {
@@ -169,7 +170,7 @@ describe('TerminalWorkspacePage', () => {
       renderTerminalPage();
 
       await waitFor(() => {
-        expect(screen.getByText('My SSH Session')).toBeInTheDocument();
+        expect(screen.getAllByText('My SSH Session')[0]).toBeInTheDocument();
       });
     });
 
@@ -189,14 +190,14 @@ describe('TerminalWorkspacePage', () => {
       });
 
       // The toolbar renders before clicking - verify it's stable
-      expect(screen.getByText('My SSH Session')).toBeInTheDocument();
+      expect(screen.getAllByText('My SSH Session')[0]).toBeInTheDocument();
 
       // Simulate connection change via the mock's onClick
       await userEvent.click(screen.getByTestId('terminal-view'));
 
       // After connection change, component re-renders without errors
       await waitFor(() => {
-        expect(screen.getByText('My SSH Session')).toBeInTheDocument();
+        expect(screen.getAllByText('My SSH Session')[0]).toBeInTheDocument();
       });
     });
   });
@@ -209,7 +210,7 @@ describe('TerminalWorkspacePage', () => {
       renderTerminalPage();
 
       await waitFor(() => {
-        expect(screen.getByText('My SSH Session')).toBeInTheDocument();
+        expect(screen.getAllByText('My SSH Session')[0]).toBeInTheDocument();
       });
 
       // Trigger inline rename via toolbar
@@ -224,7 +225,7 @@ describe('TerminalWorkspacePage', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Renamed Session')).toBeInTheDocument();
+        expect(screen.getAllByText('Renamed Session')[0]).toBeInTheDocument();
       });
     });
   });
