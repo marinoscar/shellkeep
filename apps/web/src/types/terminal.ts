@@ -71,6 +71,13 @@ export interface TerminalUserSettings {
 /** The `shortcuts` user-settings namespace (#80, API: `terminal/settings`). */
 export interface ShortcutsUserSettings {
   keyShortcuts: KeyShortcut[];
+  /** Rebound app actions (#57); absent means the built-in binding. */
+  actions?: ActionShortcuts;
+}
+
+/** App actions whose keyboard shortcut a user may rebind, by action id. */
+export interface ActionShortcuts {
+  'terminal.aiAssist'?: Keystroke;
 }
 
 /**

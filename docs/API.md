@@ -90,6 +90,19 @@ Endpoints returning lists support pagination with the following query parameters
 
 Binary frames are terminal input and output; `resize` and `ping` are unchanged. Each denial is logged as `ws.auth.denied` with the user id and the reason, never the token.
 
+## Terminal command assist
+
+`POST /api/ai/terminal/assist` (`ai:use` in the route declaration plus `sessions:write` checked in the handler, behind the AI kill switch and the organization AI switch). Body `{ "sessionId": "<uuid>", "prompt": "<1..2000 chars>", "includeScreen": true }`. The answer is `text/event-stream`:
+
+| Event | Data | Meaning |
+|---|---|---|
+| `context` | `{ os, shell, cwd, screenLines, findings }` | What was sent: the server facts, the working directory and how many redacted screen lines (0 when `includeScreen` is false or the server profile does not share output) |
+| `delta` | `{ text }` | The raw token stream (`COMMAND: ...` then `WHY: ...`) |
+| `result` | `{ command, explanation, risk, destructive, reasons }` | The command, parsed server-side as one plain line. `risk` (`low`, `medium`, `high`), `destructive` and `reasons` come from `classifyCommand`, never from the model |
+| `error` | `{ code }` | In-band failure after streaming began: `AI_ASSIST_UNPARSEABLE` or an `AiError` code |
+
+A failure before the first event is an ordinary JSON error: `404` for a session that is not the caller's, `403 AI_DISABLED`, `409 AI_CONSENT_REQUIRED`, `429 AI_RATE_LIMITED` with `Retry-After`, and `400 AI_INVALID_REQUEST` when the user has no default model. The command is a suggestion only: nothing on the server or in the web client runs it.
+
 ## Endpoints
 
 ### Authentication
@@ -1437,6 +1450,28 @@ Server profiles and runbooks are private to their owner until shared (#71). The 
 - `DELETE /api/server-profiles/:id` (the owner) removes the grants on it in the same transaction.
 
 **Audit events.** The slice audits shares, revocations and group membership. ShellKeep adds `server_profile.connect_as_grantee` (actor, profile id, `ownerUserId`, `ownerGroupId`, `purpose`: `connect`, `test`, `history` or `run`; never a secret) whenever a credential is read for a caller who did not save it. Metric: `app.sharing.access_decisions` (`resource_type`, `outcome`, `via`).
+
+### Dashboard
+
+The Home page's one read (#78). `GET /api/dashboard/summary` requires `sessions:read`; it is read-only and bounded (a fixed number of counts plus the five most recent rows, no N+1).
+
+```json
+{
+  "data": {
+    "servers": { "total": 14, "reachable": 0, "unreachable": 0, "unknown": 14, "hostKeyUntrusted": 3 },
+    "sessions": {
+      "active": 5, "attached": 2, "detached": 3,
+      "recent": [{ "id": "…", "name": "deploy-hotfix", "status": "active", "serverProfileId": "…", "serverName": "server-a", "lastActivityAt": "…", "createdAt": "…" }]
+    },
+    "runs": null
+  }
+}
+```
+
+- **Scope.** `servers` counts the profiles the caller may see (own, owned by a group of theirs, shared with them; the sharing slice's `accessibleWhere`) and is `null` without `servers:read`. `sessions` covers the caller's own non-terminated sessions in the request's organization; `recent` is newest activity first, at most five, and carries the server's name, never its hostname.
+- **Reachability.** Counted from stored connection-test results only, and the dashboard never opens SSH. No result is stored yet, so every visible server is `unknown`; `hostKeyUntrusted` counts servers with no trusted fingerprint (#60).
+- **Runs.** `null` without `runbooks:read`, and `null` until the runbook engine (#62) binds `DASHBOARD_RUNS_SOURCE` (`apps/api/src/dashboard/dashboard-runs.source.ts`), after which it is `{ running, failedLast24h, recent: [{ id, runbookId, runbookName, status, targets: { total, succeeded, failed, running }, startedAt }] }`.
+- The response is validated against `dashboardSummarySchema` (`apps/api/src/dashboard/dashboard.schema.ts`). One span per request, `dashboard.summary`; no hostname in a log or span.
 
 ---
 
