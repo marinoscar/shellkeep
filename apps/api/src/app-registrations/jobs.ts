@@ -23,7 +23,10 @@ import type { NodeSpanAttributeDefinition } from '@marinoscar/platform-api/nodes
 // =============================================================================
 
 /** This app's own job reasons. */
-export const APP_JOB_REASONS: readonly JobReasonDefinition[] = [];
+export const APP_JOB_REASONS: readonly JobReasonDefinition[] = [
+  // The runbook engine's run, target, advance and reconcile jobs (#62).
+  { id: 'runbook_run', label: 'Runbook run' },
+];
 
 /** This app's own retention policies. */
 export const APP_RETENTION_POLICIES: readonly RetentionPolicyDefinition[] = [];

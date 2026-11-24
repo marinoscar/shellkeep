@@ -366,6 +366,35 @@ export class RunbooksService {
     await this.access.require(await this.actor(principal), 'run', { type: RUNBOOK_RESOURCE, id });
   }
 
+  /** 404 unless the caller may read the runbook (the run engine uses it for the runs of that runbook). */
+  async requireRead(principal: Principal, id: string): Promise<void> {
+    await this.access.require(await this.actor(principal), 'read', { type: RUNBOOK_RESOURCE, id });
+  }
+
+  /** Whether the caller may take `action` on the runbook; never throws for a refusal. */
+  async can(principal: Principal, id: string, action: 'read' | 'run'): Promise<boolean> {
+    try {
+      await this.access.require(await this.actor(principal), action, { type: RUNBOOK_RESOURCE, id });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The `where` of the runbooks the caller may read, inside the caller's organization transaction. */
+  async readableWhere(tx: OrgTx, principal: Principal): Promise<Prisma.RunbookWhereInput> {
+    const me = await this.actor(principal);
+    return (await accessibleListWhere({
+      tx,
+      principal: me,
+      type: RUNBOOK_RESOURCE,
+      table: 'runbooks',
+      ownerUserField: 'ownerUserId',
+      ownerGroupField: 'ownerGroupId',
+      filter: 'all',
+    })) as Prisma.RunbookWhereInput;
+  }
+
   // ---------------------------------------------------------------------------
   // Writes
   // ---------------------------------------------------------------------------

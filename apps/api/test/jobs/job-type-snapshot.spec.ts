@@ -29,6 +29,12 @@ import { authHeader, createMockAdminUser } from '../helpers/auth-mock.helper';
 const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   // ShellKeep's own (#49): the session reaper, queued by an enqueue-only cron.
   'terminal.session.reap': 'Reap idle terminal sessions',
+  // The runbook engine (#62): start (resolve and snapshot), one segment on one server (server-only, one attempt),
+  // advance (the coordinator) and the reconcile sweep.
+  'runbook.run.start': 'Start a runbook run',
+  'runbook.target.run': 'Run a runbook on one server',
+  'runbook.run.advance': 'Advance a runbook run',
+  'runbook.logs.compact': 'Reconcile runbook runs and compact their logs',
   // The jobs slice: its own housekeeping.
   'job.history.purge': 'Job history purge',
   'audit.events.purge': 'Audit log purge',

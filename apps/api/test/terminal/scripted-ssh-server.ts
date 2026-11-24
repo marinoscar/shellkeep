@@ -47,7 +47,7 @@ export interface ScriptedSshServer {
  * not of the code under test, so a key that does not round-trip is discarded and drawn again
  * (each draw is independent; 16 consecutive failures have probability 1e-38).
  */
-function generateHostKey(): { keys: { public: string; private: string }; parsed: ParsedKey } {
+export function generateHostKey(): { keys: { public: string; private: string }; parsed: ParsedKey } {
   for (let attempt = 0; attempt < 16; attempt++) {
     const keys = utils.generateKeyPairSync('ed25519');
     const parsed = utils.parseKey(keys.public);
