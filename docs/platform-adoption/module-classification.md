@@ -69,7 +69,7 @@ The **Drift** column uses the slice view where the module has a packaged slice a
 | `apps/api/src/settings` | 0% / +250 −685 | 15 | backport | settings slice | #48 | deleted by #48 (the platform settings slice is bound in `platform/settings/`; the `terminal` user and system namespaces are `terminal/settings/`) |
 | `apps/api/src/common` | 0% / +27 −164 | 23 | mixed (see sub-rows) | split across host, core, settings, credentials, identity and otel-core | #44, #46, #47, #48, #53 | see the `common/` rows |
 | `apps/api/src/storage` | 1.1% / +367 −1060 | 29 | noise | storage slice | #50 | ShellKeep key prefixes registered with `registerStorageKeyPrefixes` (`session-logs/`, `runbook-artifacts/`); the S3 environment variables are removed |
-| `apps/api/src/config` | 0% / +29 −42 | 1 | noise | host core (config and `buildCorsOptions`) | #46 | Env-derived `DATABASE_URL` and the S3 and Uptrace variables disappear with #50 and #53 |
+| `apps/api/src/config` | 0% / +29 −42 | 1 | noise | host core (config and `buildCorsOptions`) | #46 | Env-derived `DATABASE_URL` and the S3 and trace-UI variables disappear with #50 and #53 |
 | `apps/api/src/openapi` | n/a / +0 −0 | 2 | noise | host slice (`createOpenApiDocument`, `registerPlatformDocs`) | #46 | keep (ShellKeep's identity for the document, `APP_OPENAPI`, and `resolveApiVersion`; the tag taxonomy is `app-registrations/openapi-tags.ts`) |
 | `apps/api/src/prisma` | 0% / +3 −37 | 2 | noise | platform-db and core data-access (`PrismaService`) | #45 | none |
 | `apps/api/src/server-profiles` | n/a / +0 −0 | 9 | domain | keep (host-key scan, trust and forget routes and the facts routes, #60) | #60 | none |
@@ -187,7 +187,7 @@ Drift comes from the apps view.
 |---|---|---|---|---|---|---|
 | `infra/compose` | 6.7% / +45 −100 | 6 | noise | platform-infra generated compose, plus app-owned `app.*.compose.yml` overlays | #73 | Overlays: `otel.compose.yml` replaced by the telemetry fragment (#53); `test.compose.yml` regenerated |
 | `infra/nginx` | 0% / +12 −70 | 2 | noise | platform-infra generated `nginx.conf`, plus app-owned `app.d/` (WebSocket location for `/api/terminal/ws`) | #73 | `nginx.dev.conf` becomes part of the generated set; the WebSocket upgrade location moves to `nginx/app.d/` |
-| `infra/otel` | 0% / +16 −182 | 2 | noise | telemetry slice (replaces Uptrace and ClickHouse) | #53 | none |
+| `infra/otel` | 0% / +16 −182 | 2 | noise | telemetry slice (replaces the former trace UI stack) | #53 | none |
 | `infra/deploy` | n/a / +0 −0 | 3 | shellkeep-divergence | CLI `deploy` command on `createCli` (`install-shellkeep.sh`, `update.sh`, `DEPLOY.md`) | #72 | none |
 
 ## Prisma
