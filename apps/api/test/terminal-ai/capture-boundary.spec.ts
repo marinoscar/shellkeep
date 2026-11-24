@@ -13,7 +13,8 @@ import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 
 const SRC = join(__dirname, '..', '..', 'src');
-const ALLOWED = ['terminal/session-history.service.ts'];
+// The service itself, and the spec that pins the command it runs.
+const ALLOWED = ['terminal/session-history.service.ts', 'terminal/session-history.service.spec.ts'];
 const NEEDLE = 'capture-pane';
 
 function walk(dir: string, out: string[] = []): string[] {

@@ -38,6 +38,15 @@ export const APP_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] 
   TERMINAL_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
+/**
+ * The app's own system namespaces registered AFTER the platform's appended ones (`ai` is the
+ * last of them), so the stored key order of the `global` row stays append-only. Terminal AI
+ * safety (#56): the redaction mode and consent, with a tighten-only organization layer.
+ */
+export const APP_TRAILING_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] = [
+  TERMINAL_AI_SYSTEM_SETTINGS as SystemSettingsNamespace,
+];
+
 /** The app's own optional user settings namespaces, in stored key order. */
 export const APP_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [
   TERMINAL_USER_SETTINGS as UserSettingsNamespace,

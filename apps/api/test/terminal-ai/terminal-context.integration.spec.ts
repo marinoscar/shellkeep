@@ -19,8 +19,11 @@ import {
   type AiRuntimeHarness,
 } from '@marinoscar/platform-api/ai/testing';
 
+// Registers the AI features (`terminal_assist`, ...) the real AiService checks.
+import '../../src/app-registrations/ai';
+import { TerminalAiConsentController } from '../../src/terminal-ai/terminal-ai-consent.controller';
 import { SessionHistoryService } from '../../src/terminal/session-history.service';
-import { TerminalContextService, TERMINAL_AI_LIMITS } from '../../src/terminal-ai/terminal-context.service';
+import { FEATURE_FOR_PURPOSE, TerminalContextService, TERMINAL_AI_LIMITS } from '../../src/terminal-ai/terminal-context.service';
 import { AI_CONSENT_REQUIRED, AI_OUTPUT_SHARING_DISABLED } from '../../src/terminal-ai/terminal-ai.error-codes';
 
 // Assembled at run time so no secret-shaped literal sits in the repository (push scanners flag them).
@@ -139,7 +142,7 @@ describe('TerminalContextService', () => {
         expect(ctx.text).toContain('PANE_MARKER_LINE built ok');
         expect(ctx.text).toContain('[REDACTED:aws_access_key]');
         expect(ctx.text).toContain('[REDACTED:private_key]');
-        await sendToAi(s, `feature_${purpose}`, ctx);
+        await sendToAi(s, FEATURE_FOR_PURPOSE[purpose], ctx);
       }
 
       const calls = s.harness.fake.calls;
@@ -302,6 +305,34 @@ describe('TerminalContextService', () => {
       const summary = await s.service.forAi('sess-1', scope, { purpose: 'summary' });
       expect(summary.text.length).toBeLessThanOrEqual(TERMINAL_AI_LIMITS.summaryChars);
       expect(summary.truncated).toBe(true);
+    });
+  });
+
+  describe('POST /api/ai/terminal/consent', () => {
+    it('clears AI_CONSENT_REQUIRED and is audited', async () => {
+      const s = setup();
+      s.policy.user = undefined;
+      const patchSettings = jest.fn(async (_userId: string, body: { terminalAi: { consentAcceptedAt: string } }) => {
+        s.policy.user = { consentAcceptedAt: body.terminalAi.consentAcceptedAt };
+      });
+      const controller = new TerminalAiConsentController(s.service, { patchSettings } as never, { record: s.audit } as never);
+
+      await expect(controller.status(HARNESS_USER, HARNESS_ORG)).resolves.toEqual({
+        required: true,
+        consentAcceptedAt: null,
+        redactionMode: 'standard',
+      });
+      await expect(s.service.forAi('sess-1', scope, { purpose: 'explain' })).rejects.toMatchObject({
+        response: { code: AI_CONSENT_REQUIRED },
+      });
+
+      const { consentAcceptedAt } = await controller.accept(HARNESS_USER, HARNESS_ORG, {});
+      expect(new Date(consentAcceptedAt).toISOString()).toBe(consentAcceptedAt);
+      expect(patchSettings).toHaveBeenCalledWith(HARNESS_USER, { terminalAi: { consentAcceptedAt } });
+      expect(s.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'terminal_ai.consent', actorUserId: HARNESS_USER }));
+
+      await expect(s.service.forAi('sess-1', scope, { purpose: 'explain' })).resolves.toMatchObject({ sharing: 'full' });
+      await expect(controller.status(HARNESS_USER, HARNESS_ORG)).resolves.toMatchObject({ consentAcceptedAt });
     });
   });
 });

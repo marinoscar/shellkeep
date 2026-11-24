@@ -17,7 +17,6 @@ import { ALERTS_APP_METRICS } from '@marinoscar/platform-api/alerts';
 import { WEBHOOKS_APP_METRICS } from '@marinoscar/platform-api/webhooks';
 import { OAUTH_APP_METRICS, ORGANIZATIONS_APP_METRICS } from '@marinoscar/platform-api/identity';
 
-import { TERMINAL_AI_APP_METRICS } from '../terminal-ai/terminal-ai.metrics';
 import { APP_METRICS } from '../app-registrations/telemetry';
 
 registerPlatformHostAppMetrics(
@@ -28,5 +27,4 @@ registerPlatformHostAppMetrics(
   APP_METRICS,
   WEBHOOKS_APP_METRICS,
   ALERTS_APP_METRICS,
-  TERMINAL_AI_APP_METRICS,
 );
