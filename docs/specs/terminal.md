@@ -69,7 +69,7 @@ Endpoint `WS /api/terminal/ws` (`@WebSocketGateway({ path })`, `ws` adapter). Te
 | `auth_expired` | the access token's `exp` passed with no fresh `auth`; the socket then closes |
 | `session_ready` `{ sessionId }` | attached; terminal output follows as binary frames |
 | `session_error` `{ error, code }` | a `connect` failed, codes in 3.4 |
-| `session_ended` `{ reason }` | `terminated` (an explicit terminate) or `stream_closed` (the shell exited) |
+| `session_ended` `{ reason }` | `terminated` (an explicit terminate), `stream_closed` (the shell exited) or `access_revoked` (a sharing change, grant revoked or downgraded, member removed or group deleted, means this client may no longer connect to the server: it is detached, its socket stays open, and the SSH stream and tmux keep running for any other permitted client) |
 | `pong` | answer to `ping` |
 | binary | terminal output |
 
