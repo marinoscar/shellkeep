@@ -6,7 +6,7 @@
 // own source and registrations. Suites adopted with their slice are added here:
 // `cron-enqueue-only`, `user-owned-data` and `identity` from #47, `settings` and
 // `credentials` from #48, `host` and `doctor-read-only` from #46, `on-event-no-io` and
-// `nodes` from #49, `storage` from #50, `email` and `notifications` from #51, `dbBackup` from #52; AI and the rest follow with #53-#55.
+// `nodes` from #49, `storage` from #50, `email` and `notifications` from #51, `dbBackup` from #52, the seven AI suites from #55.
 //
 // The registries are filled by the first two imports, as `main.ts` fills them.
 // =============================================================================
@@ -41,9 +41,12 @@ import '@marinoscar/platform-api/notifications/testing';
 import '@marinoscar/platform-api/db-backup/testing';
 import { discoverControllers } from '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/settings/testing';
+// Register the seven `ai-*` suites (#55).
+import '@marinoscar/platform-api/ai/testing';
 import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 
 import { AppModule } from '../src/app.module';
+import { aiConformanceFixture } from './conformance/ai-fixture';
 import { doctorConformanceFixture } from './conformance/doctor-fixture';
 import {
   SETTINGS_CATALOG_STALE_MESSAGE,
@@ -53,6 +56,9 @@ import {
 const catalogPath = join(__dirname, '..', SYSTEM_SETTINGS_CATALOG_RELATIVE_PATH);
 
 const API_DIR = join(__dirname, '..');
+const REPO = join(API_DIR, '..', '..');
+const API_SOURCE_ROOT = join(API_DIR, 'src');
+const WEB_SOURCE_ROOT = join(REPO, 'apps', 'web', 'src');
 
 /**
  * The root the identity suite walks: every controller reachable from `AppModule`.
@@ -148,8 +154,8 @@ runPlatformConformance({
         contents: existsSync(catalogPath) ? readFileSync(catalogPath, 'utf8') : undefined,
         staleMessage: SETTINGS_CATALOG_STALE_MESSAGE,
       },
-      // ui, features, terminal, maintenance, jobs, nodes, retention, storage, notifications, ssh and databaseBackup.
-      minSystemNamespaces: 11,
+      // ui, features, terminal, maintenance, jobs, nodes, retention, storage, notifications, ssh, databaseBackup and ai.
+      minSystemNamespaces: 12,
     },
     // Every credential purpose has a platform or app owner, every user purpose's fallback
     // address resolves (`ssh` has none), and no credential presentation schema carries a
@@ -169,5 +175,37 @@ runPlatformConformance({
     // `terminal.ssh.legacy-secrets`, and the SSH slice's `ssh.host_key_policy`). The last item,
     // `terminal.ssh.egress`, is an egress contributor graded by `network.egress`.
     doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 24 },
+
+    // ---- the AI platform's invariants (AGENTS.md "AI Platform Rules") ---------
+    // The five that boot the app take the fixture (./conformance/ai-fixture.ts):
+    // routes, job types and roles are DISCOVERED from the booted app, none skipped.
+    aiKillSwitch: { fixture: aiConformanceFixture },
+    aiRbacMatrix: { fixture: aiConformanceFixture },
+    aiSecretEgress: { fixture: aiConformanceFixture },
+    aiKeyPolicy: { fixture: aiConformanceFixture },
+    aiJobsServerOnly: { fixture: aiConformanceFixture },
+    // Rule 1: a provider SDK is imported nowhere in the app or the web, and no manifest of
+    // the app declares one (the SDKs belong to @marinoscar/platform-ai-providers).
+    aiNoSdkLeak: {
+      apiTrees: [{ name: 'apps/api/src', root: API_SOURCE_ROOT, minFiles: 50 }],
+      webTrees: [{ name: 'apps/web/src', root: WEB_SOURCE_ROOT, minFiles: 50 }],
+      noSdkManifests: [
+        join(REPO, 'package.json'),
+        join(API_DIR, 'package.json'),
+        join(REPO, 'apps', 'web', 'package.json'),
+      ],
+    },
+    // The base allows no orchestration library; ShellKeep adopts none (the runbook agent
+    // runs on AiService, #64), so no root is allowed.
+    aiOrchestrationBoundary: {
+      apiSourceRoots: [API_SOURCE_ROOT],
+      webSourceRoots: [WEB_SOURCE_ROOT],
+      packageJsonPaths: [
+        join(REPO, 'package.json'),
+        join(API_DIR, 'package.json'),
+        join(REPO, 'apps', 'web', 'package.json'),
+      ],
+      allowedRoots: {},
+    },
   },
 });
