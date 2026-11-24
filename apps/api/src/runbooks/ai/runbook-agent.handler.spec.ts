@@ -7,10 +7,39 @@ import { describeJobHandlerConformance } from '@marinoscar/platform-api/jobs/tes
 import { RunbookAgentHandler } from './runbook-agent.handler';
 import { RUNBOOK_AGENT_TYPE } from './runbook-agent.constants';
 
-const build = () => new RunbookAgentHandler({ register: () => undefined } as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+const RUN = '9d5b1c34-1c3e-4e53-a1d3-0d7c9a1f1a01';
+const TARGET = '9d5b1c34-1c3e-4e53-a1d3-0d7c9a1f1a02';
+const ORG = '9d5b1c34-1c3e-4e53-a1d3-0d7c9a1f1a03';
+
+/** A client whose every table is empty: `runInOrg`'s transaction runs the callback over it. */
+function emptyTx(): Record<string, unknown> {
+  const delegate = {
+    findUnique: async () => null,
+    findFirst: async () => null,
+    findMany: async () => [],
+    aggregate: async () => ({ _max: {}, _sum: {} }),
+  };
+  return { $executeRaw: async () => 0, runbookRun: delegate, runbookRunTarget: delegate, runbookRunStep: delegate, runbookVersion: delegate };
+}
+const stubPrisma = { $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(emptyTx()), $executeRaw: async () => 0, $connect: async () => undefined, $extends: () => undefined } as never;
+const unused = {} as never;
+
+const build = () =>
+  new RunbookAgentHandler({ register: () => undefined } as never, stubPrisma, unused, unused, unused, unused, unused, unused, unused, unused, unused, unused, unused, unused, unused, unused);
 
 describeJobHandlerConformance(RUNBOOK_AGENT_TYPE, build, {
-  payloads: [{ name: 'a payload that is not ours', payload: { runId: 'nope' }, expectFailure: 'Invalid ai.runbook.agent payload' }],
+  payloads: [
+    {
+      // The run is gone: the job is a no-op, so the second run changes nothing. Behaviour proper is `test/runbooks/runbook-ai.db.spec.ts`.
+      name: 'a step of a run that no longer exists is a no-op',
+      payload: { runId: RUN, targetId: TARGET, stepIndex: 0, orgId: ORG, phase: 'start' },
+      subjectType: 'runbook_run_target',
+      subjectId: TARGET,
+      orgId: ORG,
+      reason: 'runbook_run',
+    },
+    { name: 'a payload that is not ours', payload: { runId: 'nope' }, expectFailure: 'Invalid ai.runbook.agent payload' },
+  ],
 });
 
 describe('RunbookAgentHandler', () => {
