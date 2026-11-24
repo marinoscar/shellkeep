@@ -36,6 +36,7 @@ import { RunStreamService } from '../../src/runbooks/engine/run-stream.service';
 import { RunbookApprovalsService } from '../../src/runbooks/engine/runbook-approvals.service';
 import { RunbookRunsService } from '../../src/runbooks/engine/runbook-runs.service';
 import { RunbookSettingsService } from '../../src/runbooks/engine/runbook-settings.service';
+import { PrismaAuditSink } from '../../src/platform/audit-sink.adapter';
 import { SshExecutor } from '../../src/runbooks/engine/ssh-executor';
 import { RunbookRiskService } from '../../src/runbooks/safety/runbook-risk.service';
 import { TargetRunHandler } from '../../src/runbooks/engine/target-run.handler';
@@ -137,7 +138,9 @@ export async function createHarness(label: string): Promise<Harness> {
     await tx.user.create({ data: { id: userB, email: 'person-b@example.test', providerDisplayName: 'Person B' } });
   });
 
-  const audit: AuditSink = { record: jest.fn(async () => undefined) } as unknown as AuditSink;
+  // The real audit table, so the audit trail reads what the services wrote; `record` is a spy.
+  const auditTable = new PrismaAuditSink(prisma);
+  const audit = { record: jest.fn((event: Parameters<AuditSink['record']>[0]) => auditTable.record(event)) } as unknown as AuditSink;
   const notifications = { notify: jest.fn(async () => undefined), notifyPermissionHolders: jest.fn(async () => undefined) };
   const emitter = new EventEmitter2();
   emitter.on('runbooks.run.finished', (event) => finishedEvents.push(event));

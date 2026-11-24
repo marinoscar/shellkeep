@@ -54,6 +54,7 @@ const SHELL_WORDS = new Set([
   'local', 'declare', 'typeset', 'readonly', 'alias', 'unalias', 'true', 'false', ':', 'break', 'continue', 'let', 'umask', 'ulimit',
   'pwd', 'pushd', 'popd', 'type', 'hash', 'getopts', 'test', '[', '[[', 'command', 'builtin', 'bg', 'fg', 'jobs', 'history', 'in',
 ]);
+const CONTROL_PREFIX = new Set(['if', 'then', 'else', 'elif', 'do', 'while', 'until', '!']);
 const WRAPPERS = new Set(['sudo', 'env', 'nohup', 'time', 'exec', 'command', 'nice', 'ionice', 'timeout', 'stdbuf']);
 const BINARY_NAME = /^[A-Za-z0-9._+/-]+$/;
 const MAX_BINARIES = 20;
@@ -127,7 +128,7 @@ export function commandBinaries(text: string): string[] {
     let index = 0;
     while (index < words.length) {
       const word = words[index]!;
-      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(word)) index += 1;
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(word) || CONTROL_PREFIX.has(word)) index += 1;
       else if (WRAPPERS.has(word)) {
         index += 1;
         // a wrapper's own flags (and a flag's value for `sudo -u user`, `timeout 5`) are not the command
