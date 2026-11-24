@@ -27,6 +27,8 @@ import type {
   TerminalUserSettings,
   TerminalUserSettingsDocument,
 } from '../../types/terminal';
+import { DEFAULT_KEY_LAYOUT, DEFAULT_KEY_OPTIONS, type KeyLayout, type KeyOptions } from './keys/keyModel';
+import { fromLegacyShortcuts, toLegacyBarKeys } from './keys/legacyAdapter';
 
 /** The terminal preferences with every field resolved. */
 export interface ResolvedTerminalSettings {
@@ -134,12 +136,15 @@ export function resolveTerminalSettings(
 }
 
 /**
- * The user's key shortcuts: `shortcuts.keyShortcuts`, else the defaults. An
- * empty list stays empty (the user deleted every shortcut).
+ * The shortcuts the key bar shows: the v2 layout through the compatibility
+ * adapter (`toLegacyBarKeys`) when one is stored, else `shortcuts.keyShortcuts`,
+ * else the defaults. An empty list stays empty (the user deleted every
+ * shortcut). The bar does not change until #167 replaces it.
  */
 export function resolveKeyShortcuts(
   document: Pick<TerminalUserSettingsDocument, 'terminal' | 'shortcuts'> | null | undefined,
 ): KeyShortcut[] {
+  if (document?.shortcuts?.layout) return toLegacyBarKeys(document.shortcuts.layout);
   return (
     document?.shortcuts?.keyShortcuts ??
     // PLATFORM-ADOPTION-SHIM(#83): a row written before #80 keeps its list at
@@ -148,6 +153,25 @@ export function resolveKeyShortcuts(
     document?.terminal?.keyShortcuts ??
     (DEFAULT_KEY_SHORTCUTS as KeyShortcut[])
   );
+}
+
+/**
+ * The user's v2 key layout (#165): the stored one, else the stored v1 list
+ * converted, else `DEFAULT_KEY_LAYOUT`.
+ */
+export function resolveKeyLayout(
+  document: Pick<TerminalUserSettingsDocument, 'terminal' | 'shortcuts'> | null | undefined,
+): KeyLayout {
+  if (document?.shortcuts?.layout) return document.shortcuts.layout;
+  const legacy = document?.shortcuts?.keyShortcuts ?? document?.terminal?.keyShortcuts;
+  return legacy ? fromLegacyShortcuts(legacy) : (DEFAULT_KEY_LAYOUT as KeyLayout);
+}
+
+/** The key bar options: the stored ones, else `DEFAULT_KEY_OPTIONS`. */
+export function resolveKeyOptions(
+  document: Pick<TerminalUserSettingsDocument, 'shortcuts'> | null | undefined,
+): KeyOptions {
+  return { ...DEFAULT_KEY_OPTIONS, ...document?.shortcuts?.options };
 }
 
 /** Whether the key bar shows, for a `showKeyBar` mode on this device. */

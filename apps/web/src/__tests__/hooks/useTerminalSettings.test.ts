@@ -6,6 +6,8 @@ import { mockUserSettings } from '../mocks/data';
 import { useTerminalSettings } from '../../hooks/useTerminalSettings';
 import { DEFAULT_KEY_SHORTCUTS, DEFAULT_TERMINAL_SETTINGS } from '../../lib/terminal/settings';
 import type { KeyShortcut } from '../../types/terminal';
+import { DEFAULT_KEY_LAYOUT, DEFAULT_KEY_OPTIONS } from '../../lib/terminal/keys/keyModel';
+import { fromLegacyShortcuts } from '../../lib/terminal/keys/legacyAdapter';
 
 const custom: KeyShortcut = {
   id: '22222222-2222-4222-8222-222222222201',
@@ -95,6 +97,48 @@ describe('useTerminalSettings', () => {
 
     expect(body).toEqual({ shortcuts: { keyShortcuts: [custom] } });
     expect(result.current.keyShortcuts).toEqual([custom]);
+  });
+
+  it('returns the resolved v2 layout and options beside the legacy list (#165)', async () => {
+    const { result } = renderHook(() => useTerminalSettings());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.keyLayout).toEqual(DEFAULT_KEY_LAYOUT);
+    expect(result.current.keyOptions).toEqual(DEFAULT_KEY_OPTIONS);
+    expect(result.current.settings?.shortcuts.layout).toEqual(DEFAULT_KEY_LAYOUT);
+  });
+
+  it('feeds the bar from a stored layout and rewrites it when the legacy editor saves', async () => {
+    let body: unknown = null;
+    server.use(
+      http.get('*/api/user-settings', () =>
+        HttpResponse.json({
+          data: {
+            ...mockUserSettings,
+            shortcuts: { keyShortcuts: [custom], layout: fromLegacyShortcuts([custom]) },
+          },
+        }),
+      ),
+      http.patch('*/api/user-settings', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({
+          data: { ...mockUserSettings, ...(body as object), version: mockUserSettings.version + 1 },
+        });
+      }),
+    );
+    const { result } = renderHook(() => useTerminalSettings());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.keyShortcuts).toEqual([custom]);
+
+    const other: KeyShortcut = { ...custom, id: '22222222-2222-4222-8222-222222222202', label: 'Ctrl+T' };
+    await act(async () => {
+      await result.current.updateShortcuts([custom, other]);
+    });
+
+    expect(body).toEqual({
+      shortcuts: { keyShortcuts: [custom, other], layout: fromLegacyShortcuts([custom, other]) },
+    });
+    expect(result.current.keyShortcuts).toEqual([custom, other]);
   });
 
   it('hands a saved document to the other open instances without a refetch', async () => {

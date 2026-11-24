@@ -21,6 +21,7 @@
 import type { PrismaClient } from '@prisma/client';
 
 import { migrateTerminalShortcuts } from './settings-migrations/terminal-shortcuts';
+import { migrateKeyLayout } from './settings-migrations/terminal-shortcuts-v2';
 
 /**
  * Seed ShellKeep's own data, after the platform's.
@@ -30,4 +31,6 @@ import { migrateTerminalShortcuts } from './settings-migrations/terminal-shortcu
 export async function seedApp(prisma: PrismaClient): Promise<void> {
   const moved = await migrateTerminalShortcuts(prisma);
   console.log(`✓ Key shortcuts moved to the shortcuts namespace on ${moved} user settings row(s)`);
+  const layouts = await migrateKeyLayout(prisma);
+  console.log(`✓ Key layout (v2) added to the shortcuts namespace on ${layouts} user settings row(s)`);
 }

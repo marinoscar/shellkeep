@@ -25,11 +25,15 @@ import { platformApi } from '../services/api';
 import {
   DEFAULT_TERMINAL_SETTINGS,
   normalizeKeyShortcuts,
+  resolveKeyLayout,
+  resolveKeyOptions,
   resolveKeyShortcuts,
   resolveTerminalSettings,
   terminalPatch,
   type ResolvedTerminalSettings,
 } from '../lib/terminal/settings';
+import { fromLegacyShortcuts } from '../lib/terminal/keys/legacyAdapter';
+import type { KeyLayout, KeyOptions } from '../lib/terminal/keys/keyModel';
 import { publishTerminalSettings, subscribeTerminalSettings } from '../lib/terminal/settingsSync';
 import type {
   ActionShortcuts,
@@ -44,13 +48,19 @@ export type ResolvedTerminalUserSettingsDocument = Omit<
   'terminal' | 'shortcuts'
 > & {
   terminal: ResolvedTerminalSettings;
-  shortcuts: { keyShortcuts: KeyShortcut[]; actions?: ActionShortcuts };
+  shortcuts: {
+    keyShortcuts: KeyShortcut[];
+    actions?: ActionShortcuts;
+    /** The v2 layout and options, resolved (#165). */
+    layout: KeyLayout;
+    options: KeyOptions;
+  };
 };
 
 /** A change to the terminal preferences and/or the shortcut list. */
 export interface TerminalSettingsChange {
   terminal?: Partial<ResolvedTerminalSettings>;
-  shortcuts?: { keyShortcuts: KeyShortcut[] };
+  shortcuts?: { keyShortcuts: KeyShortcut[]; layout?: KeyLayout; options?: KeyOptions };
 }
 
 export interface UseTerminalSettingsResult {
@@ -60,6 +70,10 @@ export interface UseTerminalSettingsResult {
   terminal: ResolvedTerminalSettings | null;
   /** The resolved key shortcuts, or `null` until loaded. */
   keyShortcuts: KeyShortcut[] | null;
+  /** The v2 key layout (#165), resolved: stored, else the v1 list converted, else the defaults. */
+  keyLayout: KeyLayout | null;
+  /** The key bar options (#165), resolved. */
+  keyOptions: KeyOptions | null;
   /** Rebound app-action shortcuts (#57); `{}` when none. */
   actionShortcuts: ActionShortcuts;
   isLoading: boolean;
@@ -118,16 +132,24 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
   );
   const keyShortcuts = useMemo(() => (stored ? resolveKeyShortcuts(stored) : null), [stored]);
 
+  const keyLayout = useMemo(() => (stored ? resolveKeyLayout(stored) : null), [stored]);
+  const keyOptions = useMemo(() => (stored ? resolveKeyOptions(stored) : null), [stored]);
+
   const settings = useMemo<ResolvedTerminalUserSettingsDocument | null>(
     () =>
-      stored && terminal && keyShortcuts
+      stored && terminal && keyShortcuts && keyLayout && keyOptions
         ? {
             ...stored,
             terminal,
-            shortcuts: { keyShortcuts, ...(stored.shortcuts?.actions ? { actions: stored.shortcuts.actions } : {}) },
+            shortcuts: {
+              keyShortcuts,
+              layout: keyLayout,
+              options: keyOptions,
+              ...(stored.shortcuts?.actions ? { actions: stored.shortcuts.actions } : {}),
+            },
           }
         : null,
-    [stored, terminal, keyShortcuts],
+    [stored, terminal, keyShortcuts, keyLayout, keyOptions],
   );
 
   const updateSettings = useCallback(
@@ -138,9 +160,17 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
       }
       if (change.shortcuts) {
         // Writing the list must not drop the rebound app actions stored beside it.
+        const keyShortcuts = normalizeKeyShortcuts(change.shortcuts.keyShortcuts);
+        // A stored v2 layout would otherwise outlive the list the bar is fed from:
+        // the legacy editor's list becomes the layout too (#165), until #169.
+        const layout =
+          change.shortcuts.layout ?? (stored?.shortcuts?.layout ? fromLegacyShortcuts(keyShortcuts) : undefined);
+        const options = change.shortcuts.options ?? stored?.shortcuts?.options;
         body.shortcuts = {
-          keyShortcuts: normalizeKeyShortcuts(change.shortcuts.keyShortcuts),
+          keyShortcuts,
           ...(stored?.shortcuts?.actions ? { actions: stored.shortcuts.actions } : {}),
+          ...(layout ? { layout } : {}),
+          ...(options ? { options } : {}),
         };
       }
       await patch(body);
@@ -162,6 +192,8 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
     settings,
     terminal,
     keyShortcuts,
+    keyLayout,
+    keyOptions,
     actionShortcuts: stored?.shortcuts?.actions ?? {},
     isLoading,
     isSaving,
