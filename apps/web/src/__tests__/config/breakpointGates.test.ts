@@ -129,14 +129,11 @@ describe('breakpoint gates: the five are the platform shell\'s (#76)', () => {
   it('keeps the deleted app-side shell files deleted', () => {
     // A re-added copy would bring a second set of gates back.
     for (const gone of [
-      'components/navigation/AppBar.tsx',
-      'components/navigation/Sidebar.tsx',
-      'components/navigation/UserMenu.tsx',
-      'contexts/ThemeContext.tsx',
-      'theme/index.ts',
-      'theme/light.ts',
-      'theme/dark.ts',
-      'theme/components.ts',
+      // The forked app bar, sidebar and user menu, the theme context and the
+      // hand-built themes: whole folders, so no copy can come back inside them.
+      'components/navigation',
+      'contexts',
+      'theme',
       'pages/TerminalFullPage.tsx',
     ]) {
       expect(existsSync(join(SRC, gone)), `${gone} must stay deleted`).toBe(false);
