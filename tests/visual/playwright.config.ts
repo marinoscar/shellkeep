@@ -53,6 +53,8 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: [['html', { outputFolder: 'playwright-report', open: 'never' }]],
   expect: {
+    // A cold, single-worker CI runner builds the lazy chunks on first use.
+    timeout: 15_000,
     toHaveScreenshot: {
       // Freeze CSS animations and transitions (the ripple, the rail's width
       // transition, the spinner) so a shot never lands mid-animation.
@@ -73,6 +75,11 @@ export default defineConfig({
     colorScheme: 'dark',
     deviceScaleFactor: 1,
     launchOptions: {
+      // Text and colour rasterisation that does not depend on the host's settings.
+      args: [
+        '--font-render-hinting=none', '--disable-lcd-text', '--force-color-profile=srgb',
+        '--disable-gpu', '--disable-partial-raster', '--num-raster-threads=1',
+      ],
       // ONLY for a smoke run on a machine whose Chromium is not the pinned
       // image's (no baseline is ever generated this way): point at it.
       executablePath: process.env.VISUAL_CHROMIUM_PATH || undefined,

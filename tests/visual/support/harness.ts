@@ -101,6 +101,8 @@ export async function openHarness(page: Page, options: HarnessOptions = {}): Pro
  * rely on.
  */
 export async function waitForSettled(page: Page): Promise<void> {
+  // Every fixture answered: a late response re-lays-out a toolbar by a sub-pixel.
+  await page.waitForLoadState('networkidle');
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.evaluate(async () => {
     await document.fonts.ready;

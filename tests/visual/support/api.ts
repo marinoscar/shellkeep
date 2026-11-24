@@ -90,6 +90,7 @@ export async function installApi(page: Page, options: ApiOptions & { theme?: 'li
         : sessions.items;
       return { ...sessions, items, total: items.length };
     },
+    'GET /runbooks': fixture('runbooks.json'),
     'GET /exports/sources': { items: [] },
     // The shell's own chrome: the bell, the maintenance banner and the Runbooks badge.
     'GET /notifications/config': { browserEnabled: false, pushEnabled: false, vapidPublicKey: null },

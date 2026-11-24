@@ -1,0 +1,185 @@
+{
+  "items": [
+    {
+      "id": "runbook-1",
+      "name": "Rotate logs",
+      "description": "Rotate and compress application logs on every web server.",
+      "tags": [
+        "maintenance",
+        "web"
+      ],
+      "ownerUserId": "visual-user",
+      "ownerGroupId": null,
+      "owner": {
+        "kind": "user",
+        "id": "visual-user",
+        "name": "Person A"
+      },
+      "access": {
+        "role": "owner",
+        "via": null,
+        "shared": false,
+        "can": {
+          "run": true,
+          "write": true,
+          "share": true
+        }
+      },
+      "archivedAt": null,
+      "createdAt": "2025-01-05T10:00:00.000Z",
+      "updatedAt": "2025-01-12T10:00:00.000Z",
+      "latestVersion": {
+        "id": "rv-1",
+        "version": 3,
+        "definitionSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "changelog": "Tighten the timeout",
+        "createdBy": "visual-user",
+        "createdAt": "2025-01-12T10:00:00.000Z"
+      },
+      "stepKinds": [
+        "command",
+        "script"
+      ],
+      "lastRun": {
+        "id": "run-1",
+        "status": "running",
+        "createdAt": "2025-01-15T11:55:00.000Z",
+        "finishedAt": null
+      }
+    },
+    {
+      "id": "runbook-2",
+      "name": "Restart workers",
+      "description": "Restart the background workers one server at a time.",
+      "tags": [
+        "workers"
+      ],
+      "ownerUserId": "visual-user",
+      "ownerGroupId": null,
+      "owner": {
+        "kind": "user",
+        "id": "visual-user",
+        "name": "Person A"
+      },
+      "access": {
+        "role": "owner",
+        "via": null,
+        "shared": false,
+        "can": {
+          "run": true,
+          "write": true,
+          "share": true
+        }
+      },
+      "archivedAt": null,
+      "createdAt": "2025-01-05T10:00:00.000Z",
+      "updatedAt": "2025-01-12T10:00:00.000Z",
+      "latestVersion": {
+        "id": "rv-2",
+        "version": 3,
+        "definitionSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "changelog": "Tighten the timeout",
+        "createdBy": "visual-user",
+        "createdAt": "2025-01-12T10:00:00.000Z"
+      },
+      "stepKinds": [
+        "command"
+      ],
+      "lastRun": {
+        "id": "run-2",
+        "status": "failed",
+        "createdAt": "2025-01-15T08:10:00.000Z",
+        "finishedAt": "2025-01-15T08:14:00.000Z"
+      }
+    },
+    {
+      "id": "runbook-3",
+      "name": "Disk report",
+      "description": "Report free disk space.",
+      "tags": [
+        "audit"
+      ],
+      "ownerUserId": "visual-user",
+      "ownerGroupId": null,
+      "owner": {
+        "kind": "user",
+        "id": "visual-user",
+        "name": "Person A"
+      },
+      "access": {
+        "role": "owner",
+        "via": null,
+        "shared": false,
+        "can": {
+          "run": true,
+          "write": true,
+          "share": true
+        }
+      },
+      "archivedAt": null,
+      "createdAt": "2025-01-05T10:00:00.000Z",
+      "updatedAt": "2025-01-12T10:00:00.000Z",
+      "latestVersion": {
+        "id": "rv-3",
+        "version": 3,
+        "definitionSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "changelog": "Tighten the timeout",
+        "createdBy": "visual-user",
+        "createdAt": "2025-01-12T10:00:00.000Z"
+      },
+      "stepKinds": [
+        "command"
+      ],
+      "lastRun": {
+        "id": "run-4",
+        "status": "succeeded",
+        "createdAt": "2025-01-14T22:00:00.000Z",
+        "finishedAt": "2025-01-14T22:02:00.000Z"
+      }
+    },
+    {
+      "id": "runbook-4",
+      "name": "Patch staging",
+      "description": "Apply pending package updates to staging.",
+      "tags": [
+        "staging"
+      ],
+      "ownerUserId": "visual-user",
+      "ownerGroupId": null,
+      "owner": {
+        "kind": "user",
+        "id": "visual-user",
+        "name": "Person A"
+      },
+      "access": {
+        "role": "owner",
+        "via": null,
+        "shared": false,
+        "can": {
+          "run": true,
+          "write": true,
+          "share": true
+        }
+      },
+      "archivedAt": null,
+      "createdAt": "2025-01-05T10:00:00.000Z",
+      "updatedAt": "2025-01-12T10:00:00.000Z",
+      "latestVersion": {
+        "id": "rv-4",
+        "version": 3,
+        "definitionSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "changelog": "Tighten the timeout",
+        "createdBy": "visual-user",
+        "createdAt": "2025-01-12T10:00:00.000Z"
+      },
+      "stepKinds": [
+        "command",
+        "script"
+      ],
+      "lastRun": null
+    }
+  ],
+  "total": 4,
+  "page": 1,
+  "pageSize": 25
+}
