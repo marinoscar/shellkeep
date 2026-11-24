@@ -55,6 +55,8 @@ const ai = {
   }),
 };
 
+const aiConfig = { resolveForOrg: async () => ({ enabled: true }) };
+
 const context = {
   forAi: async () => ({ text: 'user@host:~$ ls\nfile', findings: [], truncated: false, sharing: 'full' }),
 };
@@ -68,6 +70,7 @@ const build = () =>
     } as never,
     context as never,
     ai as never,
+    aiConfig as never,
   );
 
 const payload = { summaryId: SUMMARY_ID, sessionId: SESSION_ID, userId: USER_ID, orgId: ORG_ID };
@@ -138,6 +141,7 @@ describe('SessionSummarizeHandler outcomes', () => {
       { terminalSessionSummary: world.fake.prisma.terminalSessionSummary, terminalSession: world.fake.prisma.terminalSession } as never,
       { forAi: async () => { throw new Error('ssh down'); } } as never,
       ai as never,
+      aiConfig as never,
     );
     await expect(handler.process({ id: 'j4', type: SESSION_SUMMARIZE_TYPE, payload, attempts: 1 } as never)).rejects.toThrow('ssh down');
     expect(world.fake.rows[0]).toMatchObject({ status: 'pending' });

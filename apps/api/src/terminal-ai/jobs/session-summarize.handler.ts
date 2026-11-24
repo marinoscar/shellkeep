@@ -27,7 +27,7 @@
 // =============================================================================
 
 import { ConflictException, Injectable, Logger, NotFoundException, type OnModuleInit } from '@nestjs/common';
-import { AiError, AiService } from '@marinoscar/platform-api/ai';
+import { AiConfigService, AiError, AiService } from '@marinoscar/platform-api/ai';
 import { JobHandlerRegistry, type Job, type JobHandler } from '@marinoscar/platform-api/jobs';
 import { z } from 'zod';
 
@@ -123,6 +123,7 @@ export class SessionSummarizeHandler implements JobHandler, OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly context: TerminalContextService,
     private readonly ai: AiService,
+    private readonly aiConfig: AiConfigService,
   ) {}
 
   onModuleInit(): void {
@@ -166,6 +167,9 @@ export class SessionSummarizeHandler implements JobHandler, OnModuleInit {
     });
     if (!session) throw new SummaryEnded(SESSION_NOT_FOUND);
     if (session.status === 'terminated') throw new SummaryEnded(SESSION_TERMINATED);
+
+    // AI off (deployment or organization): stop before any pane is read.
+    if (!(await this.aiConfig.resolveForOrg(orgId)).enabled) throw new SummaryEnded('AI_DISABLED');
 
     // The only path to terminal text: ownership, consent, the server's switch, redaction, the cap, the audit.
     const ctx = await this.context.forAi(sessionId, { userId, orgId }, { purpose: 'summary' });

@@ -13,7 +13,7 @@ import { Logger, NotFoundException } from '@nestjs/common';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { Test } from '@nestjs/testing';
-import { AiEnabledGuard, AiOrgEnabledInterceptor, AiService } from '@marinoscar/platform-api/ai';
+import { AiConfigService, AiEnabledGuard, AiOrgEnabledInterceptor, AiService } from '@marinoscar/platform-api/ai';
 import {
   createAiRuntimeHarness,
   HARNESS_MODEL,
@@ -158,6 +158,7 @@ describe('terminal session summaries', () => {
           SessionSummarizeHandler,
           TerminalContextService,
           { provide: AiService, useValue: aiForTests },
+          { provide: AiConfigService, useValue: harness.aiConfig },
           { provide: JobsService, useValue: { enqueue } },
           { provide: JobHandlerRegistry, useValue: { register: jest.fn() } },
           { provide: SessionsService, useValue: { findOne } },
@@ -388,6 +389,15 @@ describe('terminal session summaries', () => {
     await runQueued();
     expect(harness.fake.calls).toHaveLength(0);
     expect((await get(SESSION_ID, `/${summaryId}`)).json()).toMatchObject({ status: 'failed', errorCode: 'AI_CONSENT_REQUIRED' });
+  });
+
+  it('makes zero provider calls and reads no pane while AI is off', async () => {
+    const { summaryId } = (await post()).json() as { summaryId: string };
+    harness.setPolicy({ enabled: false });
+    await runQueued();
+    expect(harness.fake.calls).toHaveLength(0);
+    expect(exec).not.toHaveBeenCalledWith(expect.anything(), expect.stringContaining('capture-pane'));
+    expect(summaries.rows.find((r) => r.id === summaryId)).toMatchObject({ status: 'failed', errorCode: 'AI_DISABLED' });
   });
 
   it('fails the row when the session was terminated after queuing', async () => {

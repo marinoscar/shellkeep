@@ -15,6 +15,7 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { CommandAssistPanel } from './CommandAssistPanel';
+import { SessionSummaryPanel } from './SessionSummaryPanel';
 
 /** The panel's three actions (#57, #58, #59). */
 export type TerminalAiMode = 'suggest' | 'explain' | 'summarize';
@@ -78,14 +79,7 @@ function PanelBody({ onClose, onInsert, sessionId = null, focusRequest = 0 }: Om
       </>
     );
   } else {
-    body = (
-      <>
-        <Typography variant="body2" color="text.secondary">
-          Summarizes this session in the background and shows the result here when it is ready.
-        </Typography>
-        <ComingSoon action="Summarize" />
-      </>
-    );
+    body = <SessionSummaryPanel sessionId={sessionId} />;
   }
 
   return (
@@ -132,8 +126,8 @@ function PanelBody({ onClose, onInsert, sessionId = null, focusRequest = 0 }: Om
  * it is a bottom sheet. The page renders it only when `useTerminalAiAvailable`
  * says so (the `ai` feature on and `ai:use`).
  *
- * "Suggest command" is live (#57, `CommandAssistPanel`); Explain and Summarize still render
- * disabled with {@link AI_COMING_SOON} until #58 and #59. Insert hands the command to
+ * "Suggest command" is live (#57, `CommandAssistPanel`) and so is Summarize (#59, `SessionSummaryPanel`); Explain still renders
+ * disabled with {@link AI_COMING_SOON} until #58. Insert hands the command to
  * `onInsert`, which pastes it without a newline. Nothing is ever run automatically.
  */
 export function TerminalAiPanel({ open, onClose, variant, onInsert, sessionId = null, focusRequest = 0 }: TerminalAiPanelProps) {

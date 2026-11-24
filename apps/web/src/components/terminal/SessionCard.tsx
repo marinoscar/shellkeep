@@ -13,6 +13,7 @@ import {
   OpenInNew as OpenIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  AutoAwesomeOutlined as SummarizeIcon,
 } from '@mui/icons-material';
 import type { TerminalSession } from '../../types';
 
@@ -21,6 +22,8 @@ interface SessionCardProps {
   onOpen: (session: TerminalSession) => void;
   onRename: (session: TerminalSession) => void;
   onTerminate: (session: TerminalSession) => void;
+  /** Opens the session summaries (#59). Given only when AI is available to the viewer. */
+  onSummarize?: (session: TerminalSession) => void;
   selected?: boolean;
   onSelectToggle?: (session: TerminalSession) => void;
 }
@@ -52,7 +55,7 @@ function getRelativeTime(dateString: string): string {
   return date.toLocaleDateString();
 }
 
-export function SessionCard({ session, onOpen, onRename, onTerminate, selected, onSelectToggle }: SessionCardProps) {
+export function SessionCard({ session, onOpen, onRename, onTerminate, onSummarize, selected, onSelectToggle }: SessionCardProps) {
   const serverInfo = `${session.serverProfile.username}@${session.serverProfile.hostname}:${session.serverProfile.port}`;
   const isTerminated = session.status === 'terminated';
 
@@ -121,6 +124,13 @@ export function SessionCard({ session, onOpen, onRename, onTerminate, selected, 
                 <OpenIcon fontSize="small" />
               </IconButton>
             </Tooltip>
+            {onSummarize && (
+              <Tooltip title="Summarize session">
+                <IconButton size="small" aria-label="Summarize session" onClick={() => onSummarize(session)}>
+                  <SummarizeIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Rename">
               <IconButton size="small" onClick={() => onRename(session)}>
                 <EditIcon fontSize="small" />
