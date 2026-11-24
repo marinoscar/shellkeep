@@ -122,9 +122,9 @@ describe('the env-spec fragment', () => {
 });
 
 describe('the commands', () => {
-  it('adds servers, sessions and runbook after the platform commands', () => {
+  it('adds servers, sessions, runbook and files after the platform commands', () => {
     const names = createCli(APP_CLI_OPTIONS).program.commands.map((command) => command.name());
-    expect(names).toEqual(['init', 'login', 'api', 'config', 'node', 'deploy', 'servers', 'sessions', 'runbook', 'android']);
+    expect(names).toEqual(['init', 'login', 'api', 'config', 'node', 'deploy', 'servers', 'sessions', 'runbook', 'files', 'android']);
   });
 });
 
