@@ -138,7 +138,7 @@ return [
   {
     id: 'hostKey',
     label: 'Host key',
-    priority: 'detail',
+    priority: 'secondary',
     minWidth: 120,
     value: (row) => HOST_KEY_LABELS[row.hostKeyState ?? (row.fingerprint ? 'trusted' : 'untrusted')],
     render: (row) => <HostKeyStatus profile={row} />,

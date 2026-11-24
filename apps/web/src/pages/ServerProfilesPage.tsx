@@ -393,7 +393,14 @@ export default function ServerProfilesPage() {
         <Box
           role="group"
           aria-label="Filters"
-          sx={{ display: 'grid', gap: 1.5, mb: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', md: '2fr 1fr 1fr 1fr' } }}
+          sx={{
+            display: 'grid',
+            gap: 1.5,
+            mb: 2,
+            // Tags spans the row on a phone and the three selects share the next; one row from md.
+            gridTemplateColumns: { xs: 'repeat(3, minmax(0, 1fr))', md: '2fr 1fr 1fr 1fr' },
+            '& > :first-of-type': { gridColumn: { xs: '1 / -1', md: 'auto' } },
+          }}
         >
           <Autocomplete
             multiple
@@ -499,6 +506,8 @@ export default function ServerProfilesPage() {
           selection={{ selectedIds, onSelectionChange: setSelectedIds }}
           rowActions={rowActions}
           bulkActions={bulkActions}
+          // The export is #68's (the header's Export button), never a second, client-side one.
+          disableExport
         />
       </Box>
 
