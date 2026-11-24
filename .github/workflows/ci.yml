@@ -26,6 +26,8 @@ jobs:
       - run: npm ci
       - name: Check module classification
         run: node scripts/platform-adoption/check-classification.mjs
+      - name: Check shim markers against the local-exceptions ledger
+        run: npm run check:shims
       - run: npm run prisma:generate --workspace=api
       - name: Composed schema is current (prisma/schema/ equals a fresh compose)
         run: npm run db:compose:check --workspace=api
