@@ -27,7 +27,7 @@ export function renderInline(text: string): ReactNode[] {
     }
     last = index + token.length;
   }
-  if (last < text.length) out.push(<Fragment key={key++}>{text.slice(last)}</Fragment>);
+  if (last < text.length) out.push(<Fragment key={`tail-${key}`}>{text.slice(last)}</Fragment>);
   return out;
 }
 

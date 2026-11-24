@@ -160,7 +160,7 @@ export function SessionSummaryPanel({ sessionId, sessionName }: SessionSummaryPa
           disabled={!sessionId || busy}
           onClick={() => void start()}
         >
-          {state.status === 'succeeded' || state.status === 'failed' ? 'Summarize again' : 'Summarize session'}
+          {state.status === 'succeeded' || state.status === 'failed' ? 'Summarize again' : 'Summarize'}
         </Button>
       </Box>
       {busy && (
