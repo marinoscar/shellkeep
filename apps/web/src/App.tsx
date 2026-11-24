@@ -110,6 +110,9 @@ const DoctorPage = lazy(() =>
 const TerminalSystemSettingsPage = lazy(
   () => import('./components/terminal/settings/TerminalSystemSettingsPage'),
 );
+const FilesSystemSettingsPage = lazy(
+  () => import('./components/files/settings/FilesSystemSettingsPage'),
+);
 // Operations (issue #49): the packaged jobs and nodes pages.
 const JobsPage = lazy(() =>
   import('@marinoscar/platform-web/jobs/ui').then((m) => ({ default: m.JobsPage })),
@@ -499,6 +502,17 @@ export function AppRoutes() {
                   element={
                     <RequirePermission permission="system_settings:read" fallback={HOME}>
                       <TerminalSystemSettingsPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Files (#153): the `files` system-settings namespace.
+                    `GET /api/system-settings` enforces `system_settings:read`;
+                    saving needs `system_settings:write`, gated in the page. */}
+                <Route
+                  path="/admin/settings/files"
+                  element={
+                    <RequirePermission permission="system_settings:read" fallback={HOME}>
+                      <FilesSystemSettingsPage />
                     </RequirePermission>
                   }
                 />

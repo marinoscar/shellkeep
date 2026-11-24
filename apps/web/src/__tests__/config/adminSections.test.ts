@@ -12,6 +12,7 @@ import {
   ADMIN_SECTIONS,
   BROADCASTS_PATH,
   EMAIL_PATH,
+  FILES_SYSTEM_SETTINGS_PATH,
   MAINTENANCE_PATH,
   PUSH_PATH,
   STORAGE_PATH,
@@ -35,6 +36,8 @@ describe('ADMIN_SECTIONS (#46)', () => {
       [androidAppSettingsPage.card.title, '/admin/settings/android'],
       // #70: the onboarding slice's Setup guide, appended to General.
       ['Setup guide', '/admin/settings/setup'],
+      // #153: appended to General.
+      ['Files', '/admin/settings/files'],
       ['Users & Allowlist', '/admin/settings/users'],
       ['Doctor', '/admin/settings/doctor'],
       // #54: appended to Observability.
@@ -94,6 +97,9 @@ describe('ADMIN_SECTIONS (#46)', () => {
       '/admin/settings/android': 'system_settings:read',
       // GET /api/onboarding's admin block and GET /api/admin/onboarding/metrics (#70).
       '/admin/settings/setup': 'system_settings:read',
+      // GET /api/system-settings (the `files` namespace, #153); saving needs
+      // system_settings:write, gated in the page.
+      '/admin/settings/files': 'system_settings:read',
       // GET /api/users.
       '/admin/settings/users': 'users:read',
       // GET /api/admin/doctor.
@@ -164,7 +170,7 @@ describe('ADMIN_SECTIONS (#46)', () => {
     expect([...((hub?.permission as readonly string[]) ?? [])].sort()).toEqual(ADMIN_HUB_PERMISSIONS);
   });
 
-  it('appends Storage (#50), then Email and Web Push (#51), then the Setup guide (#70) to General', () => {
+  it('appends Storage (#50), then Email and Web Push (#51), then the Setup guide (#70) and Files (#153) to General', () => {
     const general = ADMIN_SECTIONS.find((section) => section.label === 'General');
     expect(general?.cards.map((c) => c.path)).toEqual([
       '/admin/settings/about',
@@ -176,6 +182,8 @@ describe('ADMIN_SECTIONS (#46)', () => {
       // #74.
       '/admin/settings/android',
       '/admin/settings/setup',
+      // #153.
+      FILES_SYSTEM_SETTINGS_PATH,
     ]);
   });
 

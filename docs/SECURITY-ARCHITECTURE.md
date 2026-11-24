@@ -169,9 +169,19 @@ Detail and flows: [specs/fleet-runbooks.md §6](specs/fleet-runbooks.md#6-safety
 - Uploads (terminal image paste, runbook `file_upload`): size and type limits (100 MiB at the proxy), randomized object keys with the organization segment, stored by the storage slice; a `file_upload` step names a stored object and verifies the checksum on the target (`UPLOAD_CHECKSUM_MISMATCH`).
 - No global rate limiter exists; targeted limits are the platform's (AI, device polling, link resolution). Add `limit_req` at the proxy if the deployment is exposed.
 
+### Remote file access
+
+Detail: [specs/files.md](specs/files.md).
+
+- **Access rule.** The same as opening a terminal: `sessions:write` plus the `connect` access check on the profile, on every request. There is no `files:*` permission; a profile the caller may not use is a 404.
+- **Download tokens.** Random, stored only as a hash in memory, single use, valid 60 seconds, bound to user, organization, profile, path and size. The download route is public by token, so redemption re-resolves the user (active, still in the organization), requires `sessions:write` and re-checks the connect rule and the size.
+- **Paths.** A path only ever reaches SFTP calls: NUL is refused, `..` is resolved lexically, nothing goes to a shell.
+- **No content in logs or spans.** File content and paths are never logged or traced (spans carry the profile id) and never sent to AI.
+- **Audit.** Every download records `server_profile.file_download`.
+
 ## 12. Audit and logging
 
-- Audit events (`audit_events`, optional retention): `terminal_session.create|terminate`, `server_profile.create|update|delete|test|host_key_trusted|host_key_auto_trusted|host_key_replaced|host_key_forgotten|connect_as_grantee`, `terminal_ai.consent|request`, `runbook.created|version_created|archived|restored|deleted`, `runbook_run.created|cancelled|target_cancelled|destructive_confirmed|ai_stopped`, `runbook_schedule.created|updated|deleted|approved|run_now`, `runbook_agent.command`. Plus the platform's identity, settings and sharing events.
+- Audit events (`audit_events`, optional retention): `terminal_session.create|terminate`, `server_profile.file_download` (path, size, hostname), `server_profile.create|update|delete|test|host_key_trusted|host_key_auto_trusted|host_key_replaced|host_key_forgotten|connect_as_grantee`, `terminal_ai.consent|request`, `runbook.created|version_created|archived|restored|deleted`, `runbook_run.created|cancelled|target_cancelled|destructive_confirmed|ai_stopped`, `runbook_schedule.created|updated|deleted|approved|run_now`, `runbook_agent.command`. Plus the platform's identity, settings and sharing events.
 - Logs are structured (Pino) with request and trace ids. Never logged: terminal input or output, commands, prompts, model output, credentials, tokens (including the WebSocket `auth` token). Logs carry counts, lengths, risk classes and codes.
 - Webhook and notification payloads carry ids, names and times only; their schemas are strict so a secret cannot be added by accident.
 

@@ -37,6 +37,7 @@ import './notifications';
 // ShellKeep's webhook events (#54) and alert rule kinds (#54); each registers itself at import.
 import './webhooks';
 import './alerts';
+import { registerFileErrorCodes } from '../files/files.error-codes';
 import { registerSshErrorCodes } from '../ssh/ssh.error-codes';
 import { registerTerminalAiErrorCodes } from '../terminal-ai/terminal-ai.error-codes';
 import { registerRunbookRegistrations } from '../runbooks/runbooks.registrations';
@@ -50,6 +51,8 @@ registerPlatformUserOwnedModels(APP_USER_OWNED_MODELS);
 registerPlatformModelOwnership(APP_MODEL_OWNERSHIP);
 registerShellkeepCredentialPurposes();
 registerSshErrorCodes();
+// The files API codes: FILE_IS_BINARY, FILE_TOO_LARGE, SFTP_UNAVAILABLE, ... (#153).
+registerFileErrorCodes();
 // The terminal AI safety codes: AI_CONSENT_REQUIRED, AI_OUTPUT_SHARING_DISABLED (#56).
 registerTerminalAiErrorCodes();
 // The runbook error codes and notification events (#61).

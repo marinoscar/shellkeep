@@ -25,6 +25,7 @@ Full index with a "Doc map by task": [docs/README.md](docs/README.md). Read docs
 | Testing tiers, helpers, fixtures | [docs/TESTING.md](docs/TESTING.md), [apps/api/TESTING.md](apps/api/TESTING.md) |
 | Terminal: sessions, WebSocket protocol, tmux, reaper, scrolling, mobile input | [docs/specs/terminal.md](docs/specs/terminal.md) |
 | Terminal AI: assist, explain, summaries, redaction, consent | [docs/specs/terminal-ai.md](docs/specs/terminal-ai.md) |
+| Spec: remote files (SFTP files API, guardrails, download tokens) | [docs/specs/files.md](docs/specs/files.md) |
 | Fleet Runbooks: model, run engine, logs, safety, AI step | [docs/specs/fleet-runbooks.md](docs/specs/fleet-runbooks.md) |
 | Device authorization and PATs (platform-owned) | [EnterpriseAppBase DEVICE-AUTH.md](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/DEVICE-AUTH.md) |
 | Where ShellKeep deviates from the platform (shims, standing constraints) | [docs/platform-adoption/local-exceptions.md](docs/platform-adoption/local-exceptions.md) |

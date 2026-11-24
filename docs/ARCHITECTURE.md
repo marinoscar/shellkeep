@@ -64,6 +64,7 @@ apps/api/src/
   server-profiles/         server profiles, SSH credential handling, host-key trust endpoints
   ssh/                     SshConnectionFactory, host-key policy, server facts, SSH metrics
   terminal/                sessions, gateway (WS), session manager, history, reaper, alerts, Doctor checks
+  files/                   remote file access over SFTP (list, stat, text windows, single-use downloads), the `files` settings namespace
   terminal-ai/             assist, explain, session summaries, the context/redaction gate
   command-safety/          classifyCommand, redactText, ANSI stripping (pure)
   runbooks/                definitions, run engine, safety, AI step, artifacts, sharing, user-data
@@ -83,7 +84,7 @@ Each adopted slice is bound in `apps/api/src/platform/<slice>/` (and `apps/web/s
 | Slice | ShellKeep binding | What ShellKeep adds or decides | Package README |
 |---|---|---|---|
 | identity | `platform/identity/` | Google sign-in only; email allowlist; PATs and device flow (used by the CLI); the OAuth server is **not** mounted | [identity](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/identity/README.md) |
-| settings | `platform/settings/` | System namespaces `ui`, `features`, `terminal`, `ssh`, `runbooks`, `terminalAi`; user namespaces `terminal`, `shortcuts`, `terminalAi`, `onboarding` | [settings](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/settings/README.md) |
+| settings | `platform/settings/` | System namespaces `ui`, `features`, `terminal`, `ssh`, `runbooks`, `terminalAi`, `files`; user namespaces `terminal`, `shortcuts`, `terminalAi`, `onboarding` | [settings](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/settings/README.md) |
 | credentials | `platform/credentials/` | Purposes `ssh` (user tier, no fallback), `runbook_secret` (org tier); SMTP, SES, VAPID, AI, storage, webhook signing, GreptimeDB | [credentials](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/credentials/README.md) |
 | jobs | `platform/jobs/` | Job types in [§6](#6-background-work); reason `runbook_run`; retention policy `runbookArtifacts` | [jobs](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/jobs/README.md) |
 | nodes | `platform/jobs/` | Worker-node fleet; no ShellKeep job is node-eligible except `runbook.artifacts.bundle`; the nodes data-plane ports are shims | [nodes](https://github.com/marinoscar/EnterpriseAppBase/blob/main/packages/platform-api/src/nodes/README.md) |
@@ -144,6 +145,10 @@ The three thresholds are the `terminal` system namespace (defaults 60 minutes, 1
 ### 3.5 Terminal AI
 
 Three features reach a model only through `TerminalContextService.forAi` (consent, the server's AI switch, capture, ANSI strip, redaction, size cap, audit): command assist (`POST /api/ai/terminal/assist`, SSE), explain (`POST /api/ai/terminal/explain`, SSE) and session summaries (job `ai.session.summarize`). Keys are the user's own. [specs/terminal-ai.md](specs/terminal-ai.md).
+
+### 3.5a Remote files
+
+A file on a server is listed, inspected, read as a text window or downloaded over SFTP (`apps/api/src/files/`, routes under `server-profiles/:id/files`). Access is the terminal rule: `sessions:write` plus the `connect` access check on every request. Downloads use a single-use, 60-second token. The admin Files card sets the size caps and rate limits. Audit event `server_profile.file_download`. [specs/files.md](specs/files.md).
 
 ### 3.6 Fleet Runbooks
 
@@ -295,6 +300,7 @@ Registered in `apps/api/src/app-registrations/settings.ts` (order is the stored 
 | system | `ssh` | `hostKeyPolicy` | `tofu_prompt` default |
 | system | `runbooks` | `enabled`, `maxTargetsPerRun`, `maxConcurrency`, `defaultStepTimeoutSec`, `maxLogBytesPerStep`, `approvals.*`, `ai.agentEnabled` | organization may only tighten |
 | system | `terminalAi` | `redactionMode`, `requireConsent` | organization may only tighten |
+| system | `files` | `fullViewMaxBytes`, `pagedViewMaxBytes`, `downloadMaxBytes`, `uploadMaxBytes`, `sftpTimeoutSeconds`, `contentRequestsPerMinute`, `downloadsPerMinute`, `maxConcurrentDownloads` | read on every request; sizes must be ordered ([specs/files.md](specs/files.md)) |
 | user | `terminal` | font, size, cursor, scrollback, theme, bell, key bar, scroll buttons | |
 | user | `shortcuts` | key-bar shortcuts | moved out of `terminal` (#80) |
 | user | `terminalAi` | `consentAcceptedAt` | |
@@ -308,7 +314,7 @@ Every page is a card in a registry (`apps/web/src/config/adminSections.tsx`, `us
 
 | Area | Routes |
 |---|---|
-| Admin, General | `/admin/settings/about`, `/setup`, `/maintenance`, `/terminal`, `/storage`, `/email`, `/push` |
+| Admin, General | `/admin/settings/about`, `/setup`, `/maintenance`, `/terminal`, `/storage`, `/email`, `/push`, `/files` (`system_settings:read`, the `files` namespace) |
 | Admin, Access | `/admin/settings/users` |
 | Admin, Observability | `/admin/settings/doctor`, `/alerts` |
 | Admin, Operations | `/admin/settings/jobs`, `/jobs/insights`, `/workers`, `/broadcasts`, `/db-backup`, `/webhooks`, `/organization-webhooks`, `/android` |
