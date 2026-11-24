@@ -13,11 +13,12 @@
 // =============================================================================
 
 import { Injectable, Logger } from '@nestjs/common';
-import { AiError, AiService } from '@marinoscar/platform-api/ai';
+import { AiService } from '@marinoscar/platform-api/ai';
 
 import type { OwnerScope } from '../common/types/owner-scope';
 import { classifyCommand, redactText, type CommandRisk, type RedactionFinding } from '../command-safety';
 import { AI_ASSIST_UNPARSEABLE } from './terminal-ai.error-codes';
+import { readModelStream } from './terminal-ai.sse';
 import { parseAssistOutput } from './terminal-assist.parser';
 import { FEATURE_FOR_PURPOSE, TerminalContextService, TERMINAL_AI_LIMITS } from './terminal-context.service';
 
@@ -119,26 +120,15 @@ export class TerminalAssistService {
   private async *frames(contextFrame: AssistContextFrame, events: AsyncIterable<unknown>): AsyncGenerator<AssistFrame> {
     yield contextFrame;
     let text = '';
-    let completedText: string | null = null;
-    try {
-      for await (const raw of events) {
-        const event = raw as { type: string; delta?: string; code?: string; response?: { outputText?: string } };
-        if (event.type === 'output_text.delta' && typeof event.delta === 'string') {
-          text += event.delta;
-          yield { type: 'delta', text: event.delta };
-        } else if (event.type === 'response.completed') {
-          completedText = event.response?.outputText ?? null;
-        } else if (event.type === 'error') {
-          yield { type: 'error', code: event.code ?? 'AI_PROVIDER_UNAVAILABLE' };
-          return;
-        }
-      }
-    } catch (err) {
-      yield { type: 'error', code: AiError.wrap(err).code };
-      return;
+    for await (const part of readModelStream(events)) {
+      if (part.type === 'delta') yield part;
+      else if (part.type === 'error') {
+        yield part;
+        return;
+      } else text = part.text;
     }
 
-    const parsed = parseAssistOutput(text !== '' ? text : (completedText ?? ''));
+    const parsed = parseAssistOutput(text);
     if (!parsed) {
       this.logger.warn(`Assist answer was not parseable (length=${text.length})`);
       yield { type: 'error', code: AI_ASSIST_UNPARSEABLE };

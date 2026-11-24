@@ -28,6 +28,10 @@ import { TerminalAiPanel } from '../components/terminal/ai/TerminalAiPanel';
 import { useTerminalAiAvailable } from '../components/terminal/ai/useTerminalAiAvailable';
 import { insertSuggestedCommand } from '../components/terminal/ai/insertCommand';
 import { AI_ASSIST_ACTION, matchesAiAssistShortcut } from '../lib/terminal/aiAssistShortcut';
+import { AI_EXPLAIN_ACTION, matchesAiExplainShortcut } from '../lib/terminal/aiExplainShortcut';
+import { EXPLAIN_SELECTION_MAX } from '../components/terminal/ai/ExplainPanel';
+import { ExplainMenuButton } from '../components/terminal/ai/ExplainMenuButton';
+import type { ExplainTrigger } from '../components/terminal/ai/ExplainPanel';
 import { RenameSessionDialog } from '../components/terminal/workspace/RenameSessionDialog';
 import { useWorkspaceLayout } from '../components/terminal/workspace/useWorkspaceLayout';
 import {
@@ -111,9 +115,11 @@ export default function TerminalWorkspacePage() {
   // Mod+Shift+A (or the user's rebinding) opens the assistant with the prompt focused; the
   // terminal keeps the key from the PTY through `isReservedKey` (#57).
   const aiAssistBinding = actionShortcuts[AI_ASSIST_ACTION];
+  const aiExplainBinding = actionShortcuts[AI_EXPLAIN_ACTION];
   const isReservedKey = useCallback(
-    (event: KeyboardEvent) => aiAvailable && matchesAiAssistShortcut(event, aiAssistBinding),
-    [aiAvailable, aiAssistBinding],
+    (event: KeyboardEvent) =>
+      aiAvailable && (matchesAiAssistShortcut(event, aiAssistBinding) || matchesAiExplainShortcut(event, aiExplainBinding)),
+    [aiAvailable, aiAssistBinding, aiExplainBinding],
   );
   const openAssistant = useCallback(() => {
     setAiOpen(true);
@@ -151,6 +157,42 @@ export default function TerminalWorkspacePage() {
   }, []);
   const activeId = layout?.active ?? null;
   const getView = useCallback(() => (activeId ? (views.current.get(activeId) ?? null) : null), [activeId]);
+
+  // Explain (#58): the selection or the last error goes to the AI panel's Explain action. The
+  // selection is read here, when asked, and sent only after the panel shows what will be sent.
+  const [explainTrigger, setExplainTrigger] = useState<ExplainTrigger | null>(null);
+  const explainSeq = useRef(0);
+  const selectionOf = useCallback((id: string | null): string => {
+    const terminal = id ? views.current.get(id)?.getTerminal() : null;
+    return terminal?.hasSelection() ? terminal.getSelection().slice(-EXPLAIN_SELECTION_MAX) : '';
+  }, []);
+  const getSelection = useCallback(() => selectionOf(activeId), [selectionOf, activeId]);
+  /** `auto` (the shortcut): the selection when there is one, else the last error. */
+  const requestExplain = useCallback(
+    (mode: 'auto' | 'selection' | 'last_error', paneId: string | null = activeId) => {
+      const selection = mode === 'last_error' ? '' : selectionOf(paneId);
+      const resolved = mode !== 'last_error' && selection.trim() !== '' ? 'selection' : 'last_error';
+      setAiOpen(true);
+      setExplainTrigger({
+        id: ++explainSeq.current,
+        mode: resolved,
+        ...(paneId ? { sessionId: paneId } : {}),
+        ...(resolved === 'selection' ? { selection } : {}),
+      });
+    },
+    [activeId, selectionOf],
+  );
+  useEffect(() => {
+    if (!aiAvailable) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!matchesAiExplainShortcut(event, aiExplainBinding)) return;
+      event.preventDefault();
+      requestExplain('auto');
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [aiAvailable, aiExplainBinding, requestExplain]);
+  const onExplainPaneSelection = useCallback((paneId: string) => requestExplain('selection', paneId), [requestExplain]);
 
   // ---- the key bar sits on the keyboard ------------------------------------
   const rootRef = useRef<HTMLDivElement>(null);
@@ -277,11 +319,12 @@ export default function TerminalWorkspacePage() {
         showScrollButtons={showScrollButtons}
         preferences={preferences ?? undefined}
         isReservedKey={isReservedKey}
+        onExplainSelection={aiAvailable ? onExplainPaneSelection : undefined}
         registerView={registerView}
         onStatus={onPaneStatus}
       />
     ),
-    [showScrollButtons, preferences, isReservedKey, registerView, onPaneStatus],
+    [showScrollButtons, preferences, isReservedKey, aiAvailable, onExplainPaneSelection, registerView, onPaneStatus],
   );
 
   const tabs = useMemo(
@@ -391,6 +434,13 @@ export default function TerminalWorkspacePage() {
                   AI
                 </Button>
               )}
+              {aiAvailable && (
+                <ExplainMenuButton
+                  disabled={!activeId}
+                  hasSelection={() => getSelection() !== ''}
+                  onExplain={(mode) => requestExplain(mode)}
+                />
+              )}
               {!isPhone && (
                 <SplitControls
                   current={splitOnScreen}
@@ -456,6 +506,9 @@ export default function TerminalWorkspacePage() {
               variant={isWide ? 'side' : 'sheet'}
               sessionId={activeId}
               focusRequest={aiFocus}
+              explainTrigger={explainTrigger}
+              onExplainTriggerHandled={() => setExplainTrigger(null)}
+              getSelection={getSelection}
               onInsert={(command) => {
                 insertSuggestedCommand(getView(), command);
                 if (!isWide) setAiOpen(false);

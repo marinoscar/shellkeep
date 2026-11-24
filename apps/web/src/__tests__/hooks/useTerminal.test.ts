@@ -795,6 +795,20 @@ describe('useTerminal', () => {
       expect(result.current.bellCount).toBe(1);
     });
 
+    it('reports whether text is selected, whatever copy-on-select says (#58)', () => {
+      const { result } = renderWithPreferences(DEFAULT_TERMINAL_SETTINGS);
+      const term = getTerminalInstance() as unknown as {
+        selectionHandler: () => void;
+        hasSelection: ReturnType<typeof vi.fn>;
+      };
+      expect(result.current.hasSelection).toBe(false);
+      act(() => term.selectionHandler());
+      expect(result.current.hasSelection).toBe(true);
+      term.hasSelection.mockReturnValue(false);
+      act(() => term.selectionHandler());
+      expect(result.current.hasSelection).toBe(false);
+    });
+
     it('copies a selection only with copy-on-select on', () => {
       const writeText = vi.fn(() => Promise.resolve());
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });

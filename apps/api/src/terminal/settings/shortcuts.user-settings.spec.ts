@@ -8,6 +8,11 @@ describe('shortcuts namespace: action shortcuts (#57)', () => {
     expect(shortcutsSettingsPatchSchema.safeParse({ actions: { 'terminal.other': binding } }).success).toBe(false);
   });
 
+  it('accepts a rebinding of terminal.aiExplain (#58)', () => {
+    const e = { modifiers: ['ctrl', 'shift'] as Array<'ctrl' | 'shift'>, key: 'e' as const };
+    expect(shortcutsSettingsPatchSchema.safeParse({ actions: { 'terminal.aiExplain': e } }).success).toBe(true);
+  });
+
   it('a stored row without actions is still valid', () => {
     expect(shortcutsSettingsSchema.safeParse({ keyShortcuts: [] }).success).toBe(true);
   });

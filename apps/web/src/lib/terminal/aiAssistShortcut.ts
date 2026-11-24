@@ -13,13 +13,10 @@ export function defaultAiAssistShortcut(mac: boolean = isMacPlatform()): Keystro
   return { modifiers: mac ? ['meta', 'shift'] : ['ctrl', 'shift'], key: 'a' };
 }
 
-/** Whether `event` is the AI assist shortcut (a stored rebinding, else Mod+Shift+A). Exact modifiers. */
-export function matchesAiAssistShortcut(
-  event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>,
-  binding?: Keystroke,
-  mac: boolean = isMacPlatform(),
-): boolean {
-  const target = binding ?? defaultAiAssistShortcut(mac);
+type KeyEventLike = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>;
+
+/** Whether `event` is exactly `target`: the key and every modifier, no extra one. */
+export function matchesKeystroke(event: KeyEventLike, target: Keystroke): boolean {
   const want = new Set(target.modifiers);
   return (
     event.key.toLowerCase() === target.key.toLowerCase() &&
@@ -28,4 +25,13 @@ export function matchesAiAssistShortcut(
     event.altKey === want.has('alt') &&
     event.metaKey === want.has('meta')
   );
+}
+
+/** Whether `event` is the AI assist shortcut (a stored rebinding, else Mod+Shift+A). Exact modifiers. */
+export function matchesAiAssistShortcut(
+  event: KeyEventLike,
+  binding?: Keystroke,
+  mac: boolean = isMacPlatform(),
+): boolean {
+  return matchesKeystroke(event, binding ?? defaultAiAssistShortcut(mac));
 }
