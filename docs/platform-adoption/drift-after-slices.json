@@ -1,0 +1,3980 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-24T07:59:15.931Z",
+  "base": {
+    "root": "<SCRATCH>/eab-slice-view",
+    "commit": null,
+    "identity": {
+      "productName": "My App",
+      "slug": "my-app",
+      "slugSnake": "my_app",
+      "serviceName": "my-app-api",
+      "repoSlug": "marinoscar/EnterpriseAppBase",
+      "repoName": "EnterpriseAppBase",
+      "cliName": "appctl",
+      "cliUpper": "APPCTL",
+      "cliTitle": "Appctl"
+    }
+  },
+  "app": {
+    "root": "shellkeep",
+    "commit": "a0acaae2645769a899feed6c22431ffb4b64d5f7",
+    "identity": {
+      "productName": "ShellKeep",
+      "slug": "shellkeep",
+      "slugSnake": "shellkeep",
+      "serviceName": "shellkeep-api",
+      "repoSlug": "marinoscar/shellkeep",
+      "repoName": "shellkeep",
+      "cliName": "shellkeep",
+      "cliUpper": "SHELLKEEP",
+      "cliTitle": "Shellkeep"
+    }
+  },
+  "replacements": [
+    {
+      "placeholder": "__PRODUCT__",
+      "base": "My App",
+      "app": "ShellKeep",
+      "applied": true,
+      "token": "__PRODUCT__"
+    },
+    {
+      "placeholder": "__SLUG__",
+      "base": "my-app",
+      "app": "shellkeep",
+      "applied": true,
+      "token": "__SLUG__"
+    },
+    {
+      "placeholder": "__SLUG_SNAKE__",
+      "base": "my_app",
+      "app": "shellkeep",
+      "applied": true,
+      "token": "__SLUG__"
+    },
+    {
+      "placeholder": "__SERVICE__",
+      "base": "my-app-api",
+      "app": "shellkeep-api",
+      "applied": true,
+      "token": "__SERVICE__"
+    },
+    {
+      "placeholder": "__REPO_SLUG__",
+      "base": "marinoscar/EnterpriseAppBase",
+      "app": "marinoscar/shellkeep",
+      "applied": true,
+      "token": "__REPO_SLUG__"
+    },
+    {
+      "placeholder": "__REPO_NAME__",
+      "base": "EnterpriseAppBase",
+      "app": "shellkeep",
+      "applied": true,
+      "token": "__SLUG__"
+    },
+    {
+      "placeholder": "__CLI__",
+      "base": "appctl",
+      "app": "shellkeep",
+      "applied": true,
+      "token": "__SLUG__"
+    },
+    {
+      "placeholder": "__CLI_UPPER__",
+      "base": "APPCTL",
+      "app": "SHELLKEEP",
+      "applied": true,
+      "token": "__CLI_UPPER__"
+    },
+    {
+      "placeholder": "__CLI_TITLE__",
+      "base": "Appctl",
+      "app": "Shellkeep",
+      "applied": true,
+      "token": "__CLI_TITLE__"
+    }
+  ],
+  "areas": {
+    "api": {
+      "files": 589,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 235,
+      "appOnly": 354,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": 0,
+      "root": "apps/api/src",
+      "inBase": true,
+      "inApp": true
+    }
+  },
+  "modules": [
+    {
+      "area": "api",
+      "module": "(root)",
+      "files": 4,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 4,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "files": 7,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 7,
+      "appOnly": 0,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "files": 21,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 21,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "files": 54,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 54,
+      "appOnly": 0,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "command-safety",
+      "files": 7,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 7,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "files": 10,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 4,
+      "appOnly": 6,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "config",
+      "files": 1,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 1,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "dashboard",
+      "files": 6,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 6,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "files": 17,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 17,
+      "appOnly": 0,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "email-templates",
+      "files": 6,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 6,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "files": 5,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 5,
+      "appOnly": 0,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "notifications-registry",
+      "files": 3,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 3,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "onboarding",
+      "files": 3,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 3,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "openapi",
+      "files": 2,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 2,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "files": 75,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 75,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "prisma",
+      "files": 3,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 3,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "files": 105,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 105,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "files": 21,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 21,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "files": 34,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 34,
+      "appOnly": 0,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "files": 18,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 18,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "files": 95,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 95,
+      "appOnly": 0,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "files": 48,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 48,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "files": 25,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 0,
+      "appOnly": 25,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": null
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "files": 11,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 11,
+      "appOnly": 0,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": 0
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "files": 8,
+      "identical": 0,
+      "normalisedIdentical": 0,
+      "modified": 0,
+      "baseOnly": 8,
+      "appOnly": 0,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "identicalPercent": 0
+    }
+  ],
+  "files": [
+    {
+      "area": "api",
+      "module": "(root)",
+      "path": "apps/api/src/app.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "(root)",
+      "path": "apps/api/src/instrumentation.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "(root)",
+      "path": "apps/api/src/main.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "(root)",
+      "path": "apps/api/src/shellkeep.manifest.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/allowlist.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/allowlist.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/allowlist.permissions.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/allowlist.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/dto/add-email.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/dto/allowlist-query.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "allowlist",
+      "path": "apps/api/src/allowlist/dto/allowlist-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/ai.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/alerts.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/credentials.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/exports.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/host.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/jobs.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/model-ownership.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/notifications.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/onboarding.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/openapi-tags.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/permissions.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/permissions.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/platform-slices.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/registrations.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/settings.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/sharing.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/storage-prefixes.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/telemetry.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/user-data.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/user-owned-models.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "app-registrations",
+      "path": "apps/api/src/app-registrations/webhooks.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/admin-bootstrap.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth-error-codes.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth-provider.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/auth.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/cookie-http.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/credential-binding.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/auth-credential.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/auth.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/current-org.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/current-principal.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/current-user.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/permissions.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/public.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/decorators/roles.decorator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/auth-providers.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/egress/auth-providers.egress.contributor.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/egress/google-auth.egress.contributor.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/initial-admin.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/jwt-secret.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/doctor/principal-cache.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/dto/auth-provider.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/dto/auth-user.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/dto/switch-org.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/external-profile.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/filters/auth-provider-exception.filter.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/filters/google-oauth-exception.filter.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/external-provider.guard.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/google-oauth.guard.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/jwt-auth.guard.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/permissions.guard.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/guards/roles.guard.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/handlers/token-cleanup.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/interfaces/authenticated-user.interface.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal-cache/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal-cache/local-event-bus.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal-cache/principal-cache.config.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal-cache/principal-cache.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal-cache/principal-cache.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/principal.factory.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/providers/auth-provider.registry.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/providers/cookie-state-store.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/providers/google.provider.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/refuse-oauth.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/route-prefix.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/sign-in-policy.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/sign-in-response.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/strategies/google.strategy.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/strategies/jwt.strategy.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/tasks/token-cleanup.task.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "auth",
+      "path": "apps/api/src/auth/tenancy-mode.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "command-safety",
+      "path": "apps/api/src/command-safety/classify-command.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "command-safety",
+      "path": "apps/api/src/command-safety/classify-command.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "command-safety",
+      "path": "apps/api/src/command-safety/destructive-patterns.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "command-safety",
+      "path": "apps/api/src/command-safety/index.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "command-safety",
+      "path": "apps/api/src/command-safety/redact.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "command-safety",
+      "path": "apps/api/src/command-safety/redact.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "command-safety",
+      "path": "apps/api/src/command-safety/strip-ansi.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/audit/record-audit.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/constants/roles.constants.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/database-url.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/exceptions/database-seed.exception.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/filters/http-exception.filter.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/interceptors/logging.interceptor.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/interceptors/transform.interceptor.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/middleware/request-id.middleware.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/otel/telemetry-identity.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "common",
+      "path": "apps/api/src/common/types/owner-scope.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "config",
+      "path": "apps/api/src/config/configuration.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "dashboard",
+      "path": "apps/api/src/dashboard/dashboard-runs.source.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "dashboard",
+      "path": "apps/api/src/dashboard/dashboard.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "dashboard",
+      "path": "apps/api/src/dashboard/dashboard.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "dashboard",
+      "path": "apps/api/src/dashboard/dashboard.schema.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "dashboard",
+      "path": "apps/api/src/dashboard/dashboard.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "dashboard",
+      "path": "apps/api/src/dashboard/dashboard.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/README.md",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/device-auth.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/device-auth.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/device-auth.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-activate-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-authorize-request.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-authorize-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-code-request.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-code-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-session.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-token-error.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-token-request.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/device-token-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/dto/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/exceptions/device-token-error.exception.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/handlers/device-code-cleanup.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "device-auth",
+      "path": "apps/api/src/device-auth/tasks/device-code-cleanup.task.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "email-templates",
+      "path": "apps/api/src/email-templates/group-invitation.email.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "email-templates",
+      "path": "apps/api/src/email-templates/idle-duration.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "email-templates",
+      "path": "apps/api/src/email-templates/index.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "email-templates",
+      "path": "apps/api/src/email-templates/runbook-run.email.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "email-templates",
+      "path": "apps/api/src/email-templates/shared-with-you.email.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "email-templates",
+      "path": "apps/api/src/email-templates/terminal-session-reaped.email.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/builtin-health-indicators.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/database.indicator.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/health-indicator.registry.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/health-indicator.runner.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "health",
+      "path": "apps/api/src/health/health.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "notifications-registry",
+      "path": "apps/api/src/notifications-registry/identity.notifications.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "notifications-registry",
+      "path": "apps/api/src/notifications-registry/runbooks.notifications.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "notifications-registry",
+      "path": "apps/api/src/notifications-registry/terminal.notifications.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "onboarding",
+      "path": "apps/api/src/onboarding/ai-keys.onboarding.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "onboarding",
+      "path": "apps/api/src/onboarding/onboarding.ids.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "onboarding",
+      "path": "apps/api/src/onboarding/onboarding.manifest.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "openapi",
+      "path": "apps/api/src/openapi/document.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "openapi",
+      "path": "apps/api/src/openapi/version.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/about/about.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/ai/ai-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/ai/ai-object-store.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/ai/ai.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/alerts/alerts-webhooks.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/alerts/alerts.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/android-app/android-app.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/android-app/empty-device-source.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/audit-sink.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/credentials/credentials.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/db-backup/db-backup-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/db-backup/db-backup.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/db-backup/db-backup.notifications.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/doctor.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/email/email.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/email/email.options.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/exports/export-paging.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/exports/export-registrations.manifest.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/exports/exports-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/exports/exports-notifier.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/exports/exports.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/exports/exports.notifications.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/host-app-metrics.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/host-core.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/identity/identity-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/identity/identity-jobs.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/identity/identity-notifier.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/identity/identity-user.adapters.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/identity/identity.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/jobs/jobs-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/jobs/jobs.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/jobs/node-job-inputs.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/jobs/node-ports.shim.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/notifications/notifications-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/notifications/notifications.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/onboarding/onboarding-data.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/onboarding/onboarding-features.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/onboarding/onboarding-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/onboarding/onboarding.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/platform-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/platform-host.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/settings/app-system-settings.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/settings/registry.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/settings/settings-catalog.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/settings/settings-data.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/settings/settings-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/settings/settings-profile-images.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/settings/settings.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/sharing/sharing-access.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/sharing/sharing-data.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/sharing/sharing-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/sharing/sharing-jobs.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/sharing/sharing-notifier.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/sharing/sharing.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/sharing/sharing.notifications.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/storage/import-env-storage-config.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/storage/import-env-storage-config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/storage/storage-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/storage/storage-key-prefix.manifest.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/storage/storage.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/system-settings-store.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/telemetry/telemetry-ai.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/telemetry/telemetry-app-info.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/telemetry/telemetry-credentials.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/telemetry/telemetry-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/telemetry/telemetry-jobs.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/telemetry/telemetry-settings-store.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/telemetry/telemetry.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/telemetry/telemetry.system-settings.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/user-data/user-data-db.adapter.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/user-data/user-data-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/user-data/user-data.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/user-data/user-data.manifest.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/webhooks/webhooks-host.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "platform",
+      "path": "apps/api/src/platform/webhooks/webhooks.config.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "prisma",
+      "path": "apps/api/src/prisma/prisma-system.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "prisma",
+      "path": "apps/api/src/prisma/prisma.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "prisma",
+      "path": "apps/api/src/prisma/prisma.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/agent-loops.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/agent-output.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/agent-output.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/agent-policy.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/agent-policy.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/agent-prompt.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/agent-session.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/agent-tools.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/agent-transcript.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/ai-approvals.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/runbook-agent.constants.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/runbook-agent.handler.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/runbook-agent.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/runbook-ai-stop.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/runbook-ai.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/runbook-draft.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/runbook-draft.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/ai/runbook-draft.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/artifacts/artifacts-handlers.conformance.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/artifacts/artifacts-purge.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/artifacts/bundle-builder.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/artifacts/bundle-builder.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/artifacts/bundle.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/artifacts/public-runbook-bundle.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/artifacts/public-runbook-bundle.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/artifacts/runbook-artifacts.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/artifacts/runbook-artifacts.listeners.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/artifacts/runbook-artifacts.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/dto/runbook.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/batching.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/cancel-watch.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/dry-run.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/dry-run.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/dto/run.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/engine-access.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/engine-handlers.conformance.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/engine-metrics.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/engine.constants.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/engine.error-codes.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/log-archive.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/log-sink.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/log-sink.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/logs-compact.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/package-commands.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/package-commands.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-advance.enqueue.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-advance.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-coordinator.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-events.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-events.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-file-source.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-finished.event.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-lifecycle.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-params.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-params.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-plan.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-plan.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-queries.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-start.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/run-stream.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/runbook-approvals.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/runbook-approvals.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/runbook-job-settled.listener.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/runbook-reconcile.task.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/runbook-runs.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/runbook-runs.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/runbook-settings.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/ssh-executor.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/ssh-executor.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/state-machine.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/state-machine.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/steps/collect-logs.step.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/steps/collect-logs.step.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/steps/tar-redact.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/steps/tar-redact.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/engine/target-run.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/export/runbook-runs.export-source.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/runbook-secrets.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/runbooks.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/runbooks.credentials.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/runbooks.error-codes.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/runbooks.metrics.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/runbooks.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/runbooks.onboarding.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/runbooks.registrations.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/runbooks.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/runbooks.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/safety/audit-csv.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/safety/audit-csv.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/safety/runbook-audit.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/safety/runbook-audit.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/safety/runbook-risk.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/safety/runbook-risk.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/schema/definition-hash.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/schema/definition-warnings.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/schema/re2-pattern.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/schema/runbook-definition.schema.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/schema/runbook-definition.schema.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/settings/runbooks.system-settings.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/settings/runbooks.system-settings.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/sharing/runbook-run.resource.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/target-resolver.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/target-resolver.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/user-data/runbooks-purge.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "runbooks",
+      "path": "apps/api/src/runbooks/user-data/runbooks-purge.job-type.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/dto/bulk-tags.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/dto/create-server-profile.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/dto/server-profiles-query.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/dto/trust-host-key.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/dto/update-server-profile.dto.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/dto/update-server-profile.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/export/server-profiles-export.binding.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/export/server-profiles.export-source.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/migrate/legacy-cipher.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/migrate/ssh-secrets-migrate.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-health.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.list.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.onboarding.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/server-profiles.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/ssh-credentials.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/user-data/servers-purge.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "server-profiles",
+      "path": "apps/api/src/server-profiles/user-data/servers-purge.job-type.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/README.md",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/data/settings-db.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/data/settings-ownership.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/oauth-server.system-settings.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/org-settings/describe-fields.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/org-settings/org-layer.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/org-settings/org-settings.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/org-settings/org-settings.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/ports.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/assemble.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/catalog.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/compose.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/core-user-fields.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/core-user-namespaces.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/extend.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/merge-helpers.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/nested.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/schema-walk.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/secret-fields.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/system-settings-namespace.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/registry/user-settings-namespace.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/row-store.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/settings-resolver.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/settings.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/settings.options.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/settings.permissions.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/system-settings/system-settings.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/system-settings/system-settings.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/testing/conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/testing/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/user-settings/user-settings.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/user-settings/user-settings.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "settings",
+      "path": "apps/api/src/settings/write-hooks.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/host-key-http.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/host-key-policy.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/host-key-policy.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/host-key.error.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/host-key.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/server-facts.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/server-facts.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/server-facts.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/ssh-connect-outcome.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/ssh-connection.factory.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/ssh-connection.factory.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/ssh-exec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/ssh-host-key-policy.doctor-check.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/ssh-profile.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/ssh.error-codes.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/ssh.metrics.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/ssh.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "ssh",
+      "path": "apps/api/src/ssh/ssh.system-settings.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/README.md",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/doctor/egress/storage.egress.contributor.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/doctor/storage-bucket.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/doctor/storage-config.doctor-check.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/dto/storage-bucket-provision.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/dto/storage-config-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/dto/storage-connection-test.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/dto/update-storage-config.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-bucket-provision.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config-admin.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config.permissions.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-config.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-connection-test.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-driver-context.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-not-configured.error.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-settings-compat.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage-submission.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/config/storage.system-settings.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/data/storage-db.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/builtin-storage-drivers.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-config.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-connection-test.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-family.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-probe.support.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-provision.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/s3/s3-purge.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/drivers/storage-driver.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/handlers/storage-cleanup.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/handlers/storage-object-process.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/copy-and-verify.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/dto/storage-migration.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migrate-object.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migrate-plan.handler.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migration-settled.listener.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migration.constants.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migration.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/migration/storage-migration.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/mime-type-match.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/multipart.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/node-object-store.binding.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/complete-upload.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/download-url-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/get-part-urls.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/init-upload.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/object-list-query.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/object-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/dto/update-metadata.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/objects.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/objects.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/part-body-parser.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/objects/part-body.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/ports.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/object-processing.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/object-processing.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/object-processor.interface.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/object-processor.registry.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/processing/processing-metadata.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/avatar.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/avatar.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/dto/profile-image-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/profile-image.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/profile-image.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/profile-image.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/profile-image/profile-image.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/resolving-storage.provider.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/s3/s3-storage.provider.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/storage-provider-router.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/storage-provider.binding.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/storage-provider.interface.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/storage-provider.types.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/providers/storage-providers.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/purge/run-storage-purge.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/status/dto/storage-status.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/status/storage-status.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage-credential.constants.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage-job-input.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage-key-prefix.registry.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage-key-prefixes.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage.constants.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage.options.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/storage.permissions.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/tasks/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/tasks/storage-cleanup.task.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/testing/conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/testing/driver-conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "storage",
+      "path": "apps/api/src/storage/testing/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/about/terminal.about-contributor.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/alerts/histogram-quantile.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/alerts/terminal-alert-rules.seed.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/alerts/terminal.alert-rule-kinds.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/alerts/terminal.starter-alert-rules.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/doctor/legacy-secrets.doctor-check.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/doctor/sessions-reaper.doctor-check.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/doctor/ssh-client.doctor-check.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/doctor/ssh-egress.contributor.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/doctor/tmux-probe.doctor-check.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/doctor/tmux-probe.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/dto/batch-terminate-sessions.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/dto/create-session.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/dto/session-query.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/dto/update-session.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/export/terminal-sessions.export-source.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/jobs/session-reap.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/session-history.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/session-history.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/session-manager.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/session-manager.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/sessions.controller.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/sessions.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/sessions.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/sessions.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/settings/shortcuts.user-settings.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/settings/shortcuts.user-settings.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/settings/terminal.system-settings.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/settings/terminal.system-settings.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/settings/terminal.user-settings.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/settings/terminal.user-settings.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/ssh.service.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/ssh.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/tasks/session-cleanup.task.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/telemetry/terminal-metrics.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/telemetry/terminal.metric-group.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/telemetry/terminal.metrics.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/terminal.gateway.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/terminal.gateway.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/terminal.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/terminal.onboarding.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/webhooks/terminal-webhooks.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/webhooks/terminal-webhooks.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/webhooks/terminal.webhook-events.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/ws/terminal-maintenance.policy.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/ws/terminal-maintenance.policy.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/ws/terminal-principal.resolver.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal",
+      "path": "apps/api/src/terminal/ws/terminal-principal.resolver.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/jobs/session-summarize.handler.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/jobs/session-summarize.handler.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/session-summary.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/session-summary.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/session-summary.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/session-summary.text.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/session-summary.text.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-ai-consent.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-ai.error-codes.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-ai.metrics.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-ai.module.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-ai.settings.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-ai.settings.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-ai.sse.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-assist.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-assist.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-assist.parser.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-assist.parser.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-assist.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-context.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-explain.controller.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-explain.dto.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-explain.parser.spec.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-explain.parser.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "terminal-ai",
+      "path": "apps/api/src/terminal-ai/terminal-explain.service.ts",
+      "status": "app-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/auth-provider-conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/dto/test-login.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/guards/test-environment.guard.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/index.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/oauth-server-conformance.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/oauth.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/stub-host.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/test-auth.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/test-auth.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "test-auth",
+      "path": "apps/api/src/test-auth/test-auth.service.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/update-user-roles.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/update-user.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/user-list-query.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/dto/user-response.dto.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/users.controller.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/users.module.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/users.permissions.ts",
+      "status": "base-only"
+    },
+    {
+      "area": "api",
+      "module": "users",
+      "path": "apps/api/src/users/users.service.ts",
+      "status": "base-only"
+    }
+  ],
+  "migrations": null,
+  "prismaModels": null
+}

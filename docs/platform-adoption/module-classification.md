@@ -230,3 +230,25 @@ The 14 base models are the 14 of EAB `0001_initial`. `DeviceCode` and `StorageOb
 
 - `apps/api/test` (specs for the modules above) follows its module and is handled in the same issue as the module.
 - `apps/cli`, `apps/stack-agent`, `apps/android`, `packages` and `scripts` have no ShellKeep side at this commit (reported base-only); #72, #73 and #74 introduce them. `.github` is handled by the CI issues (#43).
+
+## Status after adoption
+
+Measured by #83 against EnterpriseAppBase `ad57217a3c5fb9c1d87e600e1ea6cca05d49db6a` and ShellKeep `a0acaae2645769a899feed6c22431ffb4b64d5f7` (2026-11-24): [drift-after.md](drift-after.md) (apps view) and [drift-after-slices.md](drift-after-slices.md) (slice view), same commands as above. The baseline files are untouched. Statuses: **adopted** (the packaged slice replaced it and the directory or file is gone), **bound** (a thin ShellKeep binding of a slice, kept), **kept (domain)**, **exception** (a row in [local-exceptions.md](local-exceptions.md)). PR numbers are the squash-merge PRs.
+
+Slice view, API: no ShellKeep base module is left. `auth`, `users`, `allowlist`, `device-auth`, `test-auth`, `health`, `settings` and `storage` are gone (0 modified files); what remains under `apps/api/src` is bindings (`platform`, `app-registrations`, `prisma`, `config`, `openapi`, `common`) and domain (`terminal`, `terminal-ai`, `server-profiles`, `ssh`, `runbooks`, `command-safety`, `dashboard`, `onboarding`, `email-templates`, `notifications-registry`).
+
+| Rows | Status | Issue | PR |
+|---|---|---|---|
+| `auth`, `users`, `allowlist`, `device-auth`, `test-auth`, the four identity cron tasks, `common/services`, web `contexts`, `components/{auth,admin,device-activation,user}`, the identity pages, `hooks/{useUsers,useAllowlist,usePermissions}` | adopted | #47 | #92 |
+| `health`, `common/{filters,interceptors,middleware,logger,common.module.ts}`, `PWAUpdatePrompt` | adopted | #46 | #97 |
+| `settings`, `common/{schemas,utils}`, `hooks/{useSystemSettings,useUserSettings}`, `components/settings`, `UserSettingsPage` | adopted | #48, #80 | #96, #109 |
+| `storage` and its two cron tasks | adopted | #50 | #99 |
+| `common/decorators`, `instrumentation.ts` (bootstrap is the platform's, the file hands it the identity), `infra/otel` | adopted (instrumentation: bound) | #53 | #103 |
+| `config`, `openapi`, `prisma`, `common/types`, `common/constants`, `app.module.ts`, `main.ts`, `app-registrations`, `platform`, `web/platform`, `web/identity`, `web/config`, `TestLoginPage`, `components/common` | bound | #44 to #54, #76 | #91 to #106, #104 |
+| `common/exceptions` | exception (dead code, deleted by #84; see "The host core (#46)") | #46 | #97 |
+| web `theme`, `components/navigation`, `SystemSettingsPage`, `TerminalPage`, `TerminalFullPage`, `infra/deploy` (replaced by the `shellkeep` CLI) | adopted | #76, #77, #72 | #104, #107, #114 |
+| `infra/compose`, `infra/nginx` (generated; ShellKeep overlays are app-owned) | adopted | #73 | #111 |
+| baseline migrations `20260124223146_initial`, `20260322203853_add_server_profile_color` | adopted (platform baseline plus the `shellkeep:domain-schema` deviation) | #45 | #90 |
+| `server-profiles`, `ssh`, `runbooks`, `command-safety`, `terminal-ai`, `terminal`, `dashboard`, `onboarding`, `email-templates`, `notifications-registry`, web `features`, `lib`, `utils`, `components/{terminal,server-profiles,home,onboarding}`, `pages/{runbooks,HomePage,ServerProfilesPage,SessionsPage}`, `hooks/use{Terminal,TouchScroll,KeyboardInset,Sessions,ServerProfiles}` | kept (domain) | #56, #60 to #65, #70, #78, #79 | #101, #105, #110, #118, #127, #131 |
+
+Standing exceptions are the rows of [local-exceptions.md](local-exceptions.md); `npm run check:shims` keeps its shim rows and the code markers in step. Resolved in #83: the web-host storage status shim and `DefaultOrgResolver` (both gone since #50); the telemetry AI adapter is the real platform binding since #55 and the copied telemetry overlay is gone since #73, so neither has a row.

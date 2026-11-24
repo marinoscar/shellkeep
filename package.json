@@ -17,6 +17,7 @@
     "api:test": "npm -w apps/api test",
     "web:test": "npm -w apps/web test",
     "check:classification": "node scripts/platform-adoption/check-classification.mjs",
+    "check:shims": "node scripts/platform-adoption/check-shims.mjs",
     "openapi:dump": "npm run openapi:dump --workspace=api -- ../../openapi.json",
     "openapi:lint": "spectral lint openapi.json --ruleset .spectral.yaml --fail-severity=error",
     "typecheck": "npm run typecheck --workspace=api && npm run typecheck --workspace=web",
@@ -24,7 +25,7 @@
     "check:platform-imports": "eslint --max-warnings=0 --config eslint.platform-imports.config.mjs \"apps/{api,web}/src/**/*.{ts,tsx}\"",
     "check:platform-pin": "node scripts/check-platform-pin.mjs",
     "check:single-instance": "node scripts/check-single-instance.mjs",
-    "test:scripts": "node --test scripts/__tests__/*.test.mjs",
+    "test:scripts": "node --test scripts/__tests__/*.test.mjs scripts/platform-adoption/__tests__/*.test.mjs",
     "platform:infra:sync": "platform-infra sync",
     "test:infra": "npm run test:run --workspace=cli -- src/infra-conformance.test.ts"
   },
