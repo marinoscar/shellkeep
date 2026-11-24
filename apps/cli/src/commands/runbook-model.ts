@@ -44,6 +44,7 @@ export interface ApiRun {
   finishedAt?: string | null;
   createdAt?: string | null;
   counts?: Record<string, number>;
+  dryRun?: boolean;
   targets?: ApiTarget[];
 }
 
@@ -76,6 +77,8 @@ export interface RunRow {
   startedAt: string | null;
   finishedAt: string | null;
   counts: Record<string, number>;
+  /** A dry run: nothing was executed on any server. */
+  dryRun: boolean;
   targets: TargetRow[];
 }
 
@@ -107,6 +110,7 @@ export function toRunRow(run: ApiRun): RunRow {
     startedAt: run.startedAt ?? null,
     finishedAt: run.finishedAt ?? null,
     counts: run.counts ?? {},
+    dryRun: run.dryRun === true,
     targets,
   };
 }
@@ -121,7 +125,7 @@ export function summarizeRun(run: RunRow): string {
     .filter(([key, value]) => key !== 'total' && value > 0)
     .map(([key, value]) => `${value} ${key}`);
   const total = run.counts.total ?? run.targets.length;
-  return `run ${run.id}  ${run.status}${run.runbook !== null ? `  (${run.runbook})` : ''}  ${total} target${total === 1 ? '' : 's'}${parts.length > 0 ? `: ${parts.join(', ')}` : ''}`;
+  return `${run.dryRun ? 'DRY RUN ' : ''}run ${run.id}  ${run.status}${run.runbook !== null ? `  (${run.runbook})` : ''}  ${total} target${total === 1 ? '' : 's'}${parts.length > 0 ? `: ${parts.join(', ')}` : ''}`;
 }
 
 /** The servers x steps matrix as plain text: a row per server, a column per step. */
@@ -145,4 +149,30 @@ export function renderRunMatrix(run: RunRow): string {
     ...indexes.map((index) => target.steps.find((step) => step.index === index)?.status ?? '-'),
   ]);
   return rows.length === 0 ? '(no targets yet)' : renderTable(headers, rows);
+}
+
+/** What a dry-run step answers: it would run, a precondition failed, or it is not simulated. */
+export type DryRunVerdict = 'would_run' | 'precondition_failed' | 'not_simulated' | 'pending';
+
+const VERDICTS: Record<string, DryRunVerdict> = { succeeded: 'would_run', failed: 'precondition_failed', timed_out: 'precondition_failed', skipped: 'not_simulated' };
+
+/** The per-target plan of a dry run (`--json` carries it as `plan`): one verdict per step, no output. */
+export function dryRunPlan(run: RunRow): Array<{ server: string; status: string; steps: Array<{ index: number; name: string | null; verdict: DryRunVerdict }> }> {
+  return run.targets.map((target) => ({
+    server: target.server,
+    status: target.status,
+    steps: target.steps.map((step) => ({ index: step.index, name: step.name, verdict: VERDICTS[step.status] ?? 'pending' })),
+  }));
+}
+
+/** The plan as text: a row per server, a column per step, with the verdict words. */
+export function renderDryRunPlan(run: RunRow): string {
+  const text = renderRunMatrix({
+    ...run,
+    targets: run.targets.map((target) => ({
+      ...target,
+      steps: target.steps.map((step) => ({ ...step, status: VERDICTS[step.status] ?? step.status })),
+    })),
+  });
+  return `${text}\n\nDRY RUN: nothing was executed or changed on any server. would_run = ready; precondition_failed = the real step would fail; not_simulated = skipped.`;
 }

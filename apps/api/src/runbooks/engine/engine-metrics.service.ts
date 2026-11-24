@@ -4,11 +4,14 @@ import { AppMetricsService } from '@marinoscar/platform-api/host';
 import {
   RUNBOOK_APPROVALS_METRIC,
   RUNBOOK_COMMANDS_METRIC,
+  RUNBOOK_DESTRUCTIVE_RUNS_METRIC,
+  RUNBOOK_DRY_RUNS_METRIC,
+  type DestructiveRunOutcome,
   RUNBOOK_RUNS_FINISHED_METRIC,
   RUNBOOK_TARGET_DURATION_METRIC,
 } from '../runbooks.metrics';
 
-/** The engine's four metrics. A metrics fault never reaches the work. */
+/** The engine's metrics. A metrics fault never reaches the work. */
 @Injectable()
 export class EngineMetricsService {
   constructor(@Optional() private readonly metrics?: AppMetricsService) {}
@@ -27,6 +30,14 @@ export class EngineMetricsService {
 
   approval(kind: string, decision: string): void {
     this.safely(() => this.metrics?.add(RUNBOOK_APPROVALS_METRIC, 1, { kind, decision }));
+  }
+
+  destructiveRun(outcome: DestructiveRunOutcome): void {
+    this.safely(() => this.metrics?.add(RUNBOOK_DESTRUCTIVE_RUNS_METRIC, 1, { outcome }));
+  }
+
+  dryRun(): void {
+    this.safely(() => this.metrics?.add(RUNBOOK_DRY_RUNS_METRIC, 1, {}));
   }
 
   private safely(fn: () => void): void {

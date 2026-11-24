@@ -180,6 +180,7 @@ describe('the Runs screen', () => {
     runbookId: null,
     runbook: 'Patch hosts',
     status: 'running',
+    dryRun: false,
     finished: false,
     succeeded: false,
     startedAt: null,
