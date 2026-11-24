@@ -38,6 +38,8 @@ import {
 import { execOnClient, type ExecOptions, type ExecResult } from './ssh-exec';
 import type { DecryptedServerProfile } from './ssh-profile';
 import { SSH_HOST_KEY_CHECKS_METRIC } from './ssh.metrics';
+import { classifySshConnectError, type SshConnectOutcome } from './ssh-connect-outcome';
+import { TERMINAL_SSH_CONNECT_DURATION_METRIC } from '../terminal/telemetry/terminal.metrics';
 
 /** The handshake and authentication must finish within this. */
 export const SSH_READY_TIMEOUT_MS = 10_000;
@@ -91,18 +93,37 @@ export class SshConnectionFactory {
    */
   async open(profile: DecryptedServerProfile, options: SshOpenOptions): Promise<Client> {
     const policy = options.hostKeyPolicy ?? (await this.currentPolicy());
-    return tracer.startActiveSpan('ssh.connect', { attributes: { 'ssh.purpose': options.purpose } }, async (span) => {
-      try {
-        const client = await this.connect(profile, options.purpose, policy, options.readyTimeoutMs);
-        span.setStatus({ code: SpanStatusCode.OK });
-        return client;
-      } catch (error) {
-        span.setStatus({ code: SpanStatusCode.ERROR });
-        throw error;
-      } finally {
-        span.end();
-      }
-    }) as Promise<Client>;
+    // ONE span and ONE duration sample per connect, for every purpose: the span is
+    // `terminal.ssh.connect` (the profile id lives on it, never on the metric) and the
+    // histogram's only attribute is the bounded `outcome` (`ssh-connect-outcome.ts`).
+    // Neither carries a hostname, a credential or the raw error text.
+    return tracer.startActiveSpan(
+      'terminal.ssh.connect',
+      { attributes: { 'ssh.purpose': options.purpose, 'server_profile.id': profile.id } },
+      async (span) => {
+        const started = performance.now();
+        let outcome: SshConnectOutcome = 'ok';
+        try {
+          const client = await this.connect(profile, options.purpose, policy, options.readyTimeoutMs);
+          span.setStatus({ code: SpanStatusCode.OK });
+          return client;
+        } catch (error) {
+          outcome = classifySshConnectError(error);
+          span.setStatus({ code: SpanStatusCode.ERROR });
+          // A host-key refusal is an expected answer (it was already logged by the policy), not a fault.
+          if (outcome !== 'host_key_unknown' && outcome !== 'host_key_mismatch') {
+            this.logger.warn(
+              `ssh.connect.failed purpose=${options.purpose} profile=${profile.id} outcome=${outcome}: ${errorMessage(error)}`,
+            );
+          }
+          throw error;
+        } finally {
+          span.setAttribute('outcome', outcome);
+          span.end();
+          this.recordConnect((performance.now() - started) / 1000, outcome);
+        }
+      },
+    ) as Promise<Client>;
   }
 
   /**
@@ -333,6 +354,15 @@ export class SshConnectionFactory {
       meta: { hostname: profile.hostname, fingerprint: presented.fingerprint, algorithm: presented.algorithm },
     });
     return true;
+  }
+
+  /** One duration sample, attribute `outcome` only. A metrics fault never reaches the connect. */
+  private recordConnect(seconds: number, outcome: SshConnectOutcome): void {
+    try {
+      this.metrics?.record(TERMINAL_SSH_CONNECT_DURATION_METRIC, seconds, { outcome });
+    } catch (error) {
+      this.logger.debug(`ssh connect metric not recorded: ${errorMessage(error)}`);
+    }
   }
 
   private record(outcome: HostKeyOutcome): void {

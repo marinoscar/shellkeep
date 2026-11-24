@@ -20,17 +20,20 @@
 // the remote tmux sessions either; killing those stays a product decision for a
 // follow-up issue, so a reaped session only changes state in the database.
 //
+// Each pass also adds its three counts to `app.terminal.sessions.reaped` (attribute `action`).
+//
 // The job has no result column to write the counts to, so the handler logs them
 // (counts only: no session id, name or user reaches a log) and `reap()` returns
 // them with the ids of the sessions it terminated, for the `terminal.session_reaped`
 // notification (#51), which is sent after the update commits.
 // =============================================================================
 
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { JobHandlerRegistry, type Job, type JobHandler } from '@marinoscar/platform-api/jobs';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { TerminalMetricsService } from '../telemetry/terminal-metrics.service';
 
 /** The job type string. Permanent: rows of this type outlive any rename. */
 export const TERMINAL_SESSION_REAP_TYPE = 'terminal.session.reap';
@@ -70,6 +73,7 @@ export class SessionReapHandler implements JobHandler, OnModuleInit {
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
     private readonly settings: SystemSettingsService,
+    @Optional() private readonly metrics?: TerminalMetricsService,
   ) {}
 
   onModuleInit(): void {
@@ -78,6 +82,10 @@ export class SessionReapHandler implements JobHandler, OnModuleInit {
 
   async process(_job: Job): Promise<void> {
     const result = await this.reap();
+    // Counts only, three bounded actions (`app.terminal.sessions.reaped`); never an id.
+    this.metrics?.reaped('detached', result.detached);
+    this.metrics?.reaped('terminated', result.terminated);
+    this.metrics?.reaped('purged', result.purged);
     this.logger.log(
       `Reaped sessions: ${result.detached} detached, ${result.terminated} terminated, ${result.purged} purged`,
     );

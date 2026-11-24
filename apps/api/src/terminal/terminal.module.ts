@@ -12,6 +12,7 @@ import { TerminalGateway } from './terminal.gateway';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
 import { TerminalMaintenancePolicy } from './ws/terminal-maintenance.policy';
 import { SessionReapHandler } from './jobs/session-reap.handler';
+import { TerminalMetricsService } from './telemetry/terminal-metrics.service';
 import { SessionCleanupTask } from './tasks/session-cleanup.task';
 import { TerminalAboutSource } from './about/terminal.about-contributor';
 import { SshClientDoctorCheck } from './doctor/ssh-client.doctor-check';
@@ -38,6 +39,8 @@ import { LegacySecretsDoctorCheck } from './doctor/legacy-secrets.doctor-check';
     SessionsService,
     SshService,
     SessionManagerService,
+    // The `app.terminal.*` recorders and gauges (#53).
+    TerminalMetricsService,
     TerminalPrincipalResolver,
     TerminalMaintenancePolicy,
     TerminalGateway,
