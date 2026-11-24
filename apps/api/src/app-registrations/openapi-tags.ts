@@ -131,6 +131,12 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           'approval gate) with parameters and target selectors: create, version with `If-Match`, archive, validate, ' +
           'preview targets, and manage write-only secret parameters. Gated on `runbooks:read` and `runbooks:write`.',
       },
+      {
+        name: 'Dashboard',
+        description:
+          'The Home page summary: fleet health (counts over the server profiles the caller may see), the caller\'s ' +
+          'active sessions and recent runbook runs. Counts plus the five most recent rows; read-only.',
+      },
     ],
   },
   {
