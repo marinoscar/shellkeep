@@ -165,3 +165,21 @@ export async function downloadSessionHistory(sessionId: string): Promise<Blob> {
 
   return response.blob();
 }
+
+// Terminal AI consent (#56). The routes sit under /api/ai/*: `ai:use` and the AI kill switch apply.
+
+export interface TerminalAiConsentState {
+  /** Whether the deployment or organization requires consent before terminal output reaches AI. */
+  required: boolean;
+  /** When this user accepted (ISO), or `null`. */
+  consentAcceptedAt: string | null;
+  redactionMode: 'standard' | 'strict';
+}
+
+export async function getTerminalAiConsent(): Promise<TerminalAiConsentState> {
+  return api.get<TerminalAiConsentState>('/ai/terminal/consent');
+}
+
+export async function acceptTerminalAiConsent(): Promise<{ consentAcceptedAt: string }> {
+  return api.post<{ consentAcceptedAt: string }>('/ai/terminal/consent', {});
+}
