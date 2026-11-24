@@ -147,7 +147,7 @@ Detail and flows: [specs/fleet-runbooks.md §6](specs/fleet-runbooks.md#6-safety
 | SMTP, SES, VAPID, storage secret, webhook signing, GreptimeDB passwords | credential store, runtime-configured in the admin UI | the admin pages; never an environment variable |
 | PATs, device tokens, refresh tokens | database, hashed | revoke in settings |
 
-`INITIAL_ADMIN_EMAIL` is not a secret but grants first-admin access: keep it a mailbox you control. The legacy `ENCRYPTION_KEY` of the old SSH ciphertext leaves the environment with [#84](https://github.com/marinoscar/shellkeep/issues/84).
+`INITIAL_ADMIN_EMAIL` is not a secret but grants first-admin access: keep it a mailbox you control. The retired key of the old SSH ciphertext leaves the environment with [#84](https://github.com/marinoscar/shellkeep/issues/84).
 
 ## 10. Egress
 
