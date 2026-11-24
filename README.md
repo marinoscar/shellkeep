@@ -127,7 +127,7 @@ cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f dev
 ShellKeep is now running:
 
 - **Application:** http://localhost:8323
-- **API + Swagger:** http://localhost:8323/api/docs
+- **API reference:** http://localhost:8323/api/docs
 
 To start with the full observability stack (collector plus GreptimeDB; the explorer is in the admin UI):
 
@@ -146,7 +146,7 @@ cd infra/compose && docker compose -f base.compose.yml -f prod.compose.yml up -d
 
 ## Architecture
 
-ShellKeep uses same-origin hosting via Nginx. The UI is served at `/`, the API at `/api`, and the Swagger docs at `/api/docs` — all from a single domain. No CORS, no cross-origin token juggling.
+ShellKeep uses same-origin hosting via Nginx. The UI is served at `/`, the API at `/api`, and the API reference at `/api/docs` — all from a single domain. No CORS, no cross-origin token juggling.
 
 Terminal I/O flows over a WebSocket connection (`/api/terminal/ws`) directly to the NestJS gateway, which SSHs into your remote servers and launches tmux sessions there. The sessions persist on the remote machines — ShellKeep just reconnects to them. SSH credentials are encrypted with AES-256-GCM before being written to the database — the API layer holds the encryption key, the database never sees plaintext credentials.
 
@@ -156,9 +156,12 @@ Auth is JWT-based with short-lived access tokens (15 minutes) and rotating refre
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Security](docs/SECURITY-ARCHITECTURE.md)
-- [Device Authorization](docs/DEVICE-AUTH.md)
-- [API Reference](docs/API.md)
-- [Development](docs/DEVELOPMENT.md)
-- [Testing](docs/TESTING.md)
+Start at the [documentation index](docs/README.md) (a "Doc map by task").
+
+- [Architecture](docs/ARCHITECTURE.md): subsystem map, domain, permission matrix, tables, job types
+- [Security](docs/SECURITY-ARCHITECTURE.md): WebSocket authorization, SSH secrets, host keys, AI and runbook safety
+- [Terminal](docs/specs/terminal.md), [Terminal AI](docs/specs/terminal-ai.md), [Fleet Runbooks](docs/specs/fleet-runbooks.md)
+- [API conventions](docs/API.md) (endpoints are in the generated reference at `/api/docs`)
+- [Development](docs/DEVELOPMENT.md) and [Testing](docs/TESTING.md)
+- [Device authorization](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/DEVICE-AUTH.md) (platform-owned)
+
