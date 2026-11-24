@@ -1,0 +1,88 @@
+{
+  "servers": {
+    "total": 6,
+    "reachable": 3,
+    "unreachable": 2,
+    "unknown": 1,
+    "hostKeyUntrusted": 2
+  },
+  "sessions": {
+    "active": 3,
+    "attached": 2,
+    "detached": 1,
+    "recent": [
+      {
+        "id": "session-alpha",
+        "name": "Build",
+        "status": "active",
+        "serverProfileId": "server-1",
+        "serverName": "server-a",
+        "lastActivityAt": "2025-01-15T11:58:00.000Z",
+        "createdAt": "2025-01-15T09:00:00.000Z"
+      },
+      {
+        "id": "session-beta",
+        "name": "Worker logs",
+        "status": "active",
+        "serverProfileId": "server-2",
+        "serverName": "server-b",
+        "lastActivityAt": "2025-01-15T11:45:00.000Z",
+        "createdAt": "2025-01-15T09:00:00.000Z"
+      },
+      {
+        "id": "session-gamma",
+        "name": "Deploy",
+        "status": "detached",
+        "serverProfileId": "server-3",
+        "serverName": "staging-a",
+        "lastActivityAt": "2025-01-15T10:20:00.000Z",
+        "createdAt": "2025-01-15T09:00:00.000Z"
+      }
+    ]
+  },
+  "runs": {
+    "running": 1,
+    "failedLast24h": 1,
+    "recent": [
+      {
+        "id": "run-1",
+        "runbookId": "runbook-1",
+        "runbookName": "Rotate logs",
+        "status": "running",
+        "targets": {
+          "total": 4,
+          "succeeded": 2,
+          "failed": 0,
+          "running": 2
+        },
+        "startedAt": "2025-01-15T11:55:00.000Z"
+      },
+      {
+        "id": "run-2",
+        "runbookId": "runbook-2",
+        "runbookName": "Restart workers",
+        "status": "failed",
+        "targets": {
+          "total": 3,
+          "succeeded": 2,
+          "failed": 1,
+          "running": 0
+        },
+        "startedAt": "2025-01-15T08:10:00.000Z"
+      },
+      {
+        "id": "run-3",
+        "runbookId": "runbook-1",
+        "runbookName": "Rotate logs",
+        "status": "succeeded",
+        "targets": {
+          "total": 4,
+          "succeeded": 4,
+          "failed": 0,
+          "running": 0
+        },
+        "startedAt": "2025-01-14T22:00:00.000Z"
+      }
+    ]
+  }
+}

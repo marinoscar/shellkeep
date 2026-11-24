@@ -1,0 +1,18 @@
+{
+  "name": "visual-regression-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pixel-based visual regression tests for the shell, settings, terminal, servers and Home surfaces. Separate from ../e2e (full-stack, against the running Compose stack): this project boots only the Vite harness in apps/web/visual, with no API, database or SSH server behind it.",
+  "scripts": {
+    "test": "playwright test",
+    "update": "playwright test --update-snapshots",
+    "typecheck": "tsc --noEmit",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
