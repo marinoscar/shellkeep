@@ -7,7 +7,7 @@
 --   runbook_run_steps.ai_summary            the model's closing summary of the step (redacted, capped)
 --   runbook_approvals.payload               what an AI approval asks for (the redacted command and reason, or the plan)
 --   runbook_approvals.kind                  gains `ai_command` and `ai_plan`
---   runbook_command_executions.outcome      how an AI agent command ended (`refused`: the policy said no, nothing ran)
+--   runbook_command_executions.outcome      how an AI agent command ended (`refused`: the policy said no; `rejected`: a person declined; nothing ran either way)
 --   runbook_command_executions.approved_by  the person who approved an AI agent command (a plain id: the audit row outlives the user)
 --
 -- Every new column is nullable, so a rollback leaves them unused. No new table and no new policy: the existing
@@ -35,6 +35,6 @@ ALTER TABLE "runbook_approvals" ADD CONSTRAINT "runbook_approvals_kind_check"
   CHECK ("kind" IN ('step','gate','destructive_run','ai_command','ai_plan'));
 
 ALTER TABLE "runbook_command_executions" ADD CONSTRAINT "runbook_command_executions_outcome_check"
-  CHECK ("outcome" IS NULL OR "outcome" IN ('succeeded','failed','timed_out','cancelled','refused'));
+  CHECK ("outcome" IS NULL OR "outcome" IN ('succeeded','failed','timed_out','cancelled','refused','rejected'));
 
 COMMIT;

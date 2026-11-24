@@ -1,11 +1,17 @@
 import { Module } from '@nestjs/common';
 import { OrgCredentialsModule } from '@marinoscar/platform-api/credentials';
 
+import { AiModule } from '../platform/ai/ai.config';
 import { sharingModule } from '../platform/sharing/sharing.config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ServerProfilesModule } from '../server-profiles/server-profiles.module';
 import { SshModule } from '../ssh/ssh.module';
 import { StorageModule, StorageProvidersModule } from '../platform/storage/storage.config';
+import { RunbookAgentHandler } from './ai/runbook-agent.handler';
+import { RunbookAiController } from './ai/runbook-ai.controller';
+import { RunbookAiStopService } from './ai/runbook-ai-stop.service';
+import { RunbookDraftController } from './ai/runbook-draft.controller';
+import { RunbookDraftService } from './ai/runbook-draft.service';
 import { EngineAccessService } from './engine/engine-access.service';
 import { EngineMetricsService } from './engine/engine-metrics.service';
 import { LogArchiveService } from './engine/log-archive.service';
@@ -39,11 +45,12 @@ import { TargetResolverService } from './target-resolver.service';
  * organization (#61), and the execution engine (#62): runs, approvals, the live stream and the four queue
  * jobs (`runbook.run.start`, `runbook.target.run`, `runbook.run.advance`, `runbook.logs.compact`). The
  * runbook events, error codes and the reconcile access reason are registered at import time by
- * `runbooks.registrations.ts` (before the registries freeze).
+ * `runbooks.registrations.ts` (before the registries freeze). #64 adds the AI step: the `ai.runbook.agent` job, "Stop AI" and
+ * `POST /api/ai/runbooks/draft`.
  */
 @Module({
-  imports: [PrismaModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule],
-  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController],
+  imports: [PrismaModule, AiModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule],
+  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController, RunbookAiController, RunbookDraftController],
   providers: [
     RunbooksService,
     TargetResolverService,
@@ -69,6 +76,10 @@ import { TargetResolverService } from './target-resolver.service';
     LogsCompactHandler,
     RunbookJobSettledListener,
     RunbookReconcileTask,
+    // AI steps (#64): the agent job (server-only), "Stop AI" and drafting
+    RunbookAgentHandler,
+    RunbookAiStopService,
+    RunbookDraftService,
   ],
   exports: [RunbooksService, TargetResolverService, RunbookRunsService, RunCoordinatorService, RunEventsService],
 })
