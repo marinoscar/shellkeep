@@ -91,6 +91,9 @@ export interface Harness {
   userA: string;
   userB: string;
   handlers: Map<string, JobHandler>;
+  /** The handler registry and the queue the handlers were built on (later slices add their handlers). */
+  registry: JobHandlerRegistry;
+  jobs: JobsService;
   /** A server profile on the fixture; returns its id. */
   addServer(name: string, over?: { fingerprint?: string | null }): Promise<string>;
   /** A runbook with one version; returns its ids. */
@@ -201,7 +204,7 @@ export async function createHarness(label: string): Promise<Harness> {
   const handlers = new Map<string, JobHandler>([start, target, advance, compact].map((h) => [h.type, h]));
 
   const harness: Harness = {
-    db, prisma, system, fixture, bus, storage, secrets, notifications, runs, approvals, compact, archive, settings, files, finishedEvents, userA, userB, handlers, factsService, audit: audit as never,
+    db, prisma, system, fixture, bus, storage, secrets, notifications, runs, approvals, compact, archive, settings, files, finishedEvents, userA, userB, handlers, registry, jobs, factsService, audit: audit as never,
     stream: new RunStreamService(prisma, events),
     async addServer(name, over = {}) {
       const row = await prisma.serverProfile.create({
