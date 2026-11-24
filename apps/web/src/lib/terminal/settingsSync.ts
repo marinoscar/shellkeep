@@ -27,6 +27,8 @@ function getChannel(): BroadcastChannel | null {
     channel = null;
   }
   if (channel) {
+    // Node (tests) keeps a process alive for an open channel; browsers have no unref.
+    (channel as BroadcastChannel & { unref?: () => void }).unref?.();
     channel.onmessage = (event: MessageEvent<TerminalUserSettingsDocument>) => {
       if (event.data && typeof event.data.version === 'number') {
         for (const listener of listeners) listener(event.data);
