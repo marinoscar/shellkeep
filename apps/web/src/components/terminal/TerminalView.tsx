@@ -104,6 +104,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
     >
       <Box
         ref={containerRef}
+        data-testid="terminal-xterm-host"
         sx={{
           width: '100%',
           height: '100%',
