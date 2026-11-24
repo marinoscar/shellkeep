@@ -173,6 +173,19 @@ describe('resize and keep-alive', () => {
     await promise;
   });
 
+  it('sends no resize for a terminal that reports no size', async () => {
+    const stdout = new FakeStdout();
+    stdout.columns = 0;
+    stdout.rows = 0;
+    const { socket, stdin, promise } = setup({ stdout });
+    ready(socket);
+
+    expect(socket.frames().some((frame) => frame.type === 'resize')).toBe(false);
+
+    stdin.type('\x1dd');
+    await promise;
+  });
+
   it('answers a ping frame with a pong', async () => {
     const { socket, stdin, promise } = setup();
     ready(socket);

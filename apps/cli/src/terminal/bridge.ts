@@ -217,7 +217,9 @@ export function runBridge(options: BridgeOptions): Promise<BridgeResult> {
     };
 
     const sendResize = (): void => {
-      if (typeof stdout.columns === 'number' && typeof stdout.rows === 'number') {
+      // A terminal that reports no size (a pty nobody sized) reads 0x0: send nothing
+      // rather than ask the remote pane to shrink to nothing.
+      if (typeof stdout.columns === 'number' && typeof stdout.rows === 'number' && stdout.columns > 0 && stdout.rows > 0) {
         sendJson({ type: 'resize', cols: stdout.columns, rows: stdout.rows });
       }
     };
