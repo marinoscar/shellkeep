@@ -72,3 +72,5 @@ Download-only and binary files get a card with a Download button.
 **Images.** PNG, JPEG, GIF, WebP and SVG preview as an `<img>` (SVG is never inlined; "Show source" reads its markup as text). The `<img>` source is `files/download/:token`, so each preview spends one single-use download token and is audited as `server_profile.file_download`, like any download. It also counts against `downloadsPerMinute`.
 
 **Dependencies** added to `apps/web`: `@codemirror/lang-json`, `@codemirror/legacy-modes`, `marked`, `dompurify`.
+
+**From the terminal.** Paths in terminal output open this viewer, download through a token, or copy, after a lazy `stat`: [terminal.md section 5.6](terminal.md#56-file-links-in-terminal-output).

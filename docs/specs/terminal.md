@@ -168,6 +168,33 @@ When tmux attaches, the terminal uses the **alternate screen**, which has no scr
 
 `overflow: hidden` anywhere on the chain breaks scroll; a missing `minHeight: 0` lets a parent grow unboundedly; a `display: none` tab silently drops scroll; padding inside the FitAddon host shifts the row count; changing a single one of the five breakpoint gates ([AGENTS.md](../../AGENTS.md)) breaks phone layout.
 
+### 5.6 File links in terminal output
+
+Issue #155 (epic #151). A path printed in the output becomes a link that opens a small menu. Code: `apps/web/src/lib/terminal/file-links.ts` (detection), `file-stat-cache.ts` (existence check), `file-link-provider.ts` (the xterm link provider), `apps/web/src/components/terminal/files/` (`useTerminalFileLinks`, `TerminalFileLinkMenu`). The routes it calls are in [files.md](files.md).
+
+**Detected.** Absolute paths, `~/` paths, `./` and `../` paths, and bare relative paths that contain a `/` or end in a known file extension, each optionally followed by `:line`, `:line:col` or `(line,col)`. **Excluded:** URLs and anything inside one, email addresses and `user@host:` remotes, pure numbers, dates and version strings, flags, and a bare name whose extension is not a known file type (`example.com` stays text).
+
+**Tokenizer.** One single-class regex cuts a line into tokens, URL spans are masked first with a literal-scheme regex, and each token is classified with plain string checks, so cost is linear in the line. A token over 1024 characters is ignored, and a line yields at most 8 references.
+
+**Existence check.** Nothing is looked up when output arrives. A `stat` (`GET .../files/stat`, relative to the session's working directory) is sent only when a candidate is hovered or tapped. Answers, found or not, are cached for 30 s per session and path (500 entries at most); a request for a path already in flight shares it; at most 3 stats run at once, the rest wait in order. Any failure (404, refused, network) counts as missing: no link, and no retry until the entry expires. Only a path that exists is underlined.
+
+**Menu.** Click, or a tap on a known link, opens `TerminalFileLinkMenu` at the pointer:
+
+| Action | Behaviour |
+|---|---|
+| Open | Opens the file viewer (`useOpenFile`), at the printed line when there is one ("Open at line N"). A binary file still opens; the viewer shows its binary card |
+| Download | Requests a download token and lets the browser download the file ([files.md](files.md#downloads)) |
+| Show in file browser | Present only when the host passes `onShowInFileBrowser` (#156) |
+| Copy path | Copies the resolved absolute path |
+
+A directory (a symlink counts as its target) offers only Show in file browser and Copy path.
+
+**Touch.** There is no hover, so a tap checks the path and its underline appears; a second tap on the underlined path, or a long-press (500 ms) on any path, opens the menu. A finger that moves more than 10 px is a scroll and never opens anything. The listeners are passive and never call `preventDefault`, so `useTouchScroll` and the `touch-action: none` rule of section 5.3 are untouched; the click a tap leaves behind is ignored for 800 ms.
+
+**Access.** Links exist only for a holder of `sessions:write`, the rule the files API enforces: `TerminalWorkspacePage` passes the pane a profile id only when the user can write.
+
+**Opt-in.** `TerminalView` takes a `fileLinks` prop (`{ profileId, onShowInFileBrowser? }`) and hands `useTerminal` an `options.fileLinks` source. Without them no link provider does any work and no stat is ever sent.
+
 ## 6. Operations
 
 - **Reaper.** `@Cron('0 */5 * * * *')` in `terminal/tasks/session-cleanup.task.ts` enqueues `terminal.session.reap` (enqueue-only). The handler runs three bounded statements in order (detach, terminate, purge), reading the thresholds at run time, then sends one `terminal.session_reaped` notification per owner and one `terminal.session.terminated` webhook (reason `reaped`) per session it terminated, after the commit. It closes the live stream of each session it terminated (best effort, logged on failure; invariant 8) and does not kill remote tmux sessions. Counts go to `app.terminal.sessions.reaped` (`action`: `detached`, `terminated`, `purged`) and the log, never ids or names.
