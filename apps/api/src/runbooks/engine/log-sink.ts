@@ -161,12 +161,33 @@ export class LogSink {
       cut = text.lastIndexOf('\n') + 1;
       if (cut === 0 && (idle || text.length > MAX_LINE)) cut = text.length;
       else if (idle) cut = text.length;
-      if (this.holdback > 0) cut = Math.min(cut, Math.max(0, text.length - this.holdback));
+      if (this.holdback > 0) cut = this.safeCut(text, Math.min(cut, Math.max(0, text.length - this.holdback)));
     }
     if (cut <= 0) return;
     this.pending[stream] = text.slice(cut);
     const segment = text.slice(0, cut);
     this.enqueue(() => this.emit(stream, segment));
+  }
+
+  /** Moves `cut` back to the start of any secret occurrence it would split. */
+  private safeCut(text: string, cut: number): number {
+    let moved = true;
+    while (moved && cut > 0) {
+      moved = false;
+      for (const secret of this.options.secrets) {
+        if (secret.length === 0) continue;
+        let at = text.indexOf(secret);
+        while (at !== -1 && at < cut) {
+          if (at + secret.length > cut) {
+            cut = at;
+            moved = true;
+            break;
+          }
+          at = text.indexOf(secret, at + 1);
+        }
+      }
+    }
+    return cut;
   }
 
   private enqueue(work: () => Promise<void>): void {

@@ -89,18 +89,9 @@ runPlatformConformance({
       exempt: [],
       minCronFiles: 1,
     },
-    // Queue rule 1, the `@OnEvent` half. SKIPPED with a reason that is no longer a violation:
-    // ShellKeep declares no `@OnEvent` listener at all since #50 deleted its own storage module
-    // (`storage/processing`, the app's only one). #51 did not add one: the notifications slice's
-    // listeners (job failure, broadcast failure, node offline) ship compiled in the package, the
-    // suite scans the app's `.ts` sources only (the package's own listeners are scanned in the
-    // platform's repository), and it refuses a scan that finds no listener (`minListenerFiles` is
-    // a positive integer, so it cannot pass vacuously). Re-enable it with `{ minListenerFiles: 1 }`
-    // in the PR that adds ShellKeep's first listener. Listed in
-    // docs/platform-adoption/local-exceptions.md.
-    onEventNoIo: {
-      skip: 'ShellKeep declares no @OnEvent listener (the suite refuses a scan that finds none); re-enable with the first one',
-    },
+    // Queue rule 1, the `@OnEvent` half. ShellKeep's first listener is the runbook engine's
+    // (#62): `RunbookJobSettledListener` only enqueues a `runbook.run.advance`.
+    onEventNoIo: { minListenerFiles: 1 },
     // The email slice (#51): every platform template is registered, ShellKeep's own render a
     // complete message from sample data and escape markup in it, and neither the stored settings
     // nor the admin view declares a secret-bearing field. The sample uses invented names only.

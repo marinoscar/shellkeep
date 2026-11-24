@@ -97,6 +97,25 @@ export function execCommandLine(request: Pick<SshExecRequest, 'interpreter' | 'r
   return `sudo -n${request.runAs.user ? ` -u ${request.runAs.user}` : ''} ${base}`;
 }
 
+/**
+ * Sends an SSH `signal` request. ssh2's public `channel.signal()` does nothing once the channel has sent EOF
+ * (its state is no longer `open`), and a script needs EOF (`python3 -` reads its whole stdin before it runs;
+ * `bash -s` needs it to end). The request itself is valid on a half-closed channel, so after EOF it is sent
+ * through the channel's own protocol object, the same call `signal()` makes. Any failure is ignored: the
+ * channel is closing anyway.
+ */
+export function sendSignal(channel: ClientChannel, name: 'INT' | 'KILL'): void {
+  try {
+    channel.signal(name);
+    const internal = channel as unknown as { outgoing?: { id: number; state: string }; _client?: { _protocol?: { signal(id: number, name: string): void } } };
+    if (internal.outgoing && internal.outgoing.state !== 'open' && internal.outgoing.state !== 'closing') {
+      internal._client?._protocol?.signal(internal.outgoing.id, name);
+    }
+  } catch {
+    // the channel is closing
+  }
+}
+
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** The text written to stdin. Exposed for tests. */
@@ -212,18 +231,10 @@ export class SshExecutor {
 
         const interrupt = (): void => {
           if (settled) return;
-          try {
-            channel.signal('INT');
-          } catch {
-            // channel already closing
-          }
+          sendSignal(channel, 'INT');
           killTimer = setTimeout(() => {
             if (settled) return;
-            try {
-              channel.signal('KILL');
-            } catch {
-              // channel already closing
-            }
+            sendSignal(channel, 'KILL');
             closeTimer = setTimeout(() => {
               try {
                 channel.close();
@@ -276,9 +287,14 @@ export class SshExecutor {
           finish();
         });
 
-        // The script, then EOF. A write error surfaces as the channel closing.
-        channel.write(stdin);
-        channel.end();
+        // The script, then EOF once it is flushed (`eof()`, so the channel stays open for a later `signal`).
+        channel.write(stdin, () => {
+          try {
+            channel.eof();
+          } catch {
+            // the channel closed first
+          }
+        });
       });
     });
   }
