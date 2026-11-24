@@ -244,7 +244,7 @@ Deliberate differences from xterm.js: Alt+arrow is `ESC [ 1 ; 3 X` (xterm rewrit
 
 Rollback, before reverting #165, from `apps/api` with `DATABASE_URL` set: `npx ts-node --transpile-only -P prisma/tsconfig.json prisma/settings-migrations/terminal-shortcuts-v2.ts --revert`. It drops `layout` and `options` from every row that has either.
 
-**Current bar.** Until #167 replaces it, `TerminalKeyShortcutsBar` still renders v1 shortcuts (since #166 it encodes them through `encodeBarShortcut` and draws modifier toggles, section 5.8). It is fed from the v2 layout by `toLegacyBarKeys` in `legacyAdapter.ts`, so what it draws and sends does not change: a catalog `key` becomes its chord (id `catalog:<id>`), a macro keeps its id, label and chords, and modifier, action and custom keys, which have no v1 form, are left out. `fromLegacyShortcuts` is the inverse for a v1 list.
+**Legacy adapter.** Since #167 the key row and panel render the v2 layout directly (section 5.9). `toLegacyBarKeys` in `legacyAdapter.ts` is kept for the legacy shortcuts editor until #169 replaces it: a catalog `key` becomes its chord (id `catalog:<id>`), a macro keeps its id, label and chords, and modifier, action and custom keys, which have no v1 form, are left out. `fromLegacyShortcuts` is the inverse for a v1 list.
 
 ### 5.8 Touch keys: modifiers and pop-ups
 
@@ -263,6 +263,34 @@ Issue #166 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Co
 **Pop-ups.** A press of 450 ms that does not move more than 10 px, or the context menu (right-click, the Menu key, Shift+F10, a platform long press), opens a menu above the key: Ctrl gives Ctrl+C, D, Z, R, L, A, E, W, U, K; Alt gives Alt+B, Alt+F, Alt+.; an arrow gives Home, End, PgUp, PgDn. A long press never also taps the key. The menu is an MUI `Menu` (keyboard navigable, closed by Escape or an outside tap); choosing an entry sends its chord with the consumed modifiers and closes it.
 
 **Haptics.** With `shortcuts.options.haptics` on and `navigator.vibrate` present (Android), a modifier toggle vibrates for 10 ms.
+
+### 5.9 Key row and panel
+
+Issue #167 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Code: `apps/web/src/lib/terminal/keys/keyRow.ts` (`resolveKeyGroups`, `encodeResolvedKey`, `popupOf`), `apps/web/src/components/terminal/TerminalKeyShortcutsBar.tsx` (the row), `components/terminal/keys/` (`TouchKey`, `TerminalKeyPanel`, `useAttachFile`), `pages/TerminalWorkspacePage.tsx`.
+
+**Source.** Both read the user's v2 `keyLayout` from `useTerminalSettings`, resolved by `resolveKeyGroups`: each entry gets its kind, label and span; an action the host cannot run is left out and a group left empty is dropped. Nothing renders from `keyShortcuts` any more; the legacy editor still writes both lists.
+
+**Accessory row.** One continuous horizontal scroller (no pages): the groups in order, flattened, with a thin divider between groups; a span-2 key is two 44 px targets wide. The panel toggle (accessible name "Key panel", `aria-expanded`, `aria-controls`) is pinned at the right end outside the scroller, so it never scrolls away. The row's height is fixed and it stays the key dock's first child, on the keyboard (section 5.4).
+
+| Kind | Drawn as |
+|---|---|
+| `modifier` | The section 5.8 toggle (off, armed, locked), with its pop-up |
+| `key` | A plain key by label; arrows have the navigation pop-up. Repeatable keys carry `data-repeatable` for hold-to-repeat (#168) |
+| `macro`, `custom` | A plain key by label |
+| `action` | Icon and label. `ai` ("Open AI assistant") only with the AI feature and `ai:use`; `attach-file` only with `sessions:write` and a server; `arrow-drag` and `snippets` are hidden until #168 and #172 |
+
+**Sending.** Every key, from the row or the panel, is encoded by `encodeResolvedKey` with the consumed modifiers and the pane's cursor-key mode (section 5.7, 5.8). After a key the terminal is refocused, except while the panel replaces the keyboard.
+
+**Full key panel.** A region named "Key panel": a tab strip (only "Keys" today; `KEY_PANEL_TABS` is where snippets #172 and history #173 append), a Customize link to `/settings/shortcuts` (the editor, #169), a close button, and a 4-column grid holding every group, one group per grid row, each key spanning 1 or 2 cells. Escape inside the panel closes it (a pop-up's Escape closes only the pop-up). The placement comes from `useTerminalLayout` (no new breakpoint read):
+
+| Layout | Placement |
+|---|---|
+| Wide (`isWide`, `md` and up, the rule of the AI and Files panels) | A side panel beside the panes, 320 px. The phone keyboard stays up: the terminal is not blurred and keeps its focus, and Escape gives it back |
+| Narrow | In the key dock under the row, replacing the keyboard at its last height above the page (280 px when none was seen). Opening blurs the xterm textarea to dismiss the OS keyboard and focuses the Keys tab; a keyboard button closes the panel and refocuses the terminal; the keyboard coming back (a tap on the terminal) closes the panel; Escape returns focus to the toggle |
+
+The key panel takes turns with the Files and AI panels: opening one closes the others.
+
+**Attach.** The `attach-file` key opens a file picker and uploads the file into the session's working directory: `stat .` with the session resolves the folder, then `uploadRemoteFile` sends it ([files.md](files.md)). It never replaces an existing file: a `FILE_EXISTS` answer tells the user to use the Files panel, which asks.
 
 ## 6. Operations
 
@@ -287,4 +315,4 @@ Issue #166 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Co
 
 ## 8. Tests
 
-`apps/api/test/terminal/` (gateway authorization and maintenance, reaper, notification, alerts, Doctor, metrics, webhooks; `scripted-ssh-server.ts` is an in-process SSH server), `terminal.gateway.spec.ts`, `session-manager.service.spec.ts`, `session-history.service.spec.ts`, `test/ssh/` (factory, host-key policy, boundary); web: `__tests__/pages/TerminalWorkspace.workspace.test.tsx`, `__tests__/terminal-ws*.test.ts`, `TerminalKeyShortcutsBar.test.tsx`; and `apps/api/test/docs-consistency.spec.ts` for this page's reason tables ([TESTING.md](../TESTING.md)).
+`apps/api/test/terminal/` (gateway authorization and maintenance, reaper, notification, alerts, Doctor, metrics, webhooks; `scripted-ssh-server.ts` is an in-process SSH server), `terminal.gateway.spec.ts`, `session-manager.service.spec.ts`, `session-history.service.spec.ts`, `test/ssh/` (factory, host-key policy, boundary); web: `__tests__/pages/TerminalWorkspace.workspace.test.tsx`, `__tests__/terminal-ws*.test.ts`, `TerminalKeyShortcutsBar.test.tsx`, `__tests__/pages/TerminalWorkspace.keys.test.tsx`, `lib/terminal/keys/keyRow.test.ts`; and `apps/api/test/docs-consistency.spec.ts` for this page's reason tables ([TESTING.md](../TESTING.md)).
