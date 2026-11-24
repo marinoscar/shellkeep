@@ -26,6 +26,13 @@ import { RunbookRunsService } from './engine/runbook-runs.service';
 import { RunbookSettingsService } from './engine/runbook-settings.service';
 import { SshExecutor } from './engine/ssh-executor';
 import { TargetRunHandler } from './engine/target-run.handler';
+import { ArtifactsPurgeHandler } from './artifacts/artifacts-purge.handler';
+import { BundleHandler } from './artifacts/bundle.handler';
+import { PublicRunbookBundleController } from './artifacts/public-runbook-bundle.controller';
+import { PublicRunbookBundleService } from './artifacts/public-runbook-bundle.service';
+import { RunbookArtifactsController } from './artifacts/runbook-artifacts.controller';
+import { RunbookArtifactsListeners } from './artifacts/runbook-artifacts.listeners';
+import { RunbookArtifactsService } from './artifacts/runbook-artifacts.service';
 import { RunbookAuditController } from './safety/runbook-audit.controller';
 import { RunbookAuditService } from './safety/runbook-audit.service';
 import { RunbookRiskService } from './safety/runbook-risk.service';
@@ -43,7 +50,7 @@ import { TargetResolverService } from './target-resolver.service';
  */
 @Module({
   imports: [PrismaModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule],
-  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController],
+  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController, RunbookArtifactsController, PublicRunbookBundleController],
   providers: [
     RunbooksService,
     TargetResolverService,
@@ -69,6 +76,12 @@ import { TargetResolverService } from './target-resolver.service';
     LogsCompactHandler,
     RunbookJobSettledListener,
     RunbookReconcileTask,
+    // Collected logs and the run bundle (#63)
+    RunbookArtifactsService,
+    PublicRunbookBundleService,
+    RunbookArtifactsListeners,
+    BundleHandler,
+    ArtifactsPurgeHandler,
   ],
   exports: [RunbooksService, TargetResolverService, RunbookRunsService, RunCoordinatorService, RunEventsService],
 })
