@@ -34,7 +34,7 @@ Every place where ShellKeep deviates from `@marinoscar/platform-*` on purpose, a
 
 | Suite | Exemption | Why | Removed by |
 |---|---|---|---|
-| `on-event-no-io` | the suite is skipped with a reason (`onEventNoIo: { skip }`) | ShellKeep declares no `@OnEvent` listener. #50 deleted the app's only one (its storage module) and #51 added none: the notifications slice's listeners (job failure, broadcast failure, node offline) ship compiled in the package, the suite scans the app's `.ts` sources only, and it refuses a scan that finds no listener (`minListenerFiles` must be a positive integer). Not a violation: nothing exists to check | The first ShellKeep `@OnEvent` listener: re-enable with `{ minListenerFiles: 1 }` |
+| `on-event-no-io` | Resolved: the suite runs with `onEventNoIo: { minListenerFiles: 1 }` (it was skipped with `{ skip }` until the first listener existed) | ShellKeep had no `@OnEvent` listener: #50 deleted the app's only one and #51 added none, and the suite refuses a scan that finds no listener. `RunbookJobSettledListener` (`runbooks/engine/runbook-job-settled.listener.ts`, `@OnEvent(JOB_SETTLED_EVENT)`, enqueue-only) is the first, so the suite now has something to check | Resolved by #118 |
 | `user-owned-data` | raw SQL in `prisma/prisma.service.ts` (test-only `cleanDatabase()`) | It touches no user-owned table in production code | Kept (the health indicator's entry went with its file in #46; the host core's own indicator lives in the package) |
 
 ### The queue and the fleet (#49)
@@ -55,7 +55,7 @@ Web: `platform/notifications.ts` calls `configureNotificationsWeb` before the fi
 | Difference | Detail | Resolved by |
 |---|---|---|
 | `terminal.session_reaped` is on for in-app, email and push by default | The platform has one `defaultEnabled` per event, not per channel, so the intended default (in-app on, email off, push off) cannot be declared. Email is sent only when a transport is configured and push only to a browser that subscribed; a user switches either off in the preferences matrix | Kept until the platform supports per-channel defaults: seam request [marinoscar/enterpriseappbase#1219](https://github.com/marinoscar/enterpriseappbase/issues/1219) (open) |
-| The runbook events are defined but not registered | `registerRunbookNotifications()` (`notifications-registry/runbooks.notifications.ts`) registers `runbooks.run_finished`, `runbooks.run_failed` and `runbooks.approval_requested` and their templates; Fleet Runbooks calls it when its module is mounted, so the preferences matrix does not list events that cannot fire | #61 |
+| The runbook events were defined but not registered | `registerRunbookNotifications()` (`notifications-registry/runbooks.notifications.ts`) registers `runbooks.run_finished`, `runbooks.run_failed` and `runbooks.approval_requested` and their templates; the runbooks module calls it from `runbooks/runbooks.registrations.ts` when it is mounted, so the preferences matrix does not list events that cannot fire | Resolved by #61 (wired in #105) |
 | The reaped-session notification is one per owner per pass | `SessionReapHandler.process()` calls `notify` after `reap()` returned (its updates are autocommitted statements, never inside a `$transaction`), listing up to ten sessions (longest idle first) and counting the rest | Kept |
 
 ### Database backup and restore, and the application role (#52)
