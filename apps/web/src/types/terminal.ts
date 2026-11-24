@@ -2,6 +2,7 @@
 // sessions, plus the `terminal` user-settings namespace.
 
 import type { UserSettingsResponseBase } from '@marinoscar/platform-contract/settings';
+import type { KeyLayout, KeyOptions } from '../lib/terminal/keys/keyModel';
 
 // Key Shortcuts
 
@@ -73,6 +74,10 @@ export interface ShortcutsUserSettings {
   keyShortcuts: KeyShortcut[];
   /** Rebound app actions (#57); absent means the built-in binding. */
   actions?: ActionShortcuts;
+  /** The v2 key layout (#165); absent until stored (the migration or a save writes it). */
+  layout?: KeyLayout;
+  /** Key bar options (#165); absent means `DEFAULT_KEY_OPTIONS`. */
+  options?: KeyOptions;
 }
 
 /** App actions whose keyboard shortcut a user may rebind, by action id. */
