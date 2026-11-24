@@ -166,6 +166,9 @@ export default function TerminalWorkspacePage() {
   const modifiers = useModifierState();
   const consumeModifiers = modifiers.consume;
   const inputModifiers = useMemo(() => createModifierInputInterceptor(modifiers.store), [modifiers.store]);
+  // Long-press-and-drag arrows on the terminal (#168): the same modifiers and haptics as the keys.
+  const keyHaptics = keyOptions?.haptics ?? false;
+  const arrowMode = useMemo(() => ({ modifiers: modifiers.store, haptics: keyHaptics }), [modifiers.store, keyHaptics]);
   const showScrollButtons = preferences?.showScrollButtons ?? DEFAULT_TERMINAL_SETTINGS.showScrollButtons;
   // Mod+Shift+A (or the user's rebinding) opens the assistant with the prompt focused; the
   // terminal keeps the key from the PTY through `isReservedKey` (#57).
@@ -544,6 +547,7 @@ export default function TerminalWorkspacePage() {
         fileLinksProfileId={fileLinksProfileIdOf(sessionId)}
         onShowInFileBrowser={canWrite ? showInFileBrowser : undefined}
         inputModifiers={inputModifiers}
+        arrowMode={arrowMode}
         registerView={registerView}
         onStatus={onPaneStatus}
       />
@@ -558,6 +562,7 @@ export default function TerminalWorkspacePage() {
       canWrite,
       showInFileBrowser,
       inputModifiers,
+      arrowMode,
       registerView,
       onPaneStatus,
     ],
