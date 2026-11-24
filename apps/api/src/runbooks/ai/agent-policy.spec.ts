@@ -1,3 +1,5 @@
+import RE2 from 're2';
+
 import { AgentPolicy } from './agent-policy';
 
 const policy = (over: Partial<ConstructorParameters<typeof AgentPolicy>[0]> = {}) =>
@@ -49,14 +51,25 @@ describe('AgentPolicy.checkCommand', () => {
     expect(policy({ allow: ['(unclosed'] }).checkCommand('uptime')).toMatchObject({ code: 'NOT_ALLOWLISTED' });
   });
 
-  it('matches patterns in linear time: a ReDoS fixture completes in under 50 ms', () => {
-    const p = policy({ allow: ['^(a+)+$'], deny: ['(x+x+)+y'] });
-    const hostile = `${'a'.repeat(60_000)}!`;
-    const started = performance.now();
-    expect(p.checkCommand(hostile)).toMatchObject({ allowed: false, code: 'NOT_ALLOWLISTED' });
-    expect(p.checkCommand('x'.repeat(60_000))).toMatchObject({ allowed: false });
-    expect(performance.now() - started).toBeLessThan(50);
+  it('compiles patterns with RE2, the linear-time engine, never a backtracking RegExp', () => {
+    // Backreferences and lookaheads exist only in a backtracking engine. RE2 refuses them, so the
+    // pattern fails closed; a fallback to RegExp would make `(a)\\1` match 'aa' and be allowed.
+    expect(policy({ allow: ['^(a)\\1$'] }).checkCommand('aa')).toMatchObject({ allowed: false, code: 'NOT_ALLOWLISTED' });
+    expect(policy({ allow: ['^a(?=b)'] }).checkCommand('ab')).toMatchObject({ allowed: false, code: 'NOT_ALLOWLISTED' });
+    expect(policy({ allow: ['.*'], deny: ['^(a)\\1$'] }).checkCommand('anything')).toMatchObject({ allowed: false, code: 'DENY_PATTERN' });
+    // Sanity: the same constructs are valid in a backtracking engine, so the refusal above is RE2's.
+    expect(new RegExp('^(a)\\1$').test('aa')).toBe(true);
+    expect(() => new RE2('^(a)\\1$', 'u')).toThrow();
   });
+
+  // The test timeout is only a generous hang bound; correctness is asserted, not elapsed time.
+  it('answers a catastrophic-backtracking fixture correctly', () => {
+    const p = policy({ allow: ['^(a+)+$'], deny: ['(x+x+)+y'] });
+    expect(p.checkCommand(`${'a'.repeat(5000)}!`)).toMatchObject({ allowed: false, code: 'NOT_ALLOWLISTED' });
+    expect(p.checkCommand('a'.repeat(5000))).toEqual({ allowed: true });
+    expect(p.checkCommand('x'.repeat(5000))).toMatchObject({ allowed: false });
+    expect(p.checkCommand(`${'x'.repeat(5000)}y`)).toMatchObject({ allowed: false, code: 'DENY_PATTERN' });
+  }, 10_000);
 });
 
 describe('AgentPolicy.checkPath', () => {

@@ -33,6 +33,8 @@ jobs:
         run: npm run db:compose:check --workspace=api
       - name: Installed migrations equal the package (platform.lock)
         run: npm run db:check --workspace=api
+      - name: "Permission snapshot is current: permissions:dump --check (web conformance reads it)"
+        run: npm run permissions:dump --workspace=api -- --check
       - run: npm run typecheck --workspace=api
       - run: npm run typecheck --workspace=web
       - run: npm run typecheck --workspace=cli
@@ -251,6 +253,113 @@ jobs:
         run: npm run openapi:dump
       - name: Lint the document (Spectral)
         run: npm run openapi:lint
+
+  visual:
+    name: Visual regression
+    runs-on: ubuntu-latest
+    # No `needs:` and no database, API or SSH server: it screenshots the harness
+    # in apps/web/visual (the real routes behind a fake auth context, a fake
+    # terminal WebSocket and JSON fixtures), so it runs alongside everything else.
+    #
+    # A pixel baseline depends on the exact browser BUILD, not just the
+    # Playwright API version, so this job runs in the image the baselines under
+    # tests/visual/__screenshots__ were generated in.
+    #
+    # THE PLAYWRIGHT VERSION LIVES IN THREE PLACES THAT CHANGE TOGETHER: this
+    # tag, the tag in visual-baselines.yml and the exact (caret-free)
+    # `@playwright/test` pin in tests/visual/package.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+    # The one job that may write: only the failure path below pushes a throwaway
+    # branch (never the PR branch, never main).
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      # The root install provides apps/web and the Vite the harness builds with.
+      # tests/visual is not an npm workspace (a test-runner package, like
+      # tests/e2e), so its pinned @playwright/test is a separate install.
+      - run: npm ci
+      - run: npm ci
+        working-directory: tests/visual
+      - name: Typecheck the specs and the support code
+        run: npm run typecheck
+        working-directory: tests/visual
+      # The binary directly, NOT `npx playwright`: npx walks up from the repo
+      # root, finds no local install and fetches whatever is latest, which loads
+      # a second @playwright/test module than the one the specs import
+      # ("Playwright Test did not expect test() to be called here").
+      #
+      # playwright.config.ts builds the harness and serves it itself (webServer).
+      # A pixel diff, or a missing baseline, fails the job; no retries.
+      - run: tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts
+      # Everything below runs ONLY when the comparison above failed, and none of
+      # it can turn the job green: the job has already failed.
+      #
+      # The report first, before the regeneration below rewrites it: it embeds
+      # the expected, actual and diff image of every failed assertion.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-report
+          path: tests/visual/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+      # Regenerate every baseline in this same pinned image and offer them as an
+      # artifact, so a reviewer can take them from a failed run. They are never
+      # committed or applied by CI (a red `visual` job must not heal itself);
+      # a person reviews the images and commits them. Same command as the
+      # manual visual-baselines.yml workflow.
+      - name: Regenerate the baselines (artifact only, the job stays failed)
+        if: failure()
+        run: tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts --update-snapshots
+      # The artifact root is the contents of tests/visual/__screenshots__/: unzip
+      # it into that directory.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-baselines
+          path: tests/visual/__screenshots__/
+          if-no-files-found: ignore
+          retention-days: 14
+      # The same images as a branch a reviewer can `git fetch` where artifact
+      # downloads are blocked. ONLY for a pull request from this repository (a
+      # fork never gets a write), ONLY tests/visual/__screenshots__/, and ONLY to
+      # a new throwaway branch cut from the PR head: never the PR branch, never
+      # main. The job stays failed; a person reviews the images and commits them
+      # to the PR branch.
+      - name: "Push the regenerated baselines to ci/visual-baselines/<pr>-<run>"
+        if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          BRANCH: ci/visual-baselines/${{ github.event.pull_request.number }}-${{ github.run_id }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          if [ -z "$(ls -A tests/visual/__screenshots__ 2>/dev/null)" ]; then
+            echo 'No regenerated baselines to push.'
+            exit 0
+          fi
+          # The checkout is the PR's merge commit; the branch starts at the PR
+          # head, and the working tree (with the new images) is kept as it is.
+          git fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout -q -b "$BRANCH"
+          git reset -q "$HEAD_SHA"
+          git add -A -- tests/visual/__screenshots__
+          if git diff --cached --quiet; then
+            echo 'The PR head already has these baselines; nothing to push.'
+            exit 0
+          fi
+          git commit -q -m 'chore(tests): regenerated visual baselines (for review, not for merging as is)'
+          git push origin "HEAD:refs/heads/${BRANCH}"
+          echo "Pushed ${BRANCH}"
 
   build:
     name: Build

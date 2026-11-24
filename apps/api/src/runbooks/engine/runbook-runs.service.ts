@@ -44,6 +44,7 @@ import { EngineMetricsService } from './engine-metrics.service';
 import { RUNBOOK_RUN_ERROR_CODES } from './engine.error-codes';
 import { RunCoordinatorService, emptyOutcome, type AdvanceOutcome } from './run-coordinator.service';
 import { RunLifecycleService } from './run-lifecycle.service';
+import { targetCountsOf } from './run-target-counts';
 import { checkRunParams } from './run-params';
 import { RunbookSettingsService } from './runbook-settings.service';
 import { assertTransition, type RunStatus } from './state-machine';
@@ -345,18 +346,7 @@ export class RunbookRunsService {
             _count: { _all: true },
           })
         : [];
-      const targetsOf = (runId: string) => {
-        const counts = { total: 0, succeeded: 0, failed: 0, running: 0 };
-        for (const g of grouped) {
-          if (g.runId !== runId) continue;
-          const n = g._count._all;
-          counts.total += n;
-          if (g.status === 'succeeded') counts.succeeded += n;
-          else if (g.status === 'failed' || g.status === 'cancelled') counts.failed += n;
-          else if (g.status === 'running' || g.status === 'waiting' || g.status === 'queued') counts.running += n;
-        }
-        return counts;
-      };
+      const targetsOf = (runId: string) => targetCountsOf(grouped, runId);
       return {
         items: rows.map(({ runbook, ...run }) => ({ ...run, runbookName: runbook.name, targets: targetsOf(run.id) })),
         total,

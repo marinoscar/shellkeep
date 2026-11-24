@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { sharedPackageResolution } from './vite.shared';
 
 export default defineConfig({
   plugins: [
@@ -80,15 +81,10 @@ export default defineConfig({
       },
     },
   },
-  // `@shellkeep/shared` (packages/shared) is CommonJS and reaches us as an npm WORKSPACE
-  // SYMLINK. Vite treats a linked package as source: the dev server would serve its
-  // `index.js` as raw ESM (no named exports) and Rollup's commonjs plugin, which by
-  // default only transforms `node_modules`, would skip it in the build. Pre-bundle it in
-  // dev and include it in the commonjs transform (#74: the Android identity).
-  optimizeDeps: { include: ['@shellkeep/shared'] },
+  optimizeDeps: sharedPackageResolution.optimizeDeps,
   build: {
     outDir: 'dist',
     sourcemap: true,
-    commonjsOptions: { include: [/node_modules/, /packages[\\/]shared[\\/]/] },
+    commonjsOptions: sharedPackageResolution.build.commonjsOptions,
   },
 });
