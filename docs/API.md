@@ -1654,6 +1654,23 @@ Job types (permanent): `user.data.purge`, `admin.factory_reset`, `org.offboard`,
 
 ---
 
+### Android app
+
+The android-app slice (`@marinoscar/platform-api/android-app`, #74) serves the Android companion's server half: the trusted apps and the public Digital Asset Links file, the hosted APK releases, signed download links and a test notification. ShellKeep adds no route of its own. Tag `Android App` in the OpenAPI reference.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /.well-known/assetlinks.json` (nginx rewrites it to `GET /api/well-known/assetlinks.json`) | Public, served during maintenance | The trusted list as Digital Asset Links; `[]` before any app is trusted |
+| `GET /api/admin/android-app`, `GET /api/admin/android-app/releases` | `system_settings:read` | Trusted apps, the reported apps of paired devices, push counts, the releases |
+| `PUT /api/admin/android-app`, `POST /api/admin/android-app/test-notification` | `system_settings:write` | Replace the trusted list; send a test notification over the `android_app` channel |
+| `POST /api/admin/android-app/releases`, `POST .../releases/:id/make-current`, `DELETE .../releases/:id` | `system_settings:write` | Streamed multipart upload (150 MiB), rollback, delete |
+| `GET /api/android-app/releases/latest`, `POST /api/android-app/releases/:id/download-link` | Any signed-in user | The current release; a 10-minute HMAC link bound to the caller |
+| `GET /api/android-app/download/:token` | Public (the token is the credential) | Streams the APK |
+
+Errors worth knowing: `409 RELEASE_UNTRUSTED_APP`, `409 RELEASE_VERSION_NOT_NEWER`, `409 RELEASE_CURRENT_CONFLICT`, `410 DOWNLOAD_LINK_EXPIRED`, `503 STORAGE_NOT_CONFIGURED`. Audit events: `android_app.trusted_apps.updated`, `android_app.release.uploaded|made_current|deleted`, `android_app.test_notification.sent`. Objects live under `android-releases/` and survive a factory reset.
+
+---
+
 ### Health
 
 **Public endpoints** - Used for Kubernetes liveness/readiness probes.
