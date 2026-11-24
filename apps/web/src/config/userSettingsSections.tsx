@@ -24,6 +24,7 @@ import PaletteIcon from '@mui/icons-material/Palette';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
+import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import {
   TERMINAL_SETTINGS_DESCRIPTION,
   TERMINAL_SETTINGS_TITLE,
@@ -72,6 +73,19 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
         path: '/settings/terminal',
       },
     ],
+  },
+  {
+    // #76, appended: the identity slice's per-user cards (#47), as data.
+    // `Access Tokens` (`/settings/tokens`, the packaged `UserTokensPage` over
+    // `/api/pat`; no permission, every signed-in user manages their own).
+    // `connectedApps` is not spread: ShellKeep runs no OAuth server.
+    label: 'Security',
+    cards: identityUserSettingsSections.security.map(({ title, description, Icon, path }) => ({
+      title,
+      description,
+      Icon,
+      path,
+    })),
   },
 ];
 

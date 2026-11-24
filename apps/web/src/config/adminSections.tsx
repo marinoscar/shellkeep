@@ -187,9 +187,13 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
   },
 ];
 
-/** The admin hub: the one `/admin/settings` route that owns no card. */
+/**
+ * The admin hub: the one `/admin/settings` route that owns no card. Since #76
+ * it is the Console: the pinned rail destination, the rail's Console mode and
+ * the compact AppBar's drill-down all name it this.
+ */
 export const ADMIN_HUB_PATH = '/admin/settings';
-export const ADMIN_HUB_TITLE = 'System Settings';
+export const ADMIN_HUB_TITLE = 'Console';
 
 /**
  * Every permission a card of {@link ADMIN_SECTIONS} declares: the hub route
