@@ -35,6 +35,7 @@ import { AUDIT_SINK, runInOrg, type AuditSink, type Principal, type RlsTransacti
 import { AppMetricsService } from '@marinoscar/platform-api/host';
 import {
   AccessPolicy,
+  GrantsService,
   PrincipalGroupsProvider,
   type AccessDecision,
 } from '@marinoscar/platform-api/sharing';
@@ -125,6 +126,9 @@ export interface ValidationResult {
 /** The actions a response says the caller may take (the UI hides the rest; the API still decides). */
 const RUNBOOK_RESPONSE_ACTIONS = ['run', 'write', 'share'] as const;
 
+/** Run statuses that are not terminal (the CHECK list of `runbook_runs.status`, minus succeeded/failed/partially_failed/aborted/cancelled). */
+const ACTIVE_RUN_STATUSES = ['queued', 'resolving', 'running', 'paused', 'cancelling'] as const;
+
 const OWNER_INCLUDE = {
   owner: { select: { id: true, displayName: true, email: true } },
   ownerGroup: { select: { id: true, name: true } },
@@ -198,6 +202,7 @@ export class RunbooksService {
     @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
     private readonly access: AccessPolicy,
     private readonly principalGroups: PrincipalGroupsProvider,
+    private readonly grants: GrantsService,
     @Optional() private readonly metrics?: AppMetricsService,
   ) {}
 
@@ -528,6 +533,33 @@ export class RunbooksService {
       return true;
     });
     if (changed) await this.audit('runbook.archived', scope, id, {});
+  }
+
+  /**
+   * Permanent delete: the runbook, its versions and its runs (the foreign keys cascade) and every grant
+   * on it, in ONE transaction. Needs the `delete` action (`owner`: the creator, or an admin of the
+   * owning group), so a group that owns runbooks can be retired. Refused while a run is unfinished.
+   */
+  async remove(principal: Principal, id: string): Promise<void> {
+    const scope = this.scopeOf(principal);
+    const me = await this.actor(principal);
+    const name = await runInOrg(this.prisma, scope, async (tx) => {
+      await this.access.requireIn(tx, me, 'delete', { type: RUNBOOK_RESOURCE, id });
+      const row = await this.requireRunbook(tx, scope, id);
+      const active = await tx.runbookRun.count({
+        where: { runbookId: id, orgId: scope.orgId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      });
+      if (active > 0) {
+        throw new ConflictException({
+          code: RUNBOOK_ERROR_CODES.HAS_ACTIVE_RUNS,
+          message: 'The runbook has a run that has not finished; cancel it before deleting the runbook',
+        });
+      }
+      await this.grants.deleteForResources(tx, RUNBOOK_RESOURCE, [id]);
+      await tx.runbook.delete({ where: { id } });
+      return row.name;
+    });
+    await this.audit('runbook.deleted', scope, id, { name });
   }
 
   async restore(principal: Principal, id: string): Promise<RunbookView> {

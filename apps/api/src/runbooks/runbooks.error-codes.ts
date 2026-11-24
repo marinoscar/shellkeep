@@ -18,6 +18,8 @@ export const RUNBOOK_ERROR_CODES = {
   NAME_TAKEN: 'RUNBOOK_NAME_TAKEN',
   /** 409: the runbook is archived; restore it first. */
   ARCHIVED: 'RUNBOOK_ARCHIVED',
+  /** 409: the runbook has a run that has not finished; cancel it or wait before deleting the runbook. */
+  HAS_ACTIVE_RUNS: 'RUNBOOK_HAS_ACTIVE_RUNS',
   /** 428: a definition PUT without `If-Match`. */
   IF_MATCH_REQUIRED: 'RUNBOOK_IF_MATCH_REQUIRED',
 } as const;
@@ -46,6 +48,11 @@ export function registerRunbookErrorCodes(): void {
     code: RUNBOOK_ERROR_CODES.ARCHIVED,
     status: 409,
     description: 'The runbook is archived; restore it before changing it.',
+  });
+  registerErrorCode({
+    code: RUNBOOK_ERROR_CODES.HAS_ACTIVE_RUNS,
+    status: 409,
+    description: 'The runbook has a run that has not finished, so it cannot be deleted yet.',
   });
   registerErrorCode({
     code: RUNBOOK_ERROR_CODES.IF_MATCH_REQUIRED,
