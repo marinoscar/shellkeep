@@ -53,7 +53,7 @@ export const FILES_SYSTEM_BOUNDS = {
 const bounded = (field: keyof typeof FILES_SYSTEM_BOUNDS) =>
   z.number().int().min(FILES_SYSTEM_BOUNDS[field].min).max(FILES_SYSTEM_BOUNDS[field].max);
 
-export const filesSystemSettingsSchema = z.object({
+const filesSystemSettingsShape = z.object({
   fullViewMaxBytes: bounded('fullViewMaxBytes'),
   pagedViewMaxBytes: bounded('pagedViewMaxBytes'),
   downloadMaxBytes: bounded('downloadMaxBytes'),
@@ -64,7 +64,29 @@ export const filesSystemSettingsSchema = z.object({
   maxConcurrentDownloads: bounded('maxConcurrentDownloads'),
 });
 
-export const filesSystemSettingsPatchSchema = filesSystemSettingsSchema.partial();
+/**
+ * The ordering rule: a text window fits in the viewer's file, which fits in a download.
+ * It is a refinement of the STORED and PUT schemas, and the platform validates the MERGED value
+ * of a PATCH against the stored schema, so all three paths enforce it. The issue names the field
+ * that is out of order, so the error says which one to change.
+ */
+export function checkFilesSizeOrder(
+  value: Partial<Pick<FilesSystemSettings, 'fullViewMaxBytes' | 'pagedViewMaxBytes' | 'downloadMaxBytes'>>,
+  ctx: z.RefinementCtx,
+): void {
+  const { fullViewMaxBytes: full, pagedViewMaxBytes: paged, downloadMaxBytes: download } = value;
+  if (full !== undefined && paged !== undefined && full > paged) {
+    ctx.addIssue({ code: 'custom', path: ['fullViewMaxBytes'], message: 'fullViewMaxBytes must not exceed pagedViewMaxBytes' });
+  }
+  if (paged !== undefined && download !== undefined && paged > download) {
+    ctx.addIssue({ code: 'custom', path: ['pagedViewMaxBytes'], message: 'pagedViewMaxBytes must not exceed downloadMaxBytes' });
+  }
+}
+
+export const filesSystemSettingsSchema = filesSystemSettingsShape.superRefine(checkFilesSizeOrder);
+
+/** A PATCH body is partial and unrefined: the order is checked on the merged value. */
+export const filesSystemSettingsPatchSchema = filesSystemSettingsShape.partial();
 
 export const DEFAULT_FILES_SYSTEM_SETTINGS: FilesSystemSettings = {
   fullViewMaxBytes: 2 * MB,

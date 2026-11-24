@@ -32,7 +32,7 @@ The token is random (256 bits), stored only as a SHA-256 in memory (the API is a
 
 ## Settings (`files`, admin)
 
-`fullViewMaxBytes` 2 MB, `pagedViewMaxBytes` 200 MB, `downloadMaxBytes` 2 GB, `uploadMaxBytes` 100 MB (for #157), `sftpTimeoutSeconds` 30, and per user `contentRequestsPerMinute` 120, `downloadsPerMinute` 20, `maxConcurrentDownloads` 3. Read on every request.
+`fullViewMaxBytes` 2 MB, `pagedViewMaxBytes` 200 MB, `downloadMaxBytes` 2 GB, `uploadMaxBytes` 100 MB (for #157), `sftpTimeoutSeconds` 30, and per user `contentRequestsPerMinute` 120, `downloadsPerMinute` 20, `maxConcurrentDownloads` 3. Read on every request. The sizes must satisfy `fullViewMaxBytes <= pagedViewMaxBytes <= downloadMaxBytes`: the stored and PUT schemas carry the rule, and the platform validates a PATCH's merged value against the stored schema, so all three paths answer 400 naming the field out of order.
 
 ## Error codes
 
