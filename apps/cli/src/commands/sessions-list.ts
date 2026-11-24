@@ -46,7 +46,15 @@ export function toSessionRow(session: TerminalSession): SessionRow {
     name: session.name,
     status: session.status,
     serverProfileId: session.serverProfileId,
-    server: session.serverProfile ?? null,
+    server:
+      session.serverProfile === undefined || session.serverProfile === null
+        ? null
+        : {
+            name: session.serverProfile.name,
+            hostname: session.serverProfile.hostname,
+            port: session.serverProfile.port,
+            username: session.serverProfile.username,
+          },
     cols: session.cols ?? null,
     rows: session.rows ?? null,
     lastActivityAt: session.lastActivityAt ?? null,
