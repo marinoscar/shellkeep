@@ -1,6 +1,7 @@
 import { serverProfilesQuerySchema } from './dto/server-profiles-query.dto';
 import { bulkTagsSchema, BULK_MAX_IDS } from './dto/bulk-tags.dto';
-import { healthOf, hostKeyStateOf, listOrderBy, listWhere } from './server-profiles.service';
+import { listOrderBy, listWhere } from './server-profiles.service';
+import { healthOf, hostKeyStateOf } from './server-health';
 
 const VISIBLE = { userId: 'u1' };
 const ID = '00000000-0000-4000-8000-000000000001';

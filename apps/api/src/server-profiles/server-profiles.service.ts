@@ -38,12 +38,11 @@ import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
 import {
   ServerProfilesQueryDto,
-  type ServerHealth,
-  type ServerHostKeyState,
   type ServerProfileSort,
   type ServerProfilesQuery,
 } from './dto/server-profiles-query.dto';
 import type { BulkTagsInput, BulkTagsResult } from './dto/bulk-tags.dto';
+import { HEALTH_WHERE, healthOf, hostKeyStateOf } from './server-health';
 import {
   SSH_CREDENTIAL_PURPOSE,
   SSH_SECRET_FIELDS,
@@ -132,18 +131,6 @@ const LAST_SESSION_SORT_CAP = 5000;
 /** The org-scoped transaction of `runInOrg`. */
 type Tx = RlsTransactionClient<PrismaService>;
 
-/** The health column: the outcome of the last connection test, or `unknown` before the first. */
-export function healthOf(profile: { lastTestAt: Date | null; lastTestOk: boolean | null }): ServerHealth {
-  if (!profile.lastTestAt || profile.lastTestOk === null) return 'unknown';
-  return profile.lastTestOk ? 'reachable' : 'unreachable';
-}
-
-/** The host-key column: `mismatch` while the last test was refused for a changed key. */
-export function hostKeyStateOf(profile: { fingerprint: string | null; lastTestCode: string | null }): ServerHostKeyState {
-  if (!profile.fingerprint) return 'untrusted';
-  return profile.lastTestCode === 'HOST_KEY_MISMATCH' ? 'mismatch' : 'trusted';
-}
-
 /** `owner` narrows `filter`: `me` is `mine`, `shared` is `shared`, `group:<id>` is that group's. */
 function listScope(query: ServerProfilesQuery): { filter: AccessFilter; ownerGroupId: string | null } {
   if (query.owner === 'me') return { filter: 'mine', ownerGroupId: null };
@@ -171,9 +158,7 @@ export function listWhere(
   }
   if (query.tag && query.tag.length > 0) and.push({ tags: { hasEvery: query.tag } });
   if (ownerGroupId) and.push({ ownerGroupId });
-  if (query.health === 'reachable') and.push({ lastTestAt: { not: null }, lastTestOk: true });
-  if (query.health === 'unreachable') and.push({ lastTestAt: { not: null }, lastTestOk: false });
-  if (query.health === 'unknown') and.push({ OR: [{ lastTestAt: null }, { lastTestOk: null }] });
+  if (query.health) and.push(HEALTH_WHERE[query.health]);
   if (query.hostKey === 'untrusted') and.push({ fingerprint: null });
   if (query.hostKey === 'mismatch') and.push({ fingerprint: { not: null }, lastTestCode: 'HOST_KEY_MISMATCH' });
   if (query.hostKey === 'trusted') {
