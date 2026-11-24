@@ -70,6 +70,8 @@ describe('TerminalView', () => {
         'test-session-42',
         expect.objectContaining({ current: expect.anything() }),
         expect.objectContaining({ preferences: DEFAULT_TERMINAL_SETTINGS }),
+        // No server given: no file links (#155).
+        { fileLinks: null },
       );
     });
 
@@ -81,8 +83,22 @@ describe('TerminalView', () => {
         's-1',
         expect.anything(),
         expect.objectContaining({ preferences }),
+        expect.anything(),
       );
       expect(screen.getByTestId('terminal-xterm-host')).toHaveStyle({ backgroundColor: '#002b36' });
+    });
+
+    it('hands a file link source to useTerminal when given a server (#155)', () => {
+      render(<TerminalView sessionId="s-1" fileLinks={{ profileId: 'prof-1' }} />);
+
+      expect(useTerminal).toHaveBeenLastCalledWith(
+        's-1',
+        expect.anything(),
+        expect.anything(),
+        { fileLinks: expect.objectContaining({ resolve: expect.any(Function), activate: expect.any(Function) }) },
+      );
+      // The menu is mounted closed.
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     });
 
     it('flashes for a visual bell', () => {

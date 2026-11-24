@@ -61,6 +61,8 @@ vi.mock('@xterm/xterm', () => {
     this.onData = vi.fn(() => ({ dispose: vi.fn() }));
     this.onBinary = vi.fn(() => ({ dispose: vi.fn() }));
     this.loadAddon = vi.fn();
+    // The file link provider (#155): one registration, one disposable.
+    this.registerLinkProvider = vi.fn(() => ({ dispose: vi.fn() }));
     this.buffer = { active: { length: 0, getLine: vi.fn() } };
   });
   return { Terminal: TerminalMock };
@@ -560,6 +562,66 @@ describe('useTerminal', () => {
       } else {
         expect(true).toBe(true);
       }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('file links (#155)', () => {
+    type LinkProvider = { provideLinks: (row: number, cb: (links: unknown[] | undefined) => void) => void };
+    function registration() {
+      const instance = getTerminalInstance() as unknown as {
+        registerLinkProvider: ReturnType<typeof vi.fn>;
+        buffer: unknown;
+      };
+      const call = instance.registerLinkProvider.mock.calls[0];
+      const result = instance.registerLinkProvider.mock.results[0]?.value as { dispose: ReturnType<typeof vi.fn> };
+      return { instance, provider: call?.[0] as LinkProvider, disposable: result };
+    }
+    function bufferWith(text: string) {
+      const line = {
+        isWrapped: false,
+        length: text.length,
+        getCell: (x: number) => ({ getChars: () => text[x] ?? '', getWidth: () => 1 }),
+      };
+      return { active: { viewportY: 0, length: 1, getLine: (y: number) => (y === 0 ? line : undefined) } };
+    }
+    function links(provider: LinkProvider): Promise<unknown[] | undefined> {
+      return new Promise((resolve) => provider.provideLinks(1, resolve));
+    }
+
+    it('registers one file link provider beside the web links', () => {
+      renderUseTerminal();
+      const { instance } = registration();
+      expect(instance.registerLinkProvider).toHaveBeenCalledTimes(1);
+    });
+
+    it('disposes the provider on unmount', () => {
+      const { unmount } = renderUseTerminal();
+      const { disposable } = registration();
+      expect(disposable.dispose).not.toHaveBeenCalled();
+      unmount();
+      expect(disposable.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('is inert without a source and follows the latest one without re-registering', async () => {
+      vi.useRealTimers();
+      const resolve = vi.fn(async (path: string) => ({ path: `/abs/${path}`, type: 'file' as const }));
+      let fileLinks: { resolve: typeof resolve; activate: () => void } | null = null;
+      const { rerender } = renderHook(() => {
+        const containerRef = useRef<HTMLDivElement>(containerDiv);
+        return useTerminal('session-1', containerRef, undefined, { fileLinks });
+      });
+      const { instance, provider } = registration();
+      instance.buffer = bufferWith('cat ./notes.md');
+
+      expect(await links(provider)).toBeUndefined();
+      expect(resolve).not.toHaveBeenCalled();
+
+      fileLinks = { resolve, activate: vi.fn() };
+      rerender();
+      expect(await links(provider)).toHaveLength(1);
+      expect(resolve).toHaveBeenCalledWith('./notes.md');
+      expect(instance.registerLinkProvider).toHaveBeenCalledTimes(1);
     });
   });
 

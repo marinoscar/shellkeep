@@ -14,6 +14,7 @@ import {
   terminalAppearanceOptions,
   type AppColorMode,
 } from '../lib/terminal/appearance';
+import { createFileLinkProvider, type TerminalFileLinkSource } from '../lib/terminal/file-link-provider';
 
 /**
  * Apply attributes to the xterm.js helper textarea that suppress the
@@ -118,6 +119,15 @@ export interface TerminalAppearance {
   isReservedKey?: (event: KeyboardEvent) => boolean;
 }
 
+/** What a session terminal does beyond drawing the session. */
+export interface TerminalOptions {
+  /**
+   * File references in the output (#155): where existence is checked and what a click does.
+   * `null` or absent: no file links. Read on every hover, so it may change without a reconnect.
+   */
+  fileLinks?: TerminalFileLinkSource | null;
+}
+
 const DEFAULT_APPEARANCE: TerminalAppearance = {
   preferences: DEFAULT_TERMINAL_SETTINGS,
   appMode: 'dark',
@@ -127,11 +137,14 @@ export function useTerminal(
   sessionId: string,
   containerRef: RefObject<HTMLDivElement | null>,
   appearance: TerminalAppearance = DEFAULT_APPEARANCE,
+  options: TerminalOptions = {},
 ) {
   // Read by the terminal's handlers (bell, selection) and at construction, so a
   // preference change never re-creates the terminal or its socket.
   const appearanceRef = useRef(appearance);
   appearanceRef.current = appearance;
+  const fileLinksRef = useRef(options.fileLinks ?? null);
+  fileLinksRef.current = options.fileLinks ?? null;
   const [bellCount, setBellCount] = useState(0);
   // Whether text is selected (#58: the floating Explain chip).
   const [hasSelection, setHasSelection] = useState(false);
@@ -192,6 +205,10 @@ export function useTerminal(
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(searchAddon);
     terminal.loadAddon(webLinksAddon);
+    // File references (#155): beside the URL links; inert while no source is given.
+    const fileLinkSubscription = terminal.registerLinkProvider?.(
+      createFileLinkProvider(terminal, () => fileLinksRef.current),
+    );
 
     terminal.open(containerRef.current);
 
@@ -287,6 +304,7 @@ export function useTerminal(
       bellSubscription?.dispose();
       selectionSubscription?.dispose();
       resizeSubscription?.dispose();
+      fileLinkSubscription?.dispose();
       wsRef.current?.disconnect();
       terminal.dispose();
       terminalRef.current = null;

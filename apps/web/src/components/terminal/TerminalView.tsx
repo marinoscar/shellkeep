@@ -1,9 +1,11 @@
-import { useRef, useEffect, useImperativeHandle, forwardRef, useState, useMemo } from 'react';
+import { useRef, useEffect, useImperativeHandle, forwardRef, useState, useMemo, useCallback } from 'react';
 import { Box, Chip, useTheme } from '@mui/material';
 import { ManageSearchOutlined as ExplainIcon } from '@mui/icons-material';
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTouchScroll } from '../../hooks/useTouchScroll';
 import { TerminalScrollButtons } from './TerminalScrollButtons';
+import { useTerminalFileLinks, type TerminalFileLinksConfig } from './files/useTerminalFileLinks';
+import { TerminalFileLinkMenu } from './files/TerminalFileLinkMenu';
 import { HostKeyDialog } from '../server-profiles/HostKeyDialog';
 import { HOST_KEY_MISMATCH_MESSAGE, HOST_KEY_UNTRUSTED_MESSAGE } from '../../services/terminal-ws';
 import type { Terminal } from '@xterm/xterm';
@@ -51,13 +53,23 @@ interface TerminalViewProps {
   isReservedKey?: (event: KeyboardEvent) => boolean;
   /** Explain the selected text (#58). Omit when AI is unavailable: no chip is drawn. */
   onExplainSelection?: () => void;
+  /**
+   * File references in the output (#155): the session's server. Give it only to a user who
+   * may use the files API (`sessions:write`, the terminal's own rule). Omitted: no file links.
+   */
+  fileLinks?: TerminalFileLinksConfig | null;
 }
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
-  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS, isReservedKey, onExplainSelection }, ref) {
+  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS, isReservedKey, onExplainSelection, fileLinks }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appMode = useTheme().palette.mode;
   const appearance = useMemo(() => ({ preferences, appMode, isReservedKey }), [preferences, appMode, isReservedKey]);
+  // The links read the terminal `useTerminal` holds; it is created after this hook runs.
+  const xtermHolder = useRef<{ current: Terminal | null } | null>(null);
+  const getXterm = useCallback(() => xtermHolder.current?.current ?? null, []);
+  const fileLinkState = useTerminalFileLinks(sessionId, containerRef, getXterm, fileLinks);
+  const terminalOptions = useMemo(() => ({ fileLinks: fileLinkState.source }), [fileLinkState.source]);
   const background = resolveTerminalTheme(preferences.theme, appMode).background;
   const {
     isConnected,
@@ -72,7 +84,8 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
     size = null,
     bellCount = 0,
     hasSelection = false,
-  } = useTerminal(sessionId, containerRef, appearance);
+  } = useTerminal(sessionId, containerRef, appearance, terminalOptions);
+  xtermHolder.current = terminal ?? null;
   useTouchScroll(containerRef);
 
   useImperativeHandle(ref, () => ({
@@ -166,6 +179,15 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
           onMouseDown={(e) => e.preventDefault()}
           onClick={onExplainSelection}
           sx={{ position: 'absolute', top: 8, right: 16, zIndex: 2, boxShadow: 2 }}
+        />
+      )}
+      {fileLinks && (
+        <TerminalFileLinkMenu
+          sessionId={sessionId}
+          profileId={fileLinks.profileId}
+          onShowInFileBrowser={fileLinks.onShowInFileBrowser}
+          state={fileLinkState.menu}
+          onClose={fileLinkState.closeMenu}
         />
       )}
       <TerminalScrollButtons containerRef={containerRef} visible={showScrollButtons} />
