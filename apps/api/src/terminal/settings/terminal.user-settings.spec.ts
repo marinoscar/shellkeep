@@ -2,7 +2,8 @@ import {
   keystrokeSchema,
   keyShortcutSchema,
   DEFAULT_KEY_SHORTCUTS,
-} from './terminal.user-settings';
+  SHORTCUTS_USER_SETTINGS,
+} from './shortcuts.user-settings';
 import {
   DEFAULT_TERMINAL_SETTINGS,
   TERMINAL_USER_SETTINGS,
@@ -153,10 +154,10 @@ describe('keyShortcutSchema', () => {
 });
 
 // =============================================================================
-// userSettingsSchema — terminal.keyShortcuts
+// userSettingsSchema — shortcuts.keyShortcuts (#80) and the legacy terminal.keyShortcuts
 // =============================================================================
 
-describe('userSettingsSchema — terminal.keyShortcuts', () => {
+describe('userSettingsSchema — shortcuts.keyShortcuts', () => {
   const makeShortcut = (index: number) => ({
     id: `${String(index).padStart(8, '0')}-1111-4111-8111-111111111100`,
     label: `Key ${index}`,
@@ -165,29 +166,52 @@ describe('userSettingsSchema — terminal.keyShortcuts', () => {
 
   it('accepts an array of 50 shortcuts (the maximum)', () => {
     const shortcuts = Array.from({ length: 50 }, (_, i) => makeShortcut(i + 1));
-    const result = userSettingsSchema.parse({
-      ...baseSettings,
-      terminal: { showScrollButtons: true, keyShortcuts: shortcuts },
-    });
-    expect(result.terminal?.keyShortcuts).toHaveLength(50);
+    const result = userSettingsSchema.parse({ ...baseSettings, shortcuts: { keyShortcuts: shortcuts } });
+    expect(result.shortcuts?.keyShortcuts).toHaveLength(50);
   });
 
-  it('rejects an array of 51 shortcuts (exceeds max of 50)', () => {
+  it('rejects an array of 51 shortcuts (exceeds max of 50), stored or patched', () => {
     const shortcuts = Array.from({ length: 51 }, (_, i) => makeShortcut(i + 1));
     expect(() =>
-      userSettingsSchema.parse({
-        ...baseSettings,
-        terminal: { showScrollButtons: true, keyShortcuts: shortcuts },
-      }),
+      userSettingsSchema.parse({ ...baseSettings, shortcuts: { keyShortcuts: shortcuts } }),
+    ).toThrow();
+    expect(() => userSettingsPatchSchema.parse({ shortcuts: { keyShortcuts: shortcuts } })).toThrow();
+  });
+
+  it('rejects an unknown key in the namespace', () => {
+    expect(() =>
+      userSettingsPatchSchema.parse({ shortcuts: { keyShortcuts: [], extra: true } }),
     ).toThrow();
   });
 
-  it('parses successfully when keyShortcuts is absent (field is optional)', () => {
+  it('still accepts a stored legacy terminal.keyShortcuts (read-time shim until #83)', () => {
     const result = userSettingsSchema.parse({
       ...baseSettings,
-      terminal: { showScrollButtons: false },
+      terminal: { showScrollButtons: true, keyShortcuts: [makeShortcut(1)] },
     });
-    expect(result.terminal?.keyShortcuts).toBeUndefined();
+    expect(result.terminal?.keyShortcuts).toHaveLength(1);
+  });
+
+  it('refuses terminal.keyShortcuts in a PATCH: the list is written to shortcuts only', () => {
+    expect(() =>
+      userSettingsPatchSchema.parse({ terminal: { keyShortcuts: [makeShortcut(1)] } }),
+    ).toThrow();
+  });
+});
+
+describe('SHORTCUTS_USER_SETTINGS.merge', () => {
+  const merge = SHORTCUTS_USER_SETTINGS.merge;
+
+  it('keeps the current value when the patch does not name the namespace', () => {
+    const current = { keyShortcuts: [] };
+    expect(merge(current, undefined)).toBe(current);
+    expect(merge(undefined, undefined)).toBeUndefined();
+  });
+
+  it('removes the namespace on null and starts from the defaults otherwise', () => {
+    expect(merge({ keyShortcuts: [] }, null)).toBeUndefined();
+    expect(merge(undefined, {})).toEqual({ keyShortcuts: DEFAULT_KEY_SHORTCUTS });
+    expect(merge(undefined, { keyShortcuts: [] })).toEqual({ keyShortcuts: [] });
   });
 });
 
@@ -216,6 +240,23 @@ describe('userSettingsSchema', () => {
 
       expect(result.terminal).toBeUndefined();
     });
+
+    it('accepts every preference at its bounds', () => {
+      const terminal = {
+        showScrollButtons: true,
+        showKeyBar: 'never',
+        fontFamily: 'jetbrains-mono',
+        fontSize: 24,
+        lineHeight: 1.6,
+        cursorStyle: 'underline',
+        cursorBlink: false,
+        scrollback: 50000,
+        theme: 'solarized-light',
+        bell: 'visual',
+        copyOnSelect: true,
+      };
+      expect(userSettingsSchema.parse({ ...baseSettings, terminal }).terminal).toEqual(terminal);
+    });
   });
 
   describe('terminal field — invalid inputs', () => {
@@ -226,6 +267,23 @@ describe('userSettingsSchema', () => {
           terminal: { showScrollButtons: 'yes' },
         }),
       ).toThrow();
+    });
+
+    it.each([
+      ['fontSize below 10', { fontSize: 9 }],
+      ['fontSize above 24', { fontSize: 25 }],
+      ['a fractional fontSize', { fontSize: 14.5 }],
+      ['lineHeight above 1.6', { lineHeight: 1.7 }],
+      ['scrollback below 1000', { scrollback: 999 }],
+      ['scrollback above 50000', { scrollback: 50001 }],
+      ['an unknown theme', { theme: 'neon' }],
+      ['an unknown key bar mode', { showKeyBar: 'sometimes' }],
+      ['an unknown key', { fontWeight: 'bold' }],
+    ])('rejects %s, stored or patched', (_label, fields) => {
+      expect(() =>
+        userSettingsSchema.parse({ ...baseSettings, terminal: { showScrollButtons: true, ...fields } }),
+      ).toThrow();
+      expect(() => userSettingsPatchSchema.parse({ terminal: fields })).toThrow();
     });
 
     it('rejects terminal: {} (missing required showScrollButtons)', () => {
@@ -280,8 +338,20 @@ describe('DEFAULT_TERMINAL_SETTINGS', () => {
     expect(DEFAULT_TERMINAL_SETTINGS.showScrollButtons).toBe(true);
   });
 
-  it('contains keyShortcuts with the default shortcuts', () => {
-    expect(DEFAULT_TERMINAL_SETTINGS.keyShortcuts).toEqual(DEFAULT_KEY_SHORTCUTS);
+  it('carries every preference and no shortcuts (they are the shortcuts namespace now)', () => {
+    expect(DEFAULT_TERMINAL_SETTINGS).toEqual({
+      showScrollButtons: true,
+      showKeyBar: 'auto',
+      fontFamily: 'system',
+      fontSize: 14,
+      lineHeight: 1,
+      cursorStyle: 'block',
+      cursorBlink: true,
+      scrollback: 10000,
+      theme: 'dark',
+      bell: 'none',
+      copyOnSelect: false,
+    });
   });
 
   it('satisfies the user settings schema so it can be stored without a validation error', () => {
@@ -312,15 +382,21 @@ describe('TERMINAL_USER_SETTINGS.merge', () => {
   });
 
   it('merges a partial patch over the defaults for a user without the namespace', () => {
-    expect(merge(undefined, { showScrollButtons: false })).toEqual({
+    expect(merge(undefined, { showScrollButtons: false, fontSize: 18 })).toEqual({
+      ...DEFAULT_TERMINAL_SETTINGS,
       showScrollButtons: false,
-      keyShortcuts: DEFAULT_KEY_SHORTCUTS,
+      fontSize: 18,
     });
   });
 
-  it('replaces the whole shortcut list and keeps showScrollButtons', () => {
+  it('fills the new fields of a pre-#80 row and keeps its legacy shortcuts until the seed moves them', () => {
     expect(
-      merge({ showScrollButtons: false, keyShortcuts: DEFAULT_KEY_SHORTCUTS }, { keyShortcuts: custom }),
-    ).toEqual({ showScrollButtons: false, keyShortcuts: custom });
+      merge({ showScrollButtons: false, keyShortcuts: custom }, { theme: 'light' }),
+    ).toEqual({
+      ...DEFAULT_TERMINAL_SETTINGS,
+      showScrollButtons: false,
+      theme: 'light',
+      keyShortcuts: custom,
+    });
   });
 });

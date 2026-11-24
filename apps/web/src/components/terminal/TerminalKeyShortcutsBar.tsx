@@ -29,7 +29,7 @@ export function TerminalKeyShortcutsBar({ open, shortcuts, onSend }: TerminalKey
         {shortcuts.length === 0 ? (
           <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', py: 0.5 }}>
             No shortcuts configured. Add some in{' '}
-            <Link to="/settings" style={{ color: 'inherit' }}>
+            <Link to="/settings/shortcuts" style={{ color: 'inherit' }}>
               Settings
             </Link>
             .

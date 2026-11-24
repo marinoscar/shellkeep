@@ -31,6 +31,11 @@ import { USER_DEFAULTS } from '@marinoscar/platform-api/identity';
  *      defaults merged with the patch, as before.
  *   3. A new user's row is created by the identity slice with the terminal defaults
  *      (`USER_DEFAULTS`), so it is stored exactly as before.
+ *
+ * Issue #80 moved the key shortcuts to their own `shortcuts` namespace and added
+ * the terminal appearance fields. A PATCH that names `terminal` now stores every
+ * terminal default merged with what is stored and the patch; a stored legacy
+ * `terminal.keyShortcuts` is kept (the seed step moves it), never written.
  */
 
 const UPDATED_AT = new Date('2026-01-02T03:04:05.000Z');
@@ -46,6 +51,21 @@ const DEFAULT_SHORTCUTS_JSON = [
   { id: '11111111-1111-4111-8111-111111111108', label: '←', keystrokes: [{ modifiers: [], key: 'ArrowLeft' }] },
   { id: '11111111-1111-4111-8111-111111111109', label: '→', keystrokes: [{ modifiers: [], key: 'ArrowRight' }] },
 ];
+
+/** `DEFAULT_TERMINAL_SETTINGS` (#80), in stored key order. */
+const DEFAULT_TERMINAL_JSON = {
+  showScrollButtons: true,
+  showKeyBar: 'auto',
+  fontFamily: 'system',
+  fontSize: 14,
+  lineHeight: 1,
+  cursorStyle: 'block',
+  cursorBlink: true,
+  scrollback: 10000,
+  theme: 'dark',
+  bell: 'none',
+  copyOnSelect: false,
+};
 
 /** What a row written before #48 stores, and what the platform reads it as. */
 const LEGACY_PROFILE = { useProviderImage: true };
@@ -134,13 +154,14 @@ describe('User settings characterization', () => {
     );
   });
 
-  it('USER_DEFAULTS gives a new user the terminal defaults, in the stored shape recorded by #44', async () => {
+  it('USER_DEFAULTS gives a new user the terminal and shortcuts defaults (#80)', async () => {
     const defaults = context.module.get(USER_DEFAULTS).userSettings();
 
-    expect(JSON.stringify(defaults.terminal)).toBe(
-      JSON.stringify({ showScrollButtons: true, keyShortcuts: DEFAULT_SHORTCUTS_JSON }),
+    expect(JSON.stringify(defaults.terminal)).toBe(JSON.stringify(DEFAULT_TERMINAL_JSON));
+    expect(JSON.stringify(defaults.shortcuts)).toBe(
+      JSON.stringify({ keyShortcuts: DEFAULT_SHORTCUTS_JSON }),
     );
-    expect(Object.keys(defaults)).toEqual(['theme', 'profile', 'terminal']);
+    expect(Object.keys(defaults)).toEqual(['theme', 'profile', 'terminal', 'shortcuts']);
     // A fresh object per user: the document is stored and later mutated.
     expect(context.module.get(USER_DEFAULTS).userSettings()).not.toBe(defaults);
   });
@@ -256,7 +277,7 @@ describe('User settings characterization', () => {
     expect(JSON.stringify(stored!.value)).toBe(JSON.stringify(expected));
   });
 
-  it('PATCH terminal.showScrollButtons leaves the shortcuts as they were', async () => {
+  it('PATCH terminal.showScrollButtons keeps a legacy shortcut list where it is (the seed moves it)', async () => {
     const user = await createMockTestUser(context);
     stored = {
       value: {
@@ -275,37 +296,67 @@ describe('User settings characterization', () => {
       JSON.stringify({
         theme: 'system',
         profile: PROVIDER_PROFILE,
-        terminal: { showScrollButtons: false, keyShortcuts: [CUSTOM_SHORTCUT] },
+        terminal: { ...DEFAULT_TERMINAL_JSON, showScrollButtons: false, keyShortcuts: [CUSTOM_SHORTCUT] },
         updatedAt: UPDATED_AT.toISOString(),
         version: 2,
       }),
     );
   });
 
-  it('PATCH terminal.keyShortcuts replaces the whole list', async () => {
+  it('PATCH shortcuts.keyShortcuts replaces the whole list in the shortcuts namespace', async () => {
     const user = await createMockTestUser(context);
     stored = {
       value: {
         theme: 'system',
         profile: LEGACY_PROFILE,
-        terminal: { showScrollButtons: true, keyShortcuts: DEFAULT_SHORTCUTS_JSON },
+        terminal: { showScrollButtons: true },
+        shortcuts: { keyShortcuts: DEFAULT_SHORTCUTS_JSON },
       },
       version: 1,
     };
 
     const text = await patchBody(user.accessToken, {
-      terminal: { keyShortcuts: [CUSTOM_SHORTCUT] },
+      shortcuts: { keyShortcuts: [CUSTOM_SHORTCUT] },
     });
 
     expect(JSON.stringify(dataOf(text))).toBe(
       JSON.stringify({
         theme: 'system',
         profile: PROVIDER_PROFILE,
-        terminal: { showScrollButtons: true, keyShortcuts: [CUSTOM_SHORTCUT] },
+        terminal: { showScrollButtons: true },
+        shortcuts: { keyShortcuts: [CUSTOM_SHORTCUT] },
         updatedAt: UPDATED_AT.toISOString(),
         version: 2,
       }),
     );
+  });
+
+  it('PATCH terminal.fontSize out of range is a 400 (10..24)', async () => {
+    const user = await createMockTestUser(context);
+    stored = { value: { theme: 'system', profile: LEGACY_PROFILE }, version: 1 };
+
+    for (const fontSize of [9, 25]) {
+      await request(context.app.getHttpServer())
+        .patch('/api/user-settings')
+        .set(authHeader(user.accessToken))
+        .send({ terminal: { fontSize } })
+        .expect(400);
+    }
+  });
+
+  it('PATCH shortcuts with 51 shortcuts is a 400 (at most 50)', async () => {
+    const user = await createMockTestUser(context);
+    stored = { value: { theme: 'system', profile: LEGACY_PROFILE }, version: 1 };
+    const keyShortcuts = Array.from({ length: 51 }, (_, i) => ({
+      ...CUSTOM_SHORTCUT,
+      id: `${String(i + 1).padStart(8, '0')}-2222-4222-8222-222222222201`,
+    }));
+
+    await request(context.app.getHttpServer())
+      .patch('/api/user-settings')
+      .set(authHeader(user.accessToken))
+      .send({ shortcuts: { keyShortcuts } })
+      .expect(400);
   });
 
   it('PATCH terminal on a legacy user materializes the terminal defaults merged with the patch', async () => {
@@ -320,7 +371,7 @@ describe('User settings characterization', () => {
     const expected = {
       theme: 'light',
       profile: PROVIDER_PROFILE,
-      terminal: { showScrollButtons: false, keyShortcuts: DEFAULT_SHORTCUTS_JSON },
+      terminal: { ...DEFAULT_TERMINAL_JSON, showScrollButtons: false },
     };
     expect(JSON.stringify(dataOf(text))).toBe(
       JSON.stringify({ ...expected, updatedAt: UPDATED_AT.toISOString(), version: 2 }),
@@ -387,7 +438,7 @@ describe('User settings characterization', () => {
     await request(context.app.getHttpServer())
       .patch('/api/user-settings')
       .set(authHeader(user.accessToken))
-      .send({ terminal: { keyShortcuts: [{ id: 'not-a-uuid', label: 'x' }] } })
+      .send({ shortcuts: { keyShortcuts: [{ id: 'not-a-uuid', label: 'x' }] } })
       .expect(400);
   });
 
@@ -402,7 +453,7 @@ describe('User settings characterization', () => {
       .patch('/api/user-settings')
       .set(authHeader(user.accessToken))
       .send({
-        terminal: {
+        shortcuts: {
           keyShortcuts: [{ ...CUSTOM_SHORTCUT, keystrokes: [{ key: 'b' }] }],
         },
       })
