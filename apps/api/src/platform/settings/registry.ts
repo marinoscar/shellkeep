@@ -41,6 +41,7 @@ import {
   APP_USER_SETTINGS_NAMESPACES,
 } from '../../app-registrations/settings';
 import { APP_RETENTION_POLICIES } from '../../app-registrations/jobs';
+import { SSH_SYSTEM_SETTINGS } from '../../ssh/ssh.system-settings';
 
 // The app's retention policies BEFORE anything reads RETENTION_SYSTEM_SETTINGS: the
 // namespace is composed once, from the policies registered by then. None yet.
@@ -67,6 +68,8 @@ export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettin
   STORAGE_SYSTEM_SETTINGS as SystemSettingsNamespace,
   // The notifications slice's deployment policy (#51): browser toggle, per-event and per-channel switches.
   NOTIFICATIONS_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The SSH host-key policy (#60), appended last so no stored key moves.
+  SSH_SYSTEM_SETTINGS as SystemSettingsNamespace,
   // The db-backup slice's schedule, retention and restore policy (#52): `databaseBackup`.
   DATABASE_BACKUP_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];

@@ -32,6 +32,8 @@ import { UpdateSessionDto } from './dto/update-session.dto';
 import { SessionQueryDto } from './dto/session-query.dto';
 import { BatchTerminateSessionsDto } from './dto/batch-terminate-sessions.dto';
 import { ServerProfilesService } from '../server-profiles/server-profiles.service';
+import { HostKeyError } from '../ssh/host-key.error';
+import { hostKeyErrorToHttp } from '../ssh/host-key-http';
 
 @ApiTags('Terminal Sessions')
 @Controller('sessions')
@@ -96,7 +98,7 @@ export class SessionsController {
     );
 
     try {
-      const output = await this.sshService.execCommand(
+      const output = await this.sshService.execForOutput(
         profile,
         `tmux capture-pane -p -S - -t ${session.tmuxSessionId}`,
       );
@@ -108,6 +110,8 @@ export class SessionsController {
       res.header('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(output);
     } catch (error) {
+      // A refused host key is the user's decision to make, not a gateway failure.
+      if (error instanceof HostKeyError) throw hostKeyErrorToHttp(error, session.serverProfileId);
       const message = error instanceof Error ? error.message : String(error);
       if (
         message.includes('session not found') ||

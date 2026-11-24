@@ -78,6 +78,9 @@
     "browserEnabled": true,
     "disabledEvents": []
   },
+  "ssh": {
+    "hostKeyPolicy": "tofu_prompt"
+  },
   "databaseBackup": {
     "enabled": false,
     "frequency": "daily",

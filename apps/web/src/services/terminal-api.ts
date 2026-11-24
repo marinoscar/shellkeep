@@ -4,6 +4,8 @@ import type {
   ServerProfile,
   ServerProfileFormData,
   TestConnectionResult,
+  HostKeyScanResult,
+  ServerFactsRefreshResult,
   SessionsResponse,
   TerminalSession,
   CreateSessionData,
@@ -51,6 +53,40 @@ export async function testServerProfile(
   id: string,
 ): Promise<TestConnectionResult> {
   return api.post<TestConnectionResult>(`/server-profiles/${id}/test`);
+}
+
+// Host keys (#60). Bodyless POST/DELETE: the client sends no Content-Type
+// without a body, which Fastify requires.
+
+/** Read the key the server presents now; sends no credential, stores nothing. */
+export async function scanHostKey(id: string): Promise<HostKeyScanResult> {
+  return api.post<HostKeyScanResult>(`/server-profiles/${id}/host-key/scan`);
+}
+
+/**
+ * Trust the key the server presents, provided it is `fingerprint` (409
+ * `HOST_KEY_CHANGED_DURING_TRUST` otherwise). Replacing a different trusted key
+ * also needs `confirmHostname` equal to the profile's hostname.
+ */
+export async function trustHostKey(
+  id: string,
+  fingerprint: string,
+  confirmHostname?: string,
+): Promise<ServerProfile> {
+  return api.post<ServerProfile>(`/server-profiles/${id}/host-key/trust`, {
+    fingerprint,
+    ...(confirmHostname !== undefined ? { confirmHostname } : {}),
+  });
+}
+
+/** Forget the trusted key; the next connect prompts again. */
+export async function forgetHostKey(id: string): Promise<ServerProfile> {
+  return api.delete<ServerProfile>(`/server-profiles/${id}/host-key`);
+}
+
+/** Probe the server's facts again (409 HOST_KEY_* when the key is not trusted). */
+export async function refreshServerFacts(id: string): Promise<ServerFactsRefreshResult> {
+  return api.post<ServerFactsRefreshResult>(`/server-profiles/${id}/facts/refresh`);
 }
 
 // Terminal Sessions API
