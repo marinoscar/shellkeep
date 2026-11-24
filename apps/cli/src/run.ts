@@ -3,6 +3,7 @@ import { CLI_NAME } from '@shellkeep/shared';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { runAttachBridge } from './commands/sessions-attach.js';
+import { planDeployArgs } from './extensions/deploy-args.js';
 import { withDefaultPort } from './extensions/default-port.js';
 import { takePendingAttach } from './tui/pending-attach.js';
 
@@ -37,6 +38,8 @@ export function describeError(error: unknown): string {
 /** Where one invocation writes; the defaults are the process's. */
 export interface RunAppOptions {
   stderr?: { write(text: string): unknown } | undefined;
+  cwd?: string | undefined;
+  now?: (() => Date) | undefined;
   /** Builds the CLI; tests substitute a fake to observe what it is handed. */
   createCli?: typeof createCli | undefined;
 }
@@ -51,6 +54,15 @@ export interface RunAppOptions {
 export async function runApp(argv: string[], options: RunAppOptions = {}): Promise<number> {
   const stderr = options.stderr ?? process.stderr;
 
+  // `deploy install|doctor|status` bind loopback 8323 unless --port says otherwise (#149).
+  // `deploy uninstall` is guarded: typed name, `.env` backup (#150).
+  const plan = planDeployArgs(withDefaultPort(argv), { cli: CLI_NAME, cwd: options.cwd ?? process.cwd(), now: options.now });
+  if (plan.kind === 'refuse') {
+    stderr.write(`${plan.message}\n`);
+    return EXIT.USAGE;
+  }
+  for (const note of plan.notes) stderr.write(`${note}\n`);
+
   let cli: ReturnType<typeof createCli>;
   try {
     cli = (options.createCli ?? createCli)(APP_CLI_OPTIONS);
@@ -59,8 +71,17 @@ export async function runApp(argv: string[], options: RunAppOptions = {}): Promi
     return exitCodeFor(error);
   }
 
-  // `deploy install|doctor|status` bind loopback 8323 unless --port says otherwise (#149).
-  const code = await cli.run(withDefaultPort(argv));
+  for (const step of plan.before) {
+    try {
+      const line = step();
+      if (line !== undefined) stderr.write(`${line}\n`);
+    } catch (error) {
+      stderr.write(`${CLI_NAME}: ${(error as Error).message}\n`);
+      return EXIT.FAILURE;
+    }
+  }
+
+  const code = await cli.run(plan.argv);
 
   const pending = takePendingAttach();
   if (pending !== undefined && code === EXIT.OK) {

@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { createCli } from '@marinoscar/platform-cli';
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -106,6 +110,52 @@ describe('runApp', () => {
       expect(await handedOver(['deploy', 'install', '--port=9000'])).toEqual(['deploy', 'install', '--port=9000']);
       expect(await handedOver(['deploy', 'update'])).toEqual(['deploy', 'update']);
       expect(await handedOver(['servers', 'list'])).toEqual(['servers', 'list']);
+    });
+  });
+
+  describe('the uninstall guard (#150)', () => {
+    let apps: string;
+    let fakeRuns: string[][];
+    const fake = (() => ({
+      run: async (args: string[]) => {
+        fakeRuns.push(args);
+        return 0;
+      },
+    })) as unknown as typeof createCli;
+
+    beforeEach(() => {
+      apps = mkdtempSync(join(tmpdir(), 'run-uninstall-'));
+      mkdirSync(join(apps, 'shellkeep', 'repo', '.git'), { recursive: true });
+      writeFileSync(join(apps, 'shellkeep', '.env'), 'SECRETS_ENCRYPTION_KEY=abc\n');
+      fakeRuns = [];
+    });
+    afterEach(() => rmSync(apps, { recursive: true, force: true }));
+
+    it('refuses an unconfirmed uninstall with the usage code and never builds a run', async () => {
+      const code = await runApp(['deploy', 'uninstall', '--apps-root', apps], { createCli: fake });
+
+      expect(code).toBe(2);
+      expect(fakeRuns).toEqual([]);
+      expect(stderr).toContain('--confirm shellkeep');
+    });
+
+    it('backs up .env, then hands the platform an argv without --confirm', async () => {
+      const argv = ['deploy', 'uninstall', '--apps-root', apps, '--confirm', 'shellkeep'];
+
+      expect(await runApp(argv, { createCli: fake, now: () => new Date('2026-11-24T10:20:30.456Z') })).toBe(0);
+
+      expect(fakeRuns).toEqual([['deploy', 'uninstall', '--apps-root', apps]]);
+      expect(readFileSync(join(apps, 'shellkeep.env.2026-11-24T10-20-30-456Z.bak'), 'utf8')).toBe(
+        'SECRETS_ENCRYPTION_KEY=abc\n',
+      );
+      expect(stderr).toContain('before it is removed');
+    });
+
+    it('leaves a dry run alone: no backup, no refusal', async () => {
+      expect(await runApp(['deploy', 'uninstall', '--apps-root', apps, '--dry-run'], { createCli: fake })).toBe(0);
+
+      expect(readdirSync(apps)).toEqual(['shellkeep']);
+      expect(fakeRuns).toHaveLength(1);
     });
   });
 });
