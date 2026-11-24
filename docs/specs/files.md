@@ -28,7 +28,7 @@ SFTP over `SshConnectionFactory` (host key verified before any credential). One 
 
 ## Downloads
 
-The token is random (256 bits), stored only as a SHA-256 in memory (the API is a single instance), single use, valid 60 seconds, bound to user, organization, profile, path and size. The download route is public by token (a browser's native download sends no `Authorization`); on redemption the connect rule is checked again for the token's user, the size must still match (`FILE_CHANGED`), and the file must be within `downloadMaxBytes`. A client abort destroys the SFTP stream and closes the connection. Every download is an audit event `server_profile.file_download` (`path`, `size`, `hostname`).
+The token is random (256 bits), stored only as a SHA-256 in memory (the API is a single instance), single use, valid 60 seconds, bound to user, organization, profile, path and size. The download route is public by token (a browser's native download sends no `Authorization`); on redemption the token user's current principal is resolved (active, still in the organization), `sessions:write` is required and the connect rule is checked again, the size must still match (`FILE_CHANGED`), and the file must be within `downloadMaxBytes`. A client abort destroys the SFTP stream and closes the connection. Every download is an audit event `server_profile.file_download` (`path`, `size`, `hostname`).
 
 ## Settings (`files`, admin)
 

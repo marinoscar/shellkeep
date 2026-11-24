@@ -25,6 +25,7 @@ import { DownloadTokenStore } from '../../src/files/download-token.store';
 import { FilesController } from '../../src/files/files.controller';
 import { FilesDownloadController } from '../../src/files/files-download.controller';
 import { FilesRateLimiter } from '../../src/files/files-rate-limiter';
+import { FilesPrincipalResolver } from '../../src/files/files-principal.resolver';
 import { FilesService } from '../../src/files/files.service';
 import { SftpService } from '../../src/files/sftp.service';
 import { DEFAULT_FILES_SYSTEM_SETTINGS, type FilesSystemSettings } from '../../src/files/settings/files.system-settings';
@@ -51,6 +52,8 @@ describe('files API over SFTP', () => {
   let audit: jest.Mock;
   let sessionCwd: string | null;
   let sessionProfile: string;
+  /** What the identity slice reports for a token's user right now. */
+  let currentPermissions: string[] | null;
 
   const as = (userId: string) => ({ 'x-test-user': userId });
   const http = () => request(app.getHttpServer());
@@ -86,6 +89,7 @@ describe('files API over SFTP', () => {
     audit = jest.fn().mockResolvedValue(undefined);
     sessionCwd = null;
     sessionProfile = PROFILE;
+    currentPermissions = ['sessions:write'];
     server.readDelayMs = 0;
     await buildApp();
   });
@@ -110,6 +114,8 @@ describe('files API over SFTP', () => {
         return profile(OWNER);
       }),
       getDecryptedProfileForSession: jest.fn(async (id: string, scope: { userId: string }) => {
+        // No longer used by the files API: it fakes sessions:write.
+        throw new Error('getDecryptedProfileForSession must not be used by the files API');
         if (id !== PROFILE || scope.userId !== OWNER) throw new NotFoundException('Server profile not found');
         return profile(OWNER);
       }),
@@ -136,6 +142,16 @@ describe('files API over SFTP', () => {
           DownloadTokenStore,
           FilesRateLimiter,
           { provide: ServerProfilesService, useValue: profiles },
+          {
+            provide: FilesPrincipalResolver,
+            useValue: {
+              resolve: jest.fn(async (userId: string) =>
+                currentPermissions
+                  ? { kind: 'user', userId, email: 'person-a@example.test', credential: 'session', roles: [], permissions: currentPermissions, activeOrgId: ORG }
+                  : null,
+              ),
+            },
+          },
           { provide: SessionsService, useValue: sessions },
           { provide: SessionHistoryService, useValue: history },
           { provide: SystemSettingsService, useValue: settingsService },
@@ -414,6 +430,22 @@ describe('files API over SFTP', () => {
       const grant = tokens.consume(t)!;
       const revoked = tokens.issue({ ...grant, userId: OTHER });
       await http().get(`/files/download/${revoked.token}`).expect(404);
+    });
+
+    it('re-checks RBAC on redemption: a role that lost sessions:write is the same 404', async () => {
+      const { token: t } = await token(join(root, 'notes.txt'));
+      currentPermissions = ['sessions:read'];
+      const res = await http().get(`/files/download/${t}`).expect(404);
+      expect(res.body.code).toBe('FILE_DOWNLOAD_NOT_FOUND');
+      expect(audit).not.toHaveBeenCalled();
+    });
+
+    it('re-checks the user on redemption: a deactivated or removed user is the same 404', async () => {
+      const { token: t } = await token(join(root, 'notes.txt'));
+      currentPermissions = null;
+      const res = await http().get(`/files/download/${t}`).expect(404);
+      expect(res.body.code).toBe('FILE_DOWNLOAD_NOT_FOUND');
+      expect(audit).not.toHaveBeenCalled();
     });
 
     it('refuses above the download cap at issue time, and a changed size at redemption', async () => {

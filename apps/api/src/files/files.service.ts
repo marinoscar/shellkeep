@@ -15,11 +15,13 @@ import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AUDIT_SINK, type AuditSink, type Principal } from '@marinoscar/platform-api/core';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
+import { PERMISSIONS } from '../common/constants/roles.constants';
 import { recordAudit } from '../common/audit/record-audit';
 import type { OwnerScope } from '../common/types/owner-scope';
 import { ServerProfilesService } from '../server-profiles/server-profiles.service';
 import { SessionHistoryService } from '../terminal/session-history.service';
 import { SessionsService } from '../terminal/sessions.service';
+import { FilesPrincipalResolver } from './files-principal.resolver';
 import { DownloadTokenStore } from './download-token.store';
 import { fileError } from './files-error';
 import { FilesRateLimiter } from './files-rate-limiter';
@@ -68,6 +70,7 @@ export class FilesService {
     private readonly settings: SystemSettingsService,
     private readonly tokens: DownloadTokenStore,
     private readonly limiter: FilesRateLimiter,
+    private readonly principals: FilesPrincipalResolver,
     @Inject(AUDIT_SINK) private readonly audit: AuditSink,
   ) {}
 
@@ -190,16 +193,21 @@ export class FilesService {
 
   /**
    * Redeems a token (public route: the token is the credential). The connect rule is checked AGAIN
-   * for the token's user, so a share revoked in the last minute stops the download. Every refusal
+   * for the token's user, so a share revoked, a role that lost `sessions:write` or a deactivated user within the minute stops the download. Every refusal
    * of the token itself is the same 404.
    */
   async openDownload(token: string): Promise<PreparedDownload> {
     const grant = this.tokens.consume(token);
     if (!grant) throw fileError('FILE_DOWNLOAD_NOT_FOUND', 'Download not found or expired');
-    const scope: OwnerScope = { userId: grant.userId, orgId: grant.orgId };
+    // The token user as they are NOW: active, still in the organization, still holding the
+    // terminal permission, and still allowed to connect to the server. Every refusal is the same 404.
+    const principal = await this.principals.resolve(grant.userId, grant.orgId);
+    if (!principal || !principal.permissions.includes(PERMISSIONS.SESSIONS_WRITE)) {
+      throw fileError('FILE_DOWNLOAD_NOT_FOUND', 'Download not found or expired');
+    }
     let profile;
     try {
-      profile = await this.profiles.getDecryptedProfileForSession(grant.serverProfileId, scope, 'connect');
+      profile = await this.profiles.getDecryptedProfile(grant.serverProfileId, principal, 'connect');
     } catch (error) {
       if (error instanceof NotFoundException) throw fileError('FILE_DOWNLOAD_NOT_FOUND', 'Download not found or expired');
       throw error;
