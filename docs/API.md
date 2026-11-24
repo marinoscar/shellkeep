@@ -1432,7 +1432,7 @@ The execution engine (#62). A run executes one runbook version on a set of serve
 | Route | Permission | Notes |
 |-------|------------|-------|
 | `POST /api/runbooks/:id/runs` | `runbooks:run` | `{ version?, params, secretRefs?, targets?, strategy? }`; `202 { runId }`. Params are checked against the definition (types, required, enum, pattern: `422 RUNBOOK_PARAMS_INVALID` with `details.issues`), each `secretRefs` name must exist (`422 RUNBOOK_SECRET_REF_UNKNOWN`); `503 RUNBOOKS_DISABLED` while `runbooks.enabled` is off |
-| `GET /api/runbook-runs` | `runbooks:read` | Paginated; filters `runbookId`, `status`, `trigger`, `initiatedBy` and `since` (`30m`, `24h`, `7d`: queued within that window; #65) |
+| `GET /api/runbook-runs` | `runbooks:read` | Paginated; filters `runbookId`, `status`, `trigger`, `initiatedBy` and `since` (`30m`, `24h`, `7d`: queued within that window; #65). Each item carries `targets: { total, succeeded, failed, running }` (`failed` counts cancelled servers too) |
 | `GET /api/runbook-runs/:id` | `runbooks:read` | The run, its targets with their step matrix, and `counts` |
 | `GET /api/runbook-runs/:id/targets/:targetId/steps/:stepIndex/log` | `runbooks:read` | `text/plain`, redacted; from storage once the step ended, else from the chunks; `?tail=N` lines |
 | `GET /api/runbook-runs/:id/logs/stream` | `runbooks:read` | SSE: `snapshot`, then `chunk` (id `<stepRowId>:<seq>`), `step`, `target`, `run`, `approval` and a `heartbeat` every 15 s. `Last-Event-ID` replays the chunks after it. `.../targets/:targetId/logs/stream` filters to one server. Send `Authorization: Bearer`, so use a fetch-based reader, not `EventSource` |

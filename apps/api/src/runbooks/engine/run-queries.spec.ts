@@ -93,3 +93,35 @@ describe('runs query `since` (#65: Home links /runs?status=failed&since=24h)', (
     expect(sinceToDate('7d', now).getTime()).toBe(now - 7 * 86_400_000);
   });
 });
+
+describe('RunbookRunsService.list (#65: the runs list and its filters)', () => {
+  const { RunbookRunsService } = jest.requireActual('./runbook-runs.service') as typeof import('./runbook-runs.service');
+  const { runsQuerySchema } = jest.requireActual('./dto/run.dto') as typeof import('./dto/run.dto');
+
+  it('carries each run\'s server split and filters by the since window', async () => {
+    const tx = {
+      runbookRun: {
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'run-1', runbookId: 'rb-1', version: 1, status: 'failed', trigger: 'manual', initiatedBy: 'user-1', createdAt: new Date(0), startedAt: null, finishedAt: null, runbook: { name: 'Patch' } },
+        ]),
+      },
+      runbookRunTarget: {
+        groupBy: jest.fn().mockResolvedValue([
+          { runId: 'run-1', status: 'succeeded', _count: { _all: 3 } },
+          { runId: 'run-1', status: 'failed', _count: { _all: 1 } },
+          { runId: 'run-1', status: 'running', _count: { _all: 2 } },
+        ]),
+      },
+    };
+    (global as any).__tx = tx;
+    const runbooks = { readableWhere: jest.fn().mockResolvedValue({ ownerUserId: 'user-1' }) };
+    const service = new RunbookRunsService({} as never, {} as never, runbooks as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+    const page = await service.list(principal, runsQuerySchema.parse({ status: 'failed', since: '24h' }));
+    expect(page.items[0]).toMatchObject({ runbookName: 'Patch', targets: { total: 6, succeeded: 3, failed: 1, running: 2 } });
+    const where = tx.runbookRun.findMany.mock.calls[0][0].where;
+    expect(where.status).toBe('failed');
+    expect(where.createdAt.gte).toBeInstanceOf(Date);
+    expect(tx.runbookRunTarget.groupBy.mock.calls[0][0].where).toEqual({ orgId: 'org-1', runId: { in: ['run-1'] } });
+  });
+});
