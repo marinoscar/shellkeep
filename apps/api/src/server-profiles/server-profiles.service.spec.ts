@@ -7,6 +7,7 @@ import { UserCredentialsService } from '@marinoscar/platform-api/credentials';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { HostKeyError } from '../ssh/host-key.error';
 import { ServerFactsService } from '../ssh/server-facts.service';
+import { TerminalWebhooksService } from '../terminal/webhooks/terminal-webhooks.service';
 import { SshConnectionFactory } from '../ssh/ssh-connection.factory';
 
 describe('ServerProfilesService', () => {
@@ -35,6 +36,8 @@ describe('ServerProfilesService', () => {
   // against doubles; the factory itself is proven in `ssh/ssh-connection.factory.spec.ts`.
   const ssh = { open: jest.fn(), scan: jest.fn() };
   const facts = { probe: jest.fn(), tryProbeClient: jest.fn() };
+  // The webhook events (#54): raised after the host-key update commits.
+  const webhooks = { hostKeyChanged: jest.fn() };
 
   const mockProfile = {
     id: mockProfileId,
@@ -67,6 +70,7 @@ describe('ServerProfilesService', () => {
         { provide: UserCredentialsService, useValue: credentials },
         { provide: SshConnectionFactory, useValue: ssh },
         { provide: ServerFactsService, useValue: facts },
+        { provide: TerminalWebhooksService, useValue: webhooks },
         {
           provide: PrismaService,
           useValue: {
@@ -586,6 +590,31 @@ describe('ServerProfilesService', () => {
           meta: expect.objectContaining({ oldFingerprint: FP_A, newFingerprint: FP_B }),
         }),
       );
+    });
+
+    it('raises server_profile.host_key_changed only when a different trusted key is replaced', async () => {
+      webhooks.hostKeyChanged.mockClear();
+      find(untrusted);
+      ssh.scan.mockResolvedValue(presentedA);
+      await service.trustHostKey(mockProfileId, mockScope, { fingerprint: FP_A });
+      expect(webhooks.hostKeyChanged).not.toHaveBeenCalled();
+
+      find(trusted);
+      ssh.scan.mockResolvedValue({ fingerprint: FP_B, algorithm: 'ssh-ed25519' });
+      await service.trustHostKey(mockProfileId, mockScope, { fingerprint: FP_B, confirmHostname: 'example.com' });
+      expect(webhooks.hostKeyChanged).toHaveBeenCalledTimes(1);
+      expect(webhooks.hostKeyChanged).toHaveBeenCalledWith(mockScope, {
+        serverProfileId: mockProfileId,
+        previousFingerprint: FP_A,
+        presentedFingerprint: FP_B,
+      });
+    });
+
+    it('does not raise the event when the confirmation is refused (nothing was replaced)', async () => {
+      webhooks.hostKeyChanged.mockClear();
+      find(trusted);
+      await expect(service.trustHostKey(mockProfileId, mockScope, { fingerprint: FP_B })).rejects.toThrow();
+      expect(webhooks.hostKeyChanged).not.toHaveBeenCalled();
     });
 
     it('still succeeds when the facts probe after trust fails', async () => {

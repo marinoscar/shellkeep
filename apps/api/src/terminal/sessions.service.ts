@@ -11,6 +11,7 @@ import { recordAudit } from '../common/audit/record-audit';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { SessionQueryDto } from './dto/session-query.dto';
+import { TerminalWebhooksService } from './webhooks/terminal-webhooks.service';
 import { randomUUID } from 'crypto';
 
 const SERVER_PROFILE_SELECT = {
@@ -28,6 +29,7 @@ export class SessionsService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
+    private readonly webhooks: TerminalWebhooksService,
   ) {}
 
   private audit(
@@ -150,6 +152,8 @@ export class SessionsService {
       serverProfileId: dto.serverProfileId,
     });
     this.logger.log(`Terminal session "${name}" created by user ${scope.userId}`);
+    // After the row is written, outside any transaction (#54). Never throws.
+    await this.webhooks.sessionCreated(scope, session, serverProfile.name);
 
     return this.toResponse(session);
   }
@@ -193,11 +197,12 @@ export class SessionsService {
       throw new NotFoundException(`Terminal session with ID ${id} not found`);
     }
 
+    const terminatedAt = new Date();
     const session = await this.prisma.terminalSession.update({
       where: { id },
       data: {
         status: 'terminated',
-        terminatedAt: new Date(),
+        terminatedAt,
       },
       include: {
         serverProfile: {
@@ -208,6 +213,7 @@ export class SessionsService {
 
     await this.audit('terminal_session.terminate', scope, session.id);
     this.logger.log(`Terminal session "${session.name}" terminated by user ${scope.userId}`);
+    await this.webhooks.sessionTerminated(scope, session, 'user', terminatedAt);
 
     return this.toResponse(session);
   }
@@ -222,22 +228,25 @@ export class SessionsService {
       orgId: scope.orgId,
       status: { not: 'terminated' as const },
     };
-    // Read the ids first so each terminated session gets its own audit row.
+    // Read the ids first so each terminated session gets its own audit row (and webhook event).
     const targets = (await this.prisma.terminalSession.findMany({
       where,
-      select: { id: true },
-    })) as Array<{ id: string }>;
+      select: { id: true, serverProfileId: true },
+    })) as Array<{ id: string; serverProfileId: string }>;
 
+    const terminatedAt = new Date();
     const result = await this.prisma.terminalSession.updateMany({
       where,
       data: {
         status: 'terminated',
-        terminatedAt: new Date(),
+        terminatedAt,
       },
     });
 
     for (const target of targets) {
       await this.audit('terminal_session.terminate', scope, target.id, { batch: true });
+      // After the update committed, outside any transaction (#54). Never throws.
+      await this.webhooks.sessionTerminated(scope, target, 'batch', terminatedAt);
     }
 
     this.logger.log(`Batch terminated ${result.count} sessions for user ${scope.userId}`);
