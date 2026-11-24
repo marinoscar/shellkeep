@@ -8,8 +8,14 @@
  * long-press on any path, opens the menu. A gesture that moved is a scroll
  * (`useTouchScroll` owns it) and never opens anything; these listeners are
  * passive and never call `preventDefault`, so scrolling is untouched.
+ *
+ * Precedence with the terminal's arrow mode (#168, `useTerminalArrowMode`): a
+ * long press on an UNDERLINED link (a path known to exist, `isLinkAt`) is the
+ * file menu's, and arrow mode declines it; a long press anywhere else enters
+ * arrow mode, which claims the gesture (`isTouchClaimed`), and then this hook
+ * opens nothing when the finger lifts.
  */
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { statRemoteFile } from '../../../services/files-api';
 import { createFileStatCache } from '../../../lib/terminal/file-stat-cache';
 import {
@@ -47,7 +53,13 @@ export function useTerminalFileLinks(
   /** The terminal, once it exists (read at each tap). */
   getTerminal: () => FileLinkTerminal | null,
   config: TerminalFileLinksConfig | null | undefined,
+  options: {
+    /** The current touch gesture belongs to another handler (arrow mode, #168): open nothing. */
+    isTouchClaimed?: () => boolean;
+  } = {},
 ) {
+  const isTouchClaimed = useRef(options.isTouchClaimed);
+  isTouchClaimed.current = options.isTouchClaimed;
   const profileId = config?.profileId ?? null;
   const [menu, setMenu] = useState<FileLinkMenuState | null>(null);
   const lastTouchEnd = useRef(-Infinity);
@@ -106,7 +118,7 @@ export function useTerminalFileLinks(
       lastTouchEnd.current = Date.now();
       const began = start;
       start = null;
-      if (!began || moved) return;
+      if (!began || moved || isTouchClaimed.current?.()) return;
       const terminal = getTerminal();
       if (!terminal) return;
       const longPress = Date.now() - began.at >= LONG_PRESS_MS;
@@ -145,5 +157,16 @@ export function useTerminalFileLinks(
     };
   }, [containerRef, getTerminal, cache, sessionId]);
 
-  return { source, menu, closeMenu: () => setMenu(null) };
+  /** Whether (x, y) is on an underlined link: a path whose stat says it exists. */
+  const isLinkAt = useCallback(
+    (x: number, y: number): boolean => {
+      const terminal = getTerminal();
+      if (!terminal || !cache) return false;
+      const found = fileReferenceAtPoint(terminal, x, y);
+      return Boolean(found && cache.peek(sessionId, found.reference.path));
+    },
+    [getTerminal, cache, sessionId],
+  );
+
+  return { source, menu, closeMenu: () => setMenu(null), isLinkAt };
 }

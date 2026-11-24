@@ -1,6 +1,13 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef, useState, useMemo, useCallback } from 'react';
 import { Box, Chip, useTheme } from '@mui/material';
-import { ManageSearchOutlined as ExplainIcon } from '@mui/icons-material';
+import {
+  ArrowBack as ArrowLeftIcon,
+  ArrowDownward as ArrowDownIcon,
+  ArrowForward as ArrowRightIcon,
+  ArrowUpward as ArrowUpIcon,
+  ManageSearchOutlined as ExplainIcon,
+  OpenWith as ArrowModeIcon,
+} from '@mui/icons-material';
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTouchScroll } from '../../hooks/useTouchScroll';
 import { TerminalScrollButtons } from './TerminalScrollButtons';
@@ -13,6 +20,9 @@ import type { HostKeyErrorCode } from '../../types/terminal';
 import { DEFAULT_TERMINAL_SETTINGS, type ResolvedTerminalSettings } from '../../lib/terminal/settings';
 import { resolveTerminalTheme } from '../../lib/terminal/appearance';
 import type { TerminalInputModifiers } from '../../lib/terminal/keys/modifiedInput';
+import type { ModifierStore } from '../../lib/terminal/keys/modifierState';
+import { createHeldKeySender, DRAG_GEARS, type ArrowDirection, type DragReading } from '../../lib/terminal/keys/arrowRepeat';
+import { useTerminalArrowMode } from './useTerminalArrowMode';
 import '@xterm/xterm/css/xterm.css';
 
 export interface TerminalViewHandle {
@@ -61,17 +71,95 @@ interface TerminalViewProps {
   fileLinks?: TerminalFileLinksConfig | null;
   /** The key bar's armed or locked modifiers, applied to typed input (#166). */
   inputModifiers?: TerminalInputModifiers | null;
+  /**
+   * Long-press-and-drag arrow mode on touch (#168): the shared modifier store
+   * (its armed modifiers apply to the whole drag) and the haptics option.
+   * Omitted: no arrow mode.
+   */
+  arrowMode?: TerminalArrowModeConfig | null;
+}
+
+export interface TerminalArrowModeConfig {
+  modifiers?: ModifierStore | null;
+  haptics: boolean;
+}
+
+const ARROW_ICONS: Record<ArrowDirection, typeof ArrowUpIcon> = {
+  up: ArrowUpIcon,
+  down: ArrowDownIcon,
+  left: ArrowLeftIcon,
+  right: ArrowRightIcon,
+};
+
+/** The subtle overlay while arrow mode is on: the direction and the gear (#168). */
+function ArrowModeIndicator({ state }: { state: DragReading }) {
+  const Icon = state.direction ? ARROW_ICONS[state.direction] : ArrowModeIcon;
+  const label = state.direction
+    ? `Arrow mode: ${state.direction}, speed ${state.gear} of ${DRAG_GEARS.length}`
+    : 'Arrow mode: drag to move the cursor';
+  return (
+    <Box
+      role="status"
+      aria-label={label}
+      data-testid="terminal-arrow-mode"
+      data-direction={state.direction ?? undefined}
+      data-gear={state.gear}
+      sx={{
+        position: 'absolute',
+        top: 12,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 3,
+        pointerEvents: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.75,
+        px: 1.25,
+        py: 0.5,
+        borderRadius: 4,
+        bgcolor: 'background.paper',
+        color: 'text.primary',
+        boxShadow: 2,
+        opacity: 0.9,
+        '@keyframes terminalArrowMode': { from: { opacity: 0 }, to: { opacity: 0.9 } },
+        animation: 'terminalArrowMode 120ms ease-out',
+        '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+      }}
+    >
+      <Icon fontSize="small" aria-hidden />
+      <Box component="span" aria-hidden sx={{ display: 'flex', gap: 0.5 }}>
+        {DRAG_GEARS.map((_, i) => (
+          <Box
+            key={i}
+            component="span"
+            data-testid="terminal-arrow-mode-gear"
+            data-on={i < state.gear ? 'true' : undefined}
+            sx={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              bgcolor: i < state.gear ? 'primary.main' : 'action.disabled',
+            }}
+          />
+        ))}
+      </Box>
+    </Box>
+  );
 }
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
-  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS, isReservedKey, onExplainSelection, fileLinks, inputModifiers }, ref) {
+  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS, isReservedKey, onExplainSelection, fileLinks, inputModifiers, arrowMode }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const appMode = useTheme().palette.mode;
   const appearance = useMemo(() => ({ preferences, appMode, isReservedKey }), [preferences, appMode, isReservedKey]);
   // The links read the terminal `useTerminal` holds; it is created after this hook runs.
   const xtermHolder = useRef<{ current: Terminal | null } | null>(null);
   const getXterm = useCallback(() => xtermHolder.current?.current ?? null, []);
-  const fileLinkState = useTerminalFileLinks(sessionId, containerRef, getXterm, fileLinks);
+  // Arrow mode (#168) runs after the links exist; the links ask it, at touch end, whether it took the gesture.
+  const arrowClaimed = useRef<() => boolean>(() => false);
+  const fileLinkOptions = useMemo(() => ({ isTouchClaimed: () => arrowClaimed.current() }), []);
+  const fileLinkState = useTerminalFileLinks(sessionId, containerRef, getXterm, fileLinks, fileLinkOptions);
   const terminalOptions = useMemo(
     () => ({ fileLinks: fileLinkState.source, inputModifiers }),
     [fileLinkState.source, inputModifiers],
@@ -93,6 +181,26 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
   } = useTerminal(sessionId, containerRef, appearance, terminalOptions);
   xtermHolder.current = terminal ?? null;
   useTouchScroll(containerRef);
+
+  // Long-press-and-drag arrows (#168): through this pane's terminal, its cursor
+  // mode, and the modifiers armed when the drag began.
+  const arrowModifiers = arrowMode?.modifiers ?? null;
+  const beginArrowHold = useCallback(
+    () =>
+      createHeldKeySender({
+        modifiers: arrowModifiers,
+        applicationCursor: () => terminal.current?.modes?.applicationCursorKeysMode ?? false,
+        write: sendInput,
+      }),
+    [arrowModifiers, terminal, sendInput],
+  );
+  const arrow = useTerminalArrowMode(wrapperRef, containerRef, {
+    enabled: Boolean(arrowMode),
+    beginHold: beginArrowHold,
+    haptics: arrowMode?.haptics ?? false,
+    isLinkAt: fileLinkState.isLinkAt,
+  });
+  arrowClaimed.current = arrow.isTouchClaimed;
 
   useImperativeHandle(ref, () => ({
     getTerminal: () => terminal.current,
@@ -132,6 +240,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
 
   return (
     <Box
+      ref={wrapperRef}
       onContextMenu={(e) => e.preventDefault()}
       sx={{
         position: 'relative',
@@ -172,6 +281,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
           }}
         />
       )}
+      {arrow.state && <ArrowModeIndicator state={arrow.state} />}
       {/* The selection's Explain action (#58): a floating chip, only while text is selected. */}
       {onExplainSelection && hasSelection && (
         <Chip

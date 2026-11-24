@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import type { Chord, KeyModifier } from '../../lib/terminal/keys/keyModel';
 import { ALL_OFF, type ModifierSnapshot } from '../../lib/terminal/keys/modifierState';
 import type { KeyActionId, ResolvedGroup, ResolvedKey } from '../../lib/terminal/keys/keyRow';
+import type { KeyHold } from '../../lib/terminal/keys/arrowRepeat';
 import { KEY_GAP, KEY_TARGET, TouchKey, useKeyPopup } from './keys/TouchKey';
 
 export interface TerminalKeyShortcutsBarProps {
@@ -30,6 +31,11 @@ export interface TerminalKeyShortcutsBarProps {
   onSendChord?: (chord: Chord) => void;
   /** A haptic tick on each modifier toggle where supported (`shortcuts.options.haptics`). */
   haptics?: boolean;
+  /**
+   * Starts a held gesture over the terminal (#168). Given: repeatable keys
+   * repeat while held and the arrow-drag key is drawn. Omitted: neither.
+   */
+  beginHold?: () => KeyHold | null;
   /** The full key panel is open (the pinned toggle is pressed). */
   panelOpen?: boolean;
   /** The pinned panel toggle. Omitted: no toggle. */
@@ -55,12 +61,13 @@ export function TerminalKeyShortcutsBar({
   onToggleModifier,
   onSendChord,
   haptics = false,
+  beginHold,
   panelOpen = false,
   onTogglePanel,
   panelId,
 }: TerminalKeyShortcutsBarProps) {
   const popup = useKeyPopup(onSendChord);
-  const handlers = { onKey, onAction, onToggleModifier, onSendChord, modifierState, haptics };
+  const handlers = { onKey, onAction, onToggleModifier, onSendChord, modifierState, haptics, beginHold };
   const empty = groups !== null && groups.length === 0;
 
   return (

@@ -189,7 +189,7 @@ Issue #155 (epic #151). A path printed in the output becomes a link that opens a
 
 A directory (a symlink counts as its target) offers only Show in file browser and Copy path.
 
-**Touch.** There is no hover, so a tap checks the path and its underline appears; a second tap on the underlined path, or a long-press (500 ms) on any path, opens the menu. A finger that moves more than 10 px is a scroll and never opens anything. The listeners are passive and never call `preventDefault`, so `useTouchScroll` and the `touch-action: none` rule of section 5.3 are untouched; the click a tap leaves behind is ignored for 800 ms.
+**Touch.** There is no hover, so a tap checks the path and its underline appears; a second tap on the underlined path, or a long-press (500 ms) on any path, opens the menu. Where the terminal has arrow mode (the workspace, section 5.10), a long press opens the menu only on an underlined path; elsewhere it enters arrow mode. A finger that moves more than 10 px is a scroll and never opens anything. The listeners are passive and never call `preventDefault`, so `useTouchScroll` and the `touch-action: none` rule of section 5.3 are untouched; the click a tap leaves behind is ignored for 800 ms.
 
 **Access.** Links exist only for a holder of `sessions:write`, the rule the files API enforces: `TerminalWorkspacePage` passes the pane a profile id only when the user can write.
 
@@ -260,7 +260,7 @@ Issue #166 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Co
 
 **Hardware keyboards win.** A keydown carrying a real `ctrlKey`, `altKey` or `metaKey` (seen in xterm's custom key handler) releases the armed one-shots, and the data xterm produces for that keydown (synchronously, within the same task) is sent unmodified, so nothing is applied twice. A locked modifier stays locked and applies again to the next soft key. A hardware key without modifiers is treated like a soft key.
 
-**Pop-ups.** A press of 450 ms that does not move more than 10 px, or the context menu (right-click, the Menu key, Shift+F10, a platform long press), opens a menu above the key: Ctrl gives Ctrl+C, D, Z, R, L, A, E, W, U, K; Alt gives Alt+B, Alt+F, Alt+.; an arrow gives Home, End, PgUp, PgDn. A long press never also taps the key. The menu is an MUI `Menu` (keyboard navigable, closed by Escape or an outside tap); choosing an entry sends its chord with the consumed modifiers and closes it.
+**Pop-ups.** A press of 450 ms that does not move more than 10 px, or the context menu (right-click, the Menu key, Shift+F10, a platform long press), opens a menu above the key: Ctrl gives Ctrl+C, D, Z, R, L, A, E, W, U, K; Alt gives Alt+B, Alt+F, Alt+.; an arrow gives Home, End, PgUp, PgDn. A long press never also taps the key. Since #168 a held arrow repeats instead, and its pop-up opens with an upward swipe or the context menu (section 5.10). The menu is an MUI `Menu` (keyboard navigable, closed by Escape or an outside tap); choosing an entry sends its chord with the consumed modifiers and closes it.
 
 **Haptics.** With `shortcuts.options.haptics` on and `navigator.vibrate` present (Android), a modifier toggle vibrates for 10 ms.
 
@@ -275,9 +275,9 @@ Issue #167 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Co
 | Kind | Drawn as |
 |---|---|
 | `modifier` | The section 5.8 toggle (off, armed, locked), with its pop-up |
-| `key` | A plain key by label; arrows have the navigation pop-up. Repeatable keys carry `data-repeatable` for hold-to-repeat (#168) |
+| `key` | A plain key by label; arrows have the navigation pop-up. Repeatable keys carry `data-repeatable` and repeat while held (section 5.10) |
 | `macro`, `custom` | A plain key by label |
-| `action` | Icon and label. `ai` ("Open AI assistant") only with the AI feature and `ai:use`; `attach-file` only with `sessions:write` and a server; `arrow-drag` and `snippets` are hidden until #168 and #172 |
+| `action` | Icon and label. `ai` ("Open AI assistant") only with the AI feature and `ai:use`; `attach-file` only with `sessions:write` and a server; `arrow-drag` is a drag surface (section 5.10); `snippets` is hidden until #172 |
 
 **Sending.** Every key, from the row or the panel, is encoded by `encodeResolvedKey` with the consumed modifiers and the pane's cursor-key mode (section 5.7, 5.8). After a key the terminal is refocused, except while the panel replaces the keyboard.
 
@@ -291,6 +291,45 @@ Issue #167 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Co
 The key panel's rule is deliberately not the AI and Files panels' (`isWide`, `md`): an unfolded foldable in portrait is under 900 px, and the side panel with the keyboard still up is what epic #171 asks for there. The key panel takes turns with the Files and AI panels: opening one closes the others.
 
 **Attach.** The `attach-file` key opens a file picker and uploads the file into the session's working directory: `stat .` with the session resolves the folder, then `uploadRemoteFile` sends it ([files.md](files.md)). It never replaces an existing file: a `FILE_EXISTS` answer tells the user to use the Files panel, which asks.
+
+### 5.10 Arrow repeat and drag
+
+Issue #168 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Code: `apps/web/src/lib/terminal/keys/arrowRepeat.ts` (timing, gears, `createHeldKeySender`), `components/terminal/keys/` (`useKeyRepeat`, `useArrowDrag`, `TouchKey`), `components/terminal/useTerminalArrowMode.ts`, `files/useTerminalFileLinks.ts`, `TerminalView.tsx`.
+
+**Held keys and modifiers.** Every held gesture sends through a `KeyHold` (`createHeldKeySender`): the modifiers armed or locked when the hold begins are read once (without consuming them) and apply to every byte of the hold; when it ends the one-shots are released and locked ones stay. A hold that sent nothing (a tap on the arrow-drag key) leaves the modifiers armed for the next key. The terminal's cursor-key mode (DECCKM) is read at every send, so an arrow is `ESC [ A` or `ESC O A` as in section 5.7, and Ctrl armed makes it `ESC [ 1 ; 5 A`. The workspace gives the row and the panel `beginHold` over the active pane and refocuses the terminal when a hold ends (not while the panel replaces the keyboard); each pane builds its own for arrow mode.
+
+**Hold-to-repeat.** On the repeatable keys (arrows, Home, End, PgUp, PgDn, Delete, Backspace) of the row and the panel:
+
+| Step | Behaviour |
+|---|---|
+| Tap | Sends once on release, through the key's normal click, as every key does. A sideways swipe that scrolls the row (the key is `touch-action: pan-x`) sends nothing |
+| Hold 400 ms | Sends once, then repeats: 80 ms, then 5 ms faster per repeat down to 30 ms. The click that ends the hold is ignored |
+| Slide over 10 px before 400 ms | Not a hold (the row is scrolling): nothing repeats |
+| Stop | Pointer up, cancel or leave; the page hidden (`visibilitychange`), `pagehide` or the window losing focus; unmount |
+
+**Pop-up rule (decision).** On a repeatable key, hold means repeat. An arrow's alternatives (Home, End, PgUp, PgDn) open with a short upward swipe on the key (20 px, mostly vertical; nothing is sent), a right-click, the Menu key or Shift+F10. The `contextmenu` a platform touch long press raises while the finger is down is ignored, so it never interrupts a repeat. Ctrl and Alt keep their long-press pop-ups (section 5.8).
+
+**Drag gears.** The arrow-drag key and arrow mode share `createDragDriver`: arrows go in the dominant direction of the drag (the larger of the horizontal and vertical offsets from where it started), at a gear chosen by that offset.
+
+| Distance | Gear | Rate |
+|---|---|---|
+| under 12 px | 0 | nothing |
+| 12 px | 1 | about 6 a second |
+| 40 px | 2 | about 15 a second |
+| 80 px | 3 | about 35 a second |
+
+Leaving the idle zone sends one arrow at once; a gear change reschedules the next arrow at the new rate. Release stops it.
+
+**Arrow-drag key.** The `arrow-drag` action (a four-way-arrow icon, "Arrow drag") is shown in the row and the panel whenever the host can hold keys. Pressing it captures the pointer, so the drag keeps going after the finger leaves the key (`touch-action: none` on the key). While dragging the key is filled and its icon shows the direction (`data-direction`, `data-gear`). A press without a drag, or a keyboard activation, sends nothing and shows the hint "Press and drag to send arrow keys" for 2 s.
+
+**Arrow mode on the terminal.** A finger resting 350 ms on the terminal with under 8 px of movement enters arrow mode; dragging then sends arrows by the gears above and lifting the finger ends it (also a second finger, a cancelled touch, a hidden page, unmount). An indicator at the top of the pane (`role="status"`, "Arrow mode: up, speed 2 of 3") shows the direction and the gear as three dots; it fades in, without animation under `prefers-reduced-motion`. Rules:
+
+- A swipe that moves before 350 ms is a normal scroll: arrow mode does nothing and `useTouchScroll` is unchanged.
+- During arrow mode its listeners (capture phase, on the `TerminalView` wrapper) stop the `touchmove` events there, so the terminal does not scroll under the drag.
+- Touch events only: a mouse never enters arrow mode, and desktop text selection is untouched.
+- **File links (#155).** A long press on an UNDERLINED link (a path whose stat said it exists, `isLinkAt`) is the file menu's: arrow mode declines it, and the menu opens as in section 5.6. A long press anywhere else, including a path not yet checked, enters arrow mode, which claims the gesture (`isTouchClaimed`); the file links then open and check nothing when the finger lifts. A tap is unchanged.
+
+**Haptics.** With `shortcuts.options.haptics` on and `navigator.vibrate` present, a 10 ms tick on entering arrow mode and on each change to a non-idle gear (also on the arrow-drag key). Off, nothing vibrates.
 
 ## 6. Operations
 
@@ -315,4 +354,4 @@ The key panel's rule is deliberately not the AI and Files panels' (`isWide`, `md
 
 ## 8. Tests
 
-`apps/api/test/terminal/` (gateway authorization and maintenance, reaper, notification, alerts, Doctor, metrics, webhooks; `scripted-ssh-server.ts` is an in-process SSH server), `terminal.gateway.spec.ts`, `session-manager.service.spec.ts`, `session-history.service.spec.ts`, `test/ssh/` (factory, host-key policy, boundary); web: `__tests__/pages/TerminalWorkspace.workspace.test.tsx`, `__tests__/terminal-ws*.test.ts`, `TerminalKeyShortcutsBar.test.tsx`, `__tests__/pages/TerminalWorkspace.keys.test.tsx`, `lib/terminal/keys/keyRow.test.ts`; and `apps/api/test/docs-consistency.spec.ts` for this page's reason tables ([TESTING.md](../TESTING.md)).
+`apps/api/test/terminal/` (gateway authorization and maintenance, reaper, notification, alerts, Doctor, metrics, webhooks; `scripted-ssh-server.ts` is an in-process SSH server), `terminal.gateway.spec.ts`, `session-manager.service.spec.ts`, `session-history.service.spec.ts`, `test/ssh/` (factory, host-key policy, boundary); web: `__tests__/pages/TerminalWorkspace.workspace.test.tsx`, `__tests__/terminal-ws*.test.ts`, `TerminalKeyShortcutsBar.test.tsx`, `__tests__/pages/TerminalWorkspace.keys.test.tsx`, `lib/terminal/keys/keyRow.test.ts`, `lib/terminal/keys/arrowRepeat.test.ts`, `components/terminal/keys/holdKeys.test.tsx`, `__tests__/components/terminal/useTerminalArrowMode.test.tsx`; and `apps/api/test/docs-consistency.spec.ts` for this page's reason tables ([TESTING.md](../TESTING.md)).

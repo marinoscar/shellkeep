@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { TerminalView } from '../TerminalView';
-import type { TerminalViewHandle, TerminalViewStatus } from '../TerminalView';
+import type { TerminalArrowModeConfig, TerminalViewHandle, TerminalViewStatus } from '../TerminalView';
 import { TerminalConnectionAlert } from '../TerminalConnectionAlert';
 import type { ResolvedTerminalSettings } from '../../../lib/terminal/settings';
 import type { TerminalFileLinksConfig } from '../files/useTerminalFileLinks';
@@ -29,6 +29,8 @@ export interface WorkspacePaneProps {
   onShowInFileBrowser?: TerminalFileLinksConfig['onShowInFileBrowser'];
   /** The key bar's modifiers, applied to typed input (#166); shared by every pane. */
   inputModifiers?: TerminalInputModifiers | null;
+  /** Long-press-and-drag arrow mode on touch (#168); shared by every pane. */
+  arrowMode?: TerminalArrowModeConfig | null;
   /** Called with the pane's handle on mount and `null` on unmount. */
   registerView: (sessionId: string, handle: TerminalViewHandle | null) => void;
   /** Called with what changed in the pane's status. */
@@ -50,6 +52,7 @@ export const WorkspacePane = memo(function WorkspacePane({
   fileLinksProfileId,
   onShowInFileBrowser,
   inputModifiers,
+  arrowMode,
   registerView,
   onStatus,
 }: WorkspacePaneProps) {
@@ -96,6 +99,7 @@ export const WorkspacePane = memo(function WorkspacePane({
         onExplainSelection={onExplainSelection ? () => onExplainSelection(sessionId) : undefined}
         fileLinks={fileLinks}
         inputModifiers={inputModifiers}
+        arrowMode={arrowMode}
       />
       <TerminalConnectionAlert
         error={error}

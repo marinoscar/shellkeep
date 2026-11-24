@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { Box } from '@mui/material';
@@ -226,6 +226,29 @@ describe('the accessory row in the workspace (#167)', () => {
     expect(mockSendInput).toHaveBeenLastCalledWith(application);
   });
 
+  it('a held arrow repeats through the active pane with the armed modifier, released at the end (#168)', async () => {
+    renderWorkspace();
+    await ready();
+    fireEvent.click(rowKey('Ctrl'));
+    vi.useFakeTimers();
+    try {
+      const left = rowKey('←');
+      fireEvent.pointerDown(left, { clientX: 10, clientY: 10, button: 0 });
+      act(() => {
+        vi.advanceTimersByTime(400 + 80);
+      });
+      expect(mockSendInput.mock.calls.map((c) => c[0])).toEqual(['\x1b[1;5D', '\x1b[1;5D']);
+      expect(rowKey('Ctrl')).toHaveAttribute('aria-pressed', 'true');
+      fireEvent.pointerUp(left);
+      fireEvent.click(left);
+      expect(mockSendInput).toHaveBeenCalledTimes(2);
+      expect(rowKey('Ctrl')).toHaveAttribute('aria-pressed', 'false');
+      expect(termMock.terminal!.focus).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('applies an armed modifier to the next key and keeps the terminal focused', async () => {
     renderWorkspace();
     await ready();
@@ -236,10 +259,10 @@ describe('the accessory row in the workspace (#167)', () => {
     expect(termMock.terminal!.focus).toHaveBeenCalled();
   });
 
-  it('hides arrow-drag and snippets until #168 and #172, and the AI key without AI', async () => {
+  it('shows the arrow-drag key (#168), hides snippets until #172 and the AI key without AI', async () => {
     renderWorkspace();
     await ready();
-    expect(within(row()).queryByRole('button', { name: 'Arrow drag' })).not.toBeInTheDocument();
+    expect(within(row()).getByRole('button', { name: 'Arrow drag' })).toBeInTheDocument();
     expect(within(row()).queryByRole('button', { name: 'Snippets' })).not.toBeInTheDocument();
     expect(within(row()).queryByRole('button', { name: 'Open AI assistant' })).not.toBeInTheDocument();
   });

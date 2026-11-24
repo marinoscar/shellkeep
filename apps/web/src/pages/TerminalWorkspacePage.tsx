@@ -57,6 +57,7 @@ import type { ServerProfile, TerminalSession } from '../types';
 import { createModifierInputInterceptor } from '../lib/terminal/keys/modifiedInput';
 import { encodeChord, type ActiveModifiers } from '../lib/terminal/keys/encodeKey';
 import type { Chord } from '../lib/terminal/keys/keyModel';
+import { createHeldKeySender, type KeyHold } from '../lib/terminal/keys/arrowRepeat';
 import {
   encodeResolvedKey,
   resolveKeyGroups,
@@ -165,6 +166,9 @@ export default function TerminalWorkspacePage() {
   const modifiers = useModifierState();
   const consumeModifiers = modifiers.consume;
   const inputModifiers = useMemo(() => createModifierInputInterceptor(modifiers.store), [modifiers.store]);
+  // Long-press-and-drag arrows on the terminal (#168): the same modifiers and haptics as the keys.
+  const keyHaptics = keyOptions?.haptics ?? false;
+  const arrowMode = useMemo(() => ({ modifiers: modifiers.store, haptics: keyHaptics }), [modifiers.store, keyHaptics]);
   const showScrollButtons = preferences?.showScrollButtons ?? DEFAULT_TERMINAL_SETTINGS.showScrollButtons;
   // Mod+Shift+A (or the user's rebinding) opens the assistant with the prompt focused; the
   // terminal keeps the key from the PTY through `isReservedKey` (#57).
@@ -373,6 +377,21 @@ export default function TerminalWorkspacePage() {
     [sendEncoded],
   );
 
+  // A held key or the arrow-drag key (#168): the modifiers armed now apply to the
+  // whole hold and are released when it ends; the cursor mode is read per send.
+  const beginKeyHold = useCallback((): KeyHold | null => {
+    const view = getView();
+    if (!view) return null;
+    return createHeldKeySender({
+      modifiers: modifiers.store,
+      applicationCursor: () => view.getTerminal()?.modes?.applicationCursorKeysMode ?? false,
+      write: (data) => view.sendInput(data),
+      onEnd: () => {
+        if (!keyboardReplaced.current) view.focus();
+      },
+    });
+  }, [getView, modifiers.store]);
+
   const handleSendChord = useCallback(
     (chord: Chord) => sendEncoded((options) => encodeChord(chord, options)),
     [sendEncoded],
@@ -387,7 +406,9 @@ export default function TerminalWorkspacePage() {
     const out = new Set<KeyActionId>();
     if (aiAvailable) out.add('ai');
     if (attachAvailable) out.add('attach-file');
-    // `arrow-drag` (#168) and `snippets` (#172) stay hidden until they exist.
+    // The arrow-drag key (#168) sends through the active pane, like every key.
+    out.add('arrow-drag');
+    // `snippets` (#172) stays hidden until it exists.
     return out;
   }, [aiAvailable, attachAvailable]);
   const keyGroups = useMemo(
@@ -474,6 +495,7 @@ export default function TerminalWorkspacePage() {
     onSendChord: handleSendChord,
     modifierState: modifiers.state,
     haptics: keyOptions?.haptics ?? false,
+    beginHold: beginKeyHold,
   };
 
   const handleToggleScrollButtons = useCallback(() => {
@@ -525,6 +547,7 @@ export default function TerminalWorkspacePage() {
         fileLinksProfileId={fileLinksProfileIdOf(sessionId)}
         onShowInFileBrowser={canWrite ? showInFileBrowser : undefined}
         inputModifiers={inputModifiers}
+        arrowMode={arrowMode}
         registerView={registerView}
         onStatus={onPaneStatus}
       />
@@ -539,6 +562,7 @@ export default function TerminalWorkspacePage() {
       canWrite,
       showInFileBrowser,
       inputModifiers,
+      arrowMode,
       registerView,
       onPaneStatus,
     ],

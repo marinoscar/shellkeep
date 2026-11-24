@@ -8,13 +8,20 @@
  * - an action is an icon with its label.
  *
  * A long press (or the context menu) opens the key's pop-up when it has one.
+ * Since #168 a repeatable key repeats while held (`useKeyRepeat`; an arrow's
+ * pop-up then opens with an upward swipe or the context menu), and the
+ * `arrow-drag` action is a drag surface (`useArrowDrag`).
  * Every key keeps the press from taking focus (`preventDefault` on mouse down),
  * so the terminal keeps the phone keyboard. Targets are at least 44 px.
  */
-import { useCallback, useId, useState, type ReactElement, type ReactNode } from 'react';
-import { Box, Chip, Menu, MenuItem } from '@mui/material';
+import { useCallback, useEffect, useId, useState, type ReactElement, type ReactNode } from 'react';
+import { Box, Chip, Menu, MenuItem, Tooltip } from '@mui/material';
 import { alpha, type Theme } from '@mui/material/styles';
 import {
+  ArrowDownward as ArrowDownIcon,
+  ArrowBack as ArrowLeftIcon,
+  ArrowForward as ArrowRightIcon,
+  ArrowUpward as ArrowUpIcon,
   AttachFile as AttachIcon,
   AutoAwesomeOutlined as AiIcon,
   OpenWith as DragIcon,
@@ -25,7 +32,10 @@ import type { ModifierSnapshot, ModifierStatus } from '../../../lib/terminal/key
 import type { PopupEntry } from '../../../lib/terminal/keys/popupKeys';
 import { popupOf, type KeyActionId, type ResolvedKey } from '../../../lib/terminal/keys/keyRow';
 import { hapticTick } from '../../../lib/terminal/keys/haptics';
+import type { ArrowDirection, KeyHold } from '../../../lib/terminal/keys/arrowRepeat';
 import { useLongPress } from '../useLongPress';
+import { useKeyRepeat } from './useKeyRepeat';
+import { useArrowDrag } from './useArrowDrag';
 
 /** The smallest touch target, in px (both sides). */
 export const KEY_TARGET = 44;
@@ -59,8 +69,14 @@ export interface TouchKeyHandlers {
   onSendChord?: (chord: Chord) => void;
   /** Each modifier's status. */
   modifierState: ModifierSnapshot;
-  /** A haptic tick on each modifier toggle where supported. */
+  /** A haptic tick on each modifier toggle (and each drag gear change) where supported. */
   haptics: boolean;
+  /**
+   * Starts a held gesture over the terminal (#168): hold-to-repeat and the
+   * arrow-drag key send through it. Without it, keys do not repeat and the
+   * arrow-drag key is not drawn.
+   */
+  beginHold?: () => KeyHold | null;
 }
 
 interface PopupState {
@@ -225,6 +241,106 @@ function ModifierKey({
   );
 }
 
+/** The hint a tap on the arrow-drag key shows. */
+export const ARROW_DRAG_HINT = 'Press and drag to send arrow keys';
+const ARROW_DRAG_HINT_MS = 2000;
+
+const DIRECTION_ICONS: Record<ArrowDirection, ReactElement> = {
+  up: <ArrowUpIcon fontSize="small" />,
+  down: <ArrowDownIcon fontSize="small" />,
+  left: <ArrowLeftIcon fontSize="small" />,
+  right: <ArrowRightIcon fontSize="small" />,
+};
+
+/** A repeatable key (#168): tap sends once, hold repeats, an upward swipe opens the pop-up. */
+function RepeatKey({
+  item,
+  layout,
+  onKey,
+  beginHold,
+  onPopup,
+}: {
+  item: ResolvedKey;
+  layout: 'row' | 'grid';
+  onKey: (key: ResolvedKey) => void;
+  beginHold: () => KeyHold | null;
+  onPopup?: (anchor: HTMLElement) => void;
+}) {
+  const { handlers, consumeClick } = useKeyRepeat({
+    beginHold,
+    sendWith: (hold) => hold.send(item),
+    onPopup,
+  });
+  return (
+    <Chip
+      label={item.label}
+      clickable
+      onClick={() => {
+        if (consumeClick()) return;
+        onKey(item);
+      }}
+      onMouseDown={(e) => e.preventDefault()}
+      aria-haspopup={onPopup ? 'menu' : undefined}
+      {...handlers}
+      color="primary"
+      variant="outlined"
+      data-kind={item.kind}
+      data-span={item.span}
+      data-repeatable="true"
+      // Sideways swipes still scroll the row; a vertical move stays with the key (the pop-up swipe).
+      sx={{ ...sizeSx(item, layout), touchAction: 'pan-x' }}
+    />
+  );
+}
+
+/** The arrow-drag action key (#168): press and drag to send arrows at three speed gears. */
+function ArrowDragKey({
+  item,
+  layout,
+  beginHold,
+  haptics,
+}: {
+  item: ResolvedKey;
+  layout: 'row' | 'grid';
+  beginHold: () => KeyHold | null;
+  haptics: boolean;
+}) {
+  const [hint, setHint] = useState(false);
+  useEffect(() => {
+    if (!hint) return undefined;
+    const timer = setTimeout(() => setHint(false), ARROW_DRAG_HINT_MS);
+    return () => clearTimeout(timer);
+  }, [hint]);
+  const drag = useArrowDrag({ beginHold, haptics, onTapWithoutDrag: () => setHint(true) });
+  const { direction, gear } = drag.reading;
+  return (
+    <Tooltip title={ARROW_DRAG_HINT} open={hint} onClose={() => setHint(false)} disableHoverListener disableFocusListener disableTouchListener>
+      <Chip
+        label={item.label}
+        icon={direction ? DIRECTION_ICONS[direction] : ACTION_ICONS['arrow-drag']}
+        clickable
+        onClick={() => {
+          if (drag.consumeClick()) return;
+          setHint(true);
+        }}
+        onMouseDown={(e) => e.preventDefault()}
+        {...drag.handlers}
+        color="secondary"
+        variant={drag.dragging ? 'filled' : 'outlined'}
+        aria-label={ACTION_NAMES['arrow-drag']}
+        aria-description={ARROW_DRAG_HINT}
+        data-action="arrow-drag"
+        data-span={item.span}
+        data-dragging={drag.dragging ? 'true' : undefined}
+        data-direction={direction ?? undefined}
+        data-gear={drag.dragging ? gear : undefined}
+        // The key owns every move of the finger: no browser pan while dragging on it.
+        sx={{ ...sizeSx(item, layout), touchAction: 'none' }}
+      />
+    </Tooltip>
+  );
+}
+
 /** One key of the row or the panel, drawn by its kind. */
 export function TouchKey({
   item,
@@ -235,6 +351,7 @@ export function TouchKey({
   onToggleModifier,
   modifierState,
   haptics,
+  beginHold,
 }: TouchKeyProps) {
   if (item.kind === 'modifier') {
     if (!onToggleModifier || !item.catalogId) return null;
@@ -256,6 +373,9 @@ export function TouchKey({
 
   if (item.kind === 'action') {
     const action = item.catalogId as KeyActionId;
+    if (action === 'arrow-drag') {
+      return beginHold ? <ArrowDragKey item={item} layout={layout} beginHold={beginHold} haptics={haptics} /> : null;
+    }
     return (
       <PressableChip
         label={item.label}
@@ -273,8 +393,12 @@ export function TouchKey({
     );
   }
 
-  // A key, a macro or a custom key. Repeatable keys are plain keys here:
-  // hold-to-repeat (#168) attaches to the keys marked `data-repeatable`.
+  // A repeatable key repeats while held (#168); its pop-up moves to a swipe up.
+  if (item.repeatable && beginHold) {
+    return <RepeatKey item={item} layout={layout} onKey={onKey} beginHold={beginHold} onPopup={onLongPress} />;
+  }
+
+  // A key, a macro or a custom key.
   return (
     <PressableChip
       label={item.label}
