@@ -52,10 +52,12 @@ describe('RunbooksService', () => {
   let service: RunbooksService;
   let access: { require: jest.Mock; requireIn: jest.Mock; decideManyIn: jest.Mock };
   let principalGroups: { enrich: jest.Mock; groupRoleFor: jest.Mock };
+  let grants: { deleteForResources: jest.Mock };
 
   beforeEach(() => {
     tx = {
-      runbook: { create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findFirst: jest.fn(), findFirstOrThrow: jest.fn(), findMany: jest.fn(), count: jest.fn() },
+      runbook: { delete: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findFirst: jest.fn(), findFirstOrThrow: jest.fn(), findMany: jest.fn(), count: jest.fn() },
+      runbookRun: { count: jest.fn().mockResolvedValue(0) },
       runbookVersion: { create: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn() },
       runbookRun: { findMany: jest.fn().mockResolvedValue([]) },
     };
@@ -70,7 +72,8 @@ describe('RunbooksService', () => {
       ),
     };
     principalGroups = { enrich: jest.fn().mockImplementation(async (p: unknown) => p), groupRoleFor: jest.fn() };
-    service = new RunbooksService({} as never, audit as never, access as never, principalGroups as never, metrics as never);
+    grants = { deleteForResources: jest.fn().mockResolvedValue(0) };
+    service = new RunbooksService({} as never, audit as never, access as never, principalGroups as never, grants as never, metrics as never);
   });
 
   describe('etag helpers', () => {
@@ -202,6 +205,31 @@ describe('RunbooksService', () => {
     });
   });
 
+  describe('permanent delete', () => {
+    it('needs the delete action, removes the grants and the row, and audits it', async () => {
+      tx.runbook.findFirst.mockResolvedValue(row());
+      await service.remove(scope, 'rb-1');
+      expect(access.requireIn).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'delete', { type: 'runbook', id: 'rb-1' });
+      expect(grants.deleteForResources).toHaveBeenCalledWith(tx, 'runbook', ['rb-1']);
+      expect(tx.runbook.delete).toHaveBeenCalledWith({ where: { id: 'rb-1' } });
+      expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'runbook.deleted', targetId: 'rb-1' }));
+    });
+
+    it('is refused with 409 RUNBOOK_HAS_ACTIVE_RUNS while a run is unfinished, deleting nothing', async () => {
+      tx.runbook.findFirst.mockResolvedValue(row());
+      tx.runbookRun.count.mockResolvedValue(1);
+      await expect(service.remove(scope, 'rb-1')).rejects.toMatchObject({ response: { code: 'RUNBOOK_HAS_ACTIVE_RUNS' } });
+      expect(grants.deleteForResources).not.toHaveBeenCalled();
+      expect(tx.runbook.delete).not.toHaveBeenCalled();
+    });
+
+    it('propagates the access denial (404) before touching anything', async () => {
+      access.requireIn.mockRejectedValue(new NotFoundException());
+      await expect(service.remove(scope, 'rb-1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(tx.runbook.delete).not.toHaveBeenCalled();
+    });
+  });
+
   describe('archive and restore', () => {
     it('archives once and audits once', async () => {
       tx.runbook.findFirst.mockResolvedValueOnce(row());
@@ -299,7 +327,7 @@ describe('RunbooksService', () => {
 describe('RunbooksService group ownership', () => {
   it('lets only an admin or editor of a group make it the owner of a new runbook', async () => {
     const groups = { enrich: jest.fn(), groupRoleFor: jest.fn() };
-    const svc = new RunbooksService({} as never, { record: jest.fn() } as never, {} as never, groups as never);
+    const svc = new RunbooksService({} as never, { record: jest.fn() } as never, {} as never, groups as never, {} as never);
     groups.groupRoleFor.mockResolvedValueOnce(null);
     await expect(svc.create(scope, { name: 'x', definition: DEF, ownerGroupId: 'g-1' } as never)).rejects.toBeInstanceOf(NotFoundException);
     groups.groupRoleFor.mockResolvedValueOnce('viewer');

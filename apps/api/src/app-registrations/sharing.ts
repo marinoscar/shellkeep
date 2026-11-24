@@ -19,9 +19,12 @@
 //   viewer    sees the profile (name, host, tags, color); never a credential
 //   operator  also tests the connection, opens sessions and runs runbooks on it
 //   editor    also changes the profile and its host-key trust
-// A member of the OWNING group holds `groupRoleMap[groupRole]`: admin -> editor, editor -> operator,
-// viewer -> viewer. Nobody but the creating user is `owner` of a group-owned profile, and `owner` is the
-// role `share` and `delete` need.
+// A member of the OWNING group holds `groupRoleMap[groupRole]`: admin -> owner, editor -> operator,
+// viewer -> viewer. `owner` is the role `share` and `delete` need, so a group ADMIN can share and delete
+// a group-owned profile (and so retire the group: `DELETE /api/groups/:id` is 409 while it owns one)
+// while a group editor cannot. `owner` adds NO access to the credential: only the user who saved the
+// secrets may change the connection or the secrets (`SERVER_PROFILE_CREDENTIAL_HOLDER_ONLY`), whatever
+// the role.
 //
 // CREDENTIALS NEVER MOVE. A grant carries a role, never a secret: the SSH secrets stay in the credential
 // store under the user who saved them (`server_profiles.user_id`, purpose `ssh`) and are read server-side
@@ -96,7 +99,7 @@ export function registerShellkeepSharing(): void {
       delete: 'servers:delete',
     },
     ownership: 'user_or_group',
-    groupRoleMap: { admin: 'editor', editor: 'operator', viewer: 'viewer' },
+    groupRoleMap: { admin: 'owner', editor: 'operator', viewer: 'viewer' },
     grantable: { link: [] },
     countOwnedByGroup: countServerProfiles,
     async loadOwners(ids, tx) {
@@ -133,13 +136,16 @@ export function registerShellkeepSharing(): void {
       run: 'runner',
       write: 'editor',
       share: 'owner',
+      // The permanent delete (`DELETE /api/runbooks/:id/permanent`); archiving needs only `write`.
+      delete: 'owner',
     },
     actionPermissions: {
       run: 'runbooks:run',
       write: 'runbooks:write',
+      delete: 'runbooks:write',
     },
     ownership: 'user_or_group',
-    groupRoleMap: { admin: 'editor', editor: 'runner', viewer: 'viewer' },
+    groupRoleMap: { admin: 'owner', editor: 'runner', viewer: 'viewer' },
     grantable: { link: [] },
     countOwnedByGroup: countRunbooks,
     async loadOwners(ids, tx) {

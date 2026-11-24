@@ -39,4 +39,9 @@ export function registerSshErrorCodes(): void {
     status: 502,
     description: 'The SSH server could not be reached to read its host key.',
   });
+  registerErrorCode({
+    code: 'SERVER_PROFILE_CREDENTIAL_HOLDER_ONLY',
+    status: 403,
+    description: 'Only the user who saved the credentials may change the connection or the secrets of a server profile, whatever their role on it.',
+  });
 }
