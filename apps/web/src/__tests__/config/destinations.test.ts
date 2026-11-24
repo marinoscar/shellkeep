@@ -146,7 +146,7 @@ describe('route ownership', () => {
   });
 
   it('keeps the sign-in flow unowned', () => {
-    expect(UNOWNED_ROUTES).toEqual(['/login', '/auth/callback', '/auth/error', '/activate', '/testing/login']);
+    expect(UNOWNED_ROUTES).toEqual(['/login', '/auth/callback', '/auth/error', '/activate', '/s', '/testing/login']);
     for (const path of UNOWNED_ROUTES) expect(resolveActiveDestination(path)).toBeNull();
   });
 });
