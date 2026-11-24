@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render, mockUser } from '../../utils/test-utils';
 import { createRef } from 'react';
@@ -34,6 +34,7 @@ vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
 
 import { TerminalView, type TerminalViewHandle } from '../../../components/terminal/TerminalView';
 import { useTerminal } from '../../../hooks/useTerminal';
+import { ARROW_MODE_LONG_PRESS_MS } from '../../../components/terminal/useTerminalArrowMode';
 import { DEFAULT_TERMINAL_SETTINGS } from '../../../lib/terminal/settings';
 import { trustHostKey, getServerProfile } from '../../../services/terminal-api';
 import { HOST_KEY_MISMATCH_MESSAGE, HOST_KEY_UNTRUSTED_MESSAGE } from '../../../services/terminal-ws';
@@ -379,6 +380,53 @@ describe('TerminalView', () => {
       } as unknown as ReturnType<typeof useTerminal>);
       rerender(<TerminalView sessionId="s1" onStatusChange={onStatusChange} />);
       expect(onStatusChange).toHaveBeenLastCalledWith({ latencyMs: 17, cols: 100, rows: 30, hostKeyRefusal: null });
+    });
+  });
+  describe('arrow mode (#168)', () => {
+    function hold(host: HTMLElement, type: string, x: number, y: number) {
+      const point = { clientX: x, clientY: y, identifier: 0, target: host } as unknown as Touch;
+      const event = new Event(type, { bubbles: true, cancelable: true }) as TouchEvent;
+      Object.defineProperty(event, 'touches', { value: type === 'touchend' ? [] : [point] });
+      Object.defineProperty(event, 'changedTouches', { value: [point] });
+      act(() => {
+        host.dispatchEvent(event);
+      });
+    }
+
+    afterEach(() => {
+      vi.useRealTimers();
+      mockTerminalRef.current = null;
+    });
+
+    it('shows the indicator with direction and gear and sends through the pane, in its cursor mode', () => {
+      vi.useFakeTimers();
+      mockTerminalRef.current = { modes: { applicationCursorKeysMode: true } };
+      render(<TerminalView sessionId="s-1" arrowMode={{ haptics: false }} />);
+      const host = screen.getByTestId('terminal-xterm-host');
+      hold(host, 'touchstart', 100, 100);
+      act(() => {
+        vi.advanceTimersByTime(ARROW_MODE_LONG_PRESS_MS);
+      });
+      const indicator = screen.getByRole('status', { name: /arrow mode/i });
+      expect(indicator).toHaveAttribute('data-gear', '0');
+      hold(host, 'touchmove', 100 + 90, 100);
+      expect(indicator).toHaveAttribute('data-direction', 'right');
+      expect(indicator).toHaveAttribute('data-gear', '3');
+      expect(indicator).toHaveAccessibleName('Arrow mode: right, speed 3 of 3');
+      expect(mockSendInput).toHaveBeenCalledWith('\x1bOC');
+      hold(host, 'touchend', 190, 100);
+      expect(screen.queryByTestId('terminal-arrow-mode')).not.toBeInTheDocument();
+    });
+
+    it('has no arrow mode without the prop', () => {
+      vi.useFakeTimers();
+      render(<TerminalView sessionId="s-1" />);
+      const host = screen.getByTestId('terminal-xterm-host');
+      hold(host, 'touchstart', 100, 100);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.queryByTestId('terminal-arrow-mode')).not.toBeInTheDocument();
     });
   });
 });
