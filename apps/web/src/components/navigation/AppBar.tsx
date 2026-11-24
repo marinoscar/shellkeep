@@ -12,6 +12,7 @@ import {
   Menu as MenuIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { NotificationBell } from '@marinoscar/platform-web/notifications/ui';
 import { useThemeContext } from '../../contexts/ThemeContext';
 import { UserMenu } from './UserMenu';
 
@@ -60,6 +61,11 @@ export function AppBar({ onMenuClick }: AppBarProps) {
 
         {/* Spacer */}
         <Box sx={{ flexGrow: 1 }} />
+
+        {/* The notification centre (#51): the packaged bell, its unread badge
+            and popover. Renders nothing without a NotificationProvider above
+            it. Moves into the shell's app bar with #76. */}
+        <NotificationBell />
 
         {/* Theme Toggle */}
         <IconButton

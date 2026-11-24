@@ -51,22 +51,19 @@ export default () => {
     serviceName: process.env.OTEL_SERVICE_NAME || 'shellkeep-api',
   },
 
-  // Storage Configuration
+  // Storage: the deployment's upload bounds. WHERE bytes go (provider, bucket, region,
+  // endpoint, keys) is runtime configuration at `/admin/settings/storage` since #50, so
+  // the old provider, S3 and AWS variables are gone; adding any of them back would restore a
+  // second source of truth. The part size is the slice's default
+  // (10 MiB, `StorageModule.forRoot({ partSizeBytes })`).
   storage: {
-    provider: process.env.STORAGE_PROVIDER || 's3',
-    s3: {
-      bucket: process.env.S3_BUCKET || '',
-      region: process.env.S3_REGION || 'us-east-1',
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-      endpoint: process.env.S3_ENDPOINT || undefined,
-    },
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10737418240', 10), // 10GB default
-    allowedMimeTypes: (
-      process.env.ALLOWED_MIME_TYPES || 'image/*,application/pdf,video/*'
-    ).split(','),
+    // Exact types and `type/*` wildcards, matched case-insensitively by the slice; an empty variable keeps the default.
+    allowedMimeTypes: (process.env.ALLOWED_MIME_TYPES || 'image/*,application/pdf,video/*')
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => entry.length > 0),
     signedUrlExpiry: parseInt(process.env.SIGNED_URL_EXPIRY || '3600', 10), // 1 hour default
-    partSize: parseInt(process.env.STORAGE_PART_SIZE || '10485760', 10), // 10MB default
   },
 
   logLevel: process.env.LOG_LEVEL || 'info',

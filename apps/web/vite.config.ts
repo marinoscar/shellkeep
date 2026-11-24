@@ -6,7 +6,16 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // #51: the app owns its worker (`src/sw.ts`) so the notifications
+      // slice's push and notification-click handlers live in it; the plugin
+      // injects the precache manifest. `registerType: 'prompt'` keeps the
+      // update flow of #46 (`UpdatePrompt` with `useRegisterSW`, which
+      // registers the worker, hence no injected registration script).
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'prompt',
+      injectRegister: null,
       devOptions: {
         enabled: false,
       },
@@ -53,46 +62,10 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+      // Built static assets only: nothing under `/api` is ever cached (see
+      // the header of `src/sw.ts`).
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^\/api\//,
-            handler: 'NetworkFirst',
-            options: {
-              networkTimeoutSeconds: 10,
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 300,
-              },
-            },
-          },
-          {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'image-cache',
-              expiration: {
-                maxEntries: 60,
-                maxAgeSeconds: 30 * 24 * 60 * 60,
-              },
-            },
-          },
-          {
-            urlPattern: /\.(?:js|css|woff|woff2)$/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'static-assets',
-              expiration: {
-                maxEntries: 60,
-                maxAgeSeconds: 30 * 24 * 60 * 60,
-              },
-            },
-          },
-        ],
       },
     }),
   ],

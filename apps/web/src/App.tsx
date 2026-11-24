@@ -12,6 +12,10 @@ import { APP_NAME } from './config/app';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
 import { AppPlatformHostProvider } from './platform/platformHost';
 import { JobsNodesProviders } from './platform/jobsAdapters';
+// The notifications web slice (#51): its configuration first, for its side
+// effect, before the first render.
+import './platform/notifications';
+import { NotificationProvider } from '@marinoscar/platform-web/notifications/headless';
 
 // Pages (lazy loaded)
 import { Suspense, lazy } from 'react';
@@ -73,6 +77,24 @@ const JobInsightsPage = lazy(() =>
 );
 const WorkersPage = lazy(() =>
   import('@marinoscar/platform-web/nodes/ui').then((m) => ({ default: m.WorkersPage })),
+);
+
+// Storage (issue #50): the packaged object-storage configuration page.
+const StorageConfigPage = lazy(() => import('@marinoscar/platform-web/storage/ui'));
+
+// Notifications (issue #51): the packaged email, Web Push and broadcasts
+// pages, and the user's notification preferences.
+const EmailSettingsPage = lazy(() => import('@marinoscar/platform-web/email/ui'));
+const PushConfigPage = lazy(() =>
+  import('@marinoscar/platform-web/notifications/ui').then((m) => ({ default: m.PushConfigPage })),
+);
+const BroadcastsPage = lazy(() =>
+  import('@marinoscar/platform-web/notifications/ui').then((m) => ({ default: m.BroadcastsPage })),
+);
+const UserNotificationsPage = lazy(() =>
+  import('@marinoscar/platform-web/notifications/ui').then((m) => ({
+    default: m.UserNotificationsPage,
+  })),
 );
 
 // Test login page (development only). The platform's test login endpoint
@@ -159,6 +181,7 @@ function AppRoutes() {
                   <Route path="/settings/profile" element={<UserProfilePage />} />
                   <Route path="/settings/appearance" element={<UserAppearancePage />} />
                   <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
+                  <Route path="/settings/notifications" element={<UserNotificationsPage />} />
                   {/* Admin settings (#46): every card of ADMIN_SECTIONS has a route
                       here, gated on the card's permission (the string its API
                       controller enforces). The hub admits any card's permission
@@ -167,7 +190,7 @@ function AppRoutes() {
                   <Route
                     path="/admin/settings"
                     element={
-                      <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read']} fallback={HOME}>
+                      <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read']} fallback={HOME}>
                         <AdminSettingsHubPage />
                       </RequirePermission>
                     }
@@ -193,6 +216,52 @@ function AppRoutes() {
                     element={
                       <RequirePermission permission="system_settings:read" fallback={HOME}>
                         <TerminalSystemSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Storage (#50): `storage_config:read` is what the storage
+                      slice's `/api/admin/storage-config` GET enforces (not
+                      `storage:read`, which every role holds). Saving, testing
+                      and migrating need `storage_config:write`, gated inside
+                      the packaged page. */}
+                  <Route
+                    path="/admin/settings/storage"
+                    element={
+                      <RequirePermission permission="storage_config:read" fallback={HOME}>
+                        <StorageConfigPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Email (#51): `GET /api/email-settings` enforces
+                      `system_settings:read`; saving and the test send need
+                      `system_settings:write`, gated inside the page. */}
+                  <Route
+                    path="/admin/settings/email"
+                    element={
+                      <RequirePermission permission="system_settings:read" fallback={HOME}>
+                        <EmailSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Web Push (#51): `GET /api/admin/push-config` enforces
+                      `push:read`; key generation, rotation and the test push
+                      need `push:write`, gated inside the page. */}
+                  <Route
+                    path="/admin/settings/push"
+                    element={
+                      <RequirePermission permission="push:read" fallback={HOME}>
+                        <PushConfigPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Broadcasts (#51): the controller admits either scope
+                      (`anyPermissions`); writes need the matching `:write`,
+                      gated inside the page. */}
+                  <Route
+                    path="/admin/settings/broadcasts"
+                    element={
+                      <RequirePermission permissions={['broadcasts:read', 'org_broadcasts:read']} fallback={HOME}>
+                        <BroadcastsPage />
                       </RequirePermission>
                     }
                   />
@@ -270,9 +339,14 @@ export default function App() {
     <ThemeContextProvider>
       <IdentityProviders>
         <AppPlatformHostProvider>
-          <JobsNodesProviders>
-            <AppRoutes />
-          </JobsNodesProviders>
+          {/* The live inbox (#51): one SSE stream per tab, opened only while
+              signed in (the provider watches the session), so the bell in
+              the app bar and the toasts work on every route. */}
+          <NotificationProvider>
+            <JobsNodesProviders>
+              <AppRoutes />
+            </JobsNodesProviders>
+          </NotificationProvider>
           {/* The host slice's PWA prompts (#46): the update prompt also
               registers the service worker. */}
           <UpdatePrompt useRegisterSW={useRegisterSW} />

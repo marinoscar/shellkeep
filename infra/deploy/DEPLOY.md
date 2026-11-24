@@ -39,7 +39,7 @@ shellkeep-api -> Cloud PostgreSQL (over the internet, SSL)
 4. Cloud PostgreSQL instance (e.g. AWS RDS, Neon, Supabase) with connection credentials
 5. Google OAuth credentials ([console.cloud.google.com](https://console.cloud.google.com))
    - Authorized redirect URI: `https://shellkeep.marin.cr/api/auth/google/callback`
-6. AWS S3 bucket with CORS configured for `https://shellkeep.marin.cr`
+6. An S3-compatible bucket (AWS S3, Cloudflare R2, MinIO) with CORS configured for `https://shellkeep.marin.cr`. It is configured at runtime in the admin UI, not in `.env` (Step 7)
 
 ## Step 1: Create Directory Structure
 
@@ -86,12 +86,6 @@ ENCRYPTION_KEY=<the existing value, or empty on a new deployment>
 GOOGLE_CLIENT_ID=<your-google-client-id>
 GOOGLE_CLIENT_SECRET=<your-google-client-secret>
 GOOGLE_CALLBACK_URL=https://shellkeep.marin.cr/api/auth/google/callback
-
-# AWS S3 Storage
-S3_BUCKET=<your-s3-bucket-name>
-S3_REGION=us-east-1
-AWS_ACCESS_KEY_ID=<your-aws-access-key>
-AWS_SECRET_ACCESS_KEY=<your-aws-secret-key>
 
 # Admin Bootstrap (first user with this email becomes admin)
 INITIAL_ADMIN_EMAIL=<your-admin-email>
@@ -160,6 +154,10 @@ curl https://shellkeep.marin.cr/api/health/ready
 ```
 
 Open `https://shellkeep.marin.cr` in a browser and sign in with Google.
+
+## Step 7: Configure Object Storage
+
+Storage is runtime configuration, not environment variables. Sign in as the initial administrator and open `/admin/settings/storage`: pick the provider, enter the bucket and key pair, **Test connection**, save. Until then uploads answer 503. Upgrading a deployment whose `.env` still holds `S3_*` and `AWS_*`: run `npm run storage:import-env` once inside the api container, verify, then delete those variables. See [docs/runbooks/storage-configuration.md](../../docs/runbooks/storage-configuration.md).
 
 ## Updating
 

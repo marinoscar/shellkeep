@@ -14,6 +14,9 @@ import { api } from '../../services/api';
  */
 
 const CONTRIBUTOR = [
+  // Object access (#50): every role holds it; it does not open the Storage page.
+  'storage:read',
+  'storage:write',
   'user_settings:read',
   'user_settings:write',
   'sessions:read',
@@ -31,7 +34,49 @@ const ADMIN = [
   'jobs:write',
   'nodes:read',
   'nodes:write',
+  'storage_config:read',
+  'storage_config:write',
+  // #51.
+  'push:read',
+  'push:write',
+  'broadcasts:read',
+  'broadcasts:write',
 ];
+
+/** `GET /api/admin/storage-config` before anything is configured: S3 only, nothing stored. */
+const UNCONFIGURED_STORAGE = {
+  provider: 's3',
+  drivers: { s3: { bucket: '', region: '', endpoint: '', accessKeyId: '', forcePathStyle: null } },
+  descriptors: [
+    {
+      kind: 'storage-driver',
+      id: 's3',
+      label: 'Amazon S3',
+      description: 'AWS S3.',
+      fields: [
+        { kind: 'string', name: 'bucket', label: 'Bucket', maxLength: 255 },
+        { kind: 'string', name: 'region', label: 'Region', maxLength: 255 },
+        { kind: 'string', name: 'endpoint', label: 'Endpoint', maxLength: 512 },
+        { kind: 'string', name: 'accessKeyId', label: 'Access key ID', maxLength: 255 },
+        { kind: 'boolean', name: 'forcePathStyle', label: 'Force path style' },
+        { kind: 'secret', name: 'secretAccessKey', label: 'Secret access key', hasValue: false, required: true },
+      ],
+    },
+  ],
+  bucket: '',
+  region: '',
+  endpoint: '',
+  accountId: '',
+  accessKeyId: '',
+  forcePathStyle: null,
+  effectiveEndpoint: null,
+  configured: false,
+  missing: ['bucket', 'region', 'accessKeyId', 'secretAccessKey'],
+  secretStatus: { configured: false, hint: null, updatedAt: null, updatedByUserId: null },
+  version: 0,
+  updatedAt: null,
+  updatedBy: null,
+};
 
 function signIn(permissions: string[], roles: string[]) {
   server.use(
@@ -94,6 +139,89 @@ describe('admin settings routing (#46)', () => {
     expect(screen.getByText('Jobs')).toBeInTheDocument();
     expect(screen.getByText('Job Insights')).toBeInTheDocument();
     expect(screen.getByText('Worker Nodes')).toBeInTheDocument();
+    // #50: the Storage card.
+    expect(screen.getByText('Storage')).toBeInTheDocument();
+    // #51: the Email, Web Push and Broadcasts cards.
+    expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Web Push')).toBeInTheDocument();
+    expect(screen.getByText('Broadcasts')).toBeInTheDocument();
+  });
+
+  it('opens the packaged Email page for an administrator (#51)', async () => {
+    signIn(ADMIN, ['admin']);
+    const read: string[] = [];
+    server.use(
+      http.get('*/api/email-settings', ({ request }) => {
+        read.push(new URL(request.url).pathname);
+        return HttpResponse.json({ message: 'Not configured' }, { status: 500 });
+      }),
+    );
+    renderAt('/admin/settings/email');
+    expect(await screen.findByRole('heading', { name: 'Email' }, { timeout: 5000 })).toBeInTheDocument();
+    await vi.waitFor(() => expect(read).toContain('/api/email-settings'), { timeout: 5000 });
+  });
+
+  it('opens the packaged Web Push page for an administrator (#51)', async () => {
+    signIn(ADMIN, ['admin']);
+    const read: string[] = [];
+    server.use(
+      http.get('*/api/admin/push-config', ({ request }) => {
+        read.push(new URL(request.url).pathname);
+        return HttpResponse.json({ message: 'Not configured' }, { status: 500 });
+      }),
+    );
+    renderAt('/admin/settings/push');
+    expect(await screen.findByRole('heading', { name: 'Web Push' }, { timeout: 5000 })).toBeInTheDocument();
+    await vi.waitFor(() => expect(read).toContain('/api/admin/push-config'), { timeout: 5000 });
+  });
+
+  it('opens the packaged Broadcasts page for an administrator (#51)', async () => {
+    signIn(ADMIN, ['admin']);
+    const listed: string[] = [];
+    server.use(
+      http.get('*/api/admin/broadcasts', ({ request }) => {
+        listed.push(new URL(request.url).pathname);
+        return HttpResponse.json({
+          data: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 },
+        });
+      }),
+    );
+    renderAt('/admin/settings/broadcasts');
+    expect(await screen.findByRole('heading', { name: 'Broadcasts' }, { timeout: 5000 })).toBeInTheDocument();
+    await vi.waitFor(() => expect(listed).toContain('/api/admin/broadcasts'), { timeout: 5000 });
+  });
+
+  it('opens Broadcasts for an organization administrator holding only org_broadcasts:read (#51)', async () => {
+    signIn([...CONTRIBUTOR, 'org_broadcasts:read'], ['contributor', 'org_admin']);
+    server.use(
+      http.get('*/api/admin/broadcasts', () =>
+        HttpResponse.json({ data: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 } }),
+      ),
+    );
+    renderAt('/admin/settings');
+    expect(await screen.findByRole('heading', { name: 'System Settings' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText('Broadcasts')).toBeInTheDocument();
+    expect(screen.queryByText('Web Push')).not.toBeInTheDocument();
+    expect(screen.queryByText('Email')).not.toBeInTheDocument();
+  });
+
+  it('opens the packaged Storage page for an administrator (#50)', async () => {
+    signIn(ADMIN, ['admin']);
+    const read: string[] = [];
+    server.use(
+      http.get('*/api/admin/storage-config', ({ request }) => {
+        read.push(new URL(request.url).pathname);
+        return HttpResponse.json({ data: UNCONFIGURED_STORAGE });
+      }),
+      http.get('*/api/admin/storage/migrations', () =>
+        HttpResponse.json({
+          data: { items: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } },
+        }),
+      ),
+    );
+    renderAt('/admin/settings/storage');
+    expect(await screen.findByRole('heading', { name: 'Storage' }, { timeout: 5000 })).toBeInTheDocument();
+    await vi.waitFor(() => expect(read).toContain('/api/admin/storage-config'), { timeout: 5000 });
   });
 
   it('opens the packaged Jobs page for an administrator (#49)', async () => {
@@ -135,9 +263,13 @@ describe('admin settings routing (#46)', () => {
       '/admin/settings',
       '/admin/settings/doctor',
       '/admin/settings/terminal',
+      '/admin/settings/storage',
       '/admin/settings/jobs',
       '/admin/settings/jobs/insights',
       '/admin/settings/workers',
+      '/admin/settings/email',
+      '/admin/settings/push',
+      '/admin/settings/broadcasts',
     ]) {
       const { unmount } = renderAt(path);
       expect(await screen.findByText(/ShellKeep Control Center/i, {}, { timeout: 5000 })).toBeInTheDocument();

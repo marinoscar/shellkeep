@@ -259,4 +259,17 @@ export const handlers = [
       },
     });
   }),
+
+  // The notifications slice (#51): an empty inbox, push not configured, and a
+  // stream that closes at once (the provider then shows the fetched list).
+  http.get(`${API_BASE}/notifications/unread-count`, () =>
+    HttpResponse.json({ data: { unreadCount: 0 } }),
+  ),
+  http.get(`${API_BASE}/notifications/config`, () =>
+    HttpResponse.json({ data: { browserEnabled: true, pushEnabled: false, vapidPublicKey: null } }),
+  ),
+  http.get(`${API_BASE}/notifications/stream`, () => new HttpResponse(null, { status: 204 })),
+  http.get(`${API_BASE}/notifications`, () =>
+    HttpResponse.json({ data: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 } }),
+  ),
 ];

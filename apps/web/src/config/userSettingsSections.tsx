@@ -22,6 +22,7 @@
 import PersonIcon from '@mui/icons-material/Person';
 import PaletteIcon from '@mui/icons-material/Palette';
 import TerminalIcon from '@mui/icons-material/Terminal';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import {
   TERMINAL_SETTINGS_DESCRIPTION,
@@ -47,6 +48,17 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
         description: 'Choose a light, dark, or system-matched theme for this account.',
         Icon: PaletteIcon,
         path: '/settings/appearance',
+      },
+      {
+        // #51, appended: the packaged `UserNotificationsPage`, the caller's
+        // own event x channel matrix. No permission, like its siblings
+        // (`GET /api/notifications/events` and `/channels` need only a
+        // session; the preferences live in the caller's user settings).
+        title: 'Notifications',
+        description:
+          'Choose which events notify you, and whether they arrive by email, in the app or as a push notification.',
+        Icon: NotificationsIcon,
+        path: '/settings/notifications',
       },
     ],
   },

@@ -7,8 +7,8 @@
 //
 //   JOBS_METRICS       -> AppMetricsService   (the `app.jobs.*` instruments)
 //   JOBS_EVENT_BUS     -> EVENT_BUS           (the cross-replica wake-up)
-//   NODE_OBJECT_STORE  -> refusing stand-in   PLATFORM-ADOPTION-SHIM(#50)
-//   NODE_JOB_INPUTS    -> refusing stand-in   PLATFORM-ADOPTION-SHIM(#50)
+//   NODE_OBJECT_STORE  -> STORAGE_PROVIDER    (signed GET and PUT URLs, #50)
+//   NODE_JOB_INPUTS    -> NodeJobInputsAdapter (a held job's input object, #50)
 //
 // `JOBS_ORG_SCOPE` is not bound: ShellKeep tracks no ambient organization, so a
 // job enqueued without `orgId` is a system job.
@@ -17,19 +17,22 @@
 import { Global, Module } from '@nestjs/common';
 import { AppMetricsService, EVENT_BUS } from '@marinoscar/platform-api/host';
 import { JOBS_EVENT_BUS, JOBS_METRICS } from '@marinoscar/platform-api/jobs';
-import { NODE_JOB_INPUTS, NODE_OBJECT_STORE } from '@marinoscar/platform-api/nodes';
+import { NODE_JOB_INPUTS } from '@marinoscar/platform-api/nodes';
+import { StorageProvidersModule, nodeObjectStoreBinding } from '@marinoscar/platform-api/storage';
 
-import { NoNodeJobInputs, NoNodeObjectStore } from './node-ports.shim';
+import { NodeJobInputsAdapter } from './node-job-inputs.adapter';
 
 const BINDINGS = [
   { provide: JOBS_METRICS, useExisting: AppMetricsService },
   { provide: JOBS_EVENT_BUS, useExisting: EVENT_BUS },
-  { provide: NODE_OBJECT_STORE, useClass: NoNodeObjectStore },
-  { provide: NODE_JOB_INPUTS, useClass: NoNodeJobInputs },
+  // The storage slice's ready-made binding: signed GET and PUT through `STORAGE_PROVIDER`.
+  nodeObjectStoreBinding,
+  { provide: NODE_JOB_INPUTS, useClass: NodeJobInputsAdapter },
 ];
 
 @Global()
 @Module({
+  imports: [StorageProvidersModule],
   providers: BINDINGS,
   exports: BINDINGS.map((binding) => binding.provide),
 })
