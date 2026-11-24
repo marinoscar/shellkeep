@@ -45,7 +45,6 @@ vi.mock('../../hooks/useTerminalSettings', async () => {
     useTerminalSettings: vi.fn(() => ({
       terminal: DEFAULT_TERMINAL_SETTINGS,
       actionShortcuts: {},
-      keyShortcuts: [],
       updateTerminal: vi.fn(),
     })),
   };

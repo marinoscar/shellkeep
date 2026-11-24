@@ -6,8 +6,8 @@
 // The platform settings slice returns a namespace only when it is stored: a
 // user who never saved terminal preferences reads `GET /api/user-settings`
 // WITHOUT `terminal` (or `shortcuts`). Every consumer reads the namespaces
-// through `resolveTerminalSettings` and `resolveKeyShortcuts`, which apply the
-// defaults below, so the terminal, the key bar and the scroll buttons look the
+// through `resolveTerminalSettings`, `resolveKeyLayout` and `resolveKeyOptions`,
+// which apply the defaults below, so the terminal, the key bar and the scroll buttons look the
 // same whether or not a row exists.
 //
 // The defaults mirror `DEFAULT_TERMINAL_SETTINGS` (terminal.user-settings.ts)
@@ -18,7 +18,6 @@
 
 import type {
   KeyShortcut,
-  Keystroke,
   TerminalBellMode,
   TerminalCursorStyle,
   TerminalFontFamily,
@@ -28,7 +27,7 @@ import type {
   TerminalUserSettingsDocument,
 } from '../../types/terminal';
 import { DEFAULT_KEY_LAYOUT, DEFAULT_KEY_OPTIONS, type KeyLayout, type KeyOptions } from './keys/keyModel';
-import { layoutFromLegacyShortcuts, toLegacyBarKeys } from './keys/legacyAdapter';
+import { layoutFromLegacyShortcuts } from './keys/legacyAdapter';
 
 /** The terminal preferences with every field resolved. */
 export interface ResolvedTerminalSettings {
@@ -49,8 +48,6 @@ export interface ResolvedTerminalSettings {
 export const TERMINAL_FONT_SIZE = { min: 10, max: 24 } as const;
 export const TERMINAL_LINE_HEIGHT = { min: 1, max: 1.6, step: 0.1 } as const;
 export const TERMINAL_SCROLLBACK = { min: 1000, max: 50000, step: 1000 } as const;
-/** The most key shortcuts a user may keep (the API's cap). */
-export const MAX_KEY_SHORTCUTS = 50;
 
 /** The key shortcuts a user without stored shortcuts gets. */
 export const DEFAULT_KEY_SHORTCUTS: readonly KeyShortcut[] = [
@@ -120,7 +117,7 @@ export const DEFAULT_TERMINAL_SETTINGS: Readonly<ResolvedTerminalSettings> = {
 /**
  * The stored namespace with the defaults applied: an absent namespace is the
  * defaults, an absent field takes its default. A legacy `keyShortcuts` is not
- * part of the result (read it through `resolveKeyShortcuts`).
+ * part of the result (`resolveKeyLayout` converts it).
  */
 export function resolveTerminalSettings(
   stored: Partial<TerminalUserSettings> | null | undefined,
@@ -136,26 +133,6 @@ export function resolveTerminalSettings(
 }
 
 /**
- * The shortcuts the key bar shows: the v2 layout through the compatibility
- * adapter (`toLegacyBarKeys`) when one is stored, else `shortcuts.keyShortcuts`,
- * else the defaults. An empty list stays empty (the user deleted every
- * shortcut). The bar does not change until #167 replaces it.
- */
-export function resolveKeyShortcuts(
-  document: Pick<TerminalUserSettingsDocument, 'terminal' | 'shortcuts'> | null | undefined,
-): KeyShortcut[] {
-  if (document?.shortcuts?.layout) return toLegacyBarKeys(document.shortcuts.layout);
-  return (
-    document?.shortcuts?.keyShortcuts ??
-    // PLATFORM-ADOPTION-SHIM(#83): a row written before #80 keeps its list at
-    // `terminal.keyShortcuts` until the seed step moves it
-    // (apps/api/prisma/settings-migrations/terminal-shortcuts.ts).
-    document?.terminal?.keyShortcuts ??
-    (DEFAULT_KEY_SHORTCUTS as KeyShortcut[])
-  );
-}
-
-/**
  * The user's v2 key layout (#165): the stored one, else the stored v1 list
  * converted, else `DEFAULT_KEY_LAYOUT`.
  */
@@ -163,7 +140,12 @@ export function resolveKeyLayout(
   document: Pick<TerminalUserSettingsDocument, 'terminal' | 'shortcuts'> | null | undefined,
 ): KeyLayout {
   if (document?.shortcuts?.layout) return document.shortcuts.layout;
-  const legacy = document?.shortcuts?.keyShortcuts ?? document?.terminal?.keyShortcuts;
+  const legacy =
+    document?.shortcuts?.keyShortcuts ??
+    // PLATFORM-ADOPTION-SHIM(#83): a row written before #80 keeps its list at
+    // `terminal.keyShortcuts` until the seed step moves it
+    // (apps/api/prisma/settings-migrations/terminal-shortcuts.ts).
+    document?.terminal?.keyShortcuts;
   return legacy ? layoutFromLegacyShortcuts(legacy) : (DEFAULT_KEY_LAYOUT as KeyLayout);
 }
 
@@ -179,22 +161,6 @@ export function isKeyBarVisible(mode: TerminalKeyBarMode, isTouchDevice: boolean
   if (mode === 'always') return true;
   if (mode === 'never') return false;
   return isTouchDevice;
-}
-
-function normalizeKeystroke(keystroke: Keystroke): Keystroke {
-  return { modifiers: keystroke.modifiers ?? [], key: keystroke.key };
-}
-
-/**
- * A shortcut list in the shape the API requires: every keystroke carries its
- * `modifiers` array (`[]` when none), nothing else.
- */
-export function normalizeKeyShortcuts(shortcuts: readonly KeyShortcut[]): KeyShortcut[] {
-  return shortcuts.map((shortcut) => ({
-    id: shortcut.id,
-    label: shortcut.label,
-    keystrokes: shortcut.keystrokes.map(normalizeKeystroke),
-  }));
 }
 
 /**

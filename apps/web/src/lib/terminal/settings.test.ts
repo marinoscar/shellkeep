@@ -3,10 +3,8 @@ import {
   DEFAULT_KEY_SHORTCUTS,
   DEFAULT_TERMINAL_SETTINGS,
   isKeyBarVisible,
-  normalizeKeyShortcuts,
   resolveKeyLayout,
   resolveKeyOptions,
-  resolveKeyShortcuts,
   resolveTerminalSettings,
   terminalPatch,
 } from './settings';
@@ -67,31 +65,6 @@ describe('resolveTerminalSettings', () => {
   });
 });
 
-describe('resolveKeyShortcuts', () => {
-  it('reads the shortcuts namespace, an empty list included', () => {
-    expect(resolveKeyShortcuts({ shortcuts: { keyShortcuts: [custom] } })).toEqual([custom]);
-    expect(resolveKeyShortcuts({ shortcuts: { keyShortcuts: [] } })).toEqual([]);
-  });
-
-  it('reads a legacy terminal.keyShortcuts through the shim when shortcuts is absent', () => {
-    expect(resolveKeyShortcuts({ terminal: { showScrollButtons: true, keyShortcuts: [custom] } })).toEqual([custom]);
-  });
-
-  it('prefers the shortcuts namespace over a legacy copy', () => {
-    expect(
-      resolveKeyShortcuts({
-        terminal: { showScrollButtons: true, keyShortcuts: [custom] },
-        shortcuts: { keyShortcuts: [] },
-      }),
-    ).toEqual([]);
-  });
-
-  it('applies the defaults when neither is stored', () => {
-    expect(resolveKeyShortcuts({})).toEqual(DEFAULT_KEY_SHORTCUTS);
-    expect(resolveKeyShortcuts(null)).toEqual(DEFAULT_KEY_SHORTCUTS);
-  });
-});
-
 describe('isKeyBarVisible', () => {
   it('shows the bar on touch devices in auto, and as the user chose otherwise', () => {
     expect(isKeyBarVisible('auto', true)).toBe(true);
@@ -110,17 +83,6 @@ describe('terminalPatch', () => {
     expect(terminalPatch(DEFAULT_TERMINAL_SETTINGS, { fontSize: 18 })).not.toHaveProperty('keyShortcuts');
   });
 
-  it('always sends modifiers on every keystroke and drops unknown fields', () => {
-    const legacy = {
-      id: custom.id,
-      label: 'Esc',
-      extra: 'x',
-      keystrokes: [{ key: 'Escape' }],
-    } as unknown as KeyShortcut;
-    expect(normalizeKeyShortcuts([legacy])).toEqual([
-      { id: custom.id, label: 'Esc', keystrokes: [{ modifiers: [], key: 'Escape' }] },
-    ]);
-  });
 });
 
 describe('the v2 key layout (#165)', () => {
@@ -130,19 +92,26 @@ describe('the v2 key layout (#165)', () => {
     expect(resolveKeyOptions(null)).toEqual(DEFAULT_KEY_OPTIONS);
   });
 
-  it('converts a stored v1 list (also the legacy terminal one) and keeps the bar on it', () => {
+  it('converts a stored v1 list (also the legacy terminal one)', () => {
     const doc = { shortcuts: { keyShortcuts: [custom] } };
     expect(resolveKeyLayout(doc)).toEqual(layoutFromLegacyShortcuts([custom]));
     expect(resolveKeyLayout({ terminal: { showScrollButtons: true, keyShortcuts: [custom] } })).toEqual(
       layoutFromLegacyShortcuts([custom]),
     );
-    expect(resolveKeyShortcuts(doc)).toEqual([custom]);
   });
 
-  it('feeds the bar from a stored layout through the adapter', () => {
-    const doc = { shortcuts: { keyShortcuts: [], layout: fromLegacyShortcuts([custom]) } };
+  it('prefers the shortcuts namespace over a legacy terminal copy', () => {
+    expect(
+      resolveKeyLayout({
+        terminal: { showScrollButtons: true, keyShortcuts: [custom] },
+        shortcuts: { keyShortcuts: [] },
+      }),
+    ).toEqual(DEFAULT_KEY_LAYOUT);
+  });
+
+  it('uses a stored layout as it is, whatever the v1 list holds', () => {
+    const doc = { shortcuts: { keyShortcuts: [custom], layout: fromLegacyShortcuts([]) } };
     expect(resolveKeyLayout(doc)).toBe(doc.shortcuts.layout);
-    expect(resolveKeyShortcuts(doc)).toEqual([custom]);
   });
 
   it('fills the options a stored object lacks', () => {
