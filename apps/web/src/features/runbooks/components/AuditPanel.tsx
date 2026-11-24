@@ -29,7 +29,8 @@ const rowId = (item: RunAuditItem, index: number) => `${item.at}-${item.kind}-${
 
 export function AuditPanel({ runId }: { runId: string }) {
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(200);
+  // The MIT data grid caps a page at 100 rows.
+  const [pageSize, setPageSize] = useState(100);
   const [exportError, setExportError] = useState<string | null>(null);
   const audit = useAsync(() => getRunAudit(runId, page, pageSize), [runId, page, pageSize]);
   const items = (audit.data?.items ?? []).map((item, index) => ({ ...item, _id: rowId(item, index) }));
@@ -105,7 +106,7 @@ export function AuditPanel({ runId }: { runId: string }) {
           page: page - 1,
           pageSize,
           total: audit.data?.total ?? 0,
-          pageSizeOptions: [50, 200, 1000],
+          pageSizeOptions: [25, 50, 100],
           onPaginationChange: (next) => {
             setPage(next.page + 1);
             setPageSize(next.pageSize);
