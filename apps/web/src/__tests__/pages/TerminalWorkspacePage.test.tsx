@@ -52,6 +52,7 @@ vi.mock('../../services/terminal-api', () => ({
 // Mock useTerminalSettings to avoid API calls in page tests
 vi.mock('../../hooks/useTerminalSettings', () => ({
   useTerminalSettings: vi.fn(() => ({
+    actionShortcuts: {},
     settings: { terminal: { showScrollButtons: true } },
     isLoading: false,
     error: null,
