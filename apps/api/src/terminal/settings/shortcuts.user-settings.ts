@@ -96,7 +96,7 @@ export interface ShortcutsUserSettings {
   /**
    * The v2 key layout (#165): ordered groups of up to four keys. Absent until the
    * migration `settings-migrations/terminal-shortcuts-v2.ts` or a save writes it;
-   * `keyShortcuts` stays for rollback and the legacy editor (until #169).
+   * `keyShortcuts` stays for rollback only: since #169 the editor writes `layout`/`options` and no client writes it.
    */
   layout?: KeyLayout;
   /** Key bar options (#165); absent means `DEFAULT_KEY_OPTIONS` (both on). */
