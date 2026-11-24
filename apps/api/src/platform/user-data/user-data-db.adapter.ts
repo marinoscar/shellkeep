@@ -17,10 +17,13 @@ import { PrismaSystemService } from '../../prisma/prisma-system.service';
 export class UserDataDbAdapter implements UserDataDbPort {
   constructor(private readonly prismaSystem: PrismaSystemService) {}
 
+  // The port types the transaction and the client as `any` (the slice reads the app's Prisma delegates by name).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   runAsSystem<R>(reason: UserDataSystemReason, fn: (tx: any) => Promise<R>, options?: { timeout?: number }): Promise<R> {
     return this.prismaSystem.runAsSystem(reason, fn, options ?? {});
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   system(reason: UserDataSystemReason): any {
     return this.prismaSystem.forSystem(reason);
   }

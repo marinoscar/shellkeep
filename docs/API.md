@@ -1528,6 +1528,32 @@ Formats: `json`, `csv` (a zip of one CSV per dataset) and `xlsx`. Audit: `export
 
 ---
 
+### User data deletion and factory reset
+
+The user-data slice (`@marinoscar/platform-api/user-data`, #69) provides three destructive flows, each a server-only queue job behind a typed phrase that the API re-checks (`400 CONFIRMATION_MISMATCH` on a wrong one). No ShellKeep route of its own: the decisions are registry data in `apps/api/src/app-registrations/user-data.ts`.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /api/user-data/summary` | `user_settings:write` (every role) | The categories with the caller's counts, the scopes with their phrases, and the "always kept" lines |
+| `POST /api/user-data/deletions` | `user_settings:write` | `{ scope, confirmation }`; `202` with the `user.data.purge` job (one pending or running purge per user; a second request returns it) |
+| `GET /api/user-data/deletions/:jobId` | `user_settings:write` | The caller's own job and, once done, its counts; `404` for anyone else's |
+| `GET /api/admin/factory-reset/summary`, `POST /api/admin/factory-reset`, `GET /api/admin/factory-reset/:jobId` | `system:factory_reset` (Admin only; never implied by `system_settings:write`) | Phrase `FACTORY RESET`; `403 FACTORY_RESET_DISABLED_IN_SAAS` in SaaS mode |
+| `/api/admin/orgs/:orgId/offboarding/*` | `orgs:offboard` (Admin only) | Multi-organization mode only (`409` otherwise); ShellKeep runs one organization, so the routes exist but are unused |
+
+| Scope | Phrase | Deletes |
+|---|---|---|
+| `servers` | `SERVERS` | Categories `servers` and `sessions`: every server profile (a group-owned one the user created too, because its saved credentials are theirs), the grants on them, their saved `ssh` credentials (through `UserCredentialsService`) and every terminal session |
+| `runbooks` | `RUNBOOKS` | Category `runbooks`: every runbook only the user owns, with its versions, runs, targets, steps, buffered logs, command audit rows, approvals, grants and the saved step logs in object storage. A runbook a group owns stays with the group (its author link is nulled), and so do its runs |
+| `content`, `everything` | `DELETE MY CONTENT`, `DELETE MY DATA` | The platform's built-ins, now reaching the three ShellKeep categories as well |
+
+Runs the user started and approvals they decided on a runbook that stays are kept as organization history with the actor id nulled. The account, memberships (organization and group), roles, the session and the audit log are never deleted by a data purge.
+
+The factory reset keeps the administrator, configuration and database backups (their runs, archives and linked jobs), and runs two ShellKeep steps before the users go: `shellkeep.terminal.disconnect` marks every `active` terminal session `terminated` (it opens no SSH connection: tmux sessions already running on the servers keep running) and `shellkeep.servers.reset` deletes every server profile, the administrator's included. Step logs of runbook runs are object-storage keys with no `storage_objects` row, so the reset's storage step does not see them: run `npm run storage:purge` afterwards to sweep the `runbook-artifacts/` prefix.
+
+Job types (permanent): `user.data.purge`, `admin.factory_reset`, `org.offboard`, and ShellKeep's two delegated halves of the purge, `servers.user_data.purge` and `runbooks.user_data.purge`. Audit: `user_data.purge.requested|completed`, `admin.factory_reset.requested|completed`. The jobs log ids and counts only: never a hostname, user name, credential name, runbook name or log line.
+
+---
+
 ### Health
 
 **Public endpoints** - Used for Kubernetes liveness/readiness probes.
