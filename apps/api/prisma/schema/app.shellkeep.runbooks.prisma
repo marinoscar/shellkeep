@@ -30,6 +30,7 @@ model Runbook {
   organization Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   owner        User?           @relation("RunbookOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   versions     RunbookVersion[]
+  runs         RunbookRun[]
 
   @@unique([id, orgId])
   @@index([orgId])
@@ -52,9 +53,227 @@ model RunbookVersion {
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   runbook      Runbook      @relation(fields: [runbookId, orgId], references: [id, orgId], onDelete: Cascade)
   author       User?        @relation("RunbookVersionAuthor", fields: [createdBy], references: [id], onDelete: SetNull)
+  runs         RunbookRun[]
 
   @@unique([runbookId, version])
   @@index([orgId])
   @@index([createdBy])
   @@map("runbook_versions")
+}
+
+// =============================================================================
+// Runbook runs (issue #62): the execution engine's tables.
+// =============================================================================
+//
+// All six are `org` tables: a NOT NULL `org_id`, forced row-level security (one
+// `<table>_org_isolation` policy each, listed under `rlsPolicies` in prisma/platform.lock) and
+// COMPOSITE foreign keys that include `org_id` between org tables (a foreign-key check bypasses RLS).
+// Every status column is `text` with a CHECK constraint (migration SQL; Prisma cannot express one):
+//   runbook_runs.status          queued resolving running paused cancelling succeeded failed partially_failed aborted cancelled
+//   runbook_runs.trigger         manual api schedule
+//   runbook_run_targets.status   pending queued running waiting succeeded failed skipped cancelled
+//   runbook_run_steps.status     pending running waiting_approval succeeded failed skipped timed_out cancelled
+//   runbook_command_executions.origin   step ai_agent
+//   runbook_approvals.status     pending approved rejected expired
+//   runbook_approvals.kind       step gate        (`gate`: the canary pause after the first wave)
+//   runbook_approvals.scope      run target
+//
+// A run snapshots the servers it targets (name, host, port, user, trusted fingerprint) on its target rows,
+// so history survives a profile being edited or deleted (`server_profile_id` is a plain id, no foreign key: the history outlives the profile).
+// No secret value is stored anywhere in these tables: `secret_refs` maps a parameter to a credential NAME.
+// `runbook_run_log_chunks` is a hot buffer: a step's chunks are concatenated into object storage when the
+// step ends (`log_storage_key`) and deleted.
+
+model RunbookRun {
+  id                String    @id @default(uuid()) @db.Uuid
+  orgId             String    @map("org_id") @db.Uuid
+  runbookId         String    @map("runbook_id") @db.Uuid
+  version           Int
+  status            String    @default("queued")
+  trigger           String    @default("manual")
+  initiatedBy       String?   @map("initiated_by") @db.Uuid
+  retryOfRunId      String?   @map("retry_of_run_id") @db.Uuid
+  /// Non-secret parameter values. A secret parameter has no value here: see `secretRefs`.
+  params            Json      @default("{}") @db.JsonB
+  /// Parameter name to the NAME of an organization credential (purpose `runbook_secret`); never a value.
+  secretRefs        Json      @default("{}") @map("secret_refs") @db.JsonB
+  /// The target selector the run resolved (a retry names the failed servers by id).
+  targetSelector    Json      @map("target_selector") @db.JsonB
+  strategy          Json      @db.JsonB
+  cancelRequestedAt DateTime? @map("cancel_requested_at") @db.Timestamptz
+  startedAt         DateTime? @map("started_at") @db.Timestamptz
+  finishedAt        DateTime? @map("finished_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  runbook        Runbook            @relation(fields: [runbookId, orgId], references: [id, orgId], onDelete: Cascade)
+  runbookVersion RunbookVersion     @relation(fields: [runbookId, version], references: [runbookId, version], onDelete: Cascade)
+  initiator      User?              @relation("RunbookRunInitiator", fields: [initiatedBy], references: [id], onDelete: SetNull)
+  targets        RunbookRunTarget[]
+  steps          RunbookRunStep[]
+  chunks         RunbookRunLogChunk[]
+  approvals      RunbookApproval[]
+
+  @@unique([id, orgId])
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([orgId, status])
+  @@index([runbookId])
+  @@index([initiatedBy])
+  @@map("runbook_runs")
+}
+
+model RunbookRunTarget {
+  id                 String    @id @default(uuid()) @db.Uuid
+  orgId              String    @map("org_id") @db.Uuid
+  runId              String    @map("run_id") @db.Uuid
+  serverProfileId    String?   @map("server_profile_id") @db.Uuid
+  /// Position in the deterministic target order; `batchIndex` is the wave it belongs to.
+  position           Int
+  batchIndex         Int       @default(0) @map("batch_index")
+  status             String    @default("pending")
+  serverName         String    @map("server_name") @db.VarChar(255)
+  hostname           String    @db.VarChar(255)
+  port               Int
+  username           String    @db.VarChar(255)
+  hostKeyFingerprint String?   @map("host_key_fingerprint") @db.VarChar(255)
+  /// The step the next segment starts at (a resume after an approval starts after the gate).
+  nextStepIndex      Int       @default(0) @map("next_step_index")
+  errorCode          String?   @map("error_code") @db.VarChar(64)
+  errorMessage       String?   @map("error_message") @db.VarChar(500)
+  cancelRequestedAt  DateTime? @map("cancel_requested_at") @db.Timestamptz
+  startedAt          DateTime? @map("started_at") @db.Timestamptz
+  finishedAt         DateTime? @map("finished_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization  Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run           RunbookRun        @relation(fields: [runId, orgId], references: [id, orgId], onDelete: Cascade)
+  steps         RunbookRunStep[]
+  approvals     RunbookApproval[]
+
+  @@unique([id, orgId])
+  @@unique([runId, position])
+  @@index([runId, status])
+  @@index([orgId])
+  @@index([serverProfileId])
+  @@map("runbook_run_targets")
+}
+
+model RunbookRunStep {
+  id            String    @id @default(uuid()) @db.Uuid
+  orgId         String    @map("org_id") @db.Uuid
+  runId         String    @map("run_id") @db.Uuid
+  runTargetId   String    @map("run_target_id") @db.Uuid
+  stepIndex     Int       @map("step_index")
+  /// The definition's step id, kind and name, copied so the matrix needs no definition lookup.
+  stepId        String    @map("step_id") @db.VarChar(48)
+  kind          String    @db.VarChar(32)
+  name          String    @db.VarChar(120)
+  status        String    @default("pending")
+  exitCode      Int?      @map("exit_code")
+  durationMs    Int?      @map("duration_ms")
+  /// The last bytes of the (redacted) output, for the matrix; the whole log is in the chunks or in storage.
+  outputTail    String?   @map("output_tail") @db.Text
+  logBytes      Int       @default(0) @map("log_bytes")
+  logTruncated  Boolean   @default(false) @map("log_truncated")
+  logStorageKey String?   @map("log_storage_key") @db.VarChar(512)
+  errorCode     String?   @map("error_code") @db.VarChar(64)
+  startedAt     DateTime? @map("started_at") @db.Timestamptz
+  finishedAt    DateTime? @map("finished_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run          RunbookRun                @relation(fields: [runId, orgId], references: [id, orgId], onDelete: Cascade)
+  target       RunbookRunTarget          @relation(fields: [runTargetId, orgId], references: [id, orgId], onDelete: Cascade)
+  chunks       RunbookRunLogChunk[]
+  executions   RunbookCommandExecution[]
+
+  @@unique([id, orgId])
+  @@unique([runTargetId, stepIndex])
+  @@index([runId])
+  @@index([orgId])
+  @@map("runbook_run_steps")
+}
+
+model RunbookRunLogChunk {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  runId     String   @map("run_id") @db.Uuid
+  runStepId String   @map("run_step_id") @db.Uuid
+  seq       Int
+  /// A global arrival order (SSE replay across steps).
+  ord       BigInt   @unique @default(autoincrement())
+  stream    String   @db.VarChar(8)
+  data      String   @db.Text
+  bytes     Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run          RunbookRun     @relation(fields: [runId, orgId], references: [id, orgId], onDelete: Cascade)
+  step         RunbookRunStep @relation(fields: [runStepId, orgId], references: [id, orgId], onDelete: Cascade)
+
+  @@unique([runStepId, seq])
+  @@index([runId, ord])
+  @@index([orgId])
+  @@index([createdAt])
+  @@map("runbook_run_log_chunks")
+}
+
+model RunbookCommandExecution {
+  id              String    @id @default(uuid()) @db.Uuid
+  orgId           String    @map("org_id") @db.Uuid
+  serverProfileId String?   @map("server_profile_id") @db.Uuid
+  runStepId       String?   @map("run_step_id") @db.Uuid
+  origin          String    @db.VarChar(16)
+  commandSha256   String    @map("command_sha256") @db.Char(64)
+  /// At most 2 KiB, redacted (command-safety `redactText` with the run's secret values as literals).
+  commandPreview  String    @map("command_preview") @db.Text
+  exitCode        Int?      @map("exit_code")
+  signal          String?   @db.VarChar(16)
+  timedOut        Boolean   @default(false) @map("timed_out")
+  bytes           Int       @default(0)
+  startedAt       DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  finishedAt      DateTime? @map("finished_at") @db.Timestamptz
+
+  organization  Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  step          RunbookRunStep? @relation(fields: [runStepId, orgId], references: [id, orgId], onDelete: Cascade)
+
+  @@index([orgId, serverProfileId, startedAt(sort: Desc)])
+  @@index([runStepId])
+  @@index([serverProfileId])
+  @@map("runbook_command_executions")
+}
+
+model RunbookApproval {
+  id          String    @id @default(uuid()) @db.Uuid
+  orgId       String    @map("org_id") @db.Uuid
+  runId       String    @map("run_id") @db.Uuid
+  /// NULL for a run-scope approval (one row for the run).
+  runTargetId String?   @map("run_target_id") @db.Uuid
+  /// `run` or the target id: with `runId` and `stepIndex` it makes the approval unique (a canary gate is step -1).
+  scopeKey    String    @map("scope_key") @db.VarChar(36)
+  scope       String    @db.VarChar(8)
+  kind        String    @db.VarChar(8)
+  stepIndex   Int       @map("step_index")
+  stepName    String    @map("step_name") @db.VarChar(120)
+  message     String    @default("") @db.VarChar(2000)
+  status      String    @default("pending")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  decidedBy   String?   @map("decided_by") @db.Uuid
+  decidedAt   DateTime? @map("decided_at") @db.Timestamptz
+  comment     String?   @db.VarChar(1000)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run          RunbookRun        @relation(fields: [runId, orgId], references: [id, orgId], onDelete: Cascade)
+  target       RunbookRunTarget? @relation(fields: [runTargetId, orgId], references: [id, orgId], onDelete: Cascade)
+  decider      User?             @relation("RunbookApprovalDecider", fields: [decidedBy], references: [id], onDelete: SetNull)
+
+  @@unique([runId, stepIndex, scopeKey])
+  @@index([orgId, status, expiresAt])
+  @@index([runId])
+  @@index([decidedBy])
+  @@map("runbook_approvals")
 }

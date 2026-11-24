@@ -55,4 +55,22 @@ export const APP_USER_OWNED_MODELS: readonly Def[] = [
     rationale:
       'An immutable runbook version records who saved it; the author leaving detaches the version (it is never rewritten or deleted) and it is not part of a personal export.',
   },
+  {
+    model: 'RunbookRun',
+    actorFields: ['initiatedBy'],
+    // `initiated_by` is ON DELETE SET NULL: a run is organization history and outlives who started it.
+    purge: 'detach',
+    export: 'exclude',
+    rationale:
+      'A runbook run records who started it; that person leaving detaches the run (the organization keeps its history) and it is not part of a personal export.',
+  },
+  {
+    model: 'RunbookApproval',
+    actorFields: ['decidedBy'],
+    // `decided_by` is ON DELETE SET NULL: an approval decision is audit history.
+    purge: 'detach',
+    export: 'exclude',
+    rationale:
+      'An approval request records who decided it; that person leaving detaches the decision (it stays as audit history) and it is not part of a personal export.',
+  },
 ];
