@@ -277,11 +277,11 @@ Issue #167 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Co
 | `modifier` | The section 5.8 toggle (off, armed, locked), with its pop-up |
 | `key` | A plain key by label; arrows have the navigation pop-up. Repeatable keys carry `data-repeatable` and repeat while held (section 5.10) |
 | `macro`, `custom` | A plain key by label |
-| `action` | Icon and label. `ai` ("Open AI assistant") only with the AI feature and `ai:use`; `attach-file` only with `sessions:write` and a server; `arrow-drag` is a drag surface (section 5.10); `snippets` is hidden until #172 |
+| `action` | Icon and label. `ai` ("Open AI assistant") only with the AI feature and `ai:use`; `attach-file` only with `sessions:write` and a server; `arrow-drag` is a drag surface (section 5.10); `snippets` only with `sessions:write`, and it opens the key panel on its Snippets tab (section 5.13) |
 
 **Sending.** Every key, from the row or the panel, is encoded by `encodeResolvedKey` with the consumed modifiers and the pane's cursor-key mode (section 5.7, 5.8). After a key the terminal is refocused, except while the panel replaces the keyboard.
 
-**Full key panel.** A region named "Key panel": a tab strip (only "Keys" today; `KEY_PANEL_TABS` is where snippets #172 and history #173 append), a Customize link to `/settings/shortcuts` (the editor, #169), a close button, and a 4-column grid holding every group, one group per grid row, each key spanning 1 or 2 cells. Escape inside the panel closes it (a pop-up's Escape closes only the pop-up). The placement comes from `useTerminalLayout` (no new breakpoint read):
+**Full key panel.** A region named "Key panel": a tab strip (Keys and Snippets, section 5.13; `KEY_PANEL_TABS` is where history #173 appends), a Customize link to `/settings/shortcuts` (the editor, #169), a close button, and a 4-column grid holding every group, one group per grid row, each key spanning 1 or 2 cells. Escape inside the panel closes it (a pop-up's Escape closes only the pop-up). The placement comes from `useTerminalLayout` (no new breakpoint read):
 
 | Layout | Placement |
 |---|---|
@@ -331,6 +331,53 @@ Leaving the idle zone sends one arrow at once; a gear change reschedules the nex
 
 **Haptics.** With `shortcuts.options.haptics` on and `navigator.vibrate` present, a 10 ms tick on entering arrow mode and on each change to a non-idle gear (also on the arrow-drag key). Off, nothing vibrates.
 
+### 5.13 Snippets
+
+Issue #172 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). API: `apps/api/src/snippets/`. Web: `components/terminal/keys/snippets/` (`SnippetsTab`, `SnippetEditorDialog`, `PlaceholderDialog`), `hooks/useSnippets.ts`, `services/snippets-api.ts`, `lib/terminal/snippets/` (`placeholders.ts`, `insert.ts`), `TerminalKeyPanel.tsx`, `pages/TerminalWorkspacePage.tsx`. (Sections 5.11 and 5.12 belong to the shortcuts editor and the history tab, which land on their own branches.)
+
+A snippet is saved text (a command, a few lines) the user inserts at the prompt from the key panel. It is **inserted, never run**: the user presses Enter.
+
+**Storage (decision).** A table of its own, `snippets` (model `Snippet`, fragment `prisma/fragments/shellkeep.snippets.prisma`), not the `shortcuts` settings namespace. Snippets are user content with a title, search, an order and up to 200 rows; a settings document has a size cap, is replaced whole on every write (two devices editing different snippets would overwrite each other, where a row-per-snippet write cannot) and cannot be searched or ordered by the database. The table is **user-owned with `org_id` as a reference**, the same shape as `terminal_sessions`: a snippet is private to its creator and never shared, so it is not an org table and has no row-level security; every query names the user and the organization and another user's id is a 404. `user_id` cascades on user delete.
+
+| Column | Rule |
+|---|---|
+| `title` | 1 to 80 characters |
+| `body` | 1 to 4096 bytes (UTF-8) of text, no NUL |
+| `tags` | at most 8, each 1 to 24 characters, de-duplicated |
+| `position` | 0-based, dense per user; create appends, delete and reorder renumber in one transaction |
+
+The migration repeats the caps as CHECK constraints (`snippets_title_check`, `snippets_body_check`, `snippets_tags_check`). At most 200 snippets per user (`SNIPPET_LIMIT_REACHED`, 409).
+
+**API** (tag `Snippets`; access is `sessions:write`, as for every terminal feature: the terminal is the only place a snippet is used, so there is no `snippets:*` pair and the permission catalog is unchanged).
+
+| Route | Does |
+|---|---|
+| `GET /api/snippets?query=` | The caller's snippets in order; `query` (at most 100 characters) keeps those whose title or body contains it (case-insensitive) or that carry it as a tag |
+| `POST /api/snippets` | Create; the new snippet goes last. 201 |
+| `PATCH /api/snippets/:id` | Change `title`, `body` and/or `tags` (at least one) |
+| `DELETE /api/snippets/:id` | Delete; the rest move up. 204 |
+| `PUT /api/snippets/order` | `{ ids }` go first in that order; snippets it does not name keep their relative order after them, so a snippet another device added meanwhile is never lost. A repeated id is `SNIPPET_ORDER_INVALID` (400) |
+
+Another user's snippet, and one that does not exist, are the same 404. Reads and writes are limited per user and minute (120 and 60, in memory: the API is a single instance); over the limit is `SNIPPETS_RATE_LIMITED` (429, `details.retryAfterSeconds`). Audit events `snippet.create`, `snippet.update`, `snippet.delete` and `snippet.reorder` carry the snippet id (and a count), never a title, body or tag.
+
+**Credential warning.** On create and update the API runs `looksLikeSecret` (`secret-detector.ts`) over the body and answers `warning: "looks-like-secret"` (else `null`). It never blocks: the snippet is saved. It flags a PEM private-key header; `password=`, `passwd:`, `secret=`, `token=`, `api_key=` and the like with a literal value (a `{{placeholder}}`, `$VARIABLE` or `<value>` is not literal); AWS access key ids, GitHub, Slack, Stripe, OpenAI-style and Google API keys, JSON web tokens; `Authorization: Bearer ...`, `sshpass -p` and `://user:pass@`; and a 32+ character token with mixed case, digits and high entropy (lower-case hex such as a git sha is not flagged). The editor says snippets are stored unencrypted, and after a flagged save the tab shows a dismissible warning naming the snippet.
+
+**Never in logs or AI.** No code in `snippets/` writes to a logger, the console or a span, audit events carry ids only, and nothing in the AI code names a snippet (`test/snippets/snippets-boundary.spec.ts`). The user-data export includes the rows (to their owner only) and the purge deletes them: category `snippets`, scope `snippets` ("Delete my snippets"), inline.
+
+**The tab.** A search box (server-side, after a 200 ms pause in typing), an add button and "Manage". The list shows the title, the first line of the text and the tags; each row is a 44 px target. Manage switches the rows to move up, move down, edit and delete (delete asks), and the order buttons are off while a search is active (an order only exists for the whole list). The editor is a dialog: title, text with a byte counter, comma-separated tags. The panel offers the tab only when the host can insert text (`onInsertSnippet`, given with `sessions:write`).
+
+**The key.** The `snippets` action key (in the default layout, in the row and the panel) opens the key panel on the Snippets tab, or switches an open panel to it. It is hidden without `sessions:write`.
+
+**Placeholders.** `{{name}}` (a letter or underscore, then up to 31 letters, digits, `_` or `-`; spaces inside the braces allowed) is a blank. Tapping a snippet that has any opens a small form with one field per distinct name, in order of first appearance; Insert fills every occurrence (a value is never searched for placeholders again, and a blank value inserts nothing), Cancel inserts nothing.
+
+**Insertion.** Through the same terminal as every key, with `terminal.paste` (as the AI assistant's suggested commands do), so bracketed paste is honoured when the shell turned it on:
+
+1. Control characters other than newline and tab are dropped, line endings become `\n`, and trailing line breaks are removed (the last one would be Enter). A text with nothing left is not inserted.
+2. A multi-line snippet needs the terminal to be in bracketed-paste mode (`terminal.modes.bracketedPasteMode`). Without it xterm sends every newline as Enter and the shell may run the lines, so the tab asks first ("Insert a multi-line snippet?", "Insert anyway").
+3. The pane is focused afterwards. On a phone the docked panel closes and the keyboard comes back, so the user can read the text and press Enter. On a wider screen the side panel stays open.
+
+**Keyboard and the dock.** On a phone the panel replaces the keyboard, and the keyboard coming back closes the panel (section 5.9). The search box and the dialogs raise the keyboard, so the tab reports text entry (`onTextEntry`) and the workspace does not treat that as the user leaving the panel.
+
 ## 6. Operations
 
 - **Reaper.** `@Cron('0 */5 * * * *')` in `terminal/tasks/session-cleanup.task.ts` enqueues `terminal.session.reap` (enqueue-only). The handler runs three bounded statements in order (detach, terminate, purge), reading the thresholds at run time, then sends one `terminal.session_reaped` notification per owner and one `terminal.session.terminated` webhook (reason `reaped`) per session it terminated, after the commit. It closes the live stream of each session it terminated (best effort, logged on failure; invariant 8) and does not kill remote tmux sessions. Counts go to `app.terminal.sessions.reaped` (`action`: `detached`, `terminated`, `purged`) and the log, never ids or names.
@@ -339,7 +386,7 @@ Leaving the idle zone sends one arrow at once; a gear change reschedules the nex
 - **Webhooks** (audience `user`, ids and names only): `terminal.session.created`, `terminal.session.terminated` (`reason`: `user`, `batch`, `reaped`), `server_profile.host_key_changed`.
 - **Doctor checks:** `terminal.tmux.probe` (probes `terminal.doctorProbeProfileId`), `terminal.ssh.client`, `terminal.ssh` egress contributor, `terminal.sessions.reaper`, `terminal.ssh.legacy-secrets`, `ssh.host_key_policy`.
 - **Telemetry spans:** `terminal.ws.session` (the socket's attachment, with `session.id` and `org.id` on the span only).
-- **Export and purge:** sessions are exported without scrollback and deleted with the user (`TerminalSession`: delete, include).
+- **Export and purge:** sessions are exported without scrollback and deleted with the user (`TerminalSession`: delete, include). Snippets are exported (to their owner) and deleted with the user or by the `snippets` scope (`Snippet`: delete, include; section 5.13).
 
 ## 7. Invariants
 
@@ -354,4 +401,4 @@ Leaving the idle zone sends one arrow at once; a gear change reschedules the nex
 
 ## 8. Tests
 
-`apps/api/test/terminal/` (gateway authorization and maintenance, reaper, notification, alerts, Doctor, metrics, webhooks; `scripted-ssh-server.ts` is an in-process SSH server), `terminal.gateway.spec.ts`, `session-manager.service.spec.ts`, `session-history.service.spec.ts`, `test/ssh/` (factory, host-key policy, boundary); web: `__tests__/pages/TerminalWorkspace.workspace.test.tsx`, `__tests__/terminal-ws*.test.ts`, `TerminalKeyShortcutsBar.test.tsx`, `__tests__/pages/TerminalWorkspace.keys.test.tsx`, `lib/terminal/keys/keyRow.test.ts`, `lib/terminal/keys/arrowRepeat.test.ts`, `components/terminal/keys/holdKeys.test.tsx`, `__tests__/components/terminal/useTerminalArrowMode.test.tsx`; and `apps/api/test/docs-consistency.spec.ts` for this page's reason tables ([TESTING.md](../TESTING.md)).
+`apps/api/test/terminal/` (gateway authorization and maintenance, reaper, notification, alerts, Doctor, metrics, webhooks; `scripted-ssh-server.ts` is an in-process SSH server), `terminal.gateway.spec.ts`, `session-manager.service.spec.ts`, `session-history.service.spec.ts`, `test/ssh/` (factory, host-key policy, boundary); web: `__tests__/pages/TerminalWorkspace.workspace.test.tsx`, `__tests__/terminal-ws*.test.ts`, `TerminalKeyShortcutsBar.test.tsx`, `__tests__/pages/TerminalWorkspace.keys.test.tsx`, `lib/terminal/keys/keyRow.test.ts`, `lib/terminal/keys/arrowRepeat.test.ts`, `components/terminal/keys/holdKeys.test.tsx`, `__tests__/components/terminal/useTerminalArrowMode.test.tsx`, `__tests__/components/terminal/SnippetsTab.test.tsx`, `__tests__/pages/TerminalWorkspace.snippets.test.tsx`, `__tests__/lib/terminal/snippets/snippets.test.ts`; API: `src/snippets/*.spec.ts` and `test/snippets/` (HTTP, boundary); and `apps/api/test/docs-consistency.spec.ts` for this page's reason tables ([TESTING.md](../TESTING.md)).
