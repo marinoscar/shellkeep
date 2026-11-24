@@ -19,6 +19,9 @@
  *     never gates.
  *   - Terminal: `GET /api/system-settings`, `system_settings:read`; saving
  *     needs `system_settings:write`, gated inside the page.
+ *   - Files (#153): `GET /api/system-settings`, `system_settings:read`, the
+ *     `files` namespace (size caps and per-user rate limits of the files API);
+ *     saving needs `system_settings:write`, gated inside the page.
  *   - Users & Allowlist: the identity slice's card (`users:read`).
  *   - Doctor: `GET /api/admin/doctor`, `system_settings:read` (the packaged
  *     page's descriptor).
@@ -91,6 +94,7 @@ import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import ModelTrainingOutlinedIcon from '@mui/icons-material/ModelTrainingOutlined';
 import DataUsageOutlinedIcon from '@mui/icons-material/DataUsageOutlined';
+import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { setupGuideSettingsPage } from '@marinoscar/platform-web/onboarding/ui';
@@ -107,6 +111,10 @@ import {
   TERMINAL_SYSTEM_SETTINGS_DESCRIPTION,
   TERMINAL_SYSTEM_SETTINGS_TITLE,
 } from '../components/terminal/settings/TerminalSystemSettingsPage';
+import {
+  FILES_SYSTEM_SETTINGS_DESCRIPTION,
+  FILES_SYSTEM_SETTINGS_TITLE,
+} from '../components/files/settings/FilesSystemSettingsPage';
 
 /** The route of the About page. */
 export const ABOUT_PATH = '/admin/settings/about';
@@ -124,6 +132,9 @@ export const PUSH_PATH = '/admin/settings/push';
 export const BROADCASTS_PATH = '/admin/settings/broadcasts';
 /** The route of the AI page (the packaged `AiConfigPage`); the other AI pages nest under it. */
 export const AI_PATH = '/admin/settings/ai';
+
+/** The route of the admin Files page (the `files` system-settings namespace, #153). */
+export const FILES_SYSTEM_SETTINGS_PATH = '/admin/settings/files';
 
 /** The route of the Alerts page (the packaged `AlertsPage`). */
 export const ALERTS_PATH = '/admin/settings/alerts';
@@ -197,6 +208,17 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
       // `@marinoscar/platform-api/onboarding` adds the admin block to
       // `GET /api/onboarding` for and gates the activation metrics on), as data.
       { ...setupGuideSettingsPage.card, Icon: setupGuideSettingsPage.Icon },
+      {
+        // #153: appended to General after the Setup guide. Size caps and rate
+        // limits an administrator sets once, like Terminal. `system_settings:read`
+        // is what `GET /api/system-settings` enforces; saving needs
+        // `system_settings:write`, gated inside the page.
+        title: FILES_SYSTEM_SETTINGS_TITLE,
+        description: FILES_SYSTEM_SETTINGS_DESCRIPTION,
+        Icon: FolderOpenOutlinedIcon,
+        path: FILES_SYSTEM_SETTINGS_PATH,
+        permission: 'system_settings:read',
+      },
     ],
   },
   {
