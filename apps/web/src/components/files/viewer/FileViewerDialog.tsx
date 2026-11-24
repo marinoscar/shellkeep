@@ -21,8 +21,9 @@ export default function FileViewerDialog({ target, onClose }: FileViewerDialogPr
       open
       fullScreen
       onClose={onClose}
-      aria-label={`File ${fileBaseName(target.path) || target.path}`}
-      slotProps={{ paper: { sx: { bgcolor: 'background.paper' } } }}
+      slotProps={{
+        paper: { 'aria-label': `File ${fileBaseName(target.path) || target.path}`, sx: { bgcolor: 'background.paper' } },
+      }}
     >
       <FileViewer
         key={`${target.profileId}:${target.path}:${target.sessionId ?? ''}:${target.line ?? ''}`}
