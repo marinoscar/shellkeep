@@ -6,9 +6,11 @@ export interface TerminalKeyShortcutsBarProps {
   open: boolean;
   shortcuts: KeyShortcut[];
   onSend: (shortcut: KeyShortcut) => void;
+  /** Opens the AI assistant (#57). Omit when AI is unavailable: no AI key is drawn. */
+  onAiAssist?: () => void;
 }
 
-export function TerminalKeyShortcutsBar({ open, shortcuts, onSend }: TerminalKeyShortcutsBarProps) {
+export function TerminalKeyShortcutsBar({ open, shortcuts, onSend, onAiAssist }: TerminalKeyShortcutsBarProps) {
   return (
     <Collapse in={open} unmountOnExit>
       <Box
@@ -26,6 +28,17 @@ export function TerminalKeyShortcutsBar({ open, shortcuts, onSend }: TerminalKey
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
+        {onAiAssist && (
+          <Chip
+            label="AI"
+            color="secondary"
+            clickable
+            onClick={onAiAssist}
+            onMouseDown={(e) => e.preventDefault()}
+            aria-label="Open AI assistant"
+            sx={{ minHeight: 44, fontSize: '0.875rem', px: 0.5, flexShrink: 0 }}
+          />
+        )}
         {shortcuts.length === 0 ? (
           <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', py: 0.5 }}>
             No shortcuts configured. Add some in{' '}
