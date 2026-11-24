@@ -69,17 +69,20 @@ async function sharedProfilesWhere(ctx: ExportContext): Promise<Record<string, u
       ...actingPrincipal({ userId: ctx.subjectId, orgId, permissions: [], roles: [] }),
       groups,
     };
-    const access = await accessibleWhere<Prisma.Sql>(principal, SERVER_PROFILE_RESOURCE, {
-      tx: db,
-      sqlKit: Prisma,
-      ownerUserField: 'userId',
-      ownerGroupField: 'ownerGroupId',
-      orgField: 'orgId',
-      scope: 'shared',
-      inlineLimit: SHARED_INLINE_LIMIT,
-    });
-    if (access.form !== 'where') throw new Error('The shared server profiles are too many to export in one request');
-    perOrg.push(access.where);
+    // As the list route decides it: what the requester's groups own, and what is granted to them or their groups.
+    for (const scope of ['groups', 'shared'] as const) {
+      const access = await accessibleWhere<Prisma.Sql>(principal, SERVER_PROFILE_RESOURCE, {
+        tx: db,
+        sqlKit: Prisma,
+        ownerUserField: 'userId',
+        ownerGroupField: 'ownerGroupId',
+        orgField: 'orgId',
+        scope,
+        inlineLimit: SHARED_INLINE_LIMIT,
+      });
+      if (access.form !== 'where') throw new Error('The shared server profiles are too many to export in one request');
+      perOrg.push(access.where);
+    }
   }
   if (perOrg.length === 0) return null;
   return { AND: [{ OR: perOrg }, { NOT: { userId: ctx.subjectId } }] };
