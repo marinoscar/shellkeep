@@ -33,6 +33,7 @@ jobs:
         run: npm run db:check --workspace=api
       - run: npm run typecheck --workspace=api
       - run: npm run typecheck --workspace=web
+      - run: npm run typecheck --workspace=cli
       - run: npm run lint --workspace=api --if-present
       - run: npm run lint --workspace=web --if-present
       - name: Platform pin (one exact version everywhere)
@@ -45,7 +46,7 @@ jobs:
         run: npm run check:platform-imports
       - name: "Infra is generated: platform-infra sync --check"
         run: npm run platform:infra:sync -- --check
-      - name: "Infra conformance: compose config per mode and nginx -t"
+      - name: "Infra conformance: compose config per mode and nginx -t (runs in the CLI workspace)"
         run: npm run test:infra
 
   docker:
@@ -148,6 +149,10 @@ jobs:
           NODE_ENV: test
       - name: Web tests
         run: npm run test:run --workspace=web
+        env:
+          NODE_ENV: test
+      - name: "CLI tests (includes the platform conformance suites cli, deployRegistrations and tui)"
+        run: npm run test:run --workspace=cli
         env:
           NODE_ENV: test
 
@@ -259,3 +264,8 @@ jobs:
       - run: npm run prisma:generate --workspace=api
       - run: npm run build --workspace=api
       - run: npm run build --workspace=web
+      - run: npm run build --workspace=cli
+      - name: "CLI smoke: --version and --help"
+        run: |
+          node apps/cli/dist/cli.js --version
+          node apps/cli/dist/cli.js --help
