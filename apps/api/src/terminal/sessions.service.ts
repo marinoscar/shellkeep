@@ -1,5 +1,6 @@
 import {
   ForbiddenException,
+  forwardRef,
   Inject,
   Injectable,
   Logger,
@@ -13,6 +14,7 @@ import { recordAudit } from '../common/audit/record-audit';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { SessionQueryDto } from './dto/session-query.dto';
+import { SessionManagerService } from './session-manager.service';
 import { TerminalWebhooksService } from './webhooks/terminal-webhooks.service';
 import { SERVER_PROFILE_RESOURCE } from '../app-registrations/sharing';
 import { randomUUID } from 'crypto';
@@ -35,7 +37,27 @@ export class SessionsService {
     private readonly webhooks: TerminalWebhooksService,
     private readonly access: AccessPolicy,
     private readonly principalGroups: PrincipalGroupsProvider,
+    // Circular with SessionsService (the manager updates activity and status): forwardRef on both sides.
+    @Inject(forwardRef(() => SessionManagerService))
+    private readonly sessionManager: SessionManagerService,
   ) {}
+
+  /**
+   * Closes the live SSH stream (and tells attached WebSocket clients `session_ended`) for each id, after the
+   * row update committed. Never throws: a failure to close is logged and the row stays terminated. The remote
+   * tmux session is not killed.
+   */
+  private async closeLive(ids: readonly string[]): Promise<void> {
+    for (const id of ids) {
+      try {
+        await this.sessionManager.terminateSession(id);
+      } catch (err) {
+        this.logger.error(
+          `Failed to close live connection for terminated session ${id}: ${err instanceof Error ? err.message : 'error'}`,
+        );
+      }
+    }
+  }
 
   private audit(
     action: string,
@@ -229,6 +251,7 @@ export class SessionsService {
     await this.audit('terminal_session.terminate', scope, session.id);
     this.logger.log(`Terminal session "${session.name}" terminated by user ${scope.userId}`);
     await this.webhooks.sessionTerminated(scope, session, 'user', terminatedAt);
+    await this.closeLive([session.id]);
 
     return this.toResponse(session);
   }
@@ -263,6 +286,8 @@ export class SessionsService {
       // After the update committed, outside any transaction (#54). Never throws.
       await this.webhooks.sessionTerminated(scope, target, 'batch', terminatedAt);
     }
+
+    await this.closeLive(targets.map((target) => target.id));
 
     this.logger.log(`Batch terminated ${result.count} sessions for user ${scope.userId}`);
 

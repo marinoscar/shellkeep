@@ -161,7 +161,7 @@ describe('ShellKeep webhook events: raised after the write commits', () => {
       }),
     };
     const audit = { record: jest.fn(async () => { log.push('audit'); }) };
-    const sessions = new SessionsService(prisma as never, audit as never, terminalWebhooks, { require: jest.fn(async () => ({ allowed: true })) } as never, { enrich: async (p: unknown) => p } as never);
+    const sessions = new SessionsService(prisma as never, audit as never, terminalWebhooks, { require: jest.fn(async () => ({ allowed: true })) } as never, { enrich: async (p: unknown) => p } as never, { terminateSession: jest.fn(async () => undefined) } as never);
     return { log, emitted, prisma, sessions, terminalWebhooks, webhooks };
   }
 
@@ -221,6 +221,7 @@ describe('ShellKeep webhook events: raised after the write commits', () => {
       { getNamespace: async () => ({ detachAfterMinutes: 60, terminateDetachedAfterHours: 12, purgeTerminatedAfterDays: 3 }) } as never,
       { notify: jest.fn(async () => undefined) } as never,
       h.terminalWebhooks,
+      { terminateSession: jest.fn(async () => undefined) } as never,
     );
     await handler.process({} as never);
 
@@ -228,6 +229,21 @@ describe('ShellKeep webhook events: raised after the write commits', () => {
     expect(emits).toHaveLength(2);
     expect(h.log.indexOf('emit:terminal.session.terminated:reaped')).toBeGreaterThan(h.log.indexOf('write:reap'));
     expect(h.log).not.toContain('$transaction');
+  });
+
+  it('the reaper closes the live connection of each terminated session and survives a failing close', async () => {
+    const h = harness();
+    const terminateSession = jest.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValue(undefined);
+    const handler = new SessionReapHandler(
+      { register: jest.fn() } as never,
+      Object.assign(h.prisma, { serverProfile: { findMany: jest.fn(async () => [{ id: PROFILE_ID, name: 'Server A' }]) } }) as never,
+      { getNamespace: async () => ({ detachAfterMinutes: 60, terminateDetachedAfterHours: 12, purgeTerminatedAfterDays: 3 }) } as never,
+      { notify: jest.fn(async () => undefined) } as never,
+      h.terminalWebhooks,
+      { terminateSession } as never,
+    );
+    await expect(handler.process({} as never)).resolves.toBeUndefined();
+    expect(terminateSession).toHaveBeenCalledTimes(2);
   });
 
   it('a failing webhook never fails the action', async () => {
