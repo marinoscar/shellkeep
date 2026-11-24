@@ -44,6 +44,7 @@ import {
 import { APP_RETENTION_POLICIES } from '../../app-registrations/jobs';
 import { RUNBOOKS_SYSTEM_SETTINGS } from '../../runbooks/settings/runbooks.system-settings';
 import { SSH_SYSTEM_SETTINGS } from '../../ssh/ssh.system-settings';
+import { TERMINAL_AI_SYSTEM_SETTINGS } from '../../terminal-ai/terminal-ai.settings';
 import { TELEMETRY_SYSTEM_SETTINGS } from '../telemetry/telemetry.system-settings';
 
 // The app's retention policies BEFORE anything reads RETENTION_SYSTEM_SETTINGS: the
@@ -83,6 +84,8 @@ export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettin
   // The AI slice's deployment policy (#55): kill switch, providers, key policy, limits. Organizations
   // may tighten it (the namespace's own org layer). Appended last so no stored key moves.
   AI_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // Terminal AI safety (#56): redaction mode and consent, with a tighten-only org layer. Appended after `ai`.
+  TERMINAL_AI_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
 /** The platform's optional user namespaces this app registers: the notification preferences (#51). */

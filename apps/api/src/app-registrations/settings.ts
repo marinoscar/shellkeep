@@ -28,6 +28,7 @@ import type {
 
 import { FEATURES_SYSTEM_SETTINGS, UI_SYSTEM_SETTINGS } from '../platform/settings/app-system-settings';
 import { TERMINAL_SYSTEM_SETTINGS } from '../terminal/settings/terminal.system-settings';
+import { TERMINAL_AI_SYSTEM_SETTINGS, TERMINAL_AI_USER_SETTINGS } from '../terminal-ai/terminal-ai.settings';
 import { DEFAULT_TERMINAL_SETTINGS, TERMINAL_USER_SETTINGS } from '../terminal/settings/terminal.user-settings';
 
 /** The app's own system settings namespaces, in stored key order. */
@@ -40,6 +41,8 @@ export const APP_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespace[] 
 /** The app's own optional user settings namespaces, in stored key order. */
 export const APP_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [
   TERMINAL_USER_SETTINGS as UserSettingsNamespace,
+  // Terminal AI consent (#56); appended, so no stored key moves.
+  TERMINAL_AI_USER_SETTINGS as UserSettingsNamespace,
 ];
 
 /** Fields the app adds inside platform system namespaces. None: every stored key has a home. */
