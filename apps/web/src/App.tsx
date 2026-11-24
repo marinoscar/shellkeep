@@ -20,6 +20,7 @@ import { registerRunbookLinkRenderers } from './features/runbooks/registerLinkRe
 import { platformApi } from './services/api';
 import { JobsNodesProviders } from './platform/jobsAdapters';
 import { appAiAdapters } from './platform/aiAdapters';
+import { FileViewerProvider } from './components/files/viewer/FileViewerProvider';
 // The deployment feature map (#55): registers `ai` for the cards and the
 // destination that carry `feature: 'ai'`. Imported for its side effect.
 import './platform/settingsFeatures';
@@ -47,6 +48,8 @@ const UsersPage = lazy(() =>
 const HomePage = lazy(() => import('./pages/HomePage'));
 const ServerProfilesPage = lazy(() => import('./pages/ServerProfilesPage'));
 const SessionsPage = lazy(() => import('./pages/SessionsPage'));
+// The file viewer (#154): its page, CodeMirror and the language packs load on first use.
+const FileViewerPage = lazy(() => import('./pages/FileViewerPage'));
 // The session workspace at `/sessions/:id` (#77): tabs, splits and the
 // switcher, full-bleed inside the shell (#76).
 const TerminalWorkspacePage = lazy(() => import('./pages/TerminalWorkspacePage'));
@@ -228,6 +231,8 @@ const SHELL_PROVIDERS: readonly ShellProvider[] = [
   AiConfigShellProvider,
   AiAdaptersShellProvider,
   JobsNodesShellProvider,
+  // `openFile` (#154): the remote file viewer as a dialog over any page.
+  FileViewerProvider,
 ];
 
 registerRunbookLinkRenderers();
@@ -295,6 +300,16 @@ export function AppRoutes() {
                   element={
                     <RequirePermission permission="servers:read" fallback={HOME}>
                       <ServerProfilesPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* The remote file viewer (#154), a deep link under `servers`. The files
+                    API requires `sessions:write` (the terminal's access). */}
+                <Route
+                  path="/servers/:id/files/view"
+                  element={
+                    <RequirePermission permission="sessions:write" fallback={HOME}>
+                      <FileViewerPage />
                     </RequirePermission>
                   }
                 />

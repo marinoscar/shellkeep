@@ -41,3 +41,34 @@ The token is random (256 bits), stored only as a SHA-256 in memory (the API is a
 ## Never
 
 File content is never logged, traced or sent to AI. Spans carry the profile id, never the path.
+
+## Viewer
+
+Issue #154. The web client of the routes above. Code: `apps/web/src/components/files/viewer/`, `apps/web/src/pages/FileViewerPage.tsx`, `apps/web/src/lib/files/viewer/`, `apps/web/src/services/files-api.ts`.
+
+**Entry point.** `useOpenFile()` returns `openFile({ profileId, path, sessionId?, line? })` (`FileViewerProvider.tsx`). `path` is absolute, `~/...`, or relative to the session's working directory (else home); `line` is 1-based. With the provider mounted around the signed-in shell, `openFile` shows the viewer in a full-screen dialog over the current page, so a terminal keeps its connection. Without a provider it navigates to the deep link. The viewer code loads lazily, only when a file is opened.
+
+**Deep link.** `/servers/:id/files/view?path=&sessionId=&line=` (`fileViewerPath`, `parseFileViewerSearch`), a full-bleed page under the `servers` destination. The route requires `sessions:write`, the permission the files API enforces; without it the user lands on Home. A link with no `path` shows an error.
+
+**Limits come from the API's answers.** The `files` system settings need `system_settings:read`, which non-admins lack, so the viewer never reads them. `useFileDocument` decides from responses instead:
+
+| Mode | When |
+|---|---|
+| Full | `stat` says `isText`, and the first `content` read (no `length`) returns `eof`: the whole file fits `fullViewMaxBytes`. |
+| Paged | The first read is not `eof`. Its length is the window size; the viewer moves by offset (previous, next, head, tail, jump to `42%`, a byte offset or `12k`). |
+| Download only | `FILE_TOO_LARGE` (above `pagedViewMaxBytes`), or an image above the preview size cap. |
+| Binary | `isText` is false, or `FILE_IS_BINARY` from a file the `stat` sniff missed. |
+
+Download-only and binary files get a card with a Download button.
+
+**Languages.** The mode is picked from the file name only (`language.ts`: whole name, `.env` family, Dockerfile variants, nginx `*.conf` under an `nginx` directory, extension, a shell shebang, names containing `log` or `journal`). Modes: Markdown, JSON, YAML, XML, shell, INI, TOML, Dockerfile, nginx, environment, log, plain text. Each loads on demand (`languages.ts`); JSON uses `@codemirror/lang-json`, the others the stream modes of `@codemirror/legacy-modes`, and Markdown a small built-in mode. JSON can be pretty-printed with the parse error's line and column.
+
+**`.env` masking.** For the `env` mode every non-empty value is replaced by a fixed-length mask (`maskEnv`), so neither the value nor its length shows. Comments stay. A Reveal values toggle shows the real text; it resets when another file opens.
+
+**Logs.** A log has ANSI escapes stripped and error, warning and info words highlighted. Tail jumps to the end. Follow polls `stat` every 2.5 seconds (`FOLLOW_INTERVAL_MS`), skips ticks while the page is hidden, reads only the appended range, and shows the new tail if the file shrank or rotated. The followed buffer is bounded: whole lines are dropped from the start once it exceeds the window size (at least 64 KiB). Follow stops on an error and says why.
+
+**Markdown preview.** `marked` renders, then DOMPurify sanitizes (`markdown.ts`). Raw HTML in the source is shown as text, never parsed. Images are dropped (a remote `<img>` would leak the viewer's address to any host the file names). `javascript:` URLs are stripped by the sanitizer. `img`, `style`, `form`, `input`, `button`, `iframe`, `object`, `embed`, `svg` and `math` are forbidden; links open in a new tab with `noopener noreferrer`.
+
+**Images.** PNG, JPEG, GIF, WebP and SVG preview as an `<img>` (SVG is never inlined; "Show source" reads its markup as text). The `<img>` source is `files/download/:token`, so each preview spends one single-use download token and is audited as `server_profile.file_download`, like any download. It also counts against `downloadsPerMinute`.
+
+**Dependencies** added to `apps/web`: `@codemirror/lang-json`, `@codemirror/legacy-modes`, `marked`, `dompurify`.
