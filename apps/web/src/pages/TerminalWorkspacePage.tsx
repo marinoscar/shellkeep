@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, IconButton, Snackbar, Tooltip, Typography } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -12,6 +12,8 @@ import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headl
 import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { TerminalToolbar } from '../components/terminal/TerminalToolbar';
 import { TerminalKeyShortcutsBar } from '../components/terminal/TerminalKeyShortcutsBar';
+import { TerminalKeyPanel } from '../components/terminal/keys/TerminalKeyPanel';
+import { useAttachFile } from '../components/terminal/keys/useAttachFile';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
 import { TERMINAL_WRITE_PERMISSION } from '../components/terminal/TerminalAccessGate';
 import { useTerminalActions } from '../components/terminal/useTerminalActions';
@@ -51,11 +53,16 @@ import {
   visiblePanes,
 } from '../components/terminal/workspace/workspaceLayout';
 import { getServerProfile, getSession, updateSession } from '../services/terminal-api';
-import type { KeyShortcut, ServerProfile, TerminalSession } from '../types';
-import { createModifierInputInterceptor, encodeBarShortcut } from '../lib/terminal/keys/modifiedInput';
+import type { ServerProfile, TerminalSession } from '../types';
+import { createModifierInputInterceptor } from '../lib/terminal/keys/modifiedInput';
 import { encodeChord, type ActiveModifiers } from '../lib/terminal/keys/encodeKey';
 import type { Chord } from '../lib/terminal/keys/keyModel';
-import { toBarModifierKeys } from '../lib/terminal/keys/legacyAdapter';
+import {
+  encodeResolvedKey,
+  resolveKeyGroups,
+  type KeyActionId,
+  type ResolvedKey,
+} from '../lib/terminal/keys/keyRow';
 import { useModifierState } from '../hooks/useModifierState';
 import { useTerminalSettings } from '../hooks/useTerminalSettings';
 import { DEFAULT_TERMINAL_SETTINGS, isKeyBarVisible } from '../lib/terminal/settings';
@@ -70,6 +77,20 @@ import { useKeyboardInset } from '../hooks/useKeyboardInset';
  */
 export function keyDockOffset(keyboardInset: number, gapBelowPage: number): number {
   return Math.max(0, Math.round(keyboardInset - Math.max(0, gapBelowPage)));
+}
+
+/** The docked key panel's height when no keyboard height has been seen yet (#167). */
+export const KEY_PANEL_DEFAULT_HEIGHT = 280;
+/** A keyboard shorter than this is not a phone keyboard (an accessory bar, a toast). */
+const KEY_PANEL_MIN_HEIGHT = 160;
+
+/**
+ * The height of the key panel that replaces the phone keyboard (#167): the
+ * keyboard's last height above the page, so the key row stays where it was,
+ * else a default. Exported for tests.
+ */
+export function keyPanelDockHeight(lastKeyboardHeight: number): number {
+  return lastKeyboardHeight >= KEY_PANEL_MIN_HEIGHT ? lastKeyboardHeight : KEY_PANEL_DEFAULT_HEIGHT;
 }
 
 /**
@@ -108,9 +129,14 @@ export default function TerminalWorkspacePage() {
   const [filesOpen, setFilesOpen] = useState(false);
   const [filesReveal, setFilesReveal] = useState<FileBrowserReveal | null>(null);
   const revealSeq = useRef(0);
+  // The full key panel (#167) takes turns with both: opening any one closes the others.
+  const [keyPanelOpen, setKeyPanelOpen] = useState(false);
   useEffect(() => {
     if (aiOpen) setFilesOpen(false);
   }, [aiOpen]);
+  useEffect(() => {
+    if (aiOpen || filesOpen) setKeyPanelOpen(false);
+  }, [aiOpen, filesOpen]);
   const toggleFiles = useCallback(() => {
     // The toolbar opens the panel following the terminal, not at an earlier reveal.
     setFilesReveal(null);
@@ -129,7 +155,6 @@ export default function TerminalWorkspacePage() {
   // truth for the panes, the key bar and the toolbar toggles.
   const {
     terminal: preferences,
-    keyShortcuts: storedShortcuts,
     actionShortcuts,
     keyLayout,
     keyOptions,
@@ -140,9 +165,7 @@ export default function TerminalWorkspacePage() {
   const modifiers = useModifierState();
   const consumeModifiers = modifiers.consume;
   const inputModifiers = useMemo(() => createModifierInputInterceptor(modifiers.store), [modifiers.store]);
-  const modifierKeys = useMemo(() => (keyLayout ? toBarModifierKeys(keyLayout) : []), [keyLayout]);
   const showScrollButtons = preferences?.showScrollButtons ?? DEFAULT_TERMINAL_SETTINGS.showScrollButtons;
-  const keyShortcuts = storedShortcuts ?? [];
   // Mod+Shift+A (or the user's rebinding) opens the assistant with the prompt focused; the
   // terminal keeps the key from the PTY through `isReservedKey` (#57).
   const aiAssistBinding = actionShortcuts[AI_ASSIST_ACTION];
@@ -234,6 +257,11 @@ export default function TerminalWorkspacePage() {
     const gap = root ? window.innerHeight - root.getBoundingClientRect().bottom : 0;
     setDockOffset(keyDockOffset(keyboardInset, gap));
   }, [keyboardInset]);
+  // The keyboard's last height above the page: the docked key panel takes it (#167).
+  const lastKeyboardHeight = useRef(0);
+  useEffect(() => {
+    if (dockOffset > 0) lastKeyboardHeight.current = dockOffset;
+  }, [dockOffset]);
 
   // ---- the open sessions' details --------------------------------------------
   const tabsKey = layout?.tabs.join(',') ?? '';
@@ -324,6 +352,9 @@ export default function TerminalWorkspacePage() {
 
   // A bar key or a pop-up entry: encoded with the active modifiers (which
   // releases the one-shots) and the pane's cursor-key mode (#166).
+  // While the key panel replaces the phone keyboard (#167), a key must not
+  // focus the terminal: that would raise the keyboard over the panel.
+  const keyboardReplaced = useRef(false);
   const sendEncoded = useCallback(
     (encode: (options: { modifiers: ActiveModifiers; applicationCursor: boolean }) => string) => {
       const view = getView();
@@ -332,13 +363,13 @@ export default function TerminalWorkspacePage() {
       const data = encode({ modifiers: consumeModifiers(), applicationCursor });
       if (!data) return;
       view.sendInput(data);
-      view.focus();
+      if (!keyboardReplaced.current) view.focus();
     },
     [getView, consumeModifiers],
   );
 
-  const handleSendShortcut = useCallback(
-    (shortcut: KeyShortcut) => sendEncoded((options) => encodeBarShortcut(shortcut, options)),
+  const handleSendKey = useCallback(
+    (key: ResolvedKey) => sendEncoded((options) => encodeResolvedKey(key, options)),
     [sendEncoded],
   );
 
@@ -346,6 +377,104 @@ export default function TerminalWorkspacePage() {
     (chord: Chord) => sendEncoded((options) => encodeChord(chord, options)),
     [sendEncoded],
   );
+
+  // ---- the key row and the full key panel (#167) ---------------------------------
+  // `attach-file` uploads into the session's working directory: the files API's
+  // rule is the terminal's (`sessions:write`), and it needs the session's server.
+  const attachAvailable = canWrite && Boolean(activeProfileId);
+  const attach = useAttachFile({ profileId: activeProfileId, sessionId: activeId, notify });
+  const availableActions = useMemo(() => {
+    const out = new Set<KeyActionId>();
+    if (aiAvailable) out.add('ai');
+    if (attachAvailable) out.add('attach-file');
+    // `arrow-drag` (#168) and `snippets` (#172) stay hidden until they exist.
+    return out;
+  }, [aiAvailable, attachAvailable]);
+  const keyGroups = useMemo(
+    () => (keyLayout ? resolveKeyGroups(keyLayout, availableActions) : null),
+    [keyLayout, availableActions],
+  );
+  // Anything but a phone (`sm` and up: tablets, landscape, an unfolded foldable):
+  // a side panel, the phone keyboard stays up. A phone: the panel replaces the
+  // keyboard in the key dock. (The AI and Files panels keep their own `isWide` rule.)
+  const keyPanelSide = !isPhone;
+  const keyPanelVariant: 'side' | 'dock' = keyPanelSide ? 'side' : 'dock';
+  const keyPanelShown = keyPanelOpen && keyShortcutsOpen;
+  const keyPanelDocked = keyPanelShown && keyPanelVariant === 'dock';
+  const keyPanelId = useId();
+  const keyPanelRef = useRef<HTMLDivElement>(null);
+  const [keyPanelHeight, setKeyPanelHeight] = useState(KEY_PANEL_DEFAULT_HEIGHT);
+  useEffect(() => {
+    keyboardReplaced.current = keyPanelDocked;
+  }, [keyPanelDocked]);
+
+  const toggleKeyPanel = useCallback(() => {
+    if (keyPanelOpen) {
+      setKeyPanelOpen(false);
+      return;
+    }
+    setAiOpen(false);
+    setFilesOpen(false);
+    if (!keyPanelSide) {
+      // Take the keyboard's place: its height, then dismiss it by blurring xterm's textarea.
+      setKeyPanelHeight(keyPanelDockHeight(lastKeyboardHeight.current));
+      keyboardReplaced.current = true;
+      getView()?.getTerminal()?.blur?.();
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && focused.closest('.xterm')) focused.blur();
+    }
+    setKeyPanelOpen(true);
+  }, [keyPanelOpen, keyPanelSide, getView]);
+
+  const closeKeyPanel = useCallback(() => {
+    setKeyPanelOpen(false);
+    if (keyPanelSide) {
+      // The side panel never took the terminal's focus for long: give it back.
+      getView()?.focus();
+    } else {
+      // Without raising the keyboard: focus goes back to the panel's toggle.
+      document.getElementById(`${keyPanelId}-toggle`)?.focus();
+    }
+  }, [keyPanelSide, getView, keyPanelId]);
+
+  // The keyboard button: close the docked panel and bring the phone keyboard back.
+  const showKeyboard = useCallback(() => {
+    keyboardReplaced.current = false;
+    setKeyPanelOpen(false);
+    getView()?.focus();
+  }, [getView]);
+
+  // Docked, the panel holds the focus (a button raises no keyboard).
+  useEffect(() => {
+    if (!keyPanelDocked) return;
+    keyPanelRef.current?.querySelector<HTMLElement>('[role="tab"]')?.focus();
+  }, [keyPanelDocked]);
+
+  // The keyboard came back while the panel replaced it (the user tapped the terminal):
+  // the keyboard wins and the panel closes.
+  const previousInset = useRef(keyboardInset);
+  useEffect(() => {
+    const previous = previousInset.current;
+    previousInset.current = keyboardInset;
+    if (keyPanelDocked && previous === 0 && keyboardInset > 0) setKeyPanelOpen(false);
+  }, [keyboardInset, keyPanelDocked]);
+
+  const handleKeyAction = useCallback(
+    (action: KeyActionId) => {
+      if (action === 'ai') openAssistant();
+      else if (action === 'attach-file') attach.pick();
+    },
+    [openAssistant, attach],
+  );
+
+  const keyHandlers = {
+    onKey: handleSendKey,
+    onAction: handleKeyAction,
+    onToggleModifier: modifiers.tap,
+    onSendChord: handleSendChord,
+    modifierState: modifiers.state,
+    haptics: keyOptions?.haptics ?? false,
+  };
 
   const handleToggleScrollButtons = useCallback(() => {
     void updateTerminal({ showScrollButtons: !showScrollButtons }).catch(() => undefined);
@@ -600,6 +729,16 @@ export default function TerminalWorkspacePage() {
             renderHeader={renderHeader}
             renderPane={renderPane}
           />
+          {keyPanelShown && keyPanelVariant === 'side' && keyGroups && (
+            <TerminalKeyPanel
+              ref={keyPanelRef}
+              id={keyPanelId}
+              variant="side"
+              groups={keyGroups}
+              onClose={closeKeyPanel}
+              {...keyHandlers}
+            />
+          )}
           {aiAvailable && (
             <TerminalAiPanel
               open={aiOpen}
@@ -644,18 +783,38 @@ export default function TerminalWorkspacePage() {
         <Box data-testid="terminal-key-dock" sx={{ flexShrink: 0 }}>
           <TerminalKeyShortcutsBar
             open={keyShortcutsOpen}
-            shortcuts={keyShortcuts}
-            onSend={handleSendShortcut}
-            onAiAssist={aiAvailable ? openAssistant : undefined}
-            modifierKeys={modifierKeys}
-            modifierState={modifiers.state}
-            onToggleModifier={modifiers.tap}
-            onSendChord={handleSendChord}
-            haptics={keyOptions?.haptics ?? false}
+            groups={keyGroups}
+            {...keyHandlers}
+            panelOpen={keyPanelShown}
+            onTogglePanel={toggleKeyPanel}
+            panelId={keyPanelId}
           />
+          {keyPanelDocked && keyGroups && (
+            <TerminalKeyPanel
+              ref={keyPanelRef}
+              id={keyPanelId}
+              variant="dock"
+              height={keyPanelHeight}
+              groups={keyGroups}
+              onClose={closeKeyPanel}
+              onShowKeyboard={showKeyboard}
+              {...keyHandlers}
+            />
+          )}
         </Box>
       </Box>
 
+      {/* The attach key's file picker (#167): outside the frame, whose last child is the key dock. */}
+      {attachAvailable && (
+        <input
+          ref={attach.inputRef}
+          type="file"
+          hidden
+          aria-label="File to attach"
+          data-testid="terminal-attach-input"
+          onChange={attach.onInputChange}
+        />
+      )}
       <NewSessionDialog
         open={newSessionDialogOpen}
         onClose={() => setNewSessionDialogOpen(false)}
