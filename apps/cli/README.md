@@ -86,7 +86,7 @@ Runs are queued on the server and executed over SSH by the runbook engine; the C
 
 `--targets` is a comma-separated list of server profile ids and `tag:<name>` entries (`--targets 2f3c...,tag:staging`). Omit it to use the runbook's own default targets. `--param` values are typed from the runbook's definition (numbers and booleans are sent as such). A secret parameter takes the **name** of a stored runbook secret with `--secret-ref PARAM=name`; `--param` for a secret parameter is refused, so a secret value never appears in argv or shell history.
 
-`--dry-run` is accepted by the parser but not usable yet: the dry-run contract belongs to the runbook safety work (#67), which is not in the run route. Until it is, `runbook run --dry-run` prints an error, exits 2 and starts nothing.
+`--dry-run` rehearses a run (#67): the server connects to every target (host key and credential verified as for a real run) and checks every step with read-only probes: syntax, that the binaries exist, the package manager's own simulation, that the destination is writable. Nothing that changes a server is executed. The command sends `dryRun: true`, always waits for the dry run to end, prints a servers x steps plan (`would_run`, `precondition_failed`, `not_simulated`) and exits 0 only if every target would run cleanly (1 otherwise); `--json` is the run plus a `plan` array. A runbook with a destructive step needs no confirmation for a dry run, but a real run of one is answered `428 RUNBOOK_CONFIRMATION_REQUIRED` and, unless self-approval is on, waits for a second person's approval; the CLI does not send that confirmation, so launch such a run from the web app.
 
 ### `runbook logs --follow`
 
