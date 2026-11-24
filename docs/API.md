@@ -1475,6 +1475,28 @@ The Home page's one read (#78). `GET /api/dashboard/summary` requires `sessions:
 
 ---
 
+### Data export
+
+Every signed-in user can download their own data (#68). The exports slice (`@marinoscar/platform-api/exports`) provides the routes; the work runs as the server-only job `export.run` and the file expires through `export.purge` (7 days). **No credential ever leaves the server**: no SSH password, private key, passphrase or credential ciphertext (`encryptedPassword`, `encryptedPrivateKey`, `encryptedPassphrase` included), and no tmux scrollback or log content. Another user's export is **404, never 403**.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /api/exports/sources` | any signed-in user | The sources the caller may use, with their formats and request fields; each source is listed only to a caller holding its permission |
+| `POST /api/exports` | the source's permission | `{ source, format, request? }`; `202` with a `pending` export. `400` for an unknown source or format or a request the source refuses; `429` at three exports in flight |
+| `GET /api/exports` | any signed-in user | The caller's own exports, newest first |
+| `GET /api/exports/:id` | any signed-in user | One export; when `ready` it carries a 5-minute signed URL with `Content-Disposition: attachment` |
+
+| Source | Permission | Request | Contents |
+|---|---|---|---|
+| `user-data` | `user_settings:read` | none | The caller's whole record, one dataset per user-owned model (server profiles without any credential, terminal sessions, runbooks the caller authored with their versions, settings, tokens' metadata) |
+| `server-profiles` | `servers:read` | `{ includeShared?: boolean }` | Name, host, port, user, auth method, tags, color, host key fingerprint, timestamps. `includeShared` adds profiles other people shared with the caller (decided by the sharing slice), with the same columns |
+| `terminal-sessions` | `sessions:read` | `{ from, to, status? }` (`YYYY-MM-DD`, both days inclusive, in the caller's time zone, by creation day) | Metadata only: name, status, tmux session name, size, server profile id, timestamps |
+| `runbook-runs` | `runbooks:read` | `{ from, to, runbookId? }` | Run, target and step status, timings, exit codes and artifact object ids (the run tables arrive with #62; until then the file has no dataset). Log contents are never exported |
+
+Formats: `json`, `csv` (a zip of one CSV per dataset) and `xlsx`. Audit: `export:create` after the job commits. Metrics: `app.exports`, `app.export.duration`, `app.export.size` (no user id label). Notifications: `export.ready` and `export.failed` (a fixed message).
+
+---
+
 ### Health
 
 **Public endpoints** - Used for Kubernetes liveness/readiness probes.

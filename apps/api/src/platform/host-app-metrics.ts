@@ -7,7 +7,7 @@
 // own list, then the app's. ShellKeep declares `app.ssh.host_key_checks` (#60),
 // `app.runbooks.definitions_saved` (#61) and its own `APP_METRICS`
 // (`app-registrations/telemetry.ts`, #53); the identity slice's lists follow the
-// platform's; the webhooks (#54), alerts (#54) and sharing (#71) slices' own lists come last.
+// platform's; the webhooks (#54), alerts (#54) and sharing (#71) and exports (#68) slices' own lists come last.
 // =============================================================================
 
 import { registerPlatformHostAppMetrics } from '@marinoscar/platform-api/host';
@@ -17,6 +17,7 @@ import { ALERTS_APP_METRICS } from '@marinoscar/platform-api/alerts';
 import { WEBHOOKS_APP_METRICS } from '@marinoscar/platform-api/webhooks';
 import { OAUTH_APP_METRICS, ORGANIZATIONS_APP_METRICS } from '@marinoscar/platform-api/identity';
 import { SHARING_APP_METRICS } from '@marinoscar/platform-api/sharing';
+import { EXPORTS_APP_METRICS } from '@marinoscar/platform-api/exports';
 
 import { APP_METRICS } from '../app-registrations/telemetry';
 
@@ -30,4 +31,6 @@ registerPlatformHostAppMetrics(
   ALERTS_APP_METRICS,
   // Sharing (#71): `app.sharing.group_mutations`, `access_decisions` and `link_resolutions`.
   SHARING_APP_METRICS,
+  // Data export (#68): `app.exports`, `app.export.duration` and `app.export.size`; no user id label.
+  EXPORTS_APP_METRICS,
 );

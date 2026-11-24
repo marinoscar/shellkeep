@@ -23,6 +23,7 @@ import { AiModule } from './platform/ai/ai.config';
 import { alertsModule } from './platform/alerts/alerts.config';
 import { webhooksModule } from './platform/webhooks/webhooks.config';
 import { sharingModule } from './platform/sharing/sharing.config';
+import { exportsModule } from './platform/exports/exports.config';
 import { jobsModule, nodeCredentialModule, nodesModule } from './platform/jobs/jobs.config';
 import {
   ProfileImageModule,
@@ -130,6 +131,11 @@ import configuration from './config/configuration';
     // "shared with me" list over `server_profile` and `runbook` (`app-registrations/sharing.ts`).
     // Links are disabled per resource type. After notifications and the jobs queue it depends on.
     sharingModule,
+    // Data export (#68): `GET /api/exports/sources`, `POST|GET /api/exports`, `GET /api/exports/:id` and the
+    // `export.run` and `export.purge` jobs, over the sources of `app-registrations/exports.ts` (`server-profiles`,
+    // `terminal-sessions`, `runbook-runs`) and the platform's `user-data`. No credential ever leaves the server.
+    // After storage, notifications, the jobs queue and sharing.
+    exportsModule,
     ServerProfilesModule,
     TerminalModule,
     // Runbooks (#61): versioned procedure definitions, target preview and secret parameters.

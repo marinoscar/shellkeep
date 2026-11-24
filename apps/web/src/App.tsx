@@ -75,6 +75,10 @@ const GroupsPage = lazy(() =>
 const GroupDetailPage = lazy(() =>
   import('@marinoscar/platform-web/sharing/ui').then((m) => ({ default: m.GroupDetailPage })),
 );
+// Data export (#68): the packaged "Download your data" page behind the card of the user hub.
+const DataExportPage = lazy(() =>
+  import('@marinoscar/platform-web/exports/ui').then((m) => ({ default: m.DataExportPage })),
+);
 // Admin settings (issue #46): the packaged hub over `config/adminSections.tsx`,
 // the host slice's About and Maintenance pages, the packaged Doctor, and the
 // terminal domain's system settings page.
@@ -300,6 +304,9 @@ function AppRoutes() {
                     </RequirePermission>
                   }
                 />
+                {/* Data export (#68): every role may export its own data; the page lists only the sources the
+                    API returns for the caller. */}
+                <Route path="/settings/data-export" element={<DataExportPage />} />
                 {/* Groups (#71): the sharing slice's pages, gated on the string `/api/groups`
                     enforces. The detail page is a child of the Groups card, not a card. */}
                 <Route
