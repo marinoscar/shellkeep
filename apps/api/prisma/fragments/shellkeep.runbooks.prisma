@@ -122,6 +122,8 @@ model RunbookRun {
   destructive       Boolean   @default(false)
   /// Why a run that never started ended (`APPROVAL_REJECTED`, `APPROVAL_EXPIRED`, `CANCELLED`); NULL otherwise.
   errorCode         String?   @map("error_code") @db.VarChar(64)
+  /// "Stop AI" (#64): the AI agents of this run end before their next tool call (`AI_STOPPED`).
+  aiStopRequestedAt DateTime? @map("ai_stop_requested_at") @db.Timestamptz
   startedAt         DateTime? @map("started_at") @db.Timestamptz
   finishedAt        DateTime? @map("finished_at") @db.Timestamptz
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -200,6 +202,11 @@ model RunbookRunStep {
   logTruncated  Boolean   @default(false) @map("log_truncated")
   logStorageKey String?   @map("log_storage_key") @db.VarChar(512)
   errorCode     String?   @map("error_code") @db.VarChar(64)
+  /// An `ai_task` step (#64): the conversation so far (redacted input items), kept while the step waits for
+  /// a person's approval so the agent can resume; cleared when the step ends. NULL for every other step.
+  aiTranscript  Json?     @map("ai_transcript") @db.JsonB
+  /// An `ai_task` step: the model's closing summary (redacted, capped).
+  aiSummary     String?   @map("ai_summary") @db.Text
   startedAt     DateTime? @map("started_at") @db.Timestamptz
   finishedAt    DateTime? @map("finished_at") @db.Timestamptz
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -255,6 +262,10 @@ model RunbookCommandExecution {
   signal          String?   @db.VarChar(16)
   timedOut        Boolean   @default(false) @map("timed_out")
   bytes           Int       @default(0)
+  /// An AI agent command (#64): `succeeded`, `failed`, `timed_out`, `cancelled`, or `refused` (policy said no; nothing ran). NULL for other origins.
+  outcome         String?   @db.VarChar(16)
+  /// The person who approved an AI agent command (a plain id, no foreign key: the audit row outlives the user); NULL when no approval was needed.
+  approvedBy      String?   @map("approved_by") @db.Uuid
   startedAt       DateTime  @default(now()) @map("started_at") @db.Timestamptz
   finishedAt      DateTime? @map("finished_at") @db.Timestamptz
 
@@ -285,6 +296,9 @@ model RunbookApproval {
   decidedBy   String?   @map("decided_by") @db.Uuid
   decidedAt   DateTime? @map("decided_at") @db.Timestamptz
   comment     String?   @db.VarChar(1000)
+  /// An AI approval (#64): `ai_command` carries `{ command, commandSha256, reason }` (the command redacted), `ai_plan`
+  /// `{ summary, commands: [{ command, reason, refused }] }`. NULL for every other kind.
+  payload     Json?     @db.JsonB
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
