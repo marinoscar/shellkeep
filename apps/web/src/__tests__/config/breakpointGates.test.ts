@@ -40,7 +40,11 @@ const WHY = {
  * Every file under `src/` (outside tests) that reads a breakpoint, keyed by its
  * path from `src/`. NONE of them may be shell chrome (see `CHROME` below).
  */
-const ALLOWED_READS: Readonly<Record<string, string>> = {};
+const ALLOWED_READS: Readonly<Record<string, string>> = {
+  // The terminal workspace's own phone/wide decision (#77): one pane and an
+  // overflow menu below `sm`, the docked AI panel at `md`.
+  'components/terminal/useTerminalLayout.ts': WHY.terminal,
+};
 
 /**
  * The files that ARE this app's shell chrome and its bindings. They must read
@@ -135,6 +139,8 @@ describe('breakpoint gates: the five are the platform shell\'s (#76)', () => {
       'contexts',
       'theme',
       'pages/TerminalFullPage.tsx',
+      // The single-session page, replaced by the workspace (#77).
+      'pages/TerminalPage.tsx',
     ]) {
       expect(existsSync(join(SRC, gone)), `${gone} must stay deleted`).toBe(false);
     }

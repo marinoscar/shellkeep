@@ -51,6 +51,7 @@ function openSocket(
   setIsConnected: (connected: boolean) => void,
   setError: (error: string | null) => void,
   setHostKeyRefusal: (refusal: HostKeyRefusal | null) => void,
+  setLatencyMs: (latency: number | null) => void,
 ): TerminalWebSocket {
   // The socket reads the session's current access token on every (re)connect
   // and re-authenticates in-band after each refresh (#47).
@@ -77,6 +78,12 @@ function openSocket(
 
   ws.on('disconnect', () => {
     setIsConnected(false);
+    setLatencyMs(null);
+  });
+
+  // The heartbeat's round trip (the status bar, #77).
+  ws.on('latency', (latency: number) => {
+    setLatencyMs(latency);
   });
 
   ws.on('error', (err: Error) => {
@@ -95,6 +102,8 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hostKeyRefusal, setHostKeyRefusal] = useState<HostKeyRefusal | null>(null);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [size, setSize] = useState<{ cols: number; rows: number } | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const wsRef = useRef<TerminalWebSocket | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -172,12 +181,14 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     container.addEventListener('focus', handleFocus, true /* capture */);
 
     fitAddon.fit();
+    setSize({ cols: terminal.cols, rows: terminal.rows });
+    const resizeSubscription = terminal.onResize?.(({ cols, rows }) => setSize({ cols, rows }));
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
 
-    const ws = openSocket(sessionId, terminal, setIsConnected, setError, setHostKeyRefusal);
+    const ws = openSocket(sessionId, terminal, setIsConnected, setError, setHostKeyRefusal, setLatencyMs);
     wsRef.current = ws;
 
     // Terminal input -> the CURRENT socket. Subscribed once per terminal, so a
@@ -221,6 +232,7 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
       container.removeEventListener('focus', handleFocus, true);
       dataSubscription?.dispose();
       binarySubscription?.dispose();
+      resizeSubscription?.dispose();
       wsRef.current?.disconnect();
       terminal.dispose();
       terminalRef.current = null;
@@ -242,7 +254,7 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     if (api.getAccessToken() && terminal) {
       // Only the socket is replaced: the terminal's single input subscription
       // already routes to whatever `wsRef.current` is.
-      const ws = openSocket(sessionId, terminal, setIsConnected, setError, setHostKeyRefusal);
+      const ws = openSocket(sessionId, terminal, setIsConnected, setError, setHostKeyRefusal, setLatencyMs);
       wsRef.current = ws;
       ws.connect();
     }
@@ -287,5 +299,9 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     hostKeyRefusal,
     retryConnect,
     dismissHostKey,
+    /** The heartbeat's last round trip in ms, or `null` while not connected (#77). */
+    latencyMs,
+    /** The terminal's columns and rows after the last fit, or `null` before the first. */
+    size,
   };
 }

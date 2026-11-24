@@ -45,9 +45,9 @@ const UsersPage = lazy(() =>
 const HomePage = lazy(() => import('./pages/HomePage'));
 const ServerProfilesPage = lazy(() => import('./pages/ServerProfilesPage'));
 const SessionsPage = lazy(() => import('./pages/SessionsPage'));
-// The session terminal at `/sessions/:id`, full-bleed inside the shell (#76);
-// #77 replaces it with the session workspace.
-const TerminalPage = lazy(() => import('./pages/TerminalPage'));
+// The session workspace at `/sessions/:id` (#77): tabs, splits and the
+// switcher, full-bleed inside the shell (#76).
+const TerminalWorkspacePage = lazy(() => import('./pages/TerminalWorkspacePage'));
 // Settings (issue #48): the packaged hub over `config/userSettingsSections.tsx`,
 // the packaged Profile and Appearance pages, and the terminal domain's page.
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
@@ -228,7 +228,7 @@ function AppRoutes() {
                   element={
                     <RequirePermission permission="sessions:read" fallback={HOME}>
                       <TerminalAccessGate>
-                        <TerminalPage />
+                        <TerminalWorkspacePage />
                       </TerminalAccessGate>
                     </RequirePermission>
                   }
