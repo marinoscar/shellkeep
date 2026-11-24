@@ -66,6 +66,22 @@ describe('TerminalSystemSettingsPage (#46)', () => {
     expect(await screen.findByText('Terminal settings saved')).toBeInTheDocument();
   });
 
+  it('saves only the ssh namespace when just the host-key policy changed (#60)', async () => {
+    const user = userEvent.setup();
+    render(<TerminalSystemSettingsPage />, { wrapperOptions: { user: mockAdminUser } });
+
+    const policy = await screen.findByLabelText('Host-key policy');
+    expect(policy).toHaveTextContent('Ask the user to verify (recommended)');
+
+    await user.click(policy);
+    await user.click(await screen.findByRole('option', { name: 'Strict' }));
+    expect(screen.getByText(/always refused; its key must be set/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patched).toHaveLength(1));
+    expect(patched[0]).toEqual({ ssh: { hostKeyPolicy: 'strict' } });
+  });
+
   it('refuses an out-of-range threshold before sending it', async () => {
     const user = userEvent.setup();
     render(<TerminalSystemSettingsPage />, { wrapperOptions: { user: mockAdminUser } });
@@ -85,6 +101,7 @@ describe('TerminalSystemSettingsPage (#46)', () => {
     expect(await screen.findByLabelText('Detach after (minutes)')).toBeDisabled();
     expect(screen.getByText(/\(read-only\)/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByLabelText('Host-key policy')).toHaveAttribute('aria-disabled', 'true');
     const probeCard = screen.getByText('Doctor probe').closest('div') as HTMLElement;
     expect(within(probeCard).getByText(/skip/i)).toBeInTheDocument();
   });
