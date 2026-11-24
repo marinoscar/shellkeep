@@ -13,15 +13,17 @@
  * `user_settings:write` to every role, so a gate on the others would invent an
  * authorization rule the API does not enforce; `ai:use` is a grant a deployment really can withhold.
  *
- * The composition root: the `Terminal` card is the terminal domain's
- * (`components/terminal/settings/TerminalSettingsPage.tsx`), declared here so
- * the base settings code never names the domain. It replaces the transitional
+ * The composition root: the `Terminal` and `Keyboard shortcuts` cards are the
+ * terminal domain's (`components/terminal/settings/TerminalSettingsPage.tsx`,
+ * `ShortcutsSettingsPage.tsx`, #80), declared here so the base settings code
+ * never names the domain. It replaces the transitional
  * `config/userSettingsPanels.tsx` of #44.
  */
 
 import PersonIcon from '@mui/icons-material/Person';
 import PaletteIcon from '@mui/icons-material/Palette';
 import TerminalIcon from '@mui/icons-material/Terminal';
+import KeyboardIcon from '@mui/icons-material/Keyboard';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
@@ -31,6 +33,10 @@ import {
   TERMINAL_SETTINGS_DESCRIPTION,
   TERMINAL_SETTINGS_TITLE,
 } from '../components/terminal/settings/TerminalSettingsPage';
+import {
+  SHORTCUTS_SETTINGS_DESCRIPTION,
+  SHORTCUTS_SETTINGS_TITLE,
+} from '../components/terminal/settings/ShortcutsSettingsPage';
 
 /** The user settings sections, in hub order. */
 export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
@@ -73,6 +79,14 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
         description: TERMINAL_SETTINGS_DESCRIPTION,
         Icon: TerminalIcon,
         path: '/settings/terminal',
+      },
+      {
+        // #80, appended: the key bar's shortcuts (the `shortcuts` namespace),
+        // moved off the Terminal page. No permission, like its siblings.
+        title: SHORTCUTS_SETTINGS_TITLE,
+        description: SHORTCUTS_SETTINGS_DESCRIPTION,
+        Icon: KeyboardIcon,
+        path: '/settings/shortcuts',
       },
     ],
   },

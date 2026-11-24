@@ -33,25 +33,61 @@ export interface KeyShortcut {
   keystrokes: Keystroke[];
 }
 
-/** The `terminal` user-settings namespace (API: `terminal/settings`). */
+/** When the on-screen key bar shows: `auto` on touch devices only (#80). */
+export const TERMINAL_KEY_BAR_MODES = ['auto', 'always', 'never'] as const;
+/** The monospace fonts the app bundles; `system` is the platform's own stack. */
+export const TERMINAL_FONT_FAMILIES = ['system', 'jetbrains-mono', 'fira-code', 'source-code-pro'] as const;
+export const TERMINAL_CURSOR_STYLES = ['block', 'bar', 'underline'] as const;
+export const TERMINAL_THEMES = ['follow-app', 'dark', 'light', 'solarized-dark', 'solarized-light'] as const;
+export const TERMINAL_BELL_MODES = ['none', 'visual', 'sound'] as const;
+
+export type TerminalKeyBarMode = (typeof TERMINAL_KEY_BAR_MODES)[number];
+export type TerminalFontFamily = (typeof TERMINAL_FONT_FAMILIES)[number];
+export type TerminalCursorStyle = (typeof TERMINAL_CURSOR_STYLES)[number];
+export type TerminalThemeName = (typeof TERMINAL_THEMES)[number];
+export type TerminalBellMode = (typeof TERMINAL_BELL_MODES)[number];
+
+/**
+ * The `terminal` user-settings namespace (API: `terminal/settings`), as
+ * stored: a row written before #80 holds only `showScrollButtons` and the
+ * legacy `keyShortcuts`, so every other field may be absent.
+ */
 export interface TerminalUserSettings {
   showScrollButtons: boolean;
+  showKeyBar?: TerminalKeyBarMode;
+  fontFamily?: TerminalFontFamily;
+  fontSize?: number;
+  lineHeight?: number;
+  cursorStyle?: TerminalCursorStyle;
+  cursorBlink?: boolean;
+  scrollback?: number;
+  theme?: TerminalThemeName;
+  bell?: TerminalBellMode;
+  copyOnSelect?: boolean;
+  /** LEGACY (before #80): now `shortcuts.keyShortcuts`. Read through the shim only. */
   keyShortcuts?: KeyShortcut[];
+}
+
+/** The `shortcuts` user-settings namespace (#80, API: `terminal/settings`). */
+export interface ShortcutsUserSettings {
+  keyShortcuts: KeyShortcut[];
 }
 
 /**
  * `GET /api/user-settings` as the terminal domain reads it: the platform's
- * document plus the `terminal` namespace, present ONLY when stored (apply
- * `resolveTerminalSettings` of `lib/terminal/settings.ts`).
+ * document plus the `terminal` and `shortcuts` namespaces, each present ONLY
+ * when stored (read them through `lib/terminal/settings.ts`).
  */
 export interface TerminalUserSettingsDocument extends UserSettingsResponseBase {
   terminal?: TerminalUserSettings;
+  shortcuts?: ShortcutsUserSettings;
 }
 
 /** The `PATCH /api/user-settings` body the terminal domain sends. */
 export interface TerminalUserSettingsUpdate {
   /** The whole namespace (`null` removes it, so the defaults apply). */
-  terminal?: TerminalUserSettings | null;
+  terminal?: Omit<TerminalUserSettings, 'keyShortcuts'> | null;
+  shortcuts?: ShortcutsUserSettings | null;
 }
 
 // Server Profiles

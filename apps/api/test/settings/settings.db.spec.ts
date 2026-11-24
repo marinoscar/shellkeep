@@ -127,7 +127,10 @@ describe('Settings (real database)', () => {
       expect(response.body.data.theme).toBe('system');
       expect(response.body.data.profile).toEqual({ imageSource: 'provider', imageObjectId: null });
       expect(response.body.data.terminal.showScrollButtons).toBe(true);
-      expect(response.body.data.terminal.keyShortcuts).toHaveLength(9);
+      expect(response.body.data.terminal.fontSize).toBe(14);
+      // #80: the shortcuts are their own namespace.
+      expect(response.body.data.terminal.keyShortcuts).toBeUndefined();
+      expect(response.body.data.shortcuts.keyShortcuts).toHaveLength(9);
     });
 
     it('saves terminal preferences and a shortcut list, and loads them back', async () => {
@@ -141,22 +144,26 @@ describe('Settings (real database)', () => {
       await request(server())
         .patch('/api/user-settings')
         .set(bearer(user.accessToken))
-        .send({ terminal: { showScrollButtons: false, keyShortcuts: [shortcut] } })
+        .send({ terminal: { showScrollButtons: false, fontSize: 18 }, shortcuts: { keyShortcuts: [shortcut] } })
         .expect(200);
 
       const loaded = await request(server()).get('/api/user-settings').set(bearer(user.accessToken)).expect(200);
-      expect(loaded.body.data.terminal).toEqual({ showScrollButtons: false, keyShortcuts: [shortcut] });
+      expect(loaded.body.data.terminal).toEqual(expect.objectContaining({ showScrollButtons: false, fontSize: 18 }));
+      expect(loaded.body.data.shortcuts).toEqual({ keyShortcuts: [shortcut] });
+
+      // An out-of-range font size is refused.
+      await request(server()).patch('/api/user-settings').set(bearer(user.accessToken)).send({ terminal: { fontSize: 25 } }).expect(400);
 
       // Too many shortcuts (the cap is 50) and a keystroke without modifiers are refused.
       const many = Array.from({ length: 51 }, (_, i) => ({
         ...shortcut,
         id: `${String(i).padStart(8, '0')}-2222-4222-8222-222222222201`,
       }));
-      await request(server()).patch('/api/user-settings').set(bearer(user.accessToken)).send({ terminal: { keyShortcuts: many } }).expect(400);
+      await request(server()).patch('/api/user-settings').set(bearer(user.accessToken)).send({ shortcuts: { keyShortcuts: many } }).expect(400);
       await request(server())
         .patch('/api/user-settings')
         .set(bearer(user.accessToken))
-        .send({ terminal: { keyShortcuts: [{ ...shortcut, keystrokes: [{ key: 'b' }] }] } })
+        .send({ shortcuts: { keyShortcuts: [{ ...shortcut, keystrokes: [{ key: 'b' }] }] } })
         .expect(400);
     });
 

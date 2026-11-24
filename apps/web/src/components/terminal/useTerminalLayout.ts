@@ -10,6 +10,11 @@ export interface TerminalLayout {
   isPhone: boolean;
   /** `md` and up: the AI panel docks to the right of the panes instead of a sheet. */
   isWide: boolean;
+  /**
+   * A coarse pointer (a touch screen): the key bar's `auto` mode shows it here
+   * and on a phone (#80). A pointer query, not a breakpoint.
+   */
+  isTouch: boolean;
 }
 
 /**
@@ -24,5 +29,6 @@ export function useTerminalLayout(): TerminalLayout {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'), { noSsr: true });
   const isWide = useMediaQuery(theme.breakpoints.up('md'), { noSsr: true });
-  return { isPhone, isWide };
+  const isTouch = useMediaQuery('(pointer: coarse)', { noSsr: true });
+  return { isPhone, isWide, isTouch };
 }

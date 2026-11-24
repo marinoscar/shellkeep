@@ -64,6 +64,10 @@ const UserTokensPage = lazy(() =>
 const TerminalSettingsPage = lazy(
   () => import('./components/terminal/settings/TerminalSettingsPage'),
 );
+// #80: the key bar's shortcuts, their own card next to Terminal.
+const ShortcutsSettingsPage = lazy(
+  () => import('./components/terminal/settings/ShortcutsSettingsPage'),
+);
 // Admin settings (issue #46): the packaged hub over `config/adminSections.tsx`,
 // the host slice's About and Maintenance pages, the packaged Doctor, and the
 // terminal domain's system settings page.
@@ -249,6 +253,7 @@ function AppRoutes() {
                 <Route path="/settings/profile" element={<UserProfilePage />} />
                 <Route path="/settings/appearance" element={<UserAppearancePage />} />
                 <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
+                <Route path="/settings/shortcuts" element={<ShortcutsSettingsPage />} />
                 <Route path="/settings/notifications" element={<UserNotificationsPage />} />
                 <Route path="/settings/tokens" element={<UserTokensPage />} />
                 {/* AI keys (#55): `ai:use` is what the `/api/ai/keys` controller

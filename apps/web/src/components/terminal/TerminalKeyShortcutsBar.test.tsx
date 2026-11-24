@@ -133,7 +133,7 @@ describe('TerminalKeyShortcutsBar', () => {
 
       const settingsLink = screen.getByRole('link', { name: /settings/i });
       expect(settingsLink).toBeInTheDocument();
-      expect(settingsLink).toHaveAttribute('href', '/settings');
+      expect(settingsLink).toHaveAttribute('href', '/settings/shortcuts');
     });
 
     it('renders no chip buttons', () => {

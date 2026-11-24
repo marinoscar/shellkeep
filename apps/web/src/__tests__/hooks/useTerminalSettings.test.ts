@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { mockUserSettings } from '../mocks/data';
 import { useTerminalSettings } from '../../hooks/useTerminalSettings';
-import { DEFAULT_KEY_SHORTCUTS } from '../../lib/terminal/settings';
+import { DEFAULT_KEY_SHORTCUTS, DEFAULT_TERMINAL_SETTINGS } from '../../lib/terminal/settings';
 import type { KeyShortcut } from '../../types/terminal';
 
 const custom: KeyShortcut = {
@@ -18,14 +18,26 @@ describe('useTerminalSettings', () => {
     const { result } = renderHook(() => useTerminalSettings());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.terminal).toEqual({
-      showScrollButtons: true,
-      keyShortcuts: DEFAULT_KEY_SHORTCUTS,
-    });
-    expect(result.current.settings?.terminal.keyShortcuts).toHaveLength(9);
+    expect(result.current.terminal).toEqual(DEFAULT_TERMINAL_SETTINGS);
+    expect(result.current.keyShortcuts).toEqual(DEFAULT_KEY_SHORTCUTS);
+    expect(result.current.settings?.shortcuts.keyShortcuts).toHaveLength(9);
   });
 
-  it('reads a stored namespace as saved before the change', async () => {
+  it('reads the shortcuts namespace', async () => {
+    server.use(
+      http.get('*/api/user-settings', () =>
+        HttpResponse.json({
+          data: { ...mockUserSettings, shortcuts: { keyShortcuts: [custom] } },
+        }),
+      ),
+    );
+    const { result } = renderHook(() => useTerminalSettings());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.keyShortcuts).toEqual([custom]);
+  });
+
+  it('reads a legacy terminal.keyShortcuts payload through the shim (#80)', async () => {
     server.use(
       http.get('*/api/user-settings', () =>
         HttpResponse.json({
@@ -36,7 +48,8 @@ describe('useTerminalSettings', () => {
     const { result } = renderHook(() => useTerminalSettings());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.terminal).toEqual({ showScrollButtons: false, keyShortcuts: [custom] });
+    expect(result.current.terminal).toEqual({ ...DEFAULT_TERMINAL_SETTINGS, showScrollButtons: false });
+    expect(result.current.keyShortcuts).toEqual([custom]);
   });
 
   it('saves the whole namespace with If-Match and adopts the answer', async () => {
@@ -59,10 +72,50 @@ describe('useTerminalSettings', () => {
     });
 
     expect(ifMatch).toBe(String(mockUserSettings.version));
-    expect(body).toEqual({
-      terminal: { showScrollButtons: false, keyShortcuts: DEFAULT_KEY_SHORTCUTS },
-    });
+    expect(body).toEqual({ terminal: { ...DEFAULT_TERMINAL_SETTINGS, showScrollButtons: false } });
     expect(result.current.terminal?.showScrollButtons).toBe(false);
+  });
+
+  it('saves the shortcut list to the shortcuts namespace', async () => {
+    let body: unknown = null;
+    server.use(
+      http.patch('*/api/user-settings', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({
+          data: { ...mockUserSettings, ...(body as object), version: mockUserSettings.version + 1 },
+        });
+      }),
+    );
+    const { result } = renderHook(() => useTerminalSettings());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.updateShortcuts([custom]);
+    });
+
+    expect(body).toEqual({ shortcuts: { keyShortcuts: [custom] } });
+    expect(result.current.keyShortcuts).toEqual([custom]);
+  });
+
+  it('hands a saved document to the other open instances without a refetch', async () => {
+    server.use(
+      http.patch('*/api/user-settings', async ({ request }) => {
+        const body = (await request.json()) as object;
+        return HttpResponse.json({
+          data: { ...mockUserSettings, ...body, version: mockUserSettings.version + 1 },
+        });
+      }),
+    );
+    const editor = renderHook(() => useTerminalSettings());
+    const terminal = renderHook(() => useTerminalSettings());
+    await waitFor(() => expect(editor.result.current.isLoading).toBe(false));
+    await waitFor(() => expect(terminal.result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await editor.result.current.updateTerminal({ fontSize: 20 });
+    });
+
+    await waitFor(() => expect(terminal.result.current.terminal?.fontSize).toBe(20));
   });
 
   it('rejects with a clear message on a version conflict', async () => {
@@ -76,7 +129,7 @@ describe('useTerminalSettings', () => {
 
     await expect(
       act(async () => {
-        await result.current.updateTerminal({ keyShortcuts: [custom] });
+        await result.current.updateShortcuts([custom]);
       }),
     ).rejects.toThrow(/updated elsewhere/i);
   });
