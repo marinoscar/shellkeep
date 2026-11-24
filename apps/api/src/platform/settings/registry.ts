@@ -40,6 +40,7 @@ import {
   APP_USER_SETTINGS_NAMESPACES,
 } from '../../app-registrations/settings';
 import { APP_RETENTION_POLICIES } from '../../app-registrations/jobs';
+import { RUNBOOKS_SYSTEM_SETTINGS } from '../../runbooks/settings/runbooks.system-settings';
 import { SSH_SYSTEM_SETTINGS } from '../../ssh/ssh.system-settings';
 
 // The app's retention policies BEFORE anything reads RETENTION_SYSTEM_SETTINGS: the
@@ -69,6 +70,8 @@ export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettin
   NOTIFICATIONS_SYSTEM_SETTINGS as SystemSettingsNamespace,
   // The SSH host-key policy (#60), appended last so no stored key moves.
   SSH_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The runbooks policy (#61), with a tighten-only org layer; appended after `ssh` so no stored key moves.
+  RUNBOOKS_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
 /** The platform's optional user namespaces this app registers: the notification preferences (#51). */

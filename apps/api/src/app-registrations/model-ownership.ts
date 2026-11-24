@@ -9,6 +9,8 @@
 // organization the row was created in), not as an isolation key: they are not
 // under row-level security (docs/platform-adoption/local-exceptions.md).
 //
+// The runbook tables (#61) are the exception: org tables under forced row-level security.
+//
 // ONE-LINE RATIONALE EACH, because the tripwire prints it when it fails.
 // =============================================================================
 
@@ -29,5 +31,17 @@ export const APP_MODEL_OWNERSHIP: readonly Def[] = [
     kind: 'user',
     orgReference: 'orgId',
     rationale: 'A terminal session belongs to the user who opened it; org_id records the organization, it is not an isolation key.',
+  },
+  {
+    model: 'Runbook',
+    kind: 'org',
+    orgField: 'orgId',
+    rationale: 'A runbook belongs to the organization (owner_user_id is only its author): isolated by forced row-level security on org_id.',
+  },
+  {
+    model: 'RunbookVersion',
+    kind: 'org',
+    orgField: 'orgId',
+    rationale: 'An immutable version of an organization-owned runbook: isolated by forced row-level security on org_id.',
   },
 ];

@@ -23,7 +23,7 @@ import { ORG_SETTINGS_PERMISSIONS, SETTINGS_PERMISSIONS } from '@marinoscar/plat
 import { STORAGE_PERMISSIONS } from '@marinoscar/platform-api/storage';
 import { PLATFORM_ROLES } from '@marinoscar/platform-api/manifest';
 
-import { APP_PERMISSIONS } from '../../app-registrations/permissions';
+import { APP_PERMISSIONS, RUNBOOK_PERMISSIONS } from '../../app-registrations/permissions';
 
 export const ROLES = roleIds(PLATFORM_ROLES);
 
@@ -38,6 +38,7 @@ export const PERMISSIONS = {
   ...permissionIds(ALLOWLIST_PERMISSIONS),
   ...permissionIds(STORAGE_PERMISSIONS),
   ...permissionIds(APP_PERMISSIONS),
+  ...permissionIds(RUNBOOK_PERMISSIONS),
 } as const;
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

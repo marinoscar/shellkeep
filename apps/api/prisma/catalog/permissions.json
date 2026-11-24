@@ -221,6 +221,26 @@
       "name": "sessions:delete",
       "description": "Terminate terminal sessions",
       "scope": "org"
+    },
+    {
+      "name": "runbooks:read",
+      "description": "View runbooks, their versions, runs and logs",
+      "scope": "org"
+    },
+    {
+      "name": "runbooks:write",
+      "description": "Create and version runbooks and manage their secret parameters",
+      "scope": "org"
+    },
+    {
+      "name": "runbooks:run",
+      "description": "Start, cancel and retry runbook runs",
+      "scope": "org"
+    },
+    {
+      "name": "runbooks:approve",
+      "description": "Decide runbook approval requests",
+      "scope": "org"
     }
   ],
   "rolePermissions": {
@@ -258,14 +278,18 @@
       "servers:delete",
       "sessions:read",
       "sessions:write",
-      "sessions:delete"
+      "sessions:delete",
+      "runbooks:read",
+      "runbooks:write",
+      "runbooks:run"
     ],
     "viewer": [
       "user_settings:read",
       "user_settings:write",
       "storage:read",
       "servers:read",
-      "sessions:read"
+      "sessions:read",
+      "runbooks:read"
     ],
     "org_admin": [
       "user_settings:read",
@@ -285,7 +309,11 @@
       "servers:delete",
       "sessions:read",
       "sessions:write",
-      "sessions:delete"
+      "sessions:delete",
+      "runbooks:read",
+      "runbooks:write",
+      "runbooks:run",
+      "runbooks:approve"
     ]
   }
 }

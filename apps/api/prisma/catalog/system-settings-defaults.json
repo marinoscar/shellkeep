@@ -80,5 +80,19 @@
   },
   "ssh": {
     "hostKeyPolicy": "tofu_prompt"
+  },
+  "runbooks": {
+    "enabled": true,
+    "maxTargetsPerRun": 200,
+    "maxConcurrency": 20,
+    "defaultStepTimeoutSec": 600,
+    "maxLogBytesPerStep": 5242880,
+    "approvals": {
+      "allowSelfApproval": false,
+      "defaultExpirySec": 86400
+    },
+    "ai": {
+      "agentEnabled": true
+    }
   }
 }
