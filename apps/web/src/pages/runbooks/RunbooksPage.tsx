@@ -74,7 +74,7 @@ export default function RunbooksPage() {
     [page, pageSize, search, tag, includeArchived, filter],
   );
 
-  const rows = list.data?.items ?? [];
+  const rows = useMemo(() => list.data?.items ?? [], [list.data]);
   const knownTags = useMemo(() => [...new Set(rows.flatMap((r) => r.tags))].sort(), [rows]);
 
   const setFilter = (next: RunbooksFilter) => {
