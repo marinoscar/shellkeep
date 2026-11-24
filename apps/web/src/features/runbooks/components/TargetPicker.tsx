@@ -136,6 +136,8 @@ export function TargetPicker({ value, onChange, onPreview, height = 320 }: Targe
   const allTags = useMemo(() => [...new Set(servers.flatMap((s) => s.tags))].sort(), [servers]);
   const serverName = useMemo(() => new Map(servers.map((s) => [s.id, s.name])), [servers]);
   const selectedIds = useMemo(() => new Set(value.serverIds), [value.serverIds]);
+  // The table is told only about the picked servers it lists.
+  const listedSelected = useMemo(() => new Set(servers.map((s) => s.id).filter((id) => selectedIds.has(id))), [servers, selectedIds]);
   const untrusted = preview?.servers.filter((s) => !s.hostKeyTrusted) ?? [];
 
   return (
@@ -178,8 +180,16 @@ export function TargetPicker({ value, onChange, onPreview, height = 320 }: Targe
           quickSearch={{ value: search, onChange: setSearch, placeholder: 'Search servers', ariaLabel: 'Search servers' }}
           selection={{
             selectable: true,
-            selectedIds,
-            onSelectionChange: (next) => onChange({ ...value, serverIds: [...next] }),
+            selectedIds: listedSelected,
+            // The table knows only the rows it shows: keep the picked servers that are not listed
+            // (another search, a deep link to a server past the first page).
+            onSelectionChange: (next) => {
+              const listed = new Set(servers.map((s) => s.id));
+              const unlisted = value.serverIds.filter((id) => !listed.has(id));
+              const merged = [...new Set([...unlisted, ...next])];
+              const same = merged.length === value.serverIds.length && merged.every((id) => selectedIds.has(id));
+              if (!same) onChange({ ...value, serverIds: merged });
+            },
           }}
           emptyState={<Typography variant="body2">No servers match.</Typography>}
         />
