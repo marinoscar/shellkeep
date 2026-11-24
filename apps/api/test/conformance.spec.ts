@@ -6,7 +6,7 @@
 // own source and registrations. Suites adopted with their slice are added here:
 // `cron-enqueue-only`, `user-owned-data` and `identity` from #47, `settings` and
 // `credentials` from #48, `host` and `doctor-read-only` from #46, `on-event-no-io` and
-// `nodes` from #49, `storage` from #50, `email` and `notifications` from #51; AI and the rest follow with #52-#55.
+// `nodes` from #49, `storage` from #50, `email` and `notifications` from #51, `dbBackup` from #52; AI and the rest follow with #53-#55.
 //
 // The registries are filled by the first two imports, as `main.ts` fills them.
 // =============================================================================
@@ -37,6 +37,8 @@ import '@marinoscar/platform-api/storage/testing';
 // Register the `email` and `notifications` suites (#51).
 import '@marinoscar/platform-api/email/testing';
 import '@marinoscar/platform-api/notifications/testing';
+// Register the `dbBackup` suite (#52).
+import '@marinoscar/platform-api/db-backup/testing';
 import { discoverControllers } from '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/settings/testing';
 // Register the `telemetry` suite (metric groups, routes, retention cron).
@@ -111,6 +113,12 @@ runPlatformConformance({
     // its own bucket, every driver writes its secrets to its own address, and the provider
     // extensions behave.
     storage: { requiredPrefixIds: ['session-logs', 'runbook-artifacts'] },
+    // The db-backup slice (#52): every dump and restore carries BOTH halves of the row-level
+    // security pair (`--enable-row-security` and `PGOPTIONS=-c app.rls_bypass=on`), the restore is
+    // server-only and the backup node-eligible with its profile and broker, the three permissions
+    // are system scope, every registered restore carry-over binds `$1` (none is registered), and
+    // `database-backups/` is a registered deployment-scope key prefix.
+    dbBackup: {},
     // Every app route under /api/nodes carries @NodeRoute() with a declared credential and ownership;
     // the platform's own control and data plane routes are discovered from the booted module graph.
     nodes: { rootModule: AppModule, minPlatformRoutes: 10 },
@@ -144,8 +152,8 @@ runPlatformConformance({
         contents: existsSync(catalogPath) ? readFileSync(catalogPath, 'utf8') : undefined,
         staleMessage: SETTINGS_CATALOG_STALE_MESSAGE,
       },
-      // ui, features, terminal, maintenance, jobs, nodes, retention, storage, notifications, ssh and telemetry.
-      minSystemNamespaces: 11,
+      // ui, features, terminal, maintenance, jobs, nodes, retention, storage, notifications, ssh, databaseBackup and telemetry.
+      minSystemNamespaces: 12,
     },
     // Every credential purpose has a platform or app owner, every user purpose's fallback
     // address resolves (`ssh` has none), and no credential presentation schema carries a
@@ -159,14 +167,15 @@ runPlatformConformance({
     // storage provider that refuses writes: none may write, throw, time out or return an invalid
     // outcome. The platform registers 15 (the host's `core.*`, `db.*`, `secrets.*`,
     // `maintenance.mode` and `network.egress`, the identity slice's `auth.*` and
-    // `tenancy.mode`, and the storage slice's `storage.config` and `storage.bucket`); the terminal
+    // `tenancy.mode`, and the storage slice's `storage.config` and `storage.bucket`) and the db-backup
+    // slice's four (`backup.schedule`, `backup.pg-client`, `backup.rls-bypass`, `backup.mirrors`, #52); the terminal
     // adds five (`terminal.ssh.client`, `terminal.tmux.probe`, `terminal.sessions.reaper`,
     // `terminal.ssh.legacy-secrets`, and the SSH slice's `ssh.host_key_policy`). The last item,
     // `terminal.ssh.egress`, is an egress contributor graded by `network.egress`. The telemetry slice (#53)
-    // adds its own checks and an egress contributor, which brings the booted total to 30.
+    // adds its own checks and an egress contributor, which brings the booted total to 34.
     // Every metric group (the platform's six and the app's "Terminal") is well formed, computes on
     // an empty schema without throwing, and every telemetry route declares its permission.
     telemetry: {},
-    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 30 },
+    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 34 },
   },
 });

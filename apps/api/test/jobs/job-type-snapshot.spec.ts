@@ -50,6 +50,11 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'admin.broadcast.chunk': 'Broadcast delivery',
   'notifications.inbox.purge': 'Notification inbox purge',
   'notifications.deliveries.purge': 'Delivery log purge',
+  // The db-backup slice (#52): the backup run, its sweep, the restore and the displaced database's cleanup.
+  'db.backup.run': 'Database backup',
+  'db.backup.sweep': 'Backup sweep',
+  'db.restore.run': 'Database restore',
+  'db.restore.old-db-drop': 'Restore cleanup',
   // The telemetry slice (#53): the store's TTL and the managed stack's deploy. Both are server-only.
   'telemetry.retention.apply': 'Telemetry retention',
   'telemetry.stack.deploy': 'Telemetry services deploy',

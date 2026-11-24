@@ -103,6 +103,21 @@
       "scope": "system"
     },
     {
+      "name": "db_backup:read",
+      "description": "View backup schedule, history and status",
+      "scope": "system"
+    },
+    {
+      "name": "db_backup:write",
+      "description": "Configure the backup schedule and run a backup",
+      "scope": "system"
+    },
+    {
+      "name": "db_backup:restore",
+      "description": "Restore the database from a backup",
+      "scope": "system"
+    },
+    {
       "name": "broadcasts:read",
       "description": "View notification broadcasts and their delivery history",
       "scope": "system"
@@ -257,6 +272,9 @@
       "jobs:write",
       "nodes:read",
       "nodes:write",
+      "db_backup:read",
+      "db_backup:write",
+      "db_backup:restore",
       "broadcasts:read",
       "broadcasts:write",
       "push:read",

@@ -164,6 +164,18 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'Database Backup',
+    tags: [
+      {
+        name: 'Database Backup',
+        description:
+          'Scheduled database backups, their history, verification, signed downloads and restore. Reading and ' +
+          'scheduling are `db_backup:read`/`db_backup:write`; restoring requires `db_backup:restore`, a permission ' +
+          'of its own because it replaces the live database and restarts the process. Administrators only.',
+      },
+    ],
+  },
+  {
     name: 'Notifications',
     tags: [
       {

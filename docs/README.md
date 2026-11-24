@@ -34,7 +34,8 @@ ShellKeep is a browser-based terminal workspace with persistent tmux-backed sess
 | [DEVICE-AUTH.md](DEVICE-AUTH.md) | Device authorization (RFC 8628) |
 | [AI-ASSISTANTS.md](AI-ASSISTANTS.md) | Claude Code and OpenCode configuration, size budgets, guards |
 | [runbooks/database-baseline.md](runbooks/database-baseline.md) | Baseline a deployed database onto the platform migration history |
-| [runbooks/application-role.md](runbooks/application-role.md) | The `shellkeep_app` database role |
+| [runbooks/application-role.md](runbooks/application-role.md) | The `shellkeep_app` database role: create, switch, rollback |
+| [runbooks/database-backup-restore.md](runbooks/database-backup-restore.md) | In-app database backup and restore |
 | [runbooks/ssh-secret-reencryption.md](runbooks/ssh-secret-reencryption.md) | Re-encrypt SSH secrets into the platform credential store (dry run, apply, verify, rollback) |
 | [specs/README.md](specs/README.md) | Foundation implementation specs |
 | [ssl-nginx-setup.md](ssl-nginx-setup.md) | SSL and Nginx reverse proxy notes |
