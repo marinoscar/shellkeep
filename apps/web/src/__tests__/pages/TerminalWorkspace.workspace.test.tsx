@@ -15,9 +15,12 @@ import type { TerminalSession } from '../../types';
 // mocked), so the walk covers the actual component tree.
 // =============================================================================
 
-const { mockSendInput, layoutMock } = vi.hoisted(() => ({
+const { mockSendInput, layoutMock, prefsMock, mockUpdateTerminal } = vi.hoisted(() => ({
   mockSendInput: vi.fn(),
-  layoutMock: { isPhone: false, isWide: true },
+  layoutMock: { isPhone: false, isWide: true, isTouch: false },
+  // The user's terminal preferences as the hook resolves them (#80).
+  prefsMock: { showKeyBar: 'auto' as 'auto' | 'always' | 'never' },
+  mockUpdateTerminal: vi.fn(),
 }));
 
 vi.mock('../../hooks/useTerminal', () => ({
@@ -57,12 +60,16 @@ vi.mock('../../services/terminal-api', () => ({
   getSessions: vi.fn(() => Promise.resolve({ items: [], total: 0, page: 1, pageSize: 100 })),
   trustHostKey: vi.fn(),
 }));
-vi.mock('../../hooks/useTerminalSettings', () => ({
-  useTerminalSettings: vi.fn(() => ({
-    settings: { terminal: { showScrollButtons: true, keyShortcuts: [] } },
-    updateSettings: vi.fn().mockResolvedValue(undefined),
-  })),
-}));
+vi.mock('../../hooks/useTerminalSettings', async () => {
+  const { DEFAULT_TERMINAL_SETTINGS } = await import('../../lib/terminal/settings');
+  return {
+    useTerminalSettings: vi.fn(() => ({
+      terminal: { ...DEFAULT_TERMINAL_SETTINGS, showKeyBar: prefsMock.showKeyBar },
+      keyShortcuts: [{ id: 'k1', label: 'ESC', keystrokes: [{ modifiers: [], key: 'Escape' }] }],
+      updateTerminal: mockUpdateTerminal,
+    })),
+  };
+});
 
 import TerminalWorkspacePage, { keyDockOffset } from '../../pages/TerminalWorkspacePage';
 import { getSession, updateSession } from '../../services/terminal-api';
@@ -371,6 +378,68 @@ describe('TerminalWorkspacePage: the key bar sits on the keyboard', () => {
     await waitFor(() => expect(frame.style.bottom || getComputedStyle(frame).bottom).toBe('320px'));
     // The key bar's dock is the frame's last child: its bottom is the frame's.
     expect(frame.lastElementChild).toBe(screen.getByTestId('terminal-key-dock'));
+  });
+});
+
+describe('TerminalWorkspacePage: the key bar preference (#80)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpdateTerminal.mockResolvedValue(undefined);
+    layoutMock.isPhone = false;
+    layoutMock.isWide = true;
+    layoutMock.isTouch = false;
+    prefsMock.showKeyBar = 'auto';
+    vi.mocked(getSession).mockImplementation((id: string) => Promise.resolve(SESSIONS[id]));
+  });
+
+  const keyBarShown = () => screen.queryByRole('button', { name: 'ESC' }) !== null;
+
+  it('auto: hidden on a desktop, shown on a touch screen', async () => {
+    const first = renderWorkspace('/sessions/a?tabs=a');
+    await screen.findByTestId('terminal-key-dock');
+    expect(keyBarShown()).toBe(false);
+    first.unmount();
+
+    layoutMock.isTouch = true;
+    renderWorkspace('/sessions/a?tabs=a');
+    await screen.findByTestId('terminal-key-dock');
+    expect(keyBarShown()).toBe(true);
+  });
+
+  it("'never' hides the bar on a touch device and 'always' shows it on a desktop", async () => {
+    layoutMock.isTouch = true;
+    layoutMock.isPhone = true;
+    prefsMock.showKeyBar = 'never';
+    const first = renderWorkspace('/sessions/a?tabs=a');
+    await screen.findByTestId('terminal-key-dock');
+    expect(keyBarShown()).toBe(false);
+    first.unmount();
+
+    layoutMock.isTouch = false;
+    layoutMock.isPhone = false;
+    prefsMock.showKeyBar = 'always';
+    renderWorkspace('/sessions/a?tabs=a');
+    await screen.findByTestId('terminal-key-dock');
+    expect(keyBarShown()).toBe(true);
+  });
+
+  it('stores the toolbar toggle as the preference, not as local state', async () => {
+    const user = userEvent.setup();
+    renderWorkspace('/sessions/a?tabs=a');
+
+    await user.click(await screen.findByRole('button', { name: 'Toggle key shortcuts' }));
+    expect(mockUpdateTerminal).toHaveBeenCalledWith({ showKeyBar: 'always' });
+    // The bar follows the stored value, which the mock has not changed.
+    expect(keyBarShown()).toBe(false);
+  });
+
+  it('a shown bar toggles to never', async () => {
+    const user = userEvent.setup();
+    prefsMock.showKeyBar = 'always';
+    renderWorkspace('/sessions/a?tabs=a');
+
+    await user.click(await screen.findByRole('button', { name: 'Toggle key shortcuts' }));
+    expect(mockUpdateTerminal).toHaveBeenCalledWith({ showKeyBar: 'never' });
   });
 });
 

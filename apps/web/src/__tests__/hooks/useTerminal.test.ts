@@ -33,9 +33,21 @@ const {
 // Module mocks – all vi.mock calls are hoisted by vitest automatically
 // ---------------------------------------------------------------------------
 vi.mock('@xterm/xterm', () => {
-  const TerminalMock = vi.fn(function(this: Record<string, unknown>) {
+  const TerminalMock = vi.fn(function(this: Record<string, unknown>, options?: Record<string, unknown>) {
     this.cols = 80;
     this.rows = 24;
+    // Like xterm, the constructor options are readable and writable (#80).
+    this.options = { ...options };
+    this.onBell = vi.fn((handler: () => void) => {
+      this.bellHandler = handler;
+      return { dispose: vi.fn() };
+    });
+    this.onSelectionChange = vi.fn((handler: () => void) => {
+      this.selectionHandler = handler;
+      return { dispose: vi.fn() };
+    });
+    this.hasSelection = vi.fn(() => true);
+    this.getSelection = vi.fn(() => 'selected text');
     this.dispose = vi.fn();
     // open() simulates xterm creating the helper textarea inside the container,
     // which is required for the mobile-input-attribute fix under test.
@@ -107,6 +119,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { TerminalWebSocket } from '../../services/terminal-ws';
 import { api } from '../../services/api';
+import { DEFAULT_TERMINAL_SETTINGS, type ResolvedTerminalSettings } from '../../lib/terminal/settings';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -725,6 +738,75 @@ describe('useTerminal', () => {
       act(() => { result.current.search(''); });
 
       expect(getSearchAddonInstance().findNext).toHaveBeenCalledWith('');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('preferences (#80)', () => {
+    function renderWithPreferences(preferences: ResolvedTerminalSettings) {
+      return renderHook(
+        ({ prefs }) => {
+          const containerRef = useRef<HTMLDivElement>(containerDiv);
+          return useTerminal('session-1', containerRef, { preferences: prefs, appMode: 'dark' });
+        },
+        { initialProps: { prefs: preferences } },
+      );
+    }
+
+    const options = () =>
+      (getTerminalInstance() as unknown as { options: Record<string, unknown> }).options;
+
+    it('builds the terminal from the preferences', () => {
+      renderWithPreferences({ ...DEFAULT_TERMINAL_SETTINGS, fontSize: 18, scrollback: 2000, cursorStyle: 'bar' });
+
+      expect(options()).toEqual(
+        expect.objectContaining({ fontSize: 18, scrollback: 2000, cursorStyle: 'bar', cursorBlink: true }),
+      );
+      expect(options().theme).toEqual(expect.objectContaining({ background: '#1e1e1e' }));
+    });
+
+    it('applies a change to the open terminal and refits it without reconnecting', async () => {
+      const { rerender } = renderWithPreferences(DEFAULT_TERMINAL_SETTINGS);
+      wsConnectedState.value = true;
+      const fit = getFitAddonInstance().fit;
+      fit.mockClear();
+
+      rerender({ prefs: { ...DEFAULT_TERMINAL_SETTINGS, fontSize: 20, theme: 'light' } });
+      await act(async () => {});
+
+      expect(options().fontSize).toBe(20);
+      expect(options().theme).toEqual(expect.objectContaining({ background: '#ffffff' }));
+      expect(fit).toHaveBeenCalled();
+      expect(wsResizeFn).toHaveBeenCalledWith(80, 24);
+      expect(vi.mocked(Terminal)).toHaveBeenCalledTimes(1);
+      expect(wsConnectFn).toHaveBeenCalledTimes(1);
+      expect(wsDisconnectFn).not.toHaveBeenCalled();
+    });
+
+    it('counts bells only while the bell is visual', () => {
+      const { result, rerender } = renderWithPreferences(DEFAULT_TERMINAL_SETTINGS);
+      const term = getTerminalInstance() as unknown as { bellHandler: () => void };
+
+      act(() => term.bellHandler());
+      expect(result.current.bellCount).toBe(0);
+
+      rerender({ prefs: { ...DEFAULT_TERMINAL_SETTINGS, bell: 'visual' } });
+      act(() => term.bellHandler());
+      expect(result.current.bellCount).toBe(1);
+    });
+
+    it('copies a selection only with copy-on-select on', () => {
+      const writeText = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      const { rerender } = renderWithPreferences(DEFAULT_TERMINAL_SETTINGS);
+      const term = getTerminalInstance() as unknown as { selectionHandler: () => void };
+
+      act(() => term.selectionHandler());
+      expect(writeText).not.toHaveBeenCalled();
+
+      rerender({ prefs: { ...DEFAULT_TERMINAL_SETTINGS, copyOnSelect: true } });
+      act(() => term.selectionHandler());
+      expect(writeText).toHaveBeenCalledWith('selected text');
     });
   });
 });

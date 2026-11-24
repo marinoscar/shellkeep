@@ -179,3 +179,19 @@ export function encodeKeystroke(ks: Keystroke): string {
 export function encodeShortcut(shortcut: KeyShortcut): string {
   return shortcut.keystrokes.map(encodeKeystroke).join('');
 }
+
+/**
+ * The bytes a shortcut sends, readable: printable ASCII as itself, every other
+ * byte as `\xNN` (`ESC [ A` reads `\x1b[A`, Ctrl+C reads `\x03`).
+ */
+export function formatEncodedBytes(data: string): string {
+  let out = '';
+  for (const char of data) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code >= 0x20 && code < 0x7f && char !== '\\') out += char;
+    else if (char === '\\') out += '\\\\';
+    else if (code <= 0xff) out += `\\x${code.toString(16).padStart(2, '0')}`;
+    else out += char;
+  }
+  return out;
+}

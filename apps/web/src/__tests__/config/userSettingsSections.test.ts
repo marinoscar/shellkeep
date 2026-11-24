@@ -8,19 +8,29 @@ const cards = USER_SETTINGS_SECTIONS.flatMap((s) => s.cards);
 const routes = parseAppRoutes(readFileSync(join(__dirname, '..', '..', 'App.tsx'), 'utf8'));
 
 describe('USER_SETTINGS_SECTIONS', () => {
-  it('declares the Profile, Appearance, Notifications, Terminal, Access Tokens, AI Keys and Webhooks cards', () => {
+  it('declares the Profile, Appearance, Notifications, Terminal, Keyboard shortcuts, Access Tokens, AI Keys and Webhooks cards', () => {
     expect(cards.map((c) => [c.title, c.path])).toEqual([
       ['Profile', '/settings/profile'],
       ['Appearance', '/settings/appearance'],
       // #51: appended to Account.
       ['Notifications', '/settings/notifications'],
       ['Terminal', '/settings/terminal'],
+      // #80: appended to Workspace.
+      ['Keyboard shortcuts', '/settings/shortcuts'],
       // #76: the identity slice's Security card, appended.
       ['Access Tokens', '/settings/tokens'],
       // #55: appended to Security.
       ['AI Keys', '/settings/ai'],
       // #54: the webhooks slice's Integrations card, appended.
       ['Webhooks', '/settings/webhooks'],
+    ]);
+  });
+
+  it('puts Terminal and Keyboard shortcuts in Workspace, with no permission (#80)', () => {
+    const workspace = USER_SETTINGS_SECTIONS.find((s) => s.label === 'Workspace');
+    expect(workspace?.cards.map((c) => [c.title, c.path, c.permission])).toEqual([
+      ['Terminal', '/settings/terminal', undefined],
+      ['Keyboard shortcuts', '/settings/shortcuts', undefined],
     ]);
   });
 

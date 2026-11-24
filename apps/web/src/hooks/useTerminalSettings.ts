@@ -1,19 +1,22 @@
 /**
- * The signed-in user's terminal preferences (issue #48), on the settings
- * slice's packaged `useUserSettings` (`@marinoscar/platform-web/settings/headless`).
+ * The signed-in user's terminal preferences and key shortcuts (issues #48,
+ * #80), on the settings slice's packaged `useUserSettings`
+ * (`@marinoscar/platform-web/settings/headless`).
  *
- * The API returns the `terminal` namespace only when it is stored; this hook
- * always hands out the resolved preferences (`resolveTerminalSettings`: the
- * defaults for an absent namespace or field), so the key bar and the scroll
- * buttons never depend on whether a row was written. A save sends the whole
- * namespace (`terminalPatch`: every keystroke carries `modifiers`) with the
- * loaded version as `If-Match`; a 409 refetches and rejects.
+ * The API returns the `terminal` and `shortcuts` namespaces only when they are
+ * stored; this hook always hands out the resolved values
+ * (`resolveTerminalSettings`, `resolveKeyShortcuts`: the defaults for an absent
+ * namespace or field, and the legacy `terminal.keyShortcuts` through the shim),
+ * so the terminal, the key bar and the scroll buttons never depend on whether a
+ * row was written. A save sends the whole namespace with the loaded version as
+ * `If-Match`; a 409 refetches and rejects.
  *
- * `settings.terminal` is the RESOLVED namespace too, so a page that reads
- * `settings?.terminal?.keyShortcuts` gets the defaults once the document loads.
+ * Every instance shares what it loads or saves (`lib/terminal/settingsSync.ts`),
+ * so a change made on the Terminal settings page or by a toolbar toggle reaches
+ * every open terminal, in this tab and in others, without reconnecting.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   useUserSettings,
   type UserSettingsUpdateBase,
@@ -21,37 +24,49 @@ import {
 import { platformApi } from '../services/api';
 import {
   DEFAULT_TERMINAL_SETTINGS,
+  normalizeKeyShortcuts,
+  resolveKeyShortcuts,
   resolveTerminalSettings,
   terminalPatch,
   type ResolvedTerminalSettings,
 } from '../lib/terminal/settings';
+import { publishTerminalSettings, subscribeTerminalSettings } from '../lib/terminal/settingsSync';
 import type {
-  TerminalUserSettings,
+  KeyShortcut,
   TerminalUserSettingsDocument,
   TerminalUserSettingsUpdate,
 } from '../types/terminal';
 
-/** The loaded document with the terminal namespace resolved. */
-export type ResolvedTerminalUserSettingsDocument = Omit<TerminalUserSettingsDocument, 'terminal'> & {
+/** The loaded document with both namespaces resolved. */
+export type ResolvedTerminalUserSettingsDocument = Omit<
+  TerminalUserSettingsDocument,
+  'terminal' | 'shortcuts'
+> & {
   terminal: ResolvedTerminalSettings;
+  shortcuts: { keyShortcuts: KeyShortcut[] };
 };
 
-/** A change to the terminal preferences: the fields to replace. */
+/** A change to the terminal preferences and/or the shortcut list. */
 export interface TerminalSettingsChange {
-  terminal?: Partial<TerminalUserSettings>;
+  terminal?: Partial<ResolvedTerminalSettings>;
+  shortcuts?: { keyShortcuts: KeyShortcut[] };
 }
 
 export interface UseTerminalSettingsResult {
-  /** The document with `terminal` resolved, or `null` until loaded. */
+  /** The document with both namespaces resolved, or `null` until loaded. */
   settings: ResolvedTerminalUserSettingsDocument | null;
   /** The resolved terminal preferences, or `null` until loaded. */
   terminal: ResolvedTerminalSettings | null;
+  /** The resolved key shortcuts, or `null` until loaded. */
+  keyShortcuts: KeyShortcut[] | null;
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
-  /** Saves `changes` over the current preferences. */
-  updateTerminal: (changes: Partial<TerminalUserSettings>) => Promise<void>;
-  /** `updateTerminal(change.terminal)`, for callers written against the settings document. */
+  /** Saves `changes` over the current terminal preferences. */
+  updateTerminal: (changes: Partial<ResolvedTerminalSettings>) => Promise<void>;
+  /** Replaces the key shortcut list (stored in the `shortcuts` namespace). */
+  updateShortcuts: (keyShortcuts: readonly KeyShortcut[]) => Promise<void>;
+  /** Saves both namespaces of `change` in one write. */
   updateSettings: (change: TerminalSettingsChange) => Promise<void>;
   /** Reloads the document. */
   refresh: () => Promise<void>;
@@ -65,6 +80,7 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
     error,
     updateSettings: patch,
     refresh,
+    replaceSettings,
   } = useUserSettings<
     TerminalUserSettingsDocument,
     UserSettingsUpdateBase & TerminalUserSettingsUpdate
@@ -75,27 +91,72 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
     syncTheme: false,
   });
 
+  // Take a newer document another instance (or tab) loaded or saved.
+  const storedRef = useRef(stored);
+  storedRef.current = stored;
+  const listenerRef = useRef<(document: TerminalUserSettingsDocument) => void>(() => {});
+  useEffect(() => {
+    const listener = (document: TerminalUserSettingsDocument) => {
+      const current = storedRef.current;
+      if (current && document.version > current.version) replaceSettings(document);
+    };
+    listenerRef.current = listener;
+    return subscribeTerminalSettings(listener);
+  }, [replaceSettings]);
+
+  // Share what this instance holds.
+  useEffect(() => {
+    if (stored) publishTerminalSettings(stored, listenerRef.current);
+  }, [stored]);
+
   const terminal = useMemo(
     () => (stored ? resolveTerminalSettings(stored.terminal) : null),
     [stored],
   );
+  const keyShortcuts = useMemo(() => (stored ? resolveKeyShortcuts(stored) : null), [stored]);
 
   const settings = useMemo<ResolvedTerminalUserSettingsDocument | null>(
-    () => (stored && terminal ? { ...stored, terminal } : null),
-    [stored, terminal],
+    () =>
+      stored && terminal && keyShortcuts
+        ? { ...stored, terminal, shortcuts: { keyShortcuts } }
+        : null,
+    [stored, terminal, keyShortcuts],
   );
 
-  const updateTerminal = useCallback(
-    async (changes: Partial<TerminalUserSettings>) => {
-      await patch({ terminal: terminalPatch(terminal ?? DEFAULT_TERMINAL_SETTINGS, changes) });
+  const updateSettings = useCallback(
+    async (change: TerminalSettingsChange) => {
+      const body: TerminalUserSettingsUpdate = {};
+      if (change.terminal) {
+        body.terminal = terminalPatch(terminal ?? DEFAULT_TERMINAL_SETTINGS, change.terminal);
+      }
+      if (change.shortcuts) {
+        body.shortcuts = { keyShortcuts: normalizeKeyShortcuts(change.shortcuts.keyShortcuts) };
+      }
+      await patch(body);
     },
     [patch, terminal],
   );
 
-  const updateSettings = useCallback(
-    (change: TerminalSettingsChange) => updateTerminal(change.terminal ?? {}),
-    [updateTerminal],
+  const updateTerminal = useCallback(
+    (changes: Partial<ResolvedTerminalSettings>) => updateSettings({ terminal: changes }),
+    [updateSettings],
   );
 
-  return { settings, terminal, isLoading, isSaving, error, updateTerminal, updateSettings, refresh };
+  const updateShortcuts = useCallback(
+    (list: readonly KeyShortcut[]) => updateSettings({ shortcuts: { keyShortcuts: [...list] } }),
+    [updateSettings],
+  );
+
+  return {
+    settings,
+    terminal,
+    keyShortcuts,
+    isLoading,
+    isSaving,
+    error,
+    updateTerminal,
+    updateShortcuts,
+    updateSettings,
+    refresh,
+  };
 }

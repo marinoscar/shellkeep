@@ -44,6 +44,7 @@ import { getServerProfile, getSession, updateSession } from '../services/termina
 import type { KeyShortcut, ServerProfile, TerminalSession } from '../types';
 import { encodeShortcut } from '../lib/terminal/encodeKeystroke';
 import { useTerminalSettings } from '../hooks/useTerminalSettings';
+import { DEFAULT_TERMINAL_SETTINGS, isKeyBarVisible } from '../lib/terminal/settings';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
 
 /**
@@ -76,7 +77,7 @@ export default function TerminalWorkspacePage() {
   const { id: routeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   useShellMainVariant('full-bleed');
-  const { isPhone, isWide } = useTerminalLayout();
+  const { isPhone, isWide, isTouch } = useTerminalLayout();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(TERMINAL_WRITE_PERMISSION);
@@ -96,11 +97,18 @@ export default function TerminalWorkspacePage() {
   const [notice, setNotice] = useState<(TerminalActionNotice & { open: boolean }) | null>(null);
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
-  const { settings, updateSettings } = useTerminalSettings();
-  const showScrollButtons = settings?.terminal?.showScrollButtons ?? true;
-  const keyShortcuts = settings?.terminal?.keyShortcuts ?? [];
-  // Open by default on a phone, where there is no Esc, Tab or Ctrl key.
-  const [keyShortcutsOpen, setKeyShortcutsOpen] = useState(isPhone);
+  // The user's terminal preferences and key shortcuts (#80): one source of
+  // truth for the panes, the key bar and the toolbar toggles.
+  const { terminal: preferences, keyShortcuts: storedShortcuts, updateTerminal } =
+    useTerminalSettings();
+  const showScrollButtons = preferences?.showScrollButtons ?? DEFAULT_TERMINAL_SETTINGS.showScrollButtons;
+  const keyShortcuts = storedShortcuts ?? [];
+  // `auto` (the default) shows the key bar on a phone or a touch screen, where
+  // there is no Esc, Tab or Ctrl key; `always` and `never` are the user's.
+  const keyShortcutsOpen = isKeyBarVisible(
+    preferences?.showKeyBar ?? DEFAULT_TERMINAL_SETTINGS.showKeyBar,
+    isPhone || isTouch,
+  );
 
   // ---- the panes' handles --------------------------------------------------
   const views = useRef(new Map<string, TerminalViewHandle>());
@@ -227,19 +235,26 @@ export default function TerminalWorkspacePage() {
   );
 
   const handleToggleScrollButtons = useCallback(() => {
-    void updateSettings({ terminal: { showScrollButtons: !showScrollButtons } });
-  }, [showScrollButtons, updateSettings]);
+    void updateTerminal({ showScrollButtons: !showScrollButtons }).catch(() => undefined);
+  }, [showScrollButtons, updateTerminal]);
+
+  // The toolbar's key bar toggle stores the choice (#80): hiding it is
+  // `never`, showing it is `always`, on this and every other device.
+  const handleToggleKeyShortcuts = useCallback(() => {
+    void updateTerminal({ showKeyBar: keyShortcutsOpen ? 'never' : 'always' }).catch(() => undefined);
+  }, [keyShortcutsOpen, updateTerminal]);
 
   const renderPane = useCallback(
     (sessionId: string) => (
       <WorkspacePane
         sessionId={sessionId}
         showScrollButtons={showScrollButtons}
+        preferences={preferences ?? undefined}
         registerView={registerView}
         onStatus={onPaneStatus}
       />
     ),
-    [showScrollButtons, registerView, onPaneStatus],
+    [showScrollButtons, preferences, registerView, onPaneStatus],
   );
 
   const tabs = useMemo(
@@ -385,7 +400,7 @@ export default function TerminalWorkspacePage() {
               serverProfileName={activeSession?.serverProfile.name}
               serverProfileColor={activeSession?.serverProfile.color}
               keyShortcutsOpen={keyShortcutsOpen}
-              onToggleKeyShortcuts={() => setKeyShortcutsOpen((o) => !o)}
+              onToggleKeyShortcuts={handleToggleKeyShortcuts}
               compact={isPhone}
               onRequestRename={() => setRenaming(activeId)}
             />
