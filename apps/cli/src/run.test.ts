@@ -73,4 +73,39 @@ describe('runApp', () => {
 
     expect(runAttachBridge).not.toHaveBeenCalled();
   });
+
+  describe('the default loopback port (#149)', () => {
+    /** What the platform CLI is asked to run, for one invocation. */
+    async function handedOver(argv: string[]): Promise<string[]> {
+      let seen: string[] = [];
+      const fake = (() => ({
+        run: async (args: string[]) => {
+          seen = args;
+          return 0;
+        },
+      })) as unknown as typeof createCli;
+      await runApp(argv, { createCli: fake });
+      return seen;
+    }
+
+    it('adds --port 8323 to deploy install, doctor and status', async () => {
+      expect(await handedOver(['deploy', 'install', '--domain', 'app.example.test'])).toEqual([
+        'deploy',
+        'install',
+        '--port',
+        '8323',
+        '--domain',
+        'app.example.test',
+      ]);
+      expect(await handedOver(['deploy', 'doctor'])).toEqual(['deploy', 'doctor', '--port', '8323']);
+      expect(await handedOver(['deploy', 'status', '--json'])).toEqual(['deploy', 'status', '--port', '8323', '--json']);
+    });
+
+    it('keeps an explicit --port (both spellings) and leaves other commands untouched', async () => {
+      expect(await handedOver(['deploy', 'install', '--port', '9000'])).toEqual(['deploy', 'install', '--port', '9000']);
+      expect(await handedOver(['deploy', 'install', '--port=9000'])).toEqual(['deploy', 'install', '--port=9000']);
+      expect(await handedOver(['deploy', 'update'])).toEqual(['deploy', 'update']);
+      expect(await handedOver(['servers', 'list'])).toEqual(['servers', 'list']);
+    });
+  });
 });

@@ -12,15 +12,15 @@ import { runApp } from './run.js';
 // Adopting an install made by infra/deploy/install-shellkeep.sh  (issue #72)
 // =============================================================================
 //
-// `infra/deploy/*.sh` are gone; `shellkeep deploy install --root
+// `infra/deploy/*.sh` are gone; `shellkeep deploy update --root
 // /opt/infra/apps/shellkeep` adopts what they left: the `repo/` checkout and a
-// `.env` (to which the operator adds APP_BIND_PORT=8323). The platform then
-// writes `.appctl-deploy.json`, a literal it fixes.
+// `.env` (which names APP_BIND_PORT=8323). `deploy install` refuses that layout
+// (#149). The platform writes `.appctl-deploy.json`, a literal it fixes.
 //
 // This fixture is the shape the scripts left (no state file at all) and proves
 // the read-only side of the cutover: the existing layout is recognised, its
 // port is read from the existing `.env`, and nothing is written by looking.
-// What it cannot prove is `deploy install` / `update` themselves against a
+// What it cannot prove is a full `deploy update` against a
 // running stack (Docker, a database and a proxy); the procedure is in
 // apps/cli/README.md, "Adopting an existing install", and the full cutover is #84.
 // =============================================================================
@@ -165,5 +165,68 @@ describe('after the first deploy', () => {
     const out = JSON.parse(stdout) as { deployments: Array<Record<string, unknown>> };
     expect(out.deployments[0]).toMatchObject({ name: 'shellkeep', bindPort: 8323, domain: 'app.example.test', source: 'record' });
     expect(readFileSync(join(root, DEPLOY_STATE_FILENAME), 'utf8')).toBe(before);
+  });
+});
+
+// A `git` that never touches a network or a repository: it answers the few
+// questions `deploy update` asks of the checkout (its origin, its revision) and
+// records every call, so a test can say what was and was not run.
+function installFakeGit(dir: string): string {
+  const log = join(dir, 'git-calls.log');
+  const sha = '0123456789abcdef0123456789abcdef01234567';
+  const script = [
+    '#!/bin/sh',
+    `echo "$@" >> '${log}'`,
+    'case "$*" in',
+    '  *"remote get-url"*|*"remote.origin.url"*) echo https://example.test/org/repo.git;;',
+    `  *rev-parse*) echo ${sha};;`,
+    `  *ls-remote*) printf '${sha}\\tHEAD\\n';;`,
+    'esac',
+    'exit 0',
+    '',
+  ].join('\n');
+  writeFileSync(join(dir, 'bin', 'git'), script, { mode: 0o755 });
+  return log;
+}
+
+describe('adoption is `deploy update`, not `deploy install` (#149)', () => {
+  it('install refuses the old scripts\' layout, names update, and writes nothing', async () => {
+    const env = readFileSync(join(root, '.env'), 'utf8');
+
+    const code = await runApp(['deploy', 'install', '--root', root, '--domain', 'app.example.test', '--non-interactive']);
+
+    expect(code).toBe(2);
+    expect(stderr).toContain('A deployment already exists');
+    expect(stderr).toContain('no deployment record');
+    expect(stderr).toContain('shellkeep deploy update');
+    expect(existsSync(join(root, DEPLOY_STATE_FILENAME))).toBe(false);
+    expect(readFileSync(join(root, '.env'), 'utf8')).toBe(env);
+    // Refused before anything was built or started.
+    const calls = existsSync(dockerLog) ? readFileSync(dockerLog, 'utf8') : '';
+    expect(calls).not.toMatch(/compose .*(build|up)/);
+  });
+
+  it('update takes the same layout: it is the adoption entry, and it works on the existing checkout', async () => {
+    const gitLog = installFakeGit(work);
+    const env = readFileSync(join(root, '.env'), 'utf8');
+
+    const code = await runApp([
+      'deploy',
+      'update',
+      '--root',
+      root,
+      '--non-interactive',
+      '--no-version-bump',
+      '--skip-proxy',
+    ]);
+
+    expect(code, stderr).toBe(0);
+    expect(stderr).not.toContain('A deployment already exists');
+    expect(stderr).not.toMatch(/no deployment|nothing installed/i);
+    // It ran the pipeline over repo/ (fetched the origin) instead of refusing.
+    expect(stderr).toContain('Look for a new revision');
+    expect(readFileSync(gitLog, 'utf8')).toContain('fetch --tags --force --prune origin');
+    // The environment the operator kept is not rewritten by an update with nothing to deploy.
+    expect(readFileSync(join(root, '.env'), 'utf8')).toBe(env);
   });
 });

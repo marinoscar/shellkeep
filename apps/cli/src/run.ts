@@ -3,6 +3,7 @@ import { CLI_NAME } from '@shellkeep/shared';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { runAttachBridge } from './commands/sessions-attach.js';
+import { withDefaultPort } from './extensions/default-port.js';
 import { takePendingAttach } from './tui/pending-attach.js';
 
 // =============================================================================
@@ -58,7 +59,8 @@ export async function runApp(argv: string[], options: RunAppOptions = {}): Promi
     return exitCodeFor(error);
   }
 
-  const code = await cli.run(argv);
+  // `deploy install|doctor|status` bind loopback 8323 unless --port says otherwise (#149).
+  const code = await cli.run(withDefaultPort(argv));
 
   const pending = takePendingAttach();
   if (pending !== undefined && code === EXIT.OK) {
