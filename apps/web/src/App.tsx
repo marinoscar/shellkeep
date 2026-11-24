@@ -213,7 +213,7 @@ const SHELL_PROVIDERS: readonly ShellProvider[] = [
   JobsNodesShellProvider,
 ];
 
-function AppRoutes() {
+export function AppRoutes() {
   return (
     <ErrorBoundary>
       {/* The host slice's client gate (#46): while the API answers a request
