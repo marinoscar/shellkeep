@@ -1444,7 +1444,7 @@ Versioned, reusable multi-step procedures (#61). Definitions can hold sensitive 
 
 | Route | Permission | Notes |
 |-------|------------|-------|
-| `GET /api/runbooks` | `runbooks:read` | Paginated (`page`, `pageSize`); filters `q` (name or description), `tag`, `includeArchived`, and `filter` (`all` default, `mine`, `shared`). Lists only the runbooks the caller may see (#71): theirs, their groups' and those shared with them; each item has `owner` and `access` |
+| `GET /api/runbooks` | `runbooks:read` | Paginated (`page`, `pageSize`); filters `q` (name or description), `tag`, `includeArchived`, and `filter` (`all` default, `mine`, `shared`). Lists only the runbooks the caller may see (#71): theirs, their groups' and those shared with them; each item has `owner` and `access`, plus `stepKinds` (the kinds of the latest version's steps, never a command) and `lastRun` (`{ id, status, createdAt, finishedAt }` or `null`; #65) |
 | `GET /api/runbooks/:id` | `runbooks:read` | Latest version embedded; `ETag: "v<version>"` |
 | `POST /api/runbooks` | `runbooks:write` | `{ name, description?, tags?, definition, changelog? }` creates the runbook and version 1 |
 | `PUT /api/runbooks/:id/definition` | `runbooks:write` | `{ definition, changelog? }`; needs `If-Match: "v<n>"` (the ETag of a GET). Creates version n+1 and returns the new `ETag`; a definition identical to the latest (same sha256) is a 200 with `created: false` and no new version |
@@ -1476,7 +1476,7 @@ The execution engine (#62). A run executes one runbook version on a set of serve
 | Route | Permission | Notes |
 |-------|------------|-------|
 | `POST /api/runbooks/:id/runs` | `runbooks:run` | `{ version?, params, secretRefs?, targets?, strategy?, dryRun?, confirm? }`; `202 { runId, status: 'queued', dryRun, awaitingApproval, approvalId }`; `428 RUNBOOK_CONFIRMATION_REQUIRED` for a destructive runbook (see Runbook safety). Params are checked against the definition (types, required, enum, pattern: `422 RUNBOOK_PARAMS_INVALID` with `details.issues`), each `secretRefs` name must exist (`422 RUNBOOK_SECRET_REF_UNKNOWN`); `503 RUNBOOKS_DISABLED` while `runbooks.enabled` is off |
-| `GET /api/runbook-runs` | `runbooks:read` | Paginated; filters `runbookId`, `status`, `trigger`, `initiatedBy` |
+| `GET /api/runbook-runs` | `runbooks:read` | Paginated; filters `runbookId`, `status`, `trigger`, `initiatedBy` and `since` (`30m`, `24h`, `7d`: queued within that window; #65). Each item carries `targets: { total, succeeded, failed, running }` (`failed` counts cancelled servers too) |
 | `GET /api/runbook-runs/:id` | `runbooks:read` | The run (`dryRun`, `destructive`, `errorCode`), its targets with their step matrix, its `approvals` and `counts` |
 | `GET /api/runbook-runs/:id/targets/:targetId/steps/:stepIndex/log` | `runbooks:read` | `text/plain`, redacted; from storage once the step ended, else from the chunks; `?tail=N` lines |
 | `GET /api/runbook-runs/:id/logs/stream` | `runbooks:read` | SSE: `snapshot`, then `chunk` (id `<stepRowId>:<seq>`), `step`, `target`, `run`, `approval` and a `heartbeat` every 15 s. `Last-Event-ID` replays the chunks after it. `.../targets/:targetId/logs/stream` filters to one server. Send `Authorization: Bearer`, so use a fetch-based reader, not `EventSource` |
@@ -1487,7 +1487,7 @@ The execution engine (#62). A run executes one runbook version on a set of serve
 | `GET /api/runbook-runs/:id/audit/export` | `runbooks:read` | `?format=csv\|json`: the same trail as a streamed download |
 | `GET /api/runbook-commands` | `runbooks:read` | Every command runbooks executed, org-wide, see Runbook safety |
 | `POST /api/runbook-runs/:id/resume` | `runbooks:run` + `runbooks:approve` | Releases a run paused after its canary batch (an approval decision) |
-| `GET /api/runbook-approvals` | `runbooks:read` | The inbox; `status=pending` by default (`approved`, `rejected`, `expired`, `all`) |
+| `GET /api/runbook-approvals` | `runbooks:read` | The inbox; `status=pending` by default (`approved`, `rejected`, `expired`, `all`). Each item names the run, `targetName` (the server, `null` for a run-scope approval) and `initiatedByName`; the page carries `allowSelfApproval` (the organization's effective rule, so the UI can explain a disabled button). `count=true` answers `{ count }` only (the Runbooks badge, #65) |
 | `POST /api/runbook-approvals/:id/decision` | `runbooks:approve` | `{ decision: 'approve' \| 'reject', comment? }`. `403 RUNBOOK_SELF_APPROVAL` for the person who started the run unless `runbooks.approvals.allowSelfApproval`; `409 RUNBOOK_APPROVAL_NOT_PENDING` |
 
 **Run statuses:** `queued resolving running paused cancelling succeeded failed partially_failed aborted cancelled`. **Target:** `pending queued running waiting succeeded failed skipped cancelled`. **Step:** `pending running waiting_approval succeeded failed skipped timed_out cancelled`. Every status column has a CHECK constraint; the transitions are `engine/state-machine.ts`.
@@ -1616,6 +1616,23 @@ Runs the user started and approvals they decided on a runbook that stays are kep
 The factory reset keeps the administrator, configuration and database backups (their runs, archives and linked jobs), and runs two ShellKeep steps before the users go: `shellkeep.terminal.disconnect` marks every `active` terminal session `terminated` (it opens no SSH connection: tmux sessions already running on the servers keep running) and `shellkeep.servers.reset` deletes every server profile, the administrator's included. Step logs of runbook runs are object-storage keys with no `storage_objects` row, so the reset's storage step does not see them: run `npm run storage:purge` afterwards to sweep the `runbook-artifacts/` prefix.
 
 Job types (permanent): `user.data.purge`, `admin.factory_reset`, `org.offboard`, and ShellKeep's two delegated halves of the purge, `servers.user_data.purge` and `runbooks.user_data.purge`. Audit: `user_data.purge.requested|completed`, `admin.factory_reset.requested|completed`. The jobs log ids and counts only: never a hostname, user name, credential name, runbook name or log line.
+
+---
+
+### Android app
+
+The android-app slice (`@marinoscar/platform-api/android-app`, #74) serves the Android companion's server half: the trusted apps and the public Digital Asset Links file, the hosted APK releases, signed download links and a test notification. ShellKeep adds no route of its own. Tag `Android App` in the OpenAPI reference.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /.well-known/assetlinks.json` (nginx rewrites it to `GET /api/well-known/assetlinks.json`) | Public, served during maintenance | The trusted list as Digital Asset Links; `[]` before any app is trusted |
+| `GET /api/admin/android-app`, `GET /api/admin/android-app/releases` | `system_settings:read` | Trusted apps, the reported apps of paired devices, push counts, the releases |
+| `PUT /api/admin/android-app`, `POST /api/admin/android-app/test-notification` | `system_settings:write` | Replace the trusted list; send a test notification over the `android_app` channel |
+| `POST /api/admin/android-app/releases`, `POST .../releases/:id/make-current`, `DELETE .../releases/:id` | `system_settings:write` | Streamed multipart upload (150 MiB), rollback, delete |
+| `GET /api/android-app/releases/latest`, `POST /api/android-app/releases/:id/download-link` | Any signed-in user | The current release; a 10-minute HMAC link bound to the caller |
+| `GET /api/android-app/download/:token` | Public (the token is the credential) | Streams the APK |
+
+Errors worth knowing: `409 RELEASE_UNTRUSTED_APP`, `409 RELEASE_VERSION_NOT_NEWER`, `409 RELEASE_CURRENT_CONFLICT`, `410 DOWNLOAD_LINK_EXPIRED`, `503 STORAGE_NOT_CONFIGURED`. Audit events: `android_app.trusted_apps.updated`, `android_app.release.uploaded|made_current|deleted`, `android_app.test_notification.sent`. Objects live under `android-releases/` and survive a factory reset.
 
 ---
 

@@ -27,6 +27,7 @@ import { TargetResolverService } from '../target-resolver.service';
 import { RUNBOOK_SECRET_PURPOSE } from '../runbooks.credentials';
 import { runStrategySchema, type RunbookDefinition, targetSelectorSchema } from '../schema/runbook-definition.schema';
 import type { CreateRunDto, RunsQueryDto } from './dto/run.dto';
+import { sinceToDate } from './dto/run.dto';
 
 type RunConfirm = NonNullable<CreateRunDto['confirm']>;
 
@@ -339,6 +340,7 @@ export class RunbookRunsService {
         ...(query.status ? { status: query.status } : {}),
         ...(query.trigger ? { trigger: query.trigger } : {}),
         ...(query.initiatedBy ? { initiatedBy: query.initiatedBy } : {}),
+        ...(query.since ? { createdAt: { gte: sinceToDate(query.since) } } : {}),
       };
       const [total, rows] = await Promise.all([
         tx.runbookRun.count({ where }),
@@ -353,8 +355,28 @@ export class RunbookRunsService {
           },
         }),
       ]);
+      // The succeeded / failed / total split of each listed run's servers (one grouped query, #65).
+      const grouped = rows.length
+        ? await tx.runbookRunTarget.groupBy({
+            by: ['runId', 'status'],
+            where: { orgId: scope.orgId, runId: { in: rows.map((r) => r.id) } },
+            _count: { _all: true },
+          })
+        : [];
+      const targetsOf = (runId: string) => {
+        const counts = { total: 0, succeeded: 0, failed: 0, running: 0 };
+        for (const g of grouped) {
+          if (g.runId !== runId) continue;
+          const n = g._count._all;
+          counts.total += n;
+          if (g.status === 'succeeded') counts.succeeded += n;
+          else if (g.status === 'failed' || g.status === 'cancelled') counts.failed += n;
+          else if (g.status === 'running' || g.status === 'waiting' || g.status === 'queued') counts.running += n;
+        }
+        return counts;
+      };
       return {
-        items: rows.map(({ runbook, ...run }) => ({ ...run, runbookName: runbook.name })),
+        items: rows.map(({ runbook, ...run }) => ({ ...run, runbookName: runbook.name, targets: targetsOf(run.id) })),
         total,
         page: query.page,
         pageSize: query.pageSize,

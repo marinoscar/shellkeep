@@ -45,7 +45,18 @@ export const runsQuerySchema = z.object({
     .optional(),
   trigger: z.enum(['manual', 'api', 'schedule']).optional(),
   initiatedBy: z.string().uuid().optional(),
+  /** Only runs queued within this window: a number and `m`, `h` or `d` (`24h`; Home links `/runs?since=24h`, #65). */
+  since: z.string().regex(/^\d{1,4}[mhd]$/, 'Use a number and m, h or d (for example 24h)').optional(),
 });
+
+const SINCE_UNIT_MS = { m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
+
+/** The start of a `since` window (`24h`) before `now`. */
+export function sinceToDate(since: string, now: number = Date.now()): Date {
+  const amount = Number(since.slice(0, -1));
+  const unit = since.slice(-1) as keyof typeof SINCE_UNIT_MS;
+  return new Date(now - amount * SINCE_UNIT_MS[unit]);
+}
 
 export const retryRunSchema = z.object({ only: z.enum(['failed', 'all']).default('failed'), confirm: runConfirmSchema.optional() });
 
@@ -55,6 +66,11 @@ export const approvalsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(['pending', 'approved', 'rejected', 'expired', 'all']).default('pending'),
+  /** `true`: answer `{ count }` only (the Runbooks destination's badge, #65). */
+  count: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => value === 'true'),
 });
 
 export const approvalDecisionSchema = z.object({
