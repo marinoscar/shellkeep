@@ -35,11 +35,12 @@ import {
 } from '../../services/runbooks-api';
 
 /**
- * Whether the run route is served. False until the runbook engine (#62) is on main: the dialog
- * still opens, previews the targets (dry run) and explains why a real run is not offered.
+ * Whether the run route is served (the runbook engine, #62, serves it). Left as a switch so a
+ * deployment build without the engine can still preview targets; while false the dialog offers
+ * only the dry run and says why.
  */
-export const RUNBOOK_RUNS_AVAILABLE = false;
-export const RUNBOOK_RUNS_UNAVAILABLE_REASON = 'Runbook runs arrive with #62';
+export const RUNBOOK_RUNS_AVAILABLE = true;
+export const RUNBOOK_RUNS_UNAVAILABLE_REASON = 'Runbook runs are not available on this server';
 
 export interface RunRunbookDialogProps {
   open: boolean;

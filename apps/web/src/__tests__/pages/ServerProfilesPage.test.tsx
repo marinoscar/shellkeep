@@ -305,7 +305,9 @@ describe('ServerProfilesPage (#79)', { timeout: 30_000 }, () => {
       expect(within(dialog).getByTestId('run-runbook-target-count')).toHaveTextContent('3 targets');
       const targets = within(dialog).getByTestId('run-runbook-targets').querySelectorAll('[data-server-id]');
       expect([...targets].map((chip) => chip.getAttribute('data-server-id'))).toEqual(['srv-a', 'srv-b', 'srv-c']);
-      expect(within(dialog).getByRole('switch', { name: 'Dry run' })).toBeChecked();
+      const dryRun = within(dialog).getByRole('switch', { name: 'Dry run' });
+      expect(dryRun).not.toBeChecked();
+      await user.click(dryRun);
 
       await user.click(within(dialog).getByRole('combobox', { name: 'Runbook' }));
       await user.click(await screen.findByRole('option', { name: 'Patch kernel' }));
@@ -314,6 +316,21 @@ describe('ServerProfilesPage (#79)', { timeout: 30_000 }, () => {
       expect(runbooks.previewRunbookTargets).toHaveBeenCalledWith(['srv-a', 'srv-b', 'srv-c']);
       expect(await within(dialog).findByTestId('run-runbook-preview')).toHaveTextContent('reach 2 of 3 servers');
       expect(runbooks.startRunbookRun).not.toHaveBeenCalled();
+    });
+
+    it('starts the run on exactly the selected servers (POST /runbooks/:id/runs)', async () => {
+      const user = userEvent.setup();
+      runbooks.startRunbookRun.mockResolvedValue({ runId: 'run-7' });
+      renderPage();
+      await selectRows(user, ['Server A', 'Server B', 'Server C']);
+      await user.click(screen.getByRole('button', { name: 'Run runbook on selected…' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Run runbook on selected' });
+      await user.click(within(dialog).getByRole('combobox', { name: 'Runbook' }));
+      await user.click(await screen.findByRole('option', { name: 'Patch kernel' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Run on 3 servers' }));
+
+      expect(runbooks.startRunbookRun).toHaveBeenCalledWith('rb-1', ['srv-a', 'srv-b', 'srv-c']);
+      expect(await within(dialog).findByTestId('run-runbook-started')).toHaveTextContent('run-7');
     });
 
     it('hides "Run runbook on selected" without runbooks:run', async () => {

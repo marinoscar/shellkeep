@@ -56,6 +56,6 @@ describe('RunRunbookDialog', () => {
     expect(dryRun).toBeChecked();
     expect(dryRun).toBeDisabled();
     expect(within(screen.getByRole('dialog')).getByTestId('run-runbook-submit')).toHaveTextContent('Preview targets');
-    expect(RUNBOOK_RUNS_UNAVAILABLE_REASON).toMatch(/#62/);
+    expect(RUNBOOK_RUNS_UNAVAILABLE_REASON).toMatch(/not available/);
   });
 });
