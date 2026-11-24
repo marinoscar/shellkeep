@@ -4,6 +4,7 @@ import { SessionsService } from './sessions.service';
 import { TerminalWebhooksService } from './webhooks/terminal-webhooks.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AUDIT_SINK } from '@marinoscar/platform-api/core';
+import { AccessPolicy, PrincipalGroupsProvider } from '@marinoscar/platform-api/sharing';
 
 describe('SessionsService', () => {
   let service: SessionsService;
@@ -12,6 +13,10 @@ describe('SessionsService', () => {
   const mockUserId = 'user-123';
   const mockOrgId = 'org-default';
   const mockScope = { userId: mockUserId, orgId: mockOrgId };
+  /** The caller as AccessPolicy sees them. */
+  const principalOf = (orgId: string) =>
+    ({ kind: 'user', userId: mockUserId, email: 'person-a@example.test', credential: 'session', roles: [], permissions: ['sessions:write'], activeOrgId: orgId }) as any;
+  const access = { require: jest.fn().mockResolvedValue({ allowed: true, role: 'operator', via: 'user_grant' }) };
   const auditSink = { record: jest.fn().mockResolvedValue(undefined) };
   const mockSessionId = 'session-456';
   const mockProfileId = 'profile-789';
@@ -44,6 +49,8 @@ describe('SessionsService', () => {
       providers: [
         SessionsService,
         { provide: AUDIT_SINK, useValue: auditSink },
+        { provide: AccessPolicy, useValue: access },
+        { provide: PrincipalGroupsProvider, useValue: { enrich: async (principal: unknown) => principal } },
         { provide: TerminalWebhooksService, useValue: { sessionCreated: jest.fn(), sessionTerminated: jest.fn() } },
         {
           provide: PrismaService,
@@ -178,7 +185,7 @@ describe('SessionsService', () => {
         mockSession,
       );
 
-      const result = await service.create(mockScope, {
+      const result = await service.create(principalOf(mockOrgId), {
         serverProfileId: mockProfileId,
       });
 
@@ -208,7 +215,7 @@ describe('SessionsService', () => {
         name: 'Custom Name',
       });
 
-      await service.create(mockScope, {
+      await service.create(principalOf(mockOrgId), {
         serverProfileId: mockProfileId,
         name: 'Custom Name',
       });
@@ -221,11 +228,32 @@ describe('SessionsService', () => {
       });
     });
 
+    it('answers 404 and creates nothing when AccessPolicy refuses the connect (a profile that is not shared with the caller)', async () => {
+      access.require.mockRejectedValueOnce(new NotFoundException('not found'));
+
+      await expect(service.create(principalOf(mockOrgId), { serverProfileId: mockProfileId })).rejects.toThrow(NotFoundException);
+
+      expect(access.require).toHaveBeenCalledWith(expect.anything(), 'connect', { type: 'server_profile', id: mockProfileId });
+      expect(prisma.serverProfile.findFirst).not.toHaveBeenCalled();
+      expect(prisma.terminalSession.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the session for the CALLER on a profile another user owns, once they may connect', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue({ id: mockProfileId, name: 'Shared Server', userId: 'someone-else' });
+      (prisma.terminalSession.create as jest.Mock).mockResolvedValue(mockSession);
+
+      await service.create(principalOf(mockOrgId), { serverProfileId: mockProfileId });
+
+      expect(prisma.terminalSession.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ userId: mockUserId, serverProfileId: mockProfileId }) }),
+      );
+    });
+
     it('should throw NotFoundException when server profile not found', async () => {
       (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.create(mockScope, {
+        service.create(principalOf(mockOrgId), {
           serverProfileId: 'nonexistent-profile',
         }),
       ).rejects.toThrow(NotFoundException);
@@ -412,10 +440,10 @@ describe('SessionsService', () => {
       (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue({ id: mockProfileId, name: 'My Server' });
       (prisma.terminalSession.create as jest.Mock).mockResolvedValue(mockSession);
 
-      await service.create(otherOrg, { serverProfileId: mockProfileId });
+      await service.create(principalOf('org-other'), { serverProfileId: mockProfileId });
 
       expect(prisma.serverProfile.findFirst).toHaveBeenCalledWith({
-        where: { id: mockProfileId, userId: mockUserId, orgId: 'org-other' },
+        where: { id: mockProfileId, orgId: 'org-other' },
       });
       expect(prisma.terminalSession.create).toHaveBeenCalledWith(
         expect.objectContaining({

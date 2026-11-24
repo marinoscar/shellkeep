@@ -2,9 +2,21 @@ import { UnprocessableEntityException } from '@nestjs/common';
 
 import { TargetResolverService } from './target-resolver.service';
 
-const ME = { userId: 'me', orgId: 'org-1' };
+const ME = { kind: 'user', userId: 'me', email: 'person-a@example.test', credential: 'session', roles: [], permissions: ['sessions:write'], activeOrgId: 'org-1' } as never;
+/** The ids the fake AccessPolicy lets `me` read and connect to (the default: the profiles `me` owns, see `profile()`). */
+const allowed = { connect: new Set<string>(), read: new Set<string>() };
+const decisions = (action: 'connect' | 'read') => async (_p: unknown, _a: string, refs: Array<{ type: string; id: string }>) =>
+  new Map(refs.map((ref) => [`${ref.type}:${ref.id}`, { allowed: allowed[action].has(ref.id), role: null, via: null }]));
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-const profile = (n: number, over: Record<string, unknown> = {}) => ({
+/** A profile row; `me` may read and connect to it unless `userId` says it is someone else's. */
+const profile = (n: number, over: Record<string, unknown> = {}) => {
+  if (over.userId === undefined) {
+    allowed.connect.add(id(n));
+    allowed.read.add(id(n));
+  }
+  return row(n, over);
+};
+const row = (n: number, over: Record<string, unknown> = {}) => ({
   id: id(n), userId: 'me', name: `srv-${n}`, hostname: `h${n}.example.test`, tags: [], fingerprint: 'SHA256:x',
   facts: { kernel: 'k', os: 'linux', has: [], prettyName: 'Debian 12' }, ...over,
 });
@@ -13,11 +25,16 @@ describe('TargetResolverService', () => {
   let findMany: jest.Mock;
   let resolve: jest.Mock;
   let service: TargetResolverService;
+  // The caller's groups: none in a unit test (the batch decision is what is under test).
+  const groups = { enrich: async (principal: unknown) => principal };
 
   beforeEach(() => {
+    allowed.connect.clear();
+    allowed.read.clear();
     findMany = jest.fn().mockResolvedValue([]);
     resolve = jest.fn().mockResolvedValue({ maxTargetsPerRun: 200 });
-    service = new TargetResolverService({ serverProfile: { findMany } } as never, { resolveSystem: resolve } as never);
+    const access = { decideMany: jest.fn().mockImplementation((p: unknown, action: 'connect' | 'read', refs: never[]) => decisions(action)(p, action, refs)) };
+    service = new TargetResolverService({ serverProfile: { findMany } } as never, { resolveSystem: resolve } as never, access as never, groups as never);
   });
 
   it('returns nothing, without a query, for an empty selector', async () => {
@@ -39,11 +56,38 @@ describe('TargetResolverService', () => {
     expect(findMany.mock.calls[0][0].where.OR).toEqual([{ AND: [{ tags: { hasSome: ['a'] } }, { tags: { hasEvery: ['b'] } }] }]);
   });
 
-  it('partitions by ownership: another user\'s server is skipped as forbidden, never a target', async () => {
+  it('partitions by access: a named server the caller cannot connect to is skipped as forbidden, never a target', async () => {
     findMany.mockResolvedValue([profile(1), profile(2, { userId: 'someone-else' })]);
     const out = await service.resolve(ME, { serverIds: [id(1), id(2)] });
     expect(out.targets.map((t) => t.id)).toEqual([id(1)]);
     expect(out.skipped).toEqual([{ serverProfileId: id(2), reason: 'forbidden' }]);
+  });
+
+  it('runs on a server shared as operator, and reports a server shared only as viewer as forbidden', async () => {
+    // 2: shared with `me` as operator (read + connect); 3: shared as viewer (read, no connect).
+    allowed.read.add(id(2));
+    allowed.connect.add(id(2));
+    allowed.read.add(id(3));
+    findMany.mockResolvedValue([row(2, { userId: 'owner' }), row(3, { userId: 'owner' })]);
+    const out = await service.resolve(ME, { serverIds: [id(2), id(3)] });
+    expect(out.targets.map((t) => t.id)).toEqual([id(2)]);
+    expect(out.skipped).toEqual([{ serverProfileId: id(3), reason: 'forbidden' }]);
+  });
+
+  it('never reveals a server matched only by tag that the caller cannot even read', async () => {
+    // 5 carries the tag but is another user\'s private server: it is neither a target nor listed as skipped.
+    findMany.mockResolvedValue([profile(1, { tags: ['web'] }), row(5, { userId: 'someone-else', tags: ['web'] })]);
+    const out = await service.resolve(ME, { tags: { any: ['web'], all: [] } });
+    expect(out.targets.map((t) => t.id)).toEqual([id(1)]);
+    expect(out.skipped).toEqual([]);
+  });
+
+  it('decides connect for the whole batch with ONE AccessPolicy call', async () => {
+    const decideMany = jest.fn().mockResolvedValue(new Map());
+    service = new TargetResolverService({ serverProfile: { findMany } } as never, { resolveSystem: resolve } as never, { decideMany } as never, groups as never);
+    findMany.mockResolvedValue([row(1), row(2), row(3)]);
+    await service.resolve(ME, { serverIds: [id(1), id(2), id(3)] });
+    expect(decideMany.mock.calls.filter((call) => call[1] === 'connect')).toHaveLength(1);
   });
 
   it('reports a named server that does not exist as not_found, but not an excluded one', async () => {

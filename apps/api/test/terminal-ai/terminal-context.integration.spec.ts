@@ -82,7 +82,7 @@ function setup(): Setup {
   const history = new SessionHistoryService(
     { findOne: jest.fn().mockResolvedValue(session) } as never,
     { execForOutput: exec } as never,
-    { getDecryptedProfile: jest.fn().mockResolvedValue({ id: 'prof-1' }) } as never,
+    { getDecryptedProfileForSession: jest.fn().mockResolvedValue({ id: 'prof-1' }) } as never,
   );
   const audit = jest.fn().mockResolvedValue(undefined);
   const metrics = jest.fn();

@@ -743,3 +743,49 @@ describe('ServerProfileForm', () => {
     });
   });
 });
+
+// A server shared with the viewer (issue #71): the connection and the secrets belong to the user who saved them.
+describe('ServerProfileForm for a shared server', () => {
+  const shared = {
+    id: 'p-1',
+    name: 'Shared box',
+    hostname: 'shared.example.test',
+    port: 22,
+    username: 'ops',
+    authMethod: 'password' as const,
+    fingerprint: null,
+    tags: [],
+    color: 'default' as const,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    access: {
+      role: 'editor',
+      via: 'user_grant',
+      shared: true,
+      credentialHolder: false,
+      can: { connect: true, test: true, write: true, share: false, delete: false },
+    },
+  };
+
+  it('locks the connection, hides the secrets and says why', () => {
+    render(<ServerProfileForm open onClose={vi.fn()} onSave={vi.fn()} profile={shared} />);
+    expect(screen.getByTestId('connection-locked-note')).toBeInTheDocument();
+    expect(screen.getByLabelText(/hostname/i)).toBeDisabled();
+    expect(screen.getByLabelText(/^port/i)).toBeDisabled();
+    expect(screen.getByLabelText(/username/i)).toBeDisabled();
+    expect(screen.queryByLabelText(/^password/i)).not.toBeInTheDocument();
+    // The name stays editable.
+    expect(screen.getByLabelText(/^name/i)).toBeEnabled();
+  });
+
+  it('sends no secret when an editor saves', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ServerProfileForm open onClose={vi.fn()} onSave={onSave} profile={shared} />);
+    await userEvent.click(screen.getByRole('button', { name: /update/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    const sent = onSave.mock.calls[0][0];
+    expect(sent).not.toHaveProperty('password');
+    expect(sent).not.toHaveProperty('privateKey');
+    expect(sent).not.toHaveProperty('passphrase');
+  });
+});

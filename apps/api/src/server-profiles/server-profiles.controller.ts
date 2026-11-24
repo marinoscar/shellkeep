@@ -20,7 +20,8 @@ import {
 } from '@nestjs/swagger';
 
 import { ServerProfilesService } from './server-profiles.service';
-import { Auth, CurrentOrg, CurrentUser } from '@marinoscar/platform-api/identity';
+import type { Principal } from '@marinoscar/platform-api/core';
+import { Auth, CurrentPrincipal } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
@@ -36,17 +37,20 @@ export class ServerProfilesController {
 
   @Get()
   @Auth({ permissions: [PERMISSIONS.SERVERS_READ] })
-  @ApiOperation({ summary: 'List server profiles for current user' })
+  @ApiOperation({
+    summary:
+      'List the server profiles the caller may see: their own, those of their groups and those shared with them (requires servers:read)',
+  })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'filter', required: false, enum: ['all', 'mine', 'shared'] })
   @ApiResponse({ status: 200, description: 'Paginated server profiles' })
   async findAll(
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
     @Query() query: ServerProfilesQueryDto,
   ) {
-    return this.serverProfilesService.findAll({ userId, orgId }, query);
+    return this.serverProfilesService.findAll(principal, query);
   }
 
   @Get(':id')
@@ -54,13 +58,12 @@ export class ServerProfilesController {
   @ApiOperation({ summary: 'Get server profile by ID' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Server profile details' })
-  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller' })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
   ) {
-    return this.serverProfilesService.findOne(id, { userId, orgId });
+    return this.serverProfilesService.findOne(id, principal);
   }
 
   @Post()
@@ -68,11 +71,10 @@ export class ServerProfilesController {
   @ApiOperation({ summary: 'Create a new server profile' })
   @ApiResponse({ status: 201, description: 'Server profile created' })
   async create(
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
     @Body() dto: CreateServerProfileDto,
   ) {
-    return this.serverProfilesService.create({ userId, orgId }, dto);
+    return this.serverProfilesService.create(principal, dto);
   }
 
   @Patch(':id')
@@ -80,14 +82,13 @@ export class ServerProfilesController {
   @ApiOperation({ summary: 'Update a server profile' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Server profile updated' })
-  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller' })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
     @Body() dto: UpdateServerProfileDto,
   ) {
-    return this.serverProfilesService.update(id, { userId, orgId }, dto);
+    return this.serverProfilesService.update(id, principal, dto);
   }
 
   @Delete(':id')
@@ -96,13 +97,12 @@ export class ServerProfilesController {
   @ApiOperation({ summary: 'Delete a server profile' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiResponse({ status: 204, description: 'Server profile deleted' })
-  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller' })
   async remove(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
   ) {
-    await this.serverProfilesService.remove(id, { userId, orgId });
+    await this.serverProfilesService.remove(id, principal);
   }
 
   @Post(':id/test')
@@ -111,13 +111,12 @@ export class ServerProfilesController {
   @ApiOperation({ summary: 'Test SSH connection for a server profile' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Connection test result' })
-  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller' })
   async testConnection(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
   ) {
-    return this.serverProfilesService.testConnection(id, { userId, orgId });
+    return this.serverProfilesService.testConnection(id, principal);
   }
 
   @Post(':id/host-key/scan')
@@ -131,14 +130,13 @@ export class ServerProfilesController {
     status: 200,
     description: '`{ presented: { fingerprint, algorithm }, trusted: { fingerprint, algorithm, trustedAt } | null, matches }`',
   })
-  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller' })
   @ApiResponse({ status: 502, description: 'SSH_HOST_UNREACHABLE: the server could not be reached' })
   async scanHostKey(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
   ) {
-    return this.serverProfilesService.scanHostKey(id, { userId, orgId });
+    return this.serverProfilesService.scanHostKey(id, principal);
   }
 
   @Post(':id/host-key/trust')
@@ -150,16 +148,15 @@ export class ServerProfilesController {
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiResponse({ status: 200, description: 'The updated server profile' })
   @ApiResponse({ status: 400, description: 'HOST_KEY_CONFIRMATION_REQUIRED: replacing a trusted key without confirmHostname' })
-  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller' })
   @ApiResponse({ status: 409, description: 'HOST_KEY_CHANGED_DURING_TRUST: the server presents another key than the one confirmed' })
   @ApiResponse({ status: 502, description: 'SSH_HOST_UNREACHABLE: the server could not be reached' })
   async trustHostKey(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
     @Body() dto: TrustHostKeyDto,
   ) {
-    return this.serverProfilesService.trustHostKey(id, { userId, orgId }, dto);
+    return this.serverProfilesService.trustHostKey(id, principal, dto);
   }
 
   @Delete(':id/host-key')
@@ -167,13 +164,12 @@ export class ServerProfilesController {
   @ApiOperation({ summary: 'Forget the trusted host key; the next connection asks the user again' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiResponse({ status: 200, description: 'The updated server profile' })
-  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller' })
   async forgetHostKey(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
   ) {
-    return this.serverProfilesService.forgetHostKey(id, { userId, orgId });
+    return this.serverProfilesService.forgetHostKey(id, principal);
   }
 
   @Post(':id/facts/refresh')
@@ -182,15 +178,14 @@ export class ServerProfilesController {
   @ApiOperation({ summary: 'Probe the server (OS, shell, package manager, tools) now' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiResponse({ status: 200, description: '`{ facts, factsProbedAt }`' })
-  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller' })
   @ApiResponse({ status: 409, description: 'HOST_KEY_UNKNOWN or HOST_KEY_MISMATCH: the host key is not trusted' })
   async refreshFacts(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
   ) {
     try {
-      return await this.serverProfilesService.refreshFacts(id, { userId, orgId });
+      return await this.serverProfilesService.refreshFacts(id, principal);
     } catch (error) {
       if (error instanceof HostKeyError) throw hostKeyErrorToHttp(error, id);
       throw error;

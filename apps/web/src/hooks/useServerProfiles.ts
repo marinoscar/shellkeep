@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type {
   ServerProfile,
   ServerProfileFormData,
@@ -12,6 +12,7 @@ import {
   deleteServerProfile as deleteProfileApi,
   testServerProfile as testProfileApi,
 } from '../services/terminal-api';
+import type { ServerProfilesFilter } from '../services/terminal-api';
 
 interface UseServerProfilesResult {
   profiles: ServerProfile[];
@@ -24,6 +25,7 @@ interface UseServerProfilesResult {
     page?: number;
     pageSize?: number;
     search?: string;
+    filter?: ServerProfilesFilter;
   }) => Promise<void>;
   createProfile: (data: ServerProfileFormData) => Promise<void>;
   updateProfile: (
@@ -41,13 +43,17 @@ export function useServerProfiles(): UseServerProfilesResult {
   const [pageSize, setPageSize] = useState(10);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The filter of the last fetch, so a save or a delete reloads the view the user is looking at.
+  const filterRef = useRef<ServerProfilesFilter | undefined>(undefined);
 
   const fetchProfiles = useCallback(
     async (params?: {
       page?: number;
       pageSize?: number;
       search?: string;
+      filter?: ServerProfilesFilter;
     }) => {
+      filterRef.current = params?.filter;
       setIsLoading(true);
       setError(null);
       try {
@@ -74,7 +80,7 @@ export function useServerProfiles(): UseServerProfilesResult {
       setError(null);
       try {
         await createProfileApi(data);
-        await fetchProfiles({ page, pageSize });
+        await fetchProfiles({ page, pageSize, filter: filterRef.current });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to create server profile';
@@ -90,7 +96,7 @@ export function useServerProfiles(): UseServerProfilesResult {
       setError(null);
       try {
         await updateProfileApi(id, data);
-        await fetchProfiles({ page, pageSize });
+        await fetchProfiles({ page, pageSize, filter: filterRef.current });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to update server profile';
@@ -106,7 +112,7 @@ export function useServerProfiles(): UseServerProfilesResult {
       setError(null);
       try {
         await deleteProfileApi(id);
-        await fetchProfiles({ page, pageSize });
+        await fetchProfiles({ page, pageSize, filter: filterRef.current });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to delete server profile';

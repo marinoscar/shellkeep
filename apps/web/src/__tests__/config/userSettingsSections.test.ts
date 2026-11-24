@@ -8,7 +8,7 @@ const cards = USER_SETTINGS_SECTIONS.flatMap((s) => s.cards);
 const routes = parseAppRoutes(readFileSync(join(__dirname, '..', '..', 'App.tsx'), 'utf8'));
 
 describe('USER_SETTINGS_SECTIONS', () => {
-  it('declares the Profile, Appearance, Notifications, Terminal, Keyboard shortcuts, Access Tokens, AI Keys and Webhooks cards', () => {
+  it('declares the Profile, Appearance, Notifications, Terminal, Keyboard shortcuts, Access Tokens, AI Keys, Webhooks and Groups cards', () => {
     expect(cards.map((c) => [c.title, c.path])).toEqual([
       ['Profile', '/settings/profile'],
       ['Appearance', '/settings/appearance'],
@@ -23,6 +23,8 @@ describe('USER_SETTINGS_SECTIONS', () => {
       ['AI Keys', '/settings/ai'],
       // #54: the webhooks slice's Integrations card, appended.
       ['Webhooks', '/settings/webhooks'],
+      // #71: the sharing slice's Sharing card, appended.
+      ['Groups', '/settings/groups'],
     ]);
   });
 
@@ -34,11 +36,13 @@ describe('USER_SETTINGS_SECTIONS', () => {
     ]);
   });
 
-  it('declares no card permission but AI Keys and Webhooks (user_settings:* is every role\'s)', () => {
-    // `ai:use` is the `/api/ai/keys` controller's string and `webhooks:read` the one `/api/webhooks` enforces.
+  it('declares no card permission but AI Keys, Webhooks and Groups (user_settings:* is every role\'s)', () => {
+    // `ai:use` is the `/api/ai/keys` controller's string, `webhooks:read` the one `/api/webhooks` enforces and
+    // `groups:read` the one `/api/groups` enforces (#71).
     expect(cards.filter((c) => c.permission !== undefined).map((c) => [c.path, c.permission, c.feature ?? null])).toEqual([
       ['/settings/ai', 'ai:use', 'ai'],
       ['/settings/webhooks', 'webhooks:read', null],
+      ['/settings/groups', 'groups:read', null],
     ]);
   });
 
@@ -51,8 +55,12 @@ describe('USER_SETTINGS_SECTIONS', () => {
     }
   });
 
-  it('has a card for every /settings/* route', () => {
-    const settingsRoutes = routes.filter((r) => r.path.startsWith(`${USER_HUB_PATH}/`)).map((r) => r.path);
-    expect(settingsRoutes.sort()).toEqual(cards.map((c) => c.path).sort());
+  it('has a card for every /settings/* route (a child route `/settings/<card>/:id` belongs to its card)', () => {
+    const settingsRoutes = routes
+      .filter((r) => r.path.startsWith(`${USER_HUB_PATH}/`))
+      .map((r) => r.path.replace(/\/:[^/]+$/, ''));
+    expect([...new Set(settingsRoutes)].sort()).toEqual(cards.map((c) => c.path).sort());
+    // The group detail page (#71) gates on the same permission as its card.
+    expect(routes.find((r) => r.path === '/settings/groups/:id')?.permission).toBe('groups:read');
   });
 });

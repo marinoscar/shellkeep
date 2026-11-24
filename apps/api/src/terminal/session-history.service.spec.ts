@@ -8,12 +8,18 @@ const session = { id: 's1', status: 'active', serverProfileId: 'p1', tmuxSession
 function setup(exec: jest.Mock = jest.fn().mockResolvedValue('pane text')) {
   const sessions = { findOne: jest.fn().mockResolvedValue(session) };
   const ssh = { execForOutput: exec };
-  const profiles = { getDecryptedProfile: jest.fn().mockResolvedValue({ id: 'p1' }) };
+  const profiles = { getDecryptedProfileForSession: jest.fn().mockResolvedValue({ id: 'p1' }) };
   const service = new SessionHistoryService(sessions as never, ssh as never, profiles as never);
   return { service, sessions, ssh, profiles };
 }
 
 describe('SessionHistoryService', () => {
+  it('reads the credential through the access-checked path, for the history purpose', async () => {
+    const { service, profiles } = setup();
+    await service.captureSession(session, scope);
+    expect(profiles.getDecryptedProfileForSession).toHaveBeenCalledWith('p1', scope, 'history');
+  });
+
   it('captures the whole history with joined lines by default', async () => {
     const { service, ssh } = setup();
     await expect(service.capture('s1', scope)).resolves.toBe('pane text');

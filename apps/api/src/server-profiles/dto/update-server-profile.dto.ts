@@ -9,6 +9,8 @@ import { createServerProfileSchema } from './create-server-profile.dto';
  * did not change (#60).
  */
 export const updateServerProfileSchema = createServerProfileSchema
+  // The owner is chosen at creation; moving a profile between owners is not an update.
+  .omit({ ownerGroupId: true })
   .extend({
     port: createServerProfileSchema.shape.port.removeDefault(),
     tags: z.array(z.string()).optional(),

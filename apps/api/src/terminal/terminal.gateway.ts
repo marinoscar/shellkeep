@@ -1,8 +1,9 @@
-import { Logger, NotFoundException, Optional, type OnModuleInit } from '@nestjs/common';
+import { ForbiddenException, Logger, NotFoundException, Optional, type OnModuleInit } from '@nestjs/common';
 import { SpanStatusCode, trace, type Span } from '@opentelemetry/api';
 import { WebSocketGateway, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { ServerProfilesService } from '../server-profiles/server-profiles.service';
 import { PERMISSIONS } from '../common/constants/roles.constants';
+import { actingPrincipal } from '../platform/sharing/sharing-access';
 import type { OwnerScope } from '../common/types/owner-scope';
 import { SessionsService } from './sessions.service';
 import { SessionManagerService } from './session-manager.service';
@@ -331,12 +332,32 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
         return;
       }
 
+      // The session is the caller's own, but attaching to it (or starting it) needs the right to
+      // connect to its server NOW: a share that was revoked since the session was created closes the
+      // door, for a session already running as well (404 NOT_FOUND, nothing disclosed).
+      const principal = actingPrincipal({
+        userId: clientState.userId,
+        orgId: clientState.orgId,
+        permissions: clientState.permissions,
+        roles: clientState.roles,
+      });
+      try {
+        await this.serverProfilesService.assertCanConnect(session.serverProfileId, principal);
+      } catch (err) {
+        if (err instanceof NotFoundException || err instanceof ForbiddenException) {
+          client.send(JSON.stringify({ type: 'session_error', error: 'Session not found', code: 'NOT_FOUND' }));
+          return;
+        }
+        throw err;
+      }
+
       // Start or reattach session
       if (!this.sessionManager.isSessionRunning(sessionId)) {
         // Need to start SSH connection
         const profile = await this.serverProfilesService.getDecryptedProfile(
           session.serverProfileId,
-          scope,
+          principal,
+          'connect',
         );
 
         await this.sessionManager.startSession(

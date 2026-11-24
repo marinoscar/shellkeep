@@ -14,6 +14,7 @@ import '../../src/shellkeep.manifest';
 import { InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AUDIT_SINK, PLATFORM_PRISMA } from '@marinoscar/platform-api/core';
+import { AccessPolicy, GrantsService, PrincipalGroupsProvider } from '@marinoscar/platform-api/sharing';
 import {
   CredentialsService,
   OrgCredentialsService,
@@ -32,10 +33,30 @@ import { SshConnectionFactory } from '../../src/ssh/ssh-connection.factory';
 import { sshCredentialName } from '../../src/server-profiles/ssh-credentials';
 import { createInMemoryCredentialPrisma } from '../helpers/in-memory-credentials';
 
+// `runInOrg` hands the in-memory profile table to the callback (the transaction itself is the platform's).
+jest.mock('@marinoscar/platform-api/core', () => ({
+  ...jest.requireActual('@marinoscar/platform-api/core'),
+  runInOrg: (_client: unknown, _scope: unknown, fn: (tx: unknown) => unknown) => fn((global as any).__profiles),
+}));
+// The list filter belongs to the sharing slice (proven against a real database in test/sharing).
+jest.mock('../../src/platform/sharing/sharing-access', () => ({
+  ...jest.requireActual('../../src/platform/sharing/sharing-access'),
+  accessibleListWhere: async ({ principal }: { principal: { userId: string } }) => ({ userId: principal.userId, ownerGroupId: null }),
+}));
+
 const ORG = '5b0c1d2e-3f40-4a51-8b62-73c84d95ea06';
 const USER_A = '11111111-1111-4111-8111-aaaaaaaaaaaa';
 const USER_B = '22222222-2222-4222-8222-bbbbbbbbbbbb';
-const scopeOf = (userId: string) => ({ userId, orgId: ORG });
+const scopeOf = (userId: string) =>
+  ({
+    kind: 'user',
+    userId,
+    email: `${userId}@example.test`,
+    credential: 'session',
+    roles: [],
+    permissions: ['servers:read', 'servers:write', 'sessions:write'],
+    activeOrgId: ORG,
+  }) as never;
 
 // Obviously fake fixtures; the marker makes any leak into a response or a log easy to find.
 const PASSWORD = 'FAKE-PASSWORD-value-for-tests-1234';
@@ -45,8 +66,15 @@ const PASSPHRASE = 'FAKE-PASSPHRASE-value-5678';
 function createProfileTable() {
   const rows: any[] = [];
   let seq = 0;
-  const matches = (row: any, where: any) =>
-    Object.entries(where).every(([key, value]) => key === 'OR' || row[key] === value);
+  // Equality, `AND` of such clauses, and `null` meaning "absent"; `OR` is not evaluated.
+  const matches = (row: any, where: any): boolean =>
+    Object.entries(where).every(([key, value]) => {
+      if (key === 'OR') return true;
+      if (key === 'AND') return (value as any[]).every((clause) => matches(row, clause));
+      return (row[key] ?? null) === (value ?? null);
+    });
+  /** What the service asks the database for with `include`: the owning user and group. */
+  const withOwner = (row: any) => ({ ...row, user: { id: row.userId, displayName: null, email: `${row.userId}@example.test` }, ownerGroup: null });
   return {
     rows,
     serverProfile: {
@@ -65,8 +93,11 @@ function createProfileTable() {
         rows.push(row);
         return row;
       },
-      findFirst: async ({ where }: any) => rows.find((row) => matches(row, where)) ?? null,
-      findMany: async ({ where }: any) => rows.filter((row) => matches(row, where)),
+      findFirst: async ({ where }: any) => {
+        const row = rows.find((candidate) => matches(candidate, where));
+        return row ? withOwner(row) : null;
+      },
+      findMany: async ({ where }: any) => rows.filter((row) => matches(row, where)).map(withOwner),
       count: async ({ where }: any) => rows.filter((row) => matches(row, where)).length,
       update: async ({ where, data }: any) => Object.assign(rows.find((row) => row.id === where.id), data),
       delete: async ({ where }: any) => {
@@ -87,6 +118,23 @@ describe('SSH credentials in the platform credential store', () => {
   beforeEach(async () => {
     table = createInMemoryCredentialPrisma();
     profiles = createProfileTable();
+    (global as any).__profiles = profiles;
+    // AccessPolicy as ShellKeep wires it, reduced to what this spec proves: only the owner reaches a profile.
+    const OWNER = { allowed: true, role: 'owner', via: 'owner' };
+    const owns = (principal: any, id: string) =>
+      profiles.rows.some((row) => row.id === id && row.userId === principal.userId && row.orgId === principal.activeOrgId);
+    const access = {
+      require: async (principal: any, _action: string, ref: { id: string }) => {
+        if (!owns(principal, ref.id)) throw new NotFoundException();
+        return OWNER;
+      },
+      requireIn: async (_tx: unknown, principal: any, _action: string, ref: { id: string }) => {
+        if (!owns(principal, ref.id)) throw new NotFoundException();
+        return OWNER;
+      },
+      decideManyIn: async (_tx: unknown, _p: unknown, _a: string, refs: Array<{ type: string; id: string }>) =>
+        new Map(refs.map((ref) => [`${ref.type}:${ref.id}`, OWNER])),
+    };
     module = await Test.createTestingModule({
       providers: [
         ServerProfilesService,
@@ -94,6 +142,9 @@ describe('SSH credentials in the platform credential store', () => {
         UserCredentialResolver,
         { provide: PLATFORM_PRISMA, useValue: table.prisma },
         { provide: PrismaService, useValue: profiles },
+        { provide: AccessPolicy, useValue: access },
+        { provide: GrantsService, useValue: { deleteForResources: async () => 0 } },
+        { provide: PrincipalGroupsProvider, useValue: { enrich: async (p: unknown) => p, groupRoleFor: async () => null } },
         // The service never connects in this spec (it proves credential storage only).
         { provide: SshConnectionFactory, useValue: {} },
         { provide: ServerFactsService, useValue: {} },
@@ -216,7 +267,7 @@ describe('SSH credentials in the platform credential store', () => {
       const one = await service.findOne(created.id, scopeOf(USER_A));
       expectNoSecret(one);
 
-      const list = await service.findAll(scopeOf(USER_A), { page: 1, pageSize: 20 });
+      const list = await service.findAll(scopeOf(USER_A), { page: 1, pageSize: 20, filter: 'all' });
       list.items.forEach(expectNoSecret);
       expect(list.items[0]).toMatchObject({ hasPassword: true, hasPrivateKey: true, hasPassphrase: true });
 
@@ -228,7 +279,7 @@ describe('SSH credentials in the platform credential store', () => {
     it('lists no profile of another user, and no flag of one', async () => {
       await createFull(USER_A);
 
-      const list = await service.findAll(scopeOf(USER_B), { page: 1, pageSize: 20 });
+      const list = await service.findAll(scopeOf(USER_B), { page: 1, pageSize: 20, filter: 'all' });
       expect(list.items).toEqual([]);
     });
   });

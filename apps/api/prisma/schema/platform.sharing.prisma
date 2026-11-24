@@ -55,6 +55,13 @@ model Group {
   grants    Grant[]
 
   // The target of the members' and invites' composite foreign keys.
+
+  // composed from app:shellkeep.runbooks.prisma
+  ownedRunbooks Runbook[] @relation("RunbookOwnerGroup")
+
+  // composed from app:shellkeep.server-profiles.prisma
+  ownedServerProfiles ServerProfile[] @relation("ServerProfileOwnerGroup")
+
   @@unique([id, orgId])
   @@index([orgId])
   @@map("groups")

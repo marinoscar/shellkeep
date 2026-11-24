@@ -40,6 +40,7 @@ import './alerts';
 import { registerSshErrorCodes } from '../ssh/ssh.error-codes';
 import { registerTerminalAiErrorCodes } from '../terminal-ai/terminal-ai.error-codes';
 import { registerRunbookRegistrations } from '../runbooks/runbooks.registrations';
+import { registerShellkeepSharing } from './sharing';
 
 registerPlatformPermissions({
   slices: [...ADOPTED_PLATFORM_SLICES],
@@ -53,3 +54,5 @@ registerSshErrorCodes();
 registerTerminalAiErrorCodes();
 // The runbook error codes and notification events (#61).
 registerRunbookRegistrations();
+// The shareable resource types `server_profile` and `runbook` (#71).
+registerShellkeepSharing();

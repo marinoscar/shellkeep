@@ -36,8 +36,10 @@ export function resetPrismaMock(): void {
 export function mockPrismaTransaction(): void {
   prismaMock.$transaction.mockImplementation(async (arg: any) => {
     if (typeof arg === 'function') {
-      // Interactive transaction
-      return arg(prismaMock);
+      // Interactive transaction. A FRESH object that inherits every mock: the platform's `runInOrg`
+      // remembers the scope of the transaction client it handed out, so handing out the shared mock
+      // itself would pin it to the first caller's organization and user (#71).
+      return arg(Object.create(prismaMock));
     } else if (Array.isArray(arg)) {
       // Sequential operations
       return Promise.all(arg);
