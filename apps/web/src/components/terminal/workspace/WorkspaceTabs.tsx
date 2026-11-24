@@ -111,6 +111,7 @@ export function WorkspaceTabs({
             <AddIcon fontSize="small" />
           </IconButton>
         )}
+        {trailing && <Box sx={{ display: 'flex', alignItems: 'center', ml: 'auto', flexShrink: 0 }}>{trailing}</Box>}
       </Box>
     );
   }

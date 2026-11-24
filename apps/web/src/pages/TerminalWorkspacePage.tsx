@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Alert, Box, IconButton, Snackbar, Tooltip, Typography } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Close as CloseIcon } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useShellMainVariant } from '@marinoscar/platform-web/shell/headless';
+import { useShellContextPaneVisible, useShellMainVariant } from '@marinoscar/platform-web/shell/headless';
 import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
 import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { TerminalToolbar } from '../components/terminal/TerminalToolbar';
@@ -17,6 +17,7 @@ import { SplitControls } from '../components/terminal/workspace/SplitControls';
 import { WorkspaceTabs } from '../components/terminal/workspace/WorkspaceTabs';
 import { WorkspacePane } from '../components/terminal/workspace/WorkspacePane';
 import type { PaneStatus } from '../components/terminal/workspace/WorkspacePane';
+import { SessionSwitcherMenu } from '../components/terminal/workspace/SessionSwitcherMenu';
 import { RenameSessionDialog } from '../components/terminal/workspace/RenameSessionDialog';
 import { useWorkspaceLayout } from '../components/terminal/workspace/useWorkspaceLayout';
 import {
@@ -70,6 +71,9 @@ export default function TerminalWorkspacePage() {
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(TERMINAL_WRITE_PERMISSION);
+  // The Sessions context pane lists the sessions beside the expanded rail;
+  // wherever the platform does not draw it, the toolbar offers a menu.
+  const switcherPaneVisible = useShellContextPaneVisible('sessions');
 
   const { layout, commit, current } = useWorkspaceLayout(routeId, user?.id ?? null);
   const [sessions, setSessions] = useState<Record<string, TerminalSession>>({});
@@ -275,13 +279,20 @@ export default function TerminalWorkspacePage() {
           onReorder={(from, to) => update((l) => moveTab(l, from, to))}
           onNewSession={canWrite ? () => setNewSessionDialogOpen(true) : undefined}
           trailing={
-            <SplitControls
-              current={splitOnScreen}
-              candidates={splitCandidates}
-              onSplit={(dir, other) => update((l) => splitWith(l, dir, other))}
-              onSetDirection={(dir) => update((l) => setSplitDirection(l, dir))}
-              onUnsplit={() => update(unsplit)}
-            />
+            <>
+              {!switcherPaneVisible && (
+                <SessionSwitcherMenu activeId={activeId} onSelect={(sessionId) => update((l) => openTab(l, sessionId))} />
+              )}
+              {!isPhone && (
+                <SplitControls
+                  current={splitOnScreen}
+                  candidates={splitCandidates}
+                  onSplit={(dir, other) => update((l) => splitWith(l, dir, other))}
+                  onSetDirection={(dir) => update((l) => setSplitDirection(l, dir))}
+                  onUnsplit={() => update(unsplit)}
+                />
+              )}
+            </>
           }
         />
         <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, bgcolor: 'background.default' }}>
