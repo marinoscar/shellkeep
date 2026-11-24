@@ -4,7 +4,7 @@
 // =============================================================================
 //
 // PURE and import-free, so the same file is used by the web app and the API.
-// There are two byte-identical copies, which `keyModel.parity.test.ts` (web)
+// There are two byte-identical copies, which `keyModel.test.ts` (web, "parity with the API copy")
 // keeps equal:
 //
 //   apps/web/src/lib/terminal/keys/keyModel.ts          (edit this one)
