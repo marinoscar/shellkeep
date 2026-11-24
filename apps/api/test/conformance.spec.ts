@@ -142,6 +142,10 @@ runPlatformConformance({
           file: 'prisma/prisma.service.ts',
           why: 'Test-only cleanDatabase() truncates every table (refuses to run outside NODE_ENV=test)',
         },
+        {
+          file: 'platform/sharing/sharing-access.ts',
+          why: 'The sharing slice\'s EXISTS form of `accessibleWhere` (more than 1,000 shared records): SELECT r.id FROM <a fixed table> r WHERE <the slice\'s own parameterised fragment>; the table is a plain-identifier constant of the caller, never request input (#71)',
+        },
       ],
       registerIn: 'src/app-registrations/user-owned-models.ts',
     },

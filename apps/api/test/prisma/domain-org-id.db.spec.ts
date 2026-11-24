@@ -149,7 +149,8 @@ describe('ShellKeep domain schema (real Postgres)', () => {
   it('backfills existing rows with the default organization', async () => {
     await withScratchDatabase(async (db) => {
       // The database as the baseline leaves it: everything but the org_id migration.
-      await replay(db, (dir) => !dir.endsWith(ORG_ID_MIGRATION));
+      // The sharing migration (#71) builds on org_id, so it is not part of the pre-org_id history either.
+      await replay(db, (dir) => !dir.endsWith(ORG_ID_MIGRATION) && !dir.endsWith('_add_sharing_owner_group'));
       await insertSampleRows(db);
 
       const orgIdDir = migrationDirs().find((d) => d.endsWith(ORG_ID_MIGRATION));

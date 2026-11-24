@@ -95,7 +95,7 @@ export class SessionHistoryService {
     if (session.status === 'terminated') {
       throw new BadRequestException('Cannot download history for a terminated session');
     }
-    const profile = await this.profiles.getDecryptedProfile(session.serverProfileId, scope);
+    const profile = await this.profiles.getDecryptedProfileForSession(session.serverProfileId, scope, 'history');
     try {
       return await this.ssh.execForOutput(profile, command);
     } catch (error) {

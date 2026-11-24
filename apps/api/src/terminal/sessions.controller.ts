@@ -24,7 +24,8 @@ import { FastifyReply } from 'fastify';
 
 import { SessionsService } from './sessions.service';
 import { SessionHistoryService } from './session-history.service';
-import { Auth, CurrentOrg, CurrentUser } from '@marinoscar/platform-api/identity';
+import type { Principal } from '@marinoscar/platform-api/core';
+import { Auth, CurrentOrg, CurrentPrincipal, CurrentUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
@@ -117,12 +118,9 @@ export class SessionsController {
   @Auth({ permissions: [PERMISSIONS.SESSIONS_WRITE] })
   @ApiOperation({ summary: 'Create a new terminal session' })
   @ApiResponse({ status: 201, description: 'Terminal session created' })
-  async create(
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
-    @Body() dto: CreateSessionDto,
-  ) {
-    return this.sessionsService.create({ userId, orgId }, dto);
+  @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller as operator or better' })
+  async create(@CurrentPrincipal() principal: Principal, @Body() dto: CreateSessionDto) {
+    return this.sessionsService.create(principal, dto);
   }
 
   @Patch(':id')

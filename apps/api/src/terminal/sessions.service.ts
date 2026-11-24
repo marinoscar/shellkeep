@@ -1,10 +1,12 @@
 import {
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { AUDIT_SINK, type AuditSink } from '@marinoscar/platform-api/core';
+import { AUDIT_SINK, type AuditSink, type Principal } from '@marinoscar/platform-api/core';
+import { AccessPolicy, PrincipalGroupsProvider } from '@marinoscar/platform-api/sharing';
 import { PrismaService } from '../prisma/prisma.service';
 import type { OwnerScope } from '../common/types/owner-scope';
 import { recordAudit } from '../common/audit/record-audit';
@@ -12,6 +14,7 @@ import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { SessionQueryDto } from './dto/session-query.dto';
 import { TerminalWebhooksService } from './webhooks/terminal-webhooks.service';
+import { SERVER_PROFILE_RESOURCE } from '../app-registrations/sharing';
 import { randomUUID } from 'crypto';
 
 const SERVER_PROFILE_SELECT = {
@@ -30,6 +33,8 @@ export class SessionsService {
     private readonly prisma: PrismaService,
     @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
     private readonly webhooks: TerminalWebhooksService,
+    private readonly access: AccessPolicy,
+    private readonly principalGroups: PrincipalGroupsProvider,
   ) {}
 
   private audit(
@@ -107,12 +112,19 @@ export class SessionsService {
   }
 
   /**
-   * Create a new terminal session
+   * Create a new terminal session. The caller must be allowed to `connect` to the server profile:
+   * their own, or one shared with them (or with a group of theirs) as `operator` or better. Any other
+   * profile answers 404. The session is the caller's own: each person who connects to a shared server
+   * opens their own tmux session, and no credential is read here.
    */
-  async create(scope: OwnerScope, dto: CreateSessionDto) {
-    // Verify server profile ownership
+  async create(principal: Principal, dto: CreateSessionDto) {
+    if (!principal.activeOrgId) throw new ForbiddenException('No active organization');
+    const scope: OwnerScope = { userId: principal.userId, orgId: principal.activeOrgId };
+    // The caller's groups are read fresh: the principal the guard built may be a few seconds old.
+    const me = await this.principalGroups.enrich(principal);
+    await this.access.require(me, 'connect', { type: SERVER_PROFILE_RESOURCE, id: dto.serverProfileId });
     const serverProfile = await this.prisma.serverProfile.findFirst({
-      where: { id: dto.serverProfileId, userId: scope.userId, orgId: scope.orgId },
+      where: { id: dto.serverProfileId, orgId: scope.orgId },
     });
 
     if (!serverProfile) {

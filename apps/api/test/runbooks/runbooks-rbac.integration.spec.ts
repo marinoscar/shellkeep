@@ -157,7 +157,7 @@ describe('Runbook routes (integration)', () => {
       const res = await request(server()).put(`/api/runbooks/${ID}/definition`).set(authHeader(user.accessToken)).set('If-Match', 'W/"v3"').send({ definition: DEF, changelog: 'c' });
       expect(res.status).toBe(200);
       expect(res.headers.etag).toBe('"v4"');
-      expect(runbooks.replaceDefinition).toHaveBeenCalledWith(expect.objectContaining({ orgId: expect.any(String) }), ID, 3, { definition: DEF, changelog: 'c' });
+      expect(runbooks.replaceDefinition).toHaveBeenCalledWith(expect.objectContaining({ activeOrgId: expect.any(String) }), ID, 3, { definition: DEF, changelog: 'c' });
     });
   });
 

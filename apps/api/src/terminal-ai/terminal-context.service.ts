@@ -144,7 +144,7 @@ export class TerminalContextService {
 
     // 2. The per-server hard switch.
     const profile = await this.prisma.serverProfile.findFirst({
-      where: { id: session.serverProfileId, userId: scope.userId, orgId: scope.orgId },
+      where: { id: session.serverProfileId, orgId: scope.orgId },
       select: { aiOutputSharing: true, facts: true },
     });
     if (!profile) {

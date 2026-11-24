@@ -1359,7 +1359,7 @@ SSH host keys are verified before any credential is sent (#60). A profile trusts
 
 A changed key is refused under every policy. Every connection path (terminal, test connection, history download, the Doctor probe, the facts probe) goes through one connection factory, so none can skip the check.
 
-A server profile response carries, besides its connection fields and `has*` flags: `fingerprint`, `hostKeyAlgorithm`, `hostKeyTrustedAt` (all null while untrusted), `facts` (null until probed) and `factsProbedAt`. `PATCH` of `hostname` or `port` to a different value clears the trust and the facts.
+A server profile response carries, besides its connection fields and (to the user who saved the credentials only) `has*` flags, `owner` and `access` (see Sharing below): `fingerprint`, `hostKeyAlgorithm`, `hostKeyTrustedAt` (all null while untrusted), `facts` (null until probed) and `factsProbedAt`. `PATCH` of `hostname` or `port` to a different value clears the trust and the facts.
 
 #### POST /server-profiles/:id/host-key/scan
 Permission `servers:read`. Reads the key the server presents and disconnects; **no credential is sent** and nothing is stored.
@@ -1401,7 +1401,7 @@ Versioned, reusable multi-step procedures (#61). Definitions can hold sensitive 
 
 | Route | Permission | Notes |
 |-------|------------|-------|
-| `GET /api/runbooks` | `runbooks:read` | Paginated (`page`, `pageSize`); filters `q` (name or description), `tag`, `includeArchived` |
+| `GET /api/runbooks` | `runbooks:read` | Paginated (`page`, `pageSize`); filters `q` (name or description), `tag`, `includeArchived`, and `filter` (`all` default, `mine`, `shared`). Lists only the runbooks the caller may see (#71): theirs, their groups' and those shared with them; each item has `owner` and `access` |
 | `GET /api/runbooks/:id` | `runbooks:read` | Latest version embedded; `ETag: "v<version>"` |
 | `POST /api/runbooks` | `runbooks:write` | `{ name, description?, tags?, definition, changelog? }` creates the runbook and version 1 |
 | `PUT /api/runbooks/:id/definition` | `runbooks:write` | `{ definition, changelog? }`; needs `If-Match: "v<n>"` (the ETag of a GET). Creates version n+1 and returns the new `ETag`; a definition identical to the latest (same sha256) is a 200 with `created: false` and no new version |
@@ -1417,13 +1417,41 @@ Versioned, reusable multi-step procedures (#61). Definitions can hold sensitive 
 
 **Definition.** `{ schemaVersion: 1, parameters[], steps[1..50], defaultTargets, strategy }`; step kinds `command`, `script`, `package_update`, `file_upload`, `collect_logs`, `ai_task`, `approval_gate`. The schema is `apps/api/src/runbooks/schema/runbook-definition.schema.ts` (types: `RunbookDefinition`, `RunbookStep`, `RunbookParameter`, `TargetSelector`, `RunStrategy`). Parameters reach commands only as environment variables; there is no template substitution into command text. `allow`, `deny` and parameter `pattern` values are RE2 expressions. A definition that fails answers `422 RUNBOOK_DEFINITION_INVALID` with `details.issues: [{ path, code, message }]`, `path` being the JSON path into the definition.
 
-**Target resolution.** The selector is the union of `serverIds` and the servers whose tags match (`any` = overlap, `all` = contains; both given means both must hold), minus `exclude`. Servers the caller may connect to (today: the profiles they own; sharing arrives with #71) are targets, sorted by `name, id` and capped at the organization's effective `runbooks.maxTargetsPerRun` (`total` is the count before the cap, `capped` says it was cut). Every other matched server is listed in `skipped` with `reason: "forbidden"`, and a named id that does not exist in the organization with `"not_found"`. `groupIds` answers `422 RUNBOOK_TARGET_GROUPS_UNAVAILABLE` until server groups exist.
+**Target resolution.** The selector is the union of `serverIds` and the servers whose tags match (`any` = overlap, `all` = contains; both given means both must hold), minus `exclude`. Servers the caller may `connect` to (their own, one owned by a group of theirs, one shared with them as `operator` or better; #71) are targets, sorted by `name, id` and capped at the organization's effective `runbooks.maxTargetsPerRun` (`total` is the count before the cap, `capped` says it was cut). A server NAMED by id that the caller cannot connect to is listed in `skipped` with `reason: "forbidden"`, and a named id that does not exist in the organization with `"not_found"`; a server matched only by TAG is considered only when the caller may read it, so a tag never reveals another user's private server. `groupIds` (groups of servers, not user groups) still answers `422 RUNBOOK_TARGET_GROUPS_UNAVAILABLE`.
 
 **Secret parameters.** `GET /api/runbook-secrets`, `PUT /api/runbook-secrets/:name` (`{ value, label? }`) and `DELETE /api/runbook-secrets/:name` (all `runbooks:write`; `name` matches `^[a-z][a-z0-9_-]{0,63}$`) manage the organization's `runbook_secret` credentials. Values are write-only: responses carry `name`, `label`, `hint` (masked, at most the last four characters), `createdAt`, `updatedAt` and `updatedBy`, never the value. A run names the credential for a `secret` parameter (`secretRefs`); the value never appears in a definition, a run row or a job payload.
 
 **Audit events** (`audit_events`): `runbook.created`, `runbook.version_created` (with `definition_sha256`), `runbook.archived`, `runbook.restored`, `runbook_secret.set`, `runbook_secret.deleted`.
 
 **Settings.** The `runbooks` system namespace (`enabled`, `maxTargetsPerRun` 200, `maxConcurrency` 20, `defaultStepTimeoutSec` 600, `maxLogBytesPerStep` 5 MiB, `approvals.allowSelfApproval` false, `approvals.defaultExpirySec` 86400, `ai.agentEnabled` true) can be tightened, never loosened, per organization through `/api/org-settings`.
+
+### Sharing: groups, shared servers and shared runbooks
+
+Server profiles and runbooks are private to their owner until shared (#71). The sharing slice (`@marinoscar/platform-api/sharing`) provides the routes; ShellKeep registers two resource types, `server_profile` and `runbook`, and every decision is `AccessPolicy`'s. A record the caller may not see is **404, never 403**, so existence is never disclosed; a missing RBAC permission (for example `sessions:write` to connect) is a 403 naming it. A grant carries a **role, never a credential**.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /api/groups`, `POST /api/groups`, `GET`/`PATCH`/`DELETE /api/groups/:id` | `groups:read`, `groups:write` | Groups of the active organization. `DELETE` answers `409` with `details.reason: "GROUP_OWNS_RESOURCES"` and `details.counts` while the group owns a server profile or a runbook |
+| `GET`/`POST /api/groups/:id/members`, `PATCH`/`DELETE /api/groups/:id/members/:userId`, `GET`/`POST /api/groups/:id/invites`, `GET /api/groups/invites/mine` | `groups:read`, `groups:write` | Group roles `admin`, `editor`, `viewer` |
+| `GET /api/grants?resourceType&resourceId`, `POST /api/grants`, `PATCH`/`DELETE /api/grants/:id` | `sharing:read`, `sharing:write` | Share one record with a user (`{ kind: "user", userId }` or `email`) or a group (`{ kind: "group", groupId }`) with a role; needs the `share` action on the record (its owner) |
+| `GET /api/grants/shared-with-me` | `sharing:read` | Active grants to the caller or their groups |
+| `POST /api/grants/links` | `sharing:write` | **Always `422` with `details.reason: "ROLE_NOT_GRANTABLE"`** for both types: links are off |
+
+**Server profile roles** (`owner` is implicit): `viewer` reads the profile (never a credential); `operator` also tests the connection, opens sessions and runs runbooks on it; `editor` also changes the name, tags, color and host-key trust. A member of the owning group holds `admin` as `editor`, `editor` as `operator`, `viewer` as `viewer`. `share` and `delete` need `owner`. Each action also needs its RBAC permission, even for the owner: `connect` needs `sessions:write`, `run` needs `runbooks:run`, `write` needs `servers:write`, `delete` needs `servers:delete`.
+
+**Runbook roles**: `viewer` reads (and previews targets), `runner` also runs, `editor` also saves versions, edits metadata and archives. The group mapping is `admin` as `editor`, `editor` as `runner`, `viewer` as `viewer`; `share` needs `owner`; `run` needs `runbooks:run`, `write` needs `runbooks:write`.
+
+**Server profiles.**
+- `GET /api/server-profiles` lists what the caller may see; `?filter=mine|shared|all`. `POST /api/server-profiles` and `POST /api/runbooks` accept `ownerGroupId` (the caller must be an `admin` or `editor` of that group, `403 GROUP_ROLE_INSUFFICIENT` for a viewer, `404` for a group they are not in).
+- Every item carries `owner` (`{ kind: "user" | "group", id, name }`) and `access` (`{ role, via, shared, credentialHolder, can: { connect, test, write, share, delete } }`; a runbook's `can` is `{ run, write, share }`). The `has*` credential flags are returned **only to the user who saved the credentials**; a grantee gets none of them.
+- The SSH secrets stay in the credential store of the user who saved them and are read server-side only, for `POST /api/server-profiles/:id/test`, the host-key and facts routes, the session history download and the terminal socket. A grantee's `PATCH` that changes the hostname, port, username, auth method or a secret answers `403 SERVER_PROFILE_CREDENTIAL_HOLDER_ONLY`, so a share can never redirect a stored credential to another host.
+- Per route: `GET` needs `read` (viewer); `POST /:id/test`, `/host-key/scan` and `/facts/refresh` need `test` (operator); `PATCH`, `POST /:id/host-key/trust` and `DELETE /:id/host-key` need `write` (editor); `DELETE /:id` needs `delete` (owner). A grantee below the role gets 404.
+- `POST /api/sessions` needs `connect` on the profile (404 otherwise); the session is the caller's own, so each person who connects opens their own tmux session. The terminal socket checks `connect` again on every attach: a revoked share answers `NOT_FOUND`.
+- `DELETE /api/server-profiles/:id` (the owner) removes the grants on it in the same transaction.
+
+**Audit events.** The slice audits shares, revocations and group membership. ShellKeep adds `server_profile.connect_as_grantee` (actor, profile id, `ownerUserId`, `ownerGroupId`, `purpose`: `connect`, `test`, `history` or `run`; never a secret) whenever a credential is read for a caller who did not save it. Metric: `app.sharing.access_decisions` (`resource_type`, `outcome`, `via`).
+
+---
 
 ### Health
 
