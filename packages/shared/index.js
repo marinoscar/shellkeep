@@ -21,3 +21,15 @@ exports.CLI_NAME = identity.cliName;
 
 /** The GitHub repository as `owner/name` (`repoSlug`). */
 exports.REPO_SLUG = identity.repoSlug;
+
+/**
+ * The fields the Android companion's identity derives from: the product name,
+ * the repository slug and the optional `android` block of `identity.json`
+ * (`{ applicationId?, deepLinkScheme?, storagePrefix?, apkStem? }`), frozen.
+ * Pass it to `androidIdentity()` of `@marinoscar/platform-contract/android-app`.
+ */
+exports.ANDROID_IDENTITY_SOURCE = Object.freeze({
+  productName: identity.productName,
+  repoSlug: identity.repoSlug,
+  ...(identity.android ? { android: Object.freeze({ ...identity.android }) } : {}),
+});

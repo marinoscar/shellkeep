@@ -1,5 +1,6 @@
 import { Typography } from '@mui/material';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import { AndroidUpdateBanner } from '@marinoscar/platform-web/android-app/ui';
 import { MaintenanceBanner } from '@marinoscar/platform-web/host/ui';
 import { usePushSubscriptionSync } from '@marinoscar/platform-web/notifications/headless';
 import {
@@ -10,6 +11,7 @@ import { OnboardingProvider } from '@marinoscar/platform-web/onboarding/headless
 import { GettingStartedMenuItem, WelcomeDialog } from '@marinoscar/platform-web/onboarding/ui';
 import { ShellAppBar, ShellLayout, ShellUserMenu } from '@marinoscar/platform-web/shell/ui';
 import type { ShellUserMenuItem } from '@marinoscar/platform-web/shell/ui';
+import { ANDROID_TWA_KEY_PREFIX } from '../../config/androidApp';
 import { APP_NAME, APP_VERSION } from '../../config/app';
 import { SHELLKEEP_NAVIGATION } from '../../config/shell';
 import { USER_HUB_PATH, USER_HUB_TITLE } from '../../config/userSettingsSections';
@@ -121,6 +123,9 @@ function ShellBanners({ pushSync }: { pushSync: ReturnType<typeof usePushSubscri
       {/* An open maintenance window, for an administrator it lets through
           (#46). Renders nothing for everyone else. */}
       <MaintenanceBanner />
+      {/* Only inside the Android app's Trusted Web Activity, and only when the
+          installed build is older than the hosted release (#74). */}
+      <AndroidUpdateBanner keyPrefix={ANDROID_TWA_KEY_PREFIX} />
       {/* What is left to set up (#70): the deployment's required steps for an
           administrator, else the account's. Renders nothing once they are
           done, once dismissed, and on the checklist page itself. */}

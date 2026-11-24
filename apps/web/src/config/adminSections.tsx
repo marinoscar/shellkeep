@@ -98,6 +98,8 @@ import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
 import { dbBackupAdminSections } from '@marinoscar/platform-web/db-backup/ui';
 import { jobsAdminSections } from '@marinoscar/platform-web/jobs/ui';
 import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
+// Android app (#74; a packaged page: card and icon from its descriptor).
+import { androidAppSettingsPage } from '@marinoscar/platform-web/android-app/ui';
 import { alertsAdminCards } from '@marinoscar/platform-web/alerts/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
 import { factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui';
@@ -183,6 +185,13 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         path: PUSH_PATH,
         permission: 'push:read',
       },
+      // #74: appended to General after Web Push. Which Android app builds the
+      // deployment trusts, and the APKs it hosts, are configuration an
+      // administrator sets. `system_settings:read` is the exact string
+      // `GET /api/admin/android-app` (`@marinoscar/platform-api/android-app`)
+      // enforces; every write is gated inside the page on
+      // `system_settings:write`. No `feature`.
+      { ...androidAppSettingsPage.card, Icon: androidAppSettingsPage.Icon },
       // #70, appended: the onboarding slice's Setup guide
       // (`/admin/settings/setup`, `system_settings:read`: the permission
       // `@marinoscar/platform-api/onboarding` adds the admin block to

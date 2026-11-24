@@ -3,7 +3,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { githubRawManifest, type CreateCliOptions } from '@marinoscar/platform-cli';
-import { APP_NAME, CLI_NAME, REPO_SLUG } from '@shellkeep/shared';
+import { androidCommand, androidDeployStep, androidTuiScreen } from '@marinoscar/platform-cli/android';
+import { ANDROID_IDENTITY_SOURCE, APP_NAME, CLI_NAME, REPO_SLUG } from '@shellkeep/shared';
 
 import { runbookCommand } from './commands/runbook.js';
 import { serversCommand } from './commands/servers.js';
@@ -26,6 +27,11 @@ import { runsScreen, serversScreen, sessionsScreen } from './tui/screens.js';
 //   - `servers`, `sessions` and `runbook`: commands over the API
 //     (`extraCommands`, one file each under src/commands/), plus their TUI
 //     screens (`tuiScreens`: Servers, Sessions, Runs);
+//   - the Android companion (#74): the platform's `android` group
+//     (doctor, keystore, version, build, publish, release, releases), its TUI
+//     screen and the optional deploy step that builds and publishes the APK
+//     after `verify` on install and update. The step runs only with
+//     `SHELLKEEP_DEPLOY_ANDROID=1` and never fails a deploy;
 //   - the metadata of the `.env.example` keys that are ShellKeep's own
 //     (`envSpecFragments`) and help for the platform's `APP_BIND_PORT`;
 //   - deploy checks: `docker-network-devnet`, `tmux-on-api-image`, `ssh-egress`;
@@ -134,8 +140,14 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
     repoSlug: REPO_SLUG,
   },
   version: readVersion(),
-  extraCommands: [serversCommand(), sessionsCommand(), runbookCommand()],
-  tuiScreens: [serversScreen, sessionsScreen, runsScreen],
+  extraCommands: [
+    serversCommand(),
+    sessionsCommand(),
+    runbookCommand(),
+    androidCommand({ identity: ANDROID_IDENTITY_SOURCE }),
+  ],
+  tuiScreens: [serversScreen, sessionsScreen, runsScreen, androidTuiScreen],
+  deploySteps: [androidDeployStep({ pipeline: 'install' }), androidDeployStep({ pipeline: 'update' })],
   nodeExecutors: [],
   envSpecFragments: [SHELLKEEP_ENV_SPEC],
   envAnnotations: {

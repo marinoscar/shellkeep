@@ -28,6 +28,7 @@
     "@mui/material": "^9.6.0",
     "@mui/x-charts": "^9.18.1",
     "@mui/x-data-grid": "^9.18.0",
+    "@shellkeep/shared": "*",
     "@uiw/react-codemirror": "^4.25.12",
     "@xterm/addon-fit": "^0.10.x",
     "@xterm/addon-search": "^0.15.x",

@@ -2,16 +2,10 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
-import { ShellLayout } from '@marinoscar/platform-web/shell/ui';
-import type { ShellNavigation } from '@marinoscar/platform-web/shell/headless';
-import ListIcon from '@mui/icons-material/List';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { http, HttpResponse } from 'msw';
 import { render, mockUser, type MockUser } from '../../utils/test-utils';
 import { server } from '../../mocks/server';
 import { Layout } from '../../../components/common/Layout';
-import { DESTINATIONS, type Destination, type DestinationKey } from '../../../config/destinations';
-import { SHELLKEEP_NAVIGATION } from '../../../config/shell';
 
 /**
  * The shell binding (#76) at the three window classes: 360 (phone), 768
@@ -108,22 +102,13 @@ describe('Layout (the platform shell binding)', () => {
 
     it('with six visible destinations shows three tabs plus More, and More holds Runbooks, Runs and Console', async () => {
       restore = installWidth(360);
-      // The shape #65 will append (Runbooks and Runs before the pinned Console).
-      const extra: Destination[] = [
-        { key: 'runbooks', label: 'Runbooks', compactLabel: 'Runbooks', Icon: ListIcon, path: '/runbooks' },
-        { key: 'runs', label: 'Runs', compactLabel: 'Runs', Icon: PlayArrowIcon, path: '/runs' },
-      ];
-      const six: ShellNavigation<DestinationKey> = {
-        ...SHELLKEEP_NAVIGATION,
-        destinations: [...DESTINATIONS.slice(0, 3), ...extra, DESTINATIONS[3]],
-        destinationRoutes: { ...SHELLKEEP_NAVIGATION.destinationRoutes!, runbooks: ['/runbooks'], runs: ['/runs'] },
-      };
-      renderShell('/', admin, <ShellLayout navigation={six} brand="ShellKeep" />);
+      // #65 appended Runbooks and Runs before the pinned Console.
+      renderShell('/', { ...admin, permissions: [...admin.permissions, 'runbooks:read'] });
       const bar = bottomBar()!;
       const tabs = within(bar).getAllByRole('button');
       expect(tabs.map((b) => b.textContent)).toEqual(['Home', 'Sessions', 'Servers', 'More']);
 
-      await userEvent.click(within(bar).getByRole('button', { name: 'More destinations' }));
+      await userEvent.click(within(bar).getByRole('button', { name: /More destinations/ }));
       const sheet = await screen.findByRole('navigation', { name: 'More destinations' });
       const rows = within(sheet).getAllByRole('link').map((row) => row.textContent);
       expect(rows).toEqual(['Runbooks', 'Runs', 'Console']);

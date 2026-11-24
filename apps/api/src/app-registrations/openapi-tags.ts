@@ -238,6 +238,18 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'Android',
+    tags: [
+      {
+        name: 'Android App',
+        description:
+          'The Android companion (a Trusted Web Activity around the PWA): the trusted apps and the public ' +
+          '`/.well-known/assetlinks.json` (`system_settings:read`/`write`), the hosted APK releases, signed ' +
+          'ten-minute download links for any signed-in user, and the Android test notification.',
+      },
+    ],
+  },
+  {
     name: 'Data export',
     tags: [
       {

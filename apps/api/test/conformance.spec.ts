@@ -42,6 +42,8 @@ import '@marinoscar/platform-api/db-backup/testing';
 // Register the `webhooks` (#54) and `alerts` (#54) suites.
 import '@marinoscar/platform-api/webhooks/testing';
 import '@marinoscar/platform-api/alerts/testing';
+// Register the `androidApp` suite (#74).
+import '@marinoscar/platform-api/android-app/testing';
 import { RAW_SQL_INDEXES } from '@marinoscar/platform-db';
 import { discoverControllers } from '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/settings/testing';
@@ -202,7 +204,10 @@ runPlatformConformance({
     // one-open-incident partial index (on the raw-SQL list), idempotent evaluation, dispatch after the
     // committed write.
     alerts: { rawSqlIndexNames: RAW_SQL_INDEXES.map((index) => index.name) },
-    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 37 },
+    // The Android companion (#74): routes (assetlinks public, admin routes exactly `system_settings:*`), the
+    // one-current partial index on the raw-SQL list, the kept `android-releases/` prefix, the `android_app` channel.
+    androidApp: { rawSqlIndexNames: RAW_SQL_INDEXES.map((index) => index.name) },
+    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 39 },
 
     // ---- the AI platform's invariants (AGENTS.md "AI Platform Rules") ---------
     // The five that boot the app take the fixture (./conformance/ai-fixture.ts):

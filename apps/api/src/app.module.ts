@@ -24,6 +24,7 @@ import { alertsModule } from './platform/alerts/alerts.config';
 import { webhooksModule } from './platform/webhooks/webhooks.config';
 import { sharingModule } from './platform/sharing/sharing.config';
 import { exportsModule } from './platform/exports/exports.config';
+import { androidAppModule } from './platform/android-app/android-app.config';
 import { userDataModule } from './platform/user-data/user-data.config';
 import { jobsModule, nodeCredentialModule, nodesModule } from './platform/jobs/jobs.config';
 import {
@@ -151,6 +152,9 @@ import configuration from './config/configuration';
     TerminalAiModule,
     // The Home dashboard (#78): `GET /api/dashboard/summary`, one bounded read over what the caller may see.
     DashboardModule,
+    // The Android companion (#74): trusted apps, `/.well-known/assetlinks.json`, hosted APK releases, signed
+    // download links and the `android_app` push channel's sender. After storage and notifications.
+    androidAppModule,
     // Onboarding (#70): `GET /api/onboarding` (the Getting started checklist and the admin Setup guide,
     // derived per request from the facts and steps of `onboarding/onboarding.manifest.ts`) and
     // `GET /api/admin/onboarding/metrics` (`system_settings:read`, the activation metrics). After the

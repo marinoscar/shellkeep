@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { androidAppSettingsPage } from '@marinoscar/platform-web/android-app/ui';
 import { parseAppRoutes } from '@marinoscar/platform-web/settings/testing';
 import { visibleSettingsSections } from '@marinoscar/platform-web/settings/ui';
 import { dangerZoneLastViolations } from '@marinoscar/platform-web/user-data/headless';
@@ -30,6 +31,8 @@ describe('ADMIN_SECTIONS (#46)', () => {
       // #51: appended to General.
       ['Email', '/admin/settings/email'],
       ['Web Push', '/admin/settings/push'],
+      // #74: appended to General.
+      [androidAppSettingsPage.card.title, '/admin/settings/android'],
       // #70: the onboarding slice's Setup guide, appended to General.
       ['Setup guide', '/admin/settings/setup'],
       ['Users & Allowlist', '/admin/settings/users'],
@@ -86,6 +89,9 @@ describe('ADMIN_SECTIONS (#46)', () => {
       // GET /api/admin/push-config, a pair of its own; key generation,
       // rotation and the test push need push:write, gated in the page.
       '/admin/settings/push': 'push:read',
+      // GET /api/admin/android-app (@marinoscar/platform-api/android-app); writes need
+      // system_settings:write, gated in the page.
+      '/admin/settings/android': 'system_settings:read',
       // GET /api/onboarding's admin block and GET /api/admin/onboarding/metrics (#70).
       '/admin/settings/setup': 'system_settings:read',
       // GET /api/users.
@@ -167,6 +173,8 @@ describe('ADMIN_SECTIONS (#46)', () => {
       STORAGE_PATH,
       EMAIL_PATH,
       PUSH_PATH,
+      // #74.
+      '/admin/settings/android',
       '/admin/settings/setup',
     ]);
   });
