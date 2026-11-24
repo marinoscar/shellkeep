@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
   AuthService,
+  PatService,
   requireJwtSecret,
   toPrincipal,
   type JwtPayload,
@@ -41,10 +42,27 @@ export type TerminalPrincipalResult =
  * docs/platform-adoption/local-exceptions.md. When the platform ships it, this
  * class becomes a one-line delegation and the shim is removed.
  *
- * Only a session or device JWT is accepted: a personal access token (`pat_`), a
- * worker-node token (`nod_`) and an OAuth token are not JWTs and fail
- * verification. The token is never logged.
+ * Two kinds of token are accepted: a session or device JWT, and a personal access
+ * token (`pat_`, what `shellkeep login` stores for the CLI's `sessions attach`).
+ * A PAT is verified by the identity slice's own `PatService.resolveToken` (hash
+ * lookup, revoked, expired, inactive user, organization binding), then mapped to
+ * the principal the HTTP guard would build. A PAT carries no JWT `exp`, so the
+ * socket it authenticates expires after `PAT_SOCKET_TTL_MS`; the client re-sends
+ * `auth` before then (the gateway's re-auth path), which re-validates the token,
+ * so a revoked PAT ends the terminal within that window. A worker-node token
+ * (`nod_`) and an OAuth token are neither and fail verification. The token is
+ * never logged.
  */
+/**
+ * How long a socket authenticated with a personal access token stays authorized
+ * without a fresh `auth` message: the access JWT's lifetime, so a PAT is
+ * re-validated as often as a session token is refreshed.
+ */
+export const PAT_SOCKET_TTL_MS = 15 * 60 * 1000;
+
+/** The prefix of a personal access token. */
+const PAT_PREFIX = 'pat_';
+
 @Injectable()
 export class TerminalPrincipalResolver {
   private readonly secret: string;
@@ -53,6 +71,7 @@ export class TerminalPrincipalResolver {
     config: ConfigService,
     private readonly jwt: JwtService,
     private readonly auth: AuthService,
+    private readonly pat: PatService,
   ) {
     this.secret = requireJwtSecret(config);
   }
@@ -61,6 +80,8 @@ export class TerminalPrincipalResolver {
     if (typeof token !== 'string' || token.length === 0) {
       return { ok: false, reason: 'invalid_token' };
     }
+
+    if (token.startsWith(PAT_PREFIX)) return this.resolvePat(token);
 
     let payload: JwtPayload & { exp?: number };
     try {
@@ -99,6 +120,31 @@ export class TerminalPrincipalResolver {
         permissions: principal.permissions,
         roles: principal.roles,
         expiresAtMs: payload.exp * 1000,
+      },
+    };
+  }
+
+  /** A personal access token, through the identity slice's verifier. */
+  private async resolvePat(token: string): Promise<TerminalPrincipalResult> {
+    const resolved = await this.pat.resolveToken(token);
+    if (!resolved) return { ok: false, reason: 'invalid_token' };
+
+    const { user } = resolved;
+    if (!user.isActive) return { ok: false, reason: 'invalid_user' };
+
+    const principal = toPrincipal(user, user.tokenKind ?? 'pat');
+    if (principal.kind !== 'user' || !principal.activeOrgId) {
+      return { ok: false, reason: 'invalid_user' };
+    }
+
+    return {
+      ok: true,
+      principal: {
+        userId: principal.userId,
+        orgId: principal.activeOrgId,
+        permissions: principal.permissions,
+        roles: principal.roles,
+        expiresAtMs: Date.now() + PAT_SOCKET_TTL_MS,
       },
     };
   }

@@ -241,6 +241,80 @@ describe('TerminalGateway', () => {
       );
     });
 
+    // The CLI's `sessions attach` (#72) authenticates with the personal access token `shellkeep login`
+    // stored. The gateway hands the token to the resolver as it is (the resolver tells a PAT from a JWT),
+    // and every later rule applies to a PAT socket exactly as to a JWT one.
+    describe('a personal access token (the shellkeep CLI)', () => {
+      const PAT = 'pat_0123456789abcdef0123456789abcdef';
+
+      it('authenticates with auth_ok and attaches a session like a JWT socket', async () => {
+        const ws = createMockWebSocket();
+        principals.resolve.mockResolvedValue(principalFor());
+        sessionsService.findOne.mockResolvedValue(mockSession as any);
+        sessionManager.isSessionRunning.mockReturnValue(true);
+        sessionManager.attachWebSocket.mockReturnValue(true);
+
+        gateway.handleConnection(ws);
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+        emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
+        for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+
+        expect(principals.resolve).toHaveBeenCalledWith(PAT);
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'auth_ok' }));
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'session_ready', sessionId: SESSION_ID }));
+        expect(sessionsService.findOne).toHaveBeenCalledWith(SESSION_ID, SCOPE);
+      });
+
+      it('refuses a PAT the identity slice rejects (revoked, expired, unknown) with auth_fail and a close', async () => {
+        const ws = createMockWebSocket();
+        principals.resolve.mockResolvedValue({ ok: false, reason: 'invalid_token' });
+
+        gateway.handleConnection(ws);
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'auth_fail', reason: 'Invalid token' }));
+        expect(ws.close).toHaveBeenCalled();
+      });
+
+      it('refuses a PAT of a principal without sessions:write as forbidden (a Viewer may not type into a session)', async () => {
+        const ws = createMockWebSocket();
+        principals.resolve.mockResolvedValue(principalFor({ permissions: ['sessions:read'], roles: ['viewer'] }));
+
+        gateway.handleConnection(ws);
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'auth_fail', reason: 'forbidden' }));
+        expect(ws.close).toHaveBeenCalled();
+      });
+
+      it('re-validates the PAT when the client re-sends auth, and a revoked one then closes the socket', async () => {
+        const ws = createMockWebSocket();
+        principals.resolve.mockResolvedValueOnce(principalFor());
+        gateway.handleConnection(ws);
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        principals.resolve.mockResolvedValueOnce(principalFor());
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'auth_refreshed' }));
+
+        principals.resolve.mockResolvedValueOnce({ ok: false, reason: 'invalid_token' });
+        emitMessage(ws, { type: 'auth', token: PAT });
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(ws.close).toHaveBeenCalled();
+      });
+    });
+
     it('should send auth_fail and close socket when token is invalid', async () => {
       const ws = createMockWebSocket();
       principals.resolve.mockResolvedValue({ ok: false, reason: 'invalid_token' });
