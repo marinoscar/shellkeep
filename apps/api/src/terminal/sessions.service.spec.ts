@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
 import { TerminalWebhooksService } from './webhooks/terminal-webhooks.service';
+import { SessionManagerService } from './session-manager.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AUDIT_SINK } from '@marinoscar/platform-api/core';
 import { AccessPolicy, PrincipalGroupsProvider } from '@marinoscar/platform-api/sharing';
@@ -16,6 +17,7 @@ describe('SessionsService', () => {
   /** The caller as AccessPolicy sees them. */
   const principalOf = (orgId: string) =>
     ({ kind: 'user', userId: mockUserId, email: 'person-a@example.test', credential: 'session', roles: [], permissions: ['sessions:write'], activeOrgId: orgId }) as any;
+  const sessionManager = { terminateSession: jest.fn().mockResolvedValue(undefined) };
   const access = { require: jest.fn().mockResolvedValue({ allowed: true, role: 'operator', via: 'user_grant' }) };
   const auditSink = { record: jest.fn().mockResolvedValue(undefined) };
   const mockSessionId = 'session-456';
@@ -50,6 +52,7 @@ describe('SessionsService', () => {
         SessionsService,
         { provide: AUDIT_SINK, useValue: auditSink },
         { provide: AccessPolicy, useValue: access },
+        { provide: SessionManagerService, useValue: sessionManager },
         { provide: PrincipalGroupsProvider, useValue: { enrich: async (principal: unknown) => principal } },
         { provide: TerminalWebhooksService, useValue: { sessionCreated: jest.fn(), sessionTerminated: jest.fn() } },
         {
@@ -296,6 +299,34 @@ describe('SessionsService', () => {
       expect(result.status).toBe('terminated');
     });
 
+    it('closes the live connection after the row update', async () => {
+      (prisma.terminalSession.findFirst as jest.Mock).mockResolvedValue(mockSession);
+      (prisma.terminalSession.update as jest.Mock).mockResolvedValue({ ...mockSession, status: 'terminated' });
+
+      await service.terminate(mockSessionId, mockScope);
+
+      expect(sessionManager.terminateSession).toHaveBeenCalledWith(mockSessionId);
+      expect((prisma.terminalSession.update as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
+        sessionManager.terminateSession.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('still succeeds when closing the live connection throws', async () => {
+      (prisma.terminalSession.findFirst as jest.Mock).mockResolvedValue(mockSession);
+      (prisma.terminalSession.update as jest.Mock).mockResolvedValue({ ...mockSession, status: 'terminated' });
+      sessionManager.terminateSession.mockRejectedValueOnce(new Error('boom'));
+
+      const result = await service.terminate(mockSessionId, mockScope);
+
+      expect(result.status).toBe('terminated');
+    });
+
+    it('does not close a connection when the session is not found', async () => {
+      (prisma.terminalSession.findFirst as jest.Mock).mockResolvedValue(null);
+      await expect(service.terminate(mockSessionId, mockScope)).rejects.toThrow(NotFoundException);
+      expect(sessionManager.terminateSession).not.toHaveBeenCalled();
+    });
+
     it('should throw NotFoundException for wrong user', async () => {
       (prisma.terminalSession.findFirst as jest.Mock).mockResolvedValue(null);
 
@@ -357,6 +388,36 @@ describe('SessionsService', () => {
         { id: mockSessionId },
         { id: 'session-999' },
       ]);
+    });
+
+    it('closes the live connection of each terminated session, after the update', async () => {
+      (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({ count: 2 });
+
+      await service.batchTerminate([mockSessionId, 'session-999'], mockScope);
+
+      expect(sessionManager.terminateSession).toHaveBeenCalledTimes(2);
+      expect(sessionManager.terminateSession).toHaveBeenCalledWith(mockSessionId);
+      expect(sessionManager.terminateSession).toHaveBeenCalledWith('session-999');
+      expect((prisma.terminalSession.updateMany as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
+        sessionManager.terminateSession.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('still closes the rest and succeeds when one close throws', async () => {
+      (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({ count: 2 });
+      sessionManager.terminateSession.mockRejectedValueOnce(new Error('boom'));
+
+      await expect(service.batchTerminate([mockSessionId, 'session-999'], mockScope)).resolves.toEqual({ terminated: 2 });
+      expect(sessionManager.terminateSession).toHaveBeenCalledTimes(2);
+    });
+
+    it('closes nothing when no session matched', async () => {
+      (prisma.terminalSession.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.terminalSession.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+      await service.batchTerminate([mockSessionId], mockScope);
+
+      expect(sessionManager.terminateSession).not.toHaveBeenCalled();
     });
 
     it('should audit each terminated session', async () => {

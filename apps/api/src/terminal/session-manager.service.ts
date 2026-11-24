@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { SshService, SshConnection, DecryptedServerProfile } from './ssh.service';
 import { SessionsService } from './sessions.service';
 import { TerminalMetricsService } from './telemetry/terminal-metrics.service';
@@ -17,6 +17,7 @@ export class SessionManagerService implements OnModuleInit {
 
   constructor(
     private readonly sshService: SshService,
+    @Inject(forwardRef(() => SessionsService))
     private readonly sessionsService: SessionsService,
     @Optional() private readonly metrics?: TerminalMetricsService,
   ) {}

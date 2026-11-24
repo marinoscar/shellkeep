@@ -39,7 +39,7 @@
 // or retry the job.
 // =============================================================================
 
-import { Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { JobHandlerRegistry, type Job, type JobHandler } from '@marinoscar/platform-api/jobs';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
@@ -47,6 +47,7 @@ import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { MAX_LISTED_SESSIONS } from '../../email-templates/idle-duration';
 import type { TerminalSessionReapedData } from '../../email-templates/terminal-session-reaped.email';
 import { TERMINAL_SESSION_REAPED_EVENT } from '../../notifications-registry/terminal.notifications';
+import { LIVE_SESSION_CLOSER, type LiveSessionCloser } from '../live-session-closer';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TerminalMetricsService } from '../telemetry/terminal-metrics.service';
 import { TerminalWebhooksService } from '../webhooks/terminal-webhooks.service';
@@ -128,6 +129,7 @@ export class SessionReapHandler implements JobHandler, OnModuleInit {
     private readonly settings: SystemSettingsService,
     private readonly notifications: NotificationsService,
     private readonly webhooks: TerminalWebhooksService,
+    @Inject(LIVE_SESSION_CLOSER) private readonly sessionManager: LiveSessionCloser,
     @Optional() private readonly metrics?: TerminalMetricsService,
   ) {}
 
@@ -146,8 +148,23 @@ export class SessionReapHandler implements JobHandler, OnModuleInit {
       `Reaped sessions: ${result.detached} detached, ${result.terminated} terminated, ${result.purged} purged`,
     );
     // AFTER the updates committed (reap() has returned), outside any transaction.
+    await this.closeLive(result.terminatedSessions);
     await this.raiseWebhooks(result.terminatedSessions, now);
     await this.notifyOwners(result.terminatedSessions, now);
+  }
+
+  /**
+   * A detached session keeps its SSH stream open in this process (the manager holds it after the last
+   * WebSocket leaves), so a reaped one is closed too. Never throws; the row stays terminated.
+   */
+  async closeLive(sessions: readonly ReapedSession[]): Promise<void> {
+    for (const session of sessions) {
+      try {
+        await this.sessionManager.terminateSession(session.id);
+      } catch (error) {
+        this.logger.warn(`Could not close live connection of a reaped session: ${error instanceof Error ? error.name : 'error'}`);
+      }
+    }
   }
 
   /** One `terminal.session.terminated` (reason `reaped`) per session the pass terminated (#54). Never throws. */
