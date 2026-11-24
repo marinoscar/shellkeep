@@ -11,7 +11,9 @@
 // the path (the epic requires it); nothing else does.
 // =============================================================================
 
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
+import type { Readable } from 'node:stream';
+import { Inject, Injectable, Logger, NotFoundException, UnsupportedMediaTypeException } from '@nestjs/common';
 import { AUDIT_SINK, type AuditSink, type Principal } from '@marinoscar/platform-api/core';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
@@ -30,6 +32,7 @@ import { guessMime } from './mime';
 import { computeRange } from './range';
 import { baseName, needsBases, resolveRemotePath } from './remote-path';
 import { SftpService, SftpSession, type FileEntry, type OpenedDownload } from './sftp.service';
+import { assertUploadName, uploadTempName } from './upload-name';
 import { BINARY_SNIFF_BYTES, decodeUtf8Window, looksBinary } from './text-detect';
 
 export interface FilesTarget {
@@ -52,6 +55,29 @@ export interface FileContent {
   size: number;
   eof: boolean;
 }
+
+export interface UploadInput {
+  /** The target directory (absolute, `~`, or relative to the session's working directory / home). */
+  path: string;
+  name: string;
+  overwrite: boolean;
+  sessionId?: string;
+  contentType?: string;
+  /** The declared Content-Length, when the client sent one. */
+  contentLength: number | null;
+  /** The request body, unread. */
+  body: Readable;
+}
+
+export interface UploadResult {
+  path: string;
+  name: string;
+  size: number;
+  overwritten: boolean;
+}
+
+/** SFTP WRITEs in flight at once: one round trip per chunk would cap the speed at chunk / RTT. */
+const UPLOAD_WRITE_WINDOW = 16;
 
 export interface PreparedDownload extends OpenedDownload {
   filename: string;
@@ -240,5 +266,126 @@ export class FilesService {
       meta: { path: grant.path, size: opened.size, hostname: profile.hostname },
     });
     return { ...opened, close, filename: baseName(grant.path), mime: guessMime(grant.path) };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Uploads
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Streams the request body into `<dir>/<name>` over SFTP: into a temporary name in the same
+   * directory, then a rename onto the final name, so a reader never sees a half-written file.
+   * The body is never buffered (at most `UPLOAD_WRITE_WINDOW` chunks are in flight) and the byte
+   * count is enforced while streaming. Any failure, abort or overflow removes the temp file.
+   * Order: access (404), media type (415), name (400), declared size (413), limits (429).
+   */
+  async upload(profileId: string, principal: Principal, input: UploadInput): Promise<UploadResult> {
+    const t = await this.target(profileId, principal, input);
+    if (!/^application\/octet-stream\s*(;|$)/i.test(input.contentType ?? '')) {
+      throw new UnsupportedMediaTypeException('An upload is sent as application/octet-stream');
+    }
+    assertUploadName(input.name);
+    const limit = t.settings.uploadMaxBytes;
+    const tooLarge = (size: number) => fileError('FILE_TOO_LARGE', 'The file is larger than the upload limit', { size, limit });
+    if (input.contentLength !== null && input.contentLength > limit) throw tooLarge(input.contentLength);
+    // Uploads share the download limits: one per-minute budget and one concurrency cap each.
+    this.limiter.hit(t.scope.userId, 'upload', t.settings.downloadsPerMinute);
+    const release = this.limiter.acquireStream(t.scope.userId, t.settings.maxConcurrentDownloads, 'upload');
+
+    try {
+      const result = await this.sftp.withTransferSession(
+        t.profile,
+        t.settings.sftpTimeoutSeconds,
+        'upload',
+        async (sftp, touch) => {
+          const dir = await this.resolve(sftp, t, input.path);
+          const dirStats = await sftp.stat(dir);
+          if (!dirStats.isDirectory()) throw fileError('FILE_NOT_A_DIRECTORY', 'The target is not a directory');
+          const finalPath = dir === '/' ? `/${input.name}` : `${dir}/${input.name}`;
+
+          const existing = await sftp.lstatOrNull(finalPath);
+          if (existing) {
+            // A link to a directory is a directory; nothing is ever uploaded over one.
+            const followed = existing.isSymbolicLink() ? await sftp.stat(finalPath).catch(() => null) : existing;
+            if (followed?.isDirectory()) throw fileError('FILE_NOT_A_FILE', 'A folder with that name already exists');
+            if (!input.overwrite) {
+              const entry = await sftp.describe(finalPath, input.name);
+              throw fileError('FILE_EXISTS', 'A file with that name already exists', {
+                name: input.name,
+                path: finalPath,
+                size: entry.size,
+                mtime: entry.mtime,
+              });
+            }
+          }
+
+          const tempPath = `${dir === '/' ? '' : dir}/${uploadTempName(input.name, randomBytes(6).toString('hex'))}`;
+          const handle = await sftp.openNewForWrite(tempPath);
+          let handleOpen = true;
+          const pending = new Set<Promise<void>>();
+          let failure: unknown;
+          let received = 0;
+          const settle = async (): Promise<void> => {
+            await Promise.allSettled([...pending]);
+          };
+          try {
+            let position = 0;
+            // Not destroyed on early exit: destroying the request would reset the socket before the error response.
+            for await (const chunk of input.body.iterator({ destroyOnReturn: false }) as AsyncIterable<Buffer>) {
+              touch();
+              received += chunk.length;
+              if (received > limit) throw tooLarge(received);
+              if (failure) throw failure;
+              const at = position;
+              position += chunk.length;
+              const write: Promise<void> = sftp.write(handle, chunk, at).then(
+                () => {
+                  touch();
+                },
+                (error) => {
+                  failure ??= error;
+                },
+              );
+              pending.add(write);
+              void write.finally(() => pending.delete(write));
+              if (pending.size >= UPLOAD_WRITE_WINDOW) await Promise.race([...pending]);
+            }
+            await settle();
+            if (failure) throw failure;
+            handleOpen = false;
+            await sftp.closeHandle(handle);
+            if (input.overwrite && existing) await sftp.renameReplacing(tempPath, finalPath);
+            else {
+              try {
+                await sftp.rename(tempPath, finalPath);
+              } catch (error) {
+                // Somebody created the name while we streamed: the same answer as the up-front check.
+                const now = await sftp.lstatOrNull(finalPath).catch(() => null);
+                if (now) throw fileError('FILE_EXISTS', 'A file with that name already exists', { name: input.name, path: finalPath, size: now.size });
+                throw error;
+              }
+            }
+            return { path: finalPath, name: input.name, size: received, overwritten: Boolean(existing) };
+          } catch (error) {
+            // Best effort, on a connection that may already be gone: close the handle, drop the temp file.
+            await settle();
+            if (handleOpen) await sftp.closeHandle(handle).catch(() => undefined);
+            await sftp.unlink(tempPath).catch(() => undefined);
+            throw error;
+          }
+        },
+        () => input.body.destroy(),
+      );
+      await recordAudit(this.audit, this.logger, {
+        action: 'server_profile.file_upload',
+        actorUserId: t.scope.userId,
+        targetType: 'server_profile',
+        targetId: profileId,
+        meta: { path: result.path, size: result.size, hostname: t.profile.hostname },
+      });
+      return result;
+    } finally {
+      release();
+    }
   }
 }

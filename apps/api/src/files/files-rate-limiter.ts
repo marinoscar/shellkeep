@@ -11,7 +11,7 @@ import { Injectable } from '@nestjs/common';
 
 import { fileError } from './files-error';
 
-export type FilesBucket = 'content' | 'download';
+export type FilesBucket = 'content' | 'download' | 'upload';
 
 @Injectable()
 export class FilesRateLimiter {
@@ -36,20 +36,24 @@ export class FilesRateLimiter {
     if (this.hits.size > 10_000) this.prune(now);
   }
 
-  /** Takes a stream slot, or throws `FILES_RATE_LIMITED`. Call the returned function once to free it. */
-  acquireStream(userId: string, max: number): () => void {
-    const current = this.open.get(userId) ?? 0;
+  /**
+   * Takes a stream slot, or throws `FILES_RATE_LIMITED`. Call the returned function once to free it.
+   * Downloads and uploads count their own slots (`kind`), each against `max`.
+   */
+  acquireStream(userId: string, max: number, kind: 'download' | 'upload' = 'download'): () => void {
+    const key = kind === 'download' ? userId : `${kind}:${userId}`;
+    const current = this.open.get(key) ?? 0;
     if (current >= max) {
-      throw fileError('FILES_RATE_LIMITED', 'Too many downloads in progress; wait for one to finish');
+      throw fileError('FILES_RATE_LIMITED', `Too many ${kind}s in progress; wait for one to finish`);
     }
-    this.open.set(userId, current + 1);
+    this.open.set(key, current + 1);
     let released = false;
     return () => {
       if (released) return;
       released = true;
-      const left = (this.open.get(userId) ?? 1) - 1;
-      if (left <= 0) this.open.delete(userId);
-      else this.open.set(userId, left);
+      const left = (this.open.get(key) ?? 1) - 1;
+      if (left <= 0) this.open.delete(key);
+      else this.open.set(key, left);
     };
   }
 

@@ -161,6 +161,59 @@ export class SftpSession {
     });
   }
 
+  /** Like `lstat`, but a path that does not exist is `null` instead of an error. */
+  lstatOrNull(path: string): Promise<Stats | null> {
+    return new Promise<Stats | null>((resolve, reject) =>
+      this.sftp.lstat(path, (err, stats) => {
+        if (!err) return resolve(stats);
+        if ((err as { code?: unknown }).code === STATUS_NO_SUCH_FILE) return resolve(null);
+        reject(mapSftpError(err));
+      }),
+    );
+  }
+
+  /** Creates a NEW file (fails when it exists) for writing and returns its handle. */
+  openNewForWrite(path: string, mode = 0o644): Promise<Buffer> {
+    return this.call<Buffer>((done) => this.sftp.open(path, 'wx', { mode }, done as never));
+  }
+
+  /** One WRITE at an absolute position. */
+  write(handle: Buffer, data: Buffer, position: number): Promise<void> {
+    return this.call<void>((done) => this.sftp.write(handle, data, 0, data.length, position, done as never));
+  }
+
+  closeHandle(handle: Buffer): Promise<void> {
+    return this.call<void>((done) => this.sftp.close(handle, done as never));
+  }
+
+  /** SFTP RENAME: on a standard server it fails when `to` exists, so it never replaces a file. */
+  rename(from: string, to: string): Promise<void> {
+    return this.call<void>((done) => this.sftp.rename(from, to, done as never));
+  }
+
+  unlink(path: string): Promise<void> {
+    return this.call<void>((done) => this.sftp.unlink(path, done as never));
+  }
+
+  /**
+   * Moves `from` onto `to`, replacing a file there. Uses OpenSSH's `posix-rename` (atomic) when
+   * the server offers it, else removes the target and renames (a short window with no file).
+   */
+  async renameReplacing(from: string, to: string): Promise<void> {
+    try {
+      await this.call<void>((done) => this.sftp.ext_openssh_rename(from, to, done as never));
+      return;
+    } catch (error) {
+      // `ext_openssh_rename` throws synchronously when the extension is not offered; a coded
+      // failure of the request itself is a real failure.
+      if (error instanceof HttpException) throw error;
+    }
+    await this.unlink(to).catch((error) => {
+      if (!(error instanceof HttpException) || (error.getResponse() as { code?: string }).code !== 'FILE_NOT_FOUND') throw error;
+    });
+    await this.rename(from, to);
+  }
+
   /** A stream of the whole file. The caller owns it and the connection (see `SftpService.openDownload`). */
   createReadStream(path: string): Readable {
     return this.sftp.createReadStream(path, { highWaterMark: STREAM_CHUNK_BYTES });
@@ -260,6 +313,60 @@ export class SftpService {
           }
         })();
         // Whichever loses must not become an unhandled rejection.
+        work.catch(() => undefined);
+        deadline.catch(() => undefined);
+        const result = await Promise.race([work, deadline]);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        throw error;
+      } finally {
+        if (timer) clearTimeout(timer);
+        if (client) this.destroy(client);
+        span.end();
+      }
+    });
+  }
+
+  /**
+   * Like `withSession`, for a transfer that may run for a long time: the deadline is IDLE time
+   * (`touch()` re-arms it; call it on every chunk), not total time. On expiry the connection is
+   * destroyed, `onTimeout` runs (it should stop the source of the data) and the call fails with
+   * `SFTP_TIMEOUT`.
+   */
+  async withTransferSession<T>(
+    profile: DecryptedServerProfile,
+    idleSeconds: number,
+    operation: string,
+    fn: (sftp: SftpSession, touch: () => void) => Promise<T>,
+    onTimeout?: () => void,
+  ): Promise<T> {
+    return tracer.startActiveSpan(`files.${operation}`, { attributes: { 'server_profile.id': profile.id } }, async (span) => {
+      let client: Client | undefined;
+      let timer: NodeJS.Timeout | undefined;
+      let rejectDeadline: ((error: Error) => void) | undefined;
+      const deadline = new Promise<never>((_, reject) => (rejectDeadline = reject));
+      const touch = (): void => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (client) this.destroy(client);
+          onTimeout?.();
+          rejectDeadline?.(fileError('SFTP_TIMEOUT', 'The server stopped answering'));
+        }, idleSeconds * 1000);
+      };
+      try {
+        touch();
+        const work = (async () => {
+          const opened = await this.connect(profile);
+          client = opened.client;
+          touch();
+          try {
+            return await fn(opened.sftp, touch);
+          } finally {
+            opened.sftp.end();
+          }
+        })();
         work.catch(() => undefined);
         deadline.catch(() => undefined);
         const result = await Promise.race([work, deadline]);

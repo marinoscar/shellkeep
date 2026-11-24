@@ -8,7 +8,7 @@
 // and the handles still open (a client abort must close the handle).
 // =============================================================================
 
-import { type Stats, closeSync, fstatSync, lstatSync, openSync, readSync, readdirSync, readlinkSync, realpathSync, statSync } from 'node:fs';
+import { type Stats, closeSync, constants as fsc, existsSync, fstatSync, lstatSync, openSync, readSync, readdirSync, readlinkSync, realpathSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs';
 import type { AddressInfo, Socket } from 'node:net';
 import { join, resolve } from 'node:path';
 import { Server, utils } from 'ssh2';
@@ -23,9 +23,11 @@ export interface SftpTestServer {
   readonly fingerprint: string;
   readonly username: string;
   readonly password: string;
-  readonly stats: { bytesRead: number; openHandles: number; connections: number; sftpRequests: number };
+  readonly stats: { bytesRead: number; bytesWritten: number; writeOpens: number; openHandles: number; connections: number; sftpRequests: number };
   /** Delay every READ by this many ms (lets a spec abort mid-stream). */
   readDelayMs: number;
+  /** Delay every WRITE by this many ms (lets a spec abort mid-upload). */
+  writeDelayMs: number;
   close(): Promise<void>;
 }
 
@@ -43,8 +45,8 @@ export async function startSftpTestServer(options: { root: string; sftpEnabled?:
   const password = 'FAKE-PASSWORD-sftp-1234';
   const { keys, parsed } = generateHostKey();
   const home = realpathSync(options.root);
-  const stats = { bytesRead: 0, openHandles: 0, connections: 0, sftpRequests: 0 };
-  const state = { readDelayMs: 0 };
+  const stats = { bytesRead: 0, bytesWritten: 0, writeOpens: 0, openHandles: 0, connections: 0, sftpRequests: 0 };
+  const state = { readDelayMs: 0, writeDelayMs: 0 };
   const sockets = new Set<Socket>();
   const absolute = (p: string): string => (p === '.' || p === '' ? home : resolve(home, p));
 
@@ -108,7 +110,43 @@ export async function startSftpTestServer(options: { root: string; sftpEnabled?:
             }));
             sftp.name(reqid, names);
           });
-          guarded('OPEN', (reqid, path: string) => sftp.handle(reqid, newHandle({ fd: openSync(absolute(path), 'r') })));
+          guarded('OPEN', (reqid, path: string, pflags: number) => {
+            const { OPEN_MODE } = utils.sftp;
+            let flags = pflags & OPEN_MODE.WRITE ? fsc.O_WRONLY : fsc.O_RDONLY;
+            if (pflags & OPEN_MODE.CREAT) flags |= fsc.O_CREAT;
+            if (pflags & OPEN_MODE.TRUNC) flags |= fsc.O_TRUNC;
+            if (pflags & OPEN_MODE.EXCL) flags |= fsc.O_EXCL;
+            const fd = openSync(absolute(path), flags, 0o644);
+            if (pflags & OPEN_MODE.WRITE) stats.writeOpens += 1;
+            sftp.handle(reqid, newHandle({ fd }));
+          });
+          guarded('WRITE', (reqid, handle: Buffer, offset: number, data: Buffer) => {
+            const entry = handles.get(handle.toString());
+            if (entry?.fd === undefined) return void sftp.status(reqid, STATUS_CODE.FAILURE);
+            const reply = (): void => {
+              try {
+                writeSync(entry.fd as number, data, 0, data.length, offset);
+                stats.bytesWritten += data.length;
+                sftp.status(reqid, STATUS_CODE.OK);
+              } catch (error) {
+                fail(reqid, error);
+              }
+            };
+            if (state.writeDelayMs > 0) setTimeout(reply, state.writeDelayMs);
+            else reply();
+          });
+          // Like OpenSSH's standard RENAME: it never replaces an existing target.
+          guarded('RENAME', (reqid, from: string, to: string) => {
+            if (existsSync(absolute(to))) return void sftp.status(reqid, STATUS_CODE.FAILURE);
+            renameSync(absolute(from), absolute(to));
+            sftp.status(reqid, STATUS_CODE.OK);
+          });
+          guarded('REMOVE', (reqid, path: string) => {
+            unlinkSync(absolute(path));
+            sftp.status(reqid, STATUS_CODE.OK);
+          });
+          guarded('FSETSTAT', (reqid) => sftp.status(reqid, STATUS_CODE.OK));
+          guarded('SETSTAT', (reqid) => sftp.status(reqid, STATUS_CODE.OK));
           guarded('FSTAT', (reqid, handle: Buffer) => {
             const entry = handles.get(handle.toString());
             if (entry?.fd === undefined) return void sftp.status(reqid, STATUS_CODE.FAILURE);
@@ -165,6 +203,12 @@ export async function startSftpTestServer(options: { root: string; sftpEnabled?:
     },
     set readDelayMs(value: number) {
       state.readDelayMs = value;
+    },
+    get writeDelayMs() {
+      return state.writeDelayMs;
+    },
+    set writeDelayMs(value: number) {
+      state.writeDelayMs = value;
     },
     close: () =>
       new Promise<void>((done) => {
