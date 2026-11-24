@@ -101,7 +101,7 @@ The legacy columns stay, so the previous build keeps working until the very end.
 
 1. Maintenance window. Back up (precondition 2). Add `SECRETS_ENCRYPTION_KEY` to the deployment's `.env` next to the existing `ENCRYPTION_KEY`.
 2. Build the new API image **without restarting the stack**: `docker compose -f /opt/infra/apps/shellkeep/compose.yml build api`.
-3. Run the migrations the new build needs (`user_credentials` exists since platform `0018`; `update.sh` runs `prisma migrate deploy` for the same reason), then the command from the **new image** against the live database while the old API still serves:
+3. Run the migrations the new build needs (`user_credentials` exists since platform `0018`; `shellkeep deploy update` runs the migrate step for the same reason), then the command from the **new image** against the live database while the old API still serves:
 
    ```bash
    docker compose -f /opt/infra/apps/shellkeep/compose.yml run --rm --no-deps api npm run ssh:migrate-secrets
@@ -110,7 +110,7 @@ The legacy columns stay, so the previous build keeps working until the very end.
    ```
 
    The old build ignores the new rows, so nothing changes for users yet.
-4. `./update.sh` (restarts the API on the new build). From this moment the API reads the credential store.
+4. `shellkeep deploy update` (restarts the API on the new build). From this moment the API reads the credential store.
 5. Section 7 on production with one profile per authentication method.
 
 ## 7. Check that every profile connects

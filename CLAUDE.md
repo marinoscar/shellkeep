@@ -27,9 +27,9 @@ Full index with a "Doc map by task": [docs/README.md](docs/README.md). Read docs
 | Device authorization (RFC 8628) | [docs/DEVICE-AUTH.md](docs/DEVICE-AUTH.md) |
 | Original implementation specs (foundation build order) | [docs/specs/README.md](docs/specs/README.md) |
 | Nginx, SSL and compose notes | [docs/ssl-nginx-setup.md](docs/ssl-nginx-setup.md), [docs/docker-compose-project-name-fix.md](docs/docker-compose-project-name-fix.md) |
-| Deployment (VPS install and update) | [infra/deploy/DEPLOY.md](infra/deploy/DEPLOY.md) |
+| Deployment (VPS install, update, adopting an old install) and the `shellkeep` CLI | [apps/cli/README.md](apps/cli/README.md#deploying-to-a-server) |
 | Recipes (skills) | [add-job-type](.claude/skills/add-job-type/SKILL.md), [add-settings-page](.claude/skills/add-settings-page/SKILL.md), [add-notification](.claude/skills/add-notification/SKILL.md), [platform-migration](.claude/skills/platform-migration/SKILL.md): each applies once its slice is adopted |
-| Area rules | [apps/api/AGENTS.md](apps/api/AGENTS.md), [apps/web/AGENTS.md](apps/web/AGENTS.md) |
+| Area rules | [apps/api/AGENTS.md](apps/api/AGENTS.md), [apps/web/AGENTS.md](apps/web/AGENTS.md), [apps/cli/AGENTS.md](apps/cli/AGENTS.md) |
 | How Claude Code and OpenCode share these files, guard specs | [docs/AI-ASSISTANTS.md](docs/AI-ASSISTANTS.md) |
 
 ## Specialized Subagents (MANDATORY)
