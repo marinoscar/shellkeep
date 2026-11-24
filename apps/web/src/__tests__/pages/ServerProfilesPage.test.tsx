@@ -116,7 +116,8 @@ async function selectRows(user: ReturnType<typeof userEvent.setup>, names: strin
   for (const name of names) await user.click(await screen.findByRole('checkbox', { name: `Select ${name}` }));
 }
 
-describe('ServerProfilesPage (#79)', () => {
+// The DataGrid renders and the dialogs animate: under a loaded runner a case can pass 10 s.
+describe('ServerProfilesPage (#79)', { timeout: 30_000 }, () => {
   beforeAll(() => installLayoutStubs());
 
   beforeEach(() => {
