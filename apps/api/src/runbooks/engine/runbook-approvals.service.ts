@@ -13,6 +13,10 @@
 //   reject   step gate   each parked target fails `APPROVAL_REJECTED`; then `advance`
 //   (expiry) as reject, with `APPROVAL_EXPIRED`; the reconcile job calls it for rows past `expires_at`
 //            canary      the run aborts (its pending targets are cancelled by `advance`)
+//   destructive_run (#67)  the two-person approval of a destructive run, created with the run (`queued`, no
+//            start job). approve: the `runbook.run.start` job is enqueued in the same transaction.
+//            reject / expiry: the run is `cancelled` with `error_code` APPROVAL_REJECTED / APPROVAL_EXPIRED,
+//            and nothing ever ran.
 //
 // SELF-APPROVAL: the person who started the run may not decide its approvals unless
 // `runbooks.approvals.allowSelfApproval` is on (`403 RUNBOOK_SELF_APPROVAL`). Reading the inbox needs
@@ -32,6 +36,8 @@ import {
   CANARY_STEP_INDEX,
   FAILURE_CODES,
   RUNBOOK_JOB_REASON,
+  RUNBOOK_RUN_START_TYPE,
+  RUNBOOK_RUN_SUBJECT,
   RUNBOOK_RUN_TARGET_SUBJECT,
   RUNBOOK_TARGET_RUN_TYPE,
 } from './engine.constants';
@@ -188,6 +194,7 @@ export class RunbookApprovalsService {
     });
 
     this.metrics.approval(result.approval.kind, outcome);
+    if (result.approval.kind === 'destructive_run') this.metrics.destructiveRun(outcome === 'approved' ? 'approved' : 'rejected');
     await recordAudit(this.auditSink, this.logger, {
       action: 'runbook_approval.decided',
       actorUserId: scope.userId,
@@ -230,6 +237,7 @@ export class RunbookApprovalsService {
         if (!done) continue;
         count += 1;
         this.metrics.approval(done.approval.kind, 'expired');
+        if (done.approval.kind === 'destructive_run') this.metrics.destructiveRun('rejected');
         await recordAudit(this.auditSink, this.logger, {
           action: 'runbook_approval.decided',
           actorUserId: null,
@@ -243,6 +251,58 @@ export class RunbookApprovalsService {
       }
     }
     return count;
+  }
+
+  /**
+   * The decision on a destructive run (#67). The run is `queued` and has no start job yet: approving enqueues
+   * it; rejecting or expiring cancels the run, so no command ever reaches a server.
+   */
+  private async applyDestructiveRun(
+    tx: OrgTx,
+    approval: { orgId: string; runId: string },
+    outcome: ApprovalOutcome,
+    now: Date,
+    events: AdvanceOutcome['events'],
+  ): Promise<AdvanceOutcome> {
+    const { runId, orgId } = approval;
+    const local: AdvanceOutcome = { runId, events, cancelRequests: [], finished: null, approvals: [], dispatched: 0 };
+    // A guarded write takes the row lock, so a decision and a cancel of the same run take turns.
+    const touched = await tx.runbookRun.updateMany({ where: { id: runId, status: 'queued' }, data: { updatedAt: now } });
+    const run = touched.count === 1 ? await tx.runbookRun.findUnique({ where: { id: runId } }) : null;
+    if (!run) {
+      throw new HttpException({ code: RUNBOOK_RUN_ERROR_CODES.RUN_STATE, message: 'The run is no longer waiting for this approval' }, 409);
+    }
+
+    if (outcome === 'approved') {
+      await this.jobs.enqueueWithin(tx as unknown as JobsTx, {
+        type: RUNBOOK_RUN_START_TYPE,
+        reason: RUNBOOK_JOB_REASON,
+        orgId,
+        subjectType: RUNBOOK_RUN_SUBJECT,
+        subjectId: runId,
+        payload: { runId },
+      });
+      return local;
+    }
+
+    const code = outcome === 'rejected' ? FAILURE_CODES.APPROVAL_REJECTED : FAILURE_CODES.APPROVAL_EXPIRED;
+    assertTransition('run', 'queued', 'cancelled');
+    await tx.runbookRun.update({ where: { id: runId }, data: { status: 'cancelled', errorCode: code, finishedAt: now } });
+    events.push({ type: 'run', runId, status: 'cancelled', finishedAt: now.toISOString() });
+    local.finished = {
+      runId,
+      orgId,
+      status: 'cancelled',
+      trigger: run.trigger,
+      initiatedBy: run.initiatedBy,
+      runbookId: run.runbookId,
+      version: run.version,
+      targetsTotal: 0,
+      targetsSucceeded: 0,
+      targetsFailed: 0,
+      dryRun: run.dryRun,
+    };
+    return local;
   }
 
   /** The state change of one decision, inside the caller's transaction. */
@@ -266,6 +326,8 @@ export class RunbookApprovalsService {
       { type: 'approval', runId, approvalId: approval.id, status: outcome, scope: approval.scope, kind: approval.kind },
     ];
     const local: AdvanceOutcome = { runId, events, cancelRequests: [], finished: null, approvals: [], dispatched: 0 };
+
+    if (approval.kind === 'destructive_run') return this.applyDestructiveRun(tx, approval, outcome, now, events);
 
     if (approval.kind === 'gate') {
       if (outcome === 'approved') {

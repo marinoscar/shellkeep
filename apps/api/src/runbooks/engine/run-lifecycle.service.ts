@@ -23,6 +23,7 @@ import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import type { RunbookApprovalRequestedData, RunbookRunNotificationData } from '../../email-templates/runbook-run.email';
 import {
   RUNBOOK_APPROVAL_REQUESTED_EVENT,
+  RUNBOOK_DRY_RUN_FINISHED_EVENT,
   RUNBOOK_RUN_FAILED_EVENT,
   RUNBOOK_RUN_FINISHED_EVENT as RUN_FINISHED_NOTIFICATION,
 } from '../../notifications-registry/runbooks.notifications';
@@ -53,21 +54,25 @@ export class RunLifecycleService {
       const { finished } = outcome;
       if (finished) {
         this.metrics.runFinished(finished.status, finished.trigger);
-        this.emitter.emit(
-          RUNBOOK_RUN_FINISHED_EVENT,
-          new RunbookRunFinished(
-            finished.runId,
-            finished.orgId,
-            finished.runbookId,
-            finished.version,
-            finished.status,
-            finished.trigger,
-            finished.initiatedBy,
-            finished.targetsTotal,
-            finished.targetsSucceeded,
-            finished.targetsFailed,
-          ),
-        );
+        // A dry run is not a real run: the in-process event feeds log collection and the webhooks (#63,
+        // #66), and neither may see a rehearsal.
+        if (!finished.dryRun) {
+          this.emitter.emit(
+            RUNBOOK_RUN_FINISHED_EVENT,
+            new RunbookRunFinished(
+              finished.runId,
+              finished.orgId,
+              finished.runbookId,
+              finished.version,
+              finished.status,
+              finished.trigger,
+              finished.initiatedBy,
+              finished.targetsTotal,
+              finished.targetsSucceeded,
+              finished.targetsFailed,
+            ),
+          );
+        }
         await this.notifyFinished(finished);
       }
       for (const approval of outcome.approvals) await this.notifyApprovers(approval);
@@ -97,7 +102,11 @@ export class RunLifecycleService {
       targetsFailed: finished.targetsFailed,
       runLink: `/runbooks/runs/${finished.runId}`,
     };
-    const event = finished.status === 'succeeded' ? RUN_FINISHED_NOTIFICATION : RUNBOOK_RUN_FAILED_EVENT;
+    const event = finished.dryRun
+      ? RUNBOOK_DRY_RUN_FINISHED_EVENT
+      : finished.status === 'succeeded'
+        ? RUN_FINISHED_NOTIFICATION
+        : RUNBOOK_RUN_FAILED_EVENT;
     await this.notifications.notify(event, finished.initiatedBy, data);
   }
 

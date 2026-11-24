@@ -161,13 +161,43 @@ describe('runbook run', () => {
     expect((failure as CommandExit).message).toMatch(/timed out/);
   });
 
-  it('--dry-run is refused with exit 2 until #67, and starts nothing', async () => {
-    const { failure, calls } = await run(['--dry-run', '--targets', `${SERVER_A}`], () => ({ runId: RUN }));
+  it('--dry-run sends dryRun, always waits, and prints the per-target plan', async () => {
+    const dryRun = (status: string, targets: unknown[]) => ({ id: RUN, runbookName: 'Patch', status, dryRun: true, counts: { total: targets.length }, targets });
+    const planTarget = (id: string, name: string) => ({
+      id,
+      serverProfileId: id,
+      serverName: name,
+      status: 'succeeded',
+      steps: [step(0, 'succeeded'), { stepIndex: 1, name: 'gate', status: 'skipped', exitCode: null, durationMs: null }],
+    });
+    const { failure, calls, out, err } = await run(['--dry-run', '--targets', `${SERVER_A}`], (call) =>
+      call.method === 'POST' ? { runId: RUN } : dryRun('succeeded', [planTarget(SERVER_A, 'alpha')]),
+    );
 
-    expect(failure).toBeInstanceOf(CommandExit);
-    expect((failure as CommandExit).exitCode).toBe(2);
-    expect((failure as CommandExit).message).toMatch(/#67/);
-    expect(calls).toEqual([]);
+    expect(failure).toBeUndefined();
+    expect(calls[0]).toMatchObject({ method: 'POST', body: { dryRun: true, params: {}, secretRefs: {} } });
+    expect(calls.some((c) => c.method === 'GET')).toBe(true);
+    expect(err()).toContain('DRY RUN run');
+    expect(out()).toContain('would_run');
+    expect(out()).toContain('not_simulated');
+    expect(out()).toContain('nothing was executed');
+  });
+
+  it('--dry-run --json carries the plan and exits 1 when a precondition failed', async () => {
+    const failing = { id: SERVER_A, serverProfileId: SERVER_A, serverName: 'alpha', status: 'failed', steps: [step(0, 'failed')] };
+    const { failure, out } = await run(['--dry-run', '--json'], (call) =>
+      call.method === 'POST' ? { runId: RUN } : { id: RUN, status: 'failed', dryRun: true, counts: { total: 1 }, targets: [failing] },
+    );
+
+    expect((failure as CommandExit).exitCode).toBe(1);
+    expect((failure as CommandExit).message).toMatch(/would run cleanly/);
+    const body = JSON.parse(out());
+    expect(body).toMatchObject({ dryRun: true, plan: [{ server: 'alpha', steps: [{ index: 0, verdict: 'precondition_failed' }] }] });
+  });
+
+  it('a real run does not send dryRun', async () => {
+    const { calls } = await run([], () => ({ runId: RUN }));
+    expect(calls[0]?.body).not.toHaveProperty('dryRun');
   });
 
   it('reads the definition to type --param values and sends secret refs by name', async () => {

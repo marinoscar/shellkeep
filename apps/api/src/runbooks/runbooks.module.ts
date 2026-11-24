@@ -26,10 +26,15 @@ import { RunbookRunsService } from './engine/runbook-runs.service';
 import { RunbookSettingsService } from './engine/runbook-settings.service';
 import { SshExecutor } from './engine/ssh-executor';
 import { TargetRunHandler } from './engine/target-run.handler';
+import { RunbookAuditController } from './safety/runbook-audit.controller';
+import { RunbookAuditService } from './safety/runbook-audit.service';
+import { RunbookRiskService } from './safety/runbook-risk.service';
 import { RunbookSecretsController } from './runbook-secrets.controller';
 import { RunbooksController } from './runbooks.controller';
 import { RunbooksService } from './runbooks.service';
 import { TargetResolverService } from './target-resolver.service';
+import { RunbooksUserDataPurgeHandler } from './user-data/runbooks-purge.handler';
+import { UserDataHostModule } from '../platform/user-data/user-data-host.module';
 
 /**
  * Runbooks: versioned multi-step procedure definitions, target resolution and the secret parameters of an
@@ -39,11 +44,13 @@ import { TargetResolverService } from './target-resolver.service';
  * `runbooks.registrations.ts` (before the registries freeze).
  */
 @Module({
-  imports: [PrismaModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule],
-  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController],
+  imports: [PrismaModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule, UserDataHostModule],
+  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController],
   providers: [
     RunbooksService,
     TargetResolverService,
+    RunbookRiskService,
+    RunbookAuditService,
     // The engine
     RunbookSettingsService,
     EngineMetricsService,
@@ -64,6 +71,8 @@ import { TargetResolverService } from './target-resolver.service';
     LogsCompactHandler,
     RunbookJobSettledListener,
     RunbookReconcileTask,
+    // The delegated half of the user-data purge (#69).
+    RunbooksUserDataPurgeHandler,
   ],
   exports: [RunbooksService, TargetResolverService, RunbookRunsService, RunCoordinatorService, RunEventsService],
 })

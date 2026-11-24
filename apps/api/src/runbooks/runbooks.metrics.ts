@@ -11,14 +11,20 @@ export const RUNBOOK_RUNS_FINISHED_METRIC = 'runbookRunsFinished';
 export const RUNBOOK_TARGET_DURATION_METRIC = 'runbookTargetDuration';
 export const RUNBOOK_COMMANDS_METRIC = 'runbookCommands';
 export const RUNBOOK_APPROVALS_METRIC = 'runbookApprovals';
+export const RUNBOOK_DESTRUCTIVE_RUNS_METRIC = 'runbookDestructiveRuns';
+export const RUNBOOK_DRY_RUNS_METRIC = 'runbookDryRuns';
+
+/** What happened to a destructive run launch (#67): never a run, org, server or runbook id. */
+export const DESTRUCTIVE_RUN_OUTCOMES = ['confirmed', 'approved', 'rejected', 'blocked'] as const;
+export type DestructiveRunOutcome = (typeof DESTRUCTIVE_RUN_OUTCOMES)[number];
 
 /** Bounded label values of the engine metrics (#62): never a run, org, server or runbook id. */
 export const RUN_FINISHED_STATUSES = ['succeeded', 'failed', 'partially_failed', 'aborted', 'cancelled'] as const;
 export const RUN_TRIGGERS = ['manual', 'api', 'schedule'] as const;
 export const TARGET_DURATION_STATUSES = ['succeeded', 'failed', 'cancelled', 'waiting'] as const;
-export const COMMAND_ORIGINS = ['step', 'ai_agent'] as const;
+export const COMMAND_ORIGINS = ['step', 'ai_agent', 'dry_run'] as const;
 export const COMMAND_OUTCOMES = ['succeeded', 'failed', 'timed_out', 'cancelled', 'error'] as const;
-export const APPROVAL_KINDS = ['step', 'gate'] as const;
+export const APPROVAL_KINDS = ['step', 'gate', 'destructive_run'] as const;
 export const APPROVAL_DECISIONS = ['approved', 'rejected', 'expired'] as const;
 
 const TARGET_DURATION_BUCKETS = [1, 5, 15, 30, 60, 120, 300, 600, 1800, 3600, 14_400];
@@ -73,5 +79,22 @@ export const RUNBOOK_APP_METRICS: readonly AppMetricDef[] = [
       kind: { kind: 'enum', values: APPROVAL_KINDS },
       decision: { kind: 'enum', values: APPROVAL_DECISIONS },
     },
+  },
+  {
+    key: RUNBOOK_DESTRUCTIVE_RUNS_METRIC,
+    name: 'app.runbooks.destructive_runs',
+    kind: 'counter',
+    unit: '{run}',
+    description:
+      'Destructive runbook run launches: confirmed (typed confirmation accepted), approved or rejected (the second person), blocked (a missing or wrong confirmation, 428).',
+    attributes: { outcome: { kind: 'enum', values: DESTRUCTIVE_RUN_OUTCOMES } },
+  },
+  {
+    key: RUNBOOK_DRY_RUNS_METRIC,
+    name: 'app.runbooks.dry_runs',
+    kind: 'counter',
+    unit: '{run}',
+    description: 'Runbook dry runs launched.',
+    attributes: {},
   },
 ];

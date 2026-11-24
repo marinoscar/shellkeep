@@ -60,6 +60,7 @@ import {
 import { definitionSha256 } from './schema/definition-hash';
 import { definitionWarnings, type DefinitionWarning } from './schema/definition-warnings';
 import { runbookDefinitionSchema, type RunbookDefinition } from './schema/runbook-definition.schema';
+import { assessDefinition, type DefinitionRisk } from './safety/runbook-risk.service';
 
 export interface RunbookVersionSummary {
   id: string;
@@ -72,6 +73,8 @@ export interface RunbookVersionSummary {
 
 export interface RunbookVersionView extends RunbookVersionSummary {
   definition: RunbookDefinition;
+  /** The destructive-command assessment (#67): per-step findings and whether launching needs a confirmation. */
+  risk: DefinitionRisk;
 }
 
 /** Who owns a runbook: the user who authored it, or the group it was created for. */
@@ -137,6 +140,8 @@ export interface ValidationResult {
   definition: RunbookDefinition;
   definitionSha256: string;
   warnings: DefinitionWarning[];
+  /** The destructive-command assessment (#67). */
+  risk: DefinitionRisk;
 }
 
 /** The actions a response says the caller may take (the UI hides the rest; the API still decides). */
@@ -159,6 +164,11 @@ const summaryOf = (v: VersionRow): RunbookVersionSummary => ({
   createdBy: v.createdBy,
   createdAt: v.createdAt,
 });
+
+const versionViewOf = (v: VersionRow): RunbookVersionView => {
+  const definition = v.definition as unknown as RunbookDefinition;
+  return { ...summaryOf(v), definition, risk: assessDefinition(definition) };
+};
 
 const ownerOf = (r: RunbookRow): RunbookOwner =>
   r.ownerGroup
@@ -263,7 +273,13 @@ export class RunbooksService {
   /** Validates without saving: the normalised definition, its hash and non-blocking warnings. */
   validate(input: unknown): ValidationResult {
     const definition = this.parseDefinition(input);
-    return { valid: true, definition, definitionSha256: definitionSha256(definition), warnings: definitionWarnings(definition) };
+    return {
+      valid: true,
+      definition,
+      definitionSha256: definitionSha256(definition),
+      warnings: definitionWarnings(definition),
+      risk: assessDefinition(definition),
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -392,7 +408,8 @@ export class RunbooksService {
       await this.access.requireIn(tx, me, 'read', { type: RUNBOOK_RESOURCE, id });
       const row = await tx.runbookVersion.findFirst({ where: { orgId: scope.orgId, runbookId: id, version } });
       if (!row) throw new NotFoundException('Runbook version not found');
-      return { ...summaryOf(row), definition: row.definition as unknown as RunbookDefinition };
+      const definition = row.definition as unknown as RunbookDefinition;
+      return { ...summaryOf(row), definition, risk: assessDefinition(definition) };
     });
   }
 
@@ -608,7 +625,7 @@ export class RunbooksService {
   ): RunbookDetail {
     return {
       ...viewOf(row, null, decision, permissions),
-      latestVersion: latest ? { ...summaryOf(latest), definition: latest.definition as unknown as RunbookDefinition } : null,
+      latestVersion: latest ? versionViewOf(latest) : null,
     };
   }
 

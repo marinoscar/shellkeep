@@ -147,6 +147,14 @@ const WebhooksPage = lazy(() =>
 const AlertsPage = lazy(() =>
   import('@marinoscar/platform-web/alerts/ui').then((m) => ({ default: m.AlertsPage })),
 );
+// User data deletion (issue #69): the packaged user Danger Zone and the admin factory reset. They re-read the
+// signed-in user themselves through the host's `viewer.refresh` (`platform/platformHost.tsx`).
+const DangerZonePage = lazy(() =>
+  import('@marinoscar/platform-web/user-data/ui').then((m) => ({ default: m.UserDangerZonePage })),
+);
+const FactoryResetPage = lazy(() =>
+  import('@marinoscar/platform-web/user-data/ui').then((m) => ({ default: m.FactoryResetPage })),
+);
 const UserNotificationsPage = lazy(() =>
   import('@marinoscar/platform-web/notifications/ui').then((m) => ({
     default: m.UserNotificationsPage,
@@ -403,6 +411,10 @@ function AppRoutes() {
                 {/* Data export (#68): every role may export its own data; the page lists only the sources the
                     API returns for the caller. */}
                 <Route path="/settings/data-export" element={<DataExportPage />} />
+                {/* Issue #69. The user Danger Zone: ungated like its `/settings/*` siblings (the routes
+                    require `user_settings:write`, which every role holds) and with no feature gate, so it
+                    stays reachable while AI is off: the deletion also removes AI keys and runs. */}
+                <Route path="/settings/danger-zone" element={<DangerZonePage />} />
                 {/* Groups (#71): the sharing slice's pages, gated on the string `/api/groups`
                     enforces. The detail page is a child of the Groups card, not a card. */}
                 <Route
@@ -431,7 +443,7 @@ function AppRoutes() {
                 <Route
                   path="/admin/settings"
                   element={
-                    <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read', 'db_backup:read', 'alerts:read', 'system_webhooks:read', 'org_webhooks:read', 'ai_config:read', 'org_ai_config:read']} fallback={HOME}>
+                    <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read', 'db_backup:read', 'alerts:read', 'system_webhooks:read', 'org_webhooks:read', 'ai_config:read', 'org_ai_config:read', 'system:factory_reset']} fallback={HOME}>
                       <AdminSettingsHubPage />
                     </RequirePermission>
                   }
@@ -560,6 +572,17 @@ function AppRoutes() {
                       <RequireAiEnabled>
                         <OrgAiKeysPage />
                       </RequireAiEnabled>
+                    </RequirePermission>
+                  }
+                />
+                {/* Issue #69. The factory reset: `system:factory_reset`, the exact SYSTEM permission the
+                    user-data slice's factory reset controller enforces (Admin only; never implied by
+                    `system_settings:write`). */}
+                <Route
+                  path="/admin/settings/factory-reset"
+                  element={
+                    <RequirePermission permission="system:factory_reset" fallback={HOME}>
+                      <FactoryResetPage />
                     </RequirePermission>
                   }
                 />

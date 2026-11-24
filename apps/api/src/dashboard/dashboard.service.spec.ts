@@ -60,7 +60,13 @@ describe('DashboardService', () => {
     runInOrgCalls.length = 0;
     tx = {
       serverProfile: {
-        count: jest.fn().mockImplementation(async ({ where }) => ('AND' in where ? 2 : 7)),
+        // 7 visible; 2 untrusted keys, 3 reachable, 1 unreachable (the AND's second member says which).
+        count: jest.fn().mockImplementation(async ({ where }) => {
+          if (!('AND' in where)) return 7;
+          const extra = where.AND[1];
+          if ('fingerprint' in extra) return 2;
+          return extra.lastTestOk === true ? 3 : 1;
+        }),
       },
       terminalSession: {
         groupBy: jest.fn().mockResolvedValue([
@@ -84,14 +90,17 @@ describe('DashboardService', () => {
     expect(options.principal.groupIds).toEqual(['g-1']);
     expect(tx.serverProfile.count).toHaveBeenCalledWith({ where: VISIBLE });
     expect(tx.serverProfile.count).toHaveBeenCalledWith({ where: { AND: [VISIBLE, { fingerprint: null }] } });
-    expect(result.servers).toEqual({ total: 7, reachable: 0, unreachable: 0, unknown: 7, hostKeyUntrusted: 2 });
+    expect(result.servers).toEqual({ total: 7, reachable: 3, unreachable: 1, unknown: 3, hostKeyUntrusted: 2 });
   });
 
-  it('reports every server as unknown: no connection-test result is stored, and it never connects', async () => {
-    const result = await make().summary(principal());
-    expect(result.servers?.unknown).toBe(result.servers?.total);
-    expect(result.servers?.reachable).toBe(0);
-    expect(result.servers?.unreachable).toBe(0);
+  it('counts reachability from the stored test outcome, with the Servers page\'s own filter (#79)', async () => {
+    await make().summary(principal());
+    expect(tx.serverProfile.count).toHaveBeenCalledWith({
+      where: { AND: [VISIBLE, { lastTestAt: { not: null }, lastTestOk: true }] },
+    });
+    expect(tx.serverProfile.count).toHaveBeenCalledWith({
+      where: { AND: [VISIBLE, { lastTestAt: { not: null }, lastTestOk: false }] },
+    });
   });
 
   it('answers servers: null without servers:read, and does not query or enrich', async () => {
@@ -128,7 +137,7 @@ describe('DashboardService', () => {
   it('runs a fixed number of queries whatever the number of rows (no N+1)', async () => {
     tx.terminalSession.findMany.mockResolvedValue([1, 2, 3, 4, 5].map((i) => sessionRow(i, 'detached')));
     await make().summary(principal());
-    expect(tx.serverProfile.count).toHaveBeenCalledTimes(2);
+    expect(tx.serverProfile.count).toHaveBeenCalledTimes(4);
     expect(tx.terminalSession.groupBy).toHaveBeenCalledTimes(1);
     expect(tx.terminalSession.findMany).toHaveBeenCalledTimes(1);
   });

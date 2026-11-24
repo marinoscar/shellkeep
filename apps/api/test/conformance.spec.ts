@@ -185,7 +185,8 @@ runPlatformConformance({
     // adds five (`terminal.ssh.client`, `terminal.tmux.probe`, `terminal.sessions.reaper`,
     // `terminal.ssh.legacy-secrets`, and the SSH slice's `ssh.host_key_policy`). The last item,
     // `terminal.ssh.egress`, is an egress contributor graded by `network.egress`. The telemetry slice (#53)
-    // adds its own checks and an egress contributor, which brings it to 34, and the AI slice (#55) to 36.
+    // adds its own checks and an egress contributor, which brings it to 34, the AI slice (#55) to 36 and the
+    // user-data slice (#69) to 37 (`user-data.registries`, which runs the three registry checks on the live registries).
     // Every metric group (the platform's six and the app's "Terminal") is well formed, computes on
     // an empty schema without throwing, and every telemetry route declares its permission.
     telemetry: {},
@@ -197,7 +198,7 @@ runPlatformConformance({
     // one-open-incident partial index (on the raw-SQL list), idempotent evaluation, dispatch after the
     // committed write.
     alerts: { rawSqlIndexNames: RAW_SQL_INDEXES.map((index) => index.name) },
-    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 36 },
+    doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 37 },
 
     // ---- the AI platform's invariants (AGENTS.md "AI Platform Rules") ---------
     // The five that boot the app take the fixture (./conformance/ai-fixture.ts):

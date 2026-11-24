@@ -15,7 +15,17 @@ const strategyOverride = z
   .partial()
   .strict();
 
+/** The launch-time confirmation of a destructive run (#67): the runbook's exact name and the resolved server count. */
+export const runConfirmSchema = z.object({
+  runbookName: z.string().max(120),
+  targetCount: z.number().int().min(0),
+});
+
 export const createRunSchema = z.object({
+  /** A rehearsal (#67): connects and checks every step, executes nothing that changes a server. */
+  dryRun: z.boolean().default(false),
+  /** Required to launch a runbook with a destructive step for real (not for a dry run). */
+  confirm: runConfirmSchema.optional(),
   /** The version to run; the latest when absent. */
   version: z.number().int().min(1).optional(),
   params: z.record(z.string(), z.union([z.string().max(8192), z.number(), z.boolean()])).default({}),
@@ -47,7 +57,7 @@ export function sinceToDate(since: string, now: number = Date.now()): Date {
   return new Date(now - amount * SINCE_UNIT_MS[unit]);
 }
 
-export const retryRunSchema = z.object({ only: z.enum(['failed', 'all']).default('failed') });
+export const retryRunSchema = z.object({ only: z.enum(['failed', 'all']).default('failed'), confirm: runConfirmSchema.optional() });
 
 export const logQuerySchema = z.object({ tail: z.coerce.number().int().min(1).max(100_000).optional() });
 

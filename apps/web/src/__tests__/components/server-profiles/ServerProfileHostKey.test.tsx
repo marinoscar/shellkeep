@@ -5,9 +5,8 @@ import { render, mockUser } from '../../utils/test-utils';
 import { ApiError } from '../../../services/api';
 import type { ServerProfile } from '../../../types';
 
-/** Issue #60: the host-key status, prompts and facts on the server profiles UI. */
+/** Issue #60: the host-key section of the profile form (the list's host-key cases are in pages/ServerProfilesPage.test.tsx, #79). */
 
-vi.mock('../../../hooks/useServerProfiles', () => ({ useServerProfiles: vi.fn() }));
 vi.mock('../../../services/terminal-api', () => ({
   trustHostKey: vi.fn(),
   getServerProfile: vi.fn(),
@@ -16,14 +15,12 @@ vi.mock('../../../services/terminal-api', () => ({
   refreshServerFacts: vi.fn(),
 }));
 
-import { useServerProfiles } from '../../../hooks/useServerProfiles';
 import {
   forgetHostKey,
   refreshServerFacts,
   scanHostKey,
   trustHostKey,
 } from '../../../services/terminal-api';
-import { ServerProfileList } from '../../../components/server-profiles/ServerProfileList';
 import { ServerProfileForm } from '../../../components/server-profiles/ServerProfileForm';
 
 const PRESENTED = 'SHA256:presentedKeyFingerprintAAAAAAAAAAAAAAAAAAAA';
@@ -69,100 +66,6 @@ const trustedProfile: ServerProfile = {
 };
 
 const writer = { ...mockUser, permissions: [...mockUser.permissions, 'servers:read', 'servers:write'] };
-
-function hook(overrides: Partial<ReturnType<typeof useServerProfiles>> = {}) {
-  return {
-    profiles: [base, trustedProfile],
-    total: 2,
-    page: 1,
-    pageSize: 10,
-    isLoading: false,
-    error: null,
-    fetchProfiles: vi.fn().mockResolvedValue(undefined),
-    createProfile: vi.fn().mockResolvedValue(undefined),
-    updateProfile: vi.fn().mockResolvedValue(undefined),
-    deleteProfile: vi.fn().mockResolvedValue(undefined),
-    testConnection: vi.fn().mockResolvedValue({ success: true }),
-    ...overrides,
-  };
-}
-
-describe('ServerProfileList host keys (#60)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(useServerProfiles).mockReturnValue(hook());
-    vi.mocked(trustHostKey).mockResolvedValue({ ...base, fingerprint: PRESENTED });
-  });
-
-  it('shows a shield icon with text per row, never colour alone', () => {
-    render(<ServerProfileList />, { wrapperOptions: { user: writer } });
-
-    const statuses = screen.getAllByTestId('host-key-status');
-    expect(statuses).toHaveLength(2);
-    expect(statuses[0]).toHaveAttribute('data-trusted', 'false');
-    expect(statuses[0]).toHaveTextContent('Not trusted');
-    expect(statuses[0].querySelector('svg')).not.toBeNull();
-    expect(statuses[1]).toHaveAttribute('data-trusted', 'true');
-    expect(statuses[1]).toHaveTextContent('Trusted');
-    expect(statuses[1].querySelector('svg')).not.toBeNull();
-    expect(screen.getByRole('columnheader', { name: 'Host key' })).toBeInTheDocument();
-  });
-
-  it('shows the probed facts under the host', () => {
-    render(<ServerProfileList />, { wrapperOptions: { user: writer } });
-    expect(screen.getByTestId('server-facts-summary')).toHaveTextContent('Distro X 12 · apt · tmux installed');
-  });
-
-  it('opens the host-key dialog on a refused test and tests again after trust', async () => {
-    const user = userEvent.setup();
-    const onTestResult = vi.fn();
-    const testConnection = vi
-      .fn()
-      .mockResolvedValueOnce({
-        success: false,
-        error: 'Host key not trusted',
-        code: 'HOST_KEY_UNKNOWN',
-        presented: { fingerprint: PRESENTED, algorithm: 'ssh-ed25519' },
-        expected: null,
-      })
-      .mockResolvedValueOnce({ success: true });
-    vi.mocked(useServerProfiles).mockReturnValue(hook({ testConnection }));
-
-    render(<ServerProfileList onTestResult={onTestResult} />, { wrapperOptions: { user: writer } });
-    await user.click(screen.getAllByRole('button', { name: /test connection/i })[0]);
-
-    const dialog = await screen.findByTestId('host-key-dialog');
-    expect(within(dialog).getByTestId('host-key-presented')).toHaveTextContent(PRESENTED);
-    expect(onTestResult).not.toHaveBeenCalled();
-
-    await user.click(within(dialog).getByRole('button', { name: 'Trust and test' }));
-
-    expect(trustHostKey).toHaveBeenCalledWith('profile-a', PRESENTED, undefined);
-    await waitFor(() => expect(testConnection).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(onTestResult).toHaveBeenCalledWith({ success: true }));
-  });
-
-  it('reports the refusal when the prompt is cancelled', async () => {
-    const user = userEvent.setup();
-    const onTestResult = vi.fn();
-    const refused = {
-      success: false,
-      error: 'Host key changed',
-      code: 'HOST_KEY_MISMATCH',
-      presented: { fingerprint: PRESENTED, algorithm: 'ssh-ed25519' },
-      expected: TRUSTED,
-    };
-    vi.mocked(useServerProfiles).mockReturnValue(hook({ testConnection: vi.fn().mockResolvedValue(refused) }));
-
-    render(<ServerProfileList onTestResult={onTestResult} />, { wrapperOptions: { user: writer } });
-    await user.click(screen.getAllByRole('button', { name: /test connection/i })[1]);
-    const dialog = await screen.findByTestId('host-key-dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-
-    expect(onTestResult).toHaveBeenCalledWith(refused);
-    expect(trustHostKey).not.toHaveBeenCalled();
-  });
-});
 
 describe('ServerProfileForm host-key section (#60)', () => {
   beforeEach(() => {

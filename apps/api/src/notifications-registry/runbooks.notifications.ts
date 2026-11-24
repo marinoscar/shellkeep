@@ -33,6 +33,8 @@ import type {
 export const RUNBOOK_RUN_FINISHED_EVENT = 'runbooks.run_finished';
 export const RUNBOOK_RUN_FAILED_EVENT = 'runbooks.run_failed';
 export const RUNBOOK_APPROVAL_REQUESTED_EVENT = 'runbooks.approval_requested';
+/** A dry run finished (#67): in-app only, so a rehearsal never emails or pushes anyone. */
+export const RUNBOOK_DRY_RUN_FINISHED_EVENT = 'runbooks.dry_run_finished';
 
 const countsBody = (data: RunbookRunNotificationData): string =>
   `${data.targetsSucceeded} of ${data.targetsTotal} targets succeeded, ${data.targetsFailed} failed.`;
@@ -46,6 +48,12 @@ export const runbookRunFinishedBrowserTemplate = (data: RunbookRunNotificationDa
 export const runbookRunFailedBrowserTemplate = (data: RunbookRunNotificationData) => ({
   title: `Runbook "${data.runbookName}" failed`,
   body: `Version ${data.version}: ${countsBody(data)}`,
+  link: data.runLink,
+});
+
+export const runbookDryRunFinishedBrowserTemplate = (data: RunbookRunNotificationData) => ({
+  title: `Dry run of "${data.runbookName}" finished`,
+  body: `Version ${data.version}: ${data.targetsSucceeded} of ${data.targetsTotal} targets would run cleanly, ${data.targetsFailed} would fail.`,
   link: data.runLink,
 });
 
@@ -89,6 +97,16 @@ export const RUNBOOK_NOTIFICATIONS: readonly NotificationRegistration[] = [
     },
     emailTemplate: 'runbook-approval-requested',
     browserTemplate: runbookApprovalRequestedBrowserTemplate,
+  },
+  {
+    event: {
+      key: RUNBOOK_DRY_RUN_FINISHED_EVENT,
+      label: 'Runbook dry run finished',
+      description: 'Sent in the app when a dry run you started finishes. Dry runs never send email or push.',
+      channels: ['browser'],
+      defaultEnabled: true,
+    },
+    browserTemplate: runbookDryRunFinishedBrowserTemplate,
   },
 ];
 

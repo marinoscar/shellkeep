@@ -22,6 +22,7 @@ import {
 
 import {
   RUNBOOK_APPROVAL_REQUESTED_EVENT,
+  RUNBOOK_DRY_RUN_FINISHED_EVENT,
   RUNBOOK_NOTIFICATIONS,
   RUNBOOK_RUN_FAILED_EVENT,
   RUNBOOK_RUN_FINISHED_EVENT,
@@ -62,13 +63,20 @@ describe('runbook notifications', () => {
   });
 
   it('declare the three permanent keys with in-app, email and push', () => {
-    expect(RUNBOOK_NOTIFICATIONS.map((entry) => entry.event.key)).toEqual(KEYS);
-    for (const entry of RUNBOOK_NOTIFICATIONS) {
+    expect(RUNBOOK_NOTIFICATIONS.map((entry) => entry.event.key)).toEqual([...KEYS, RUNBOOK_DRY_RUN_FINISHED_EVENT]);
+    for (const entry of RUNBOOK_NOTIFICATIONS.filter((e) => KEYS.includes(e.event.key))) {
       expect(entry.event.channels).toEqual(['browser', 'email', 'push']);
       expect(entry.event.defaultEnabled).toBe(true);
       expect(entry.emailTemplate).toBeDefined();
       expect(entry.browserTemplate).toBeDefined();
     }
+  });
+
+  it('a dry run finishes in the app only: no email, no push (#67)', () => {
+    const entry = RUNBOOK_NOTIFICATIONS.find((e) => e.event.key === RUNBOOK_DRY_RUN_FINISHED_EVENT)!;
+    expect(entry.event.channels).toEqual(['browser']);
+    expect(entry.emailTemplate).toBeUndefined();
+    expect(entry.browserTemplate).toBeDefined();
   });
 
   it('register once, with their templates, and a second call is a no-op', () => {

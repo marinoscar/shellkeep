@@ -9,6 +9,9 @@ import type {
   SessionsResponse,
   TerminalSession,
   CreateSessionData,
+  BulkTagsResult,
+  ServerHealth,
+  ServerHostKeyState,
 } from '../types/terminal';
 
 // Terminal domain API: server profiles and terminal sessions. Built on the base
@@ -17,21 +20,60 @@ import type {
 /** Which server profiles the list shows (#71). */
 export type ServerProfilesFilter = 'all' | 'mine' | 'shared';
 
-// Server Profiles API
-export async function getServerProfiles(params?: {
+/** The columns `GET /server-profiles` sorts by (#79). */
+export type ServerProfilesSort = 'name' | 'hostname' | 'health' | 'lastSession' | 'updatedAt';
+
+/** The list query of the Servers page (#79). Every field is optional; unset means "no filter". */
+export interface ServerProfilesQuery {
   page?: number;
   pageSize?: number;
+  /** Text over the name, hostname and username. */
+  q?: string;
+  /** Older spelling of `q`. */
   search?: string;
   /** `mine`: owned by me; `shared`: shared with me or owned by a group of mine; default `all` (#71). */
   filter?: ServerProfilesFilter;
-}): Promise<ServerProfilesResponse> {
+  /** `me`, `shared` or `group:<id>`. */
+  owner?: string;
+  /** Profiles carrying every one of these tags. */
+  tags?: string[];
+  health?: ServerHealth;
+  hostKey?: ServerHostKeyState;
+  sort?: ServerProfilesSort;
+  order?: 'asc' | 'desc';
+}
+
+// Server Profiles API
+export async function getServerProfiles(params?: ServerProfilesQuery): Promise<ServerProfilesResponse> {
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.set('page', String(params.page));
   if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+  if (params?.q) searchParams.set('q', params.q);
   if (params?.search) searchParams.set('search', params.search);
   if (params?.filter && params.filter !== 'all') searchParams.set('filter', params.filter);
+  if (params?.owner) searchParams.set('owner', params.owner);
+  for (const tag of params?.tags ?? []) searchParams.append('tag', tag);
+  if (params?.health) searchParams.set('health', params.health);
+  if (params?.hostKey) searchParams.set('hostKey', params.hostKey);
+  if (params?.sort) searchParams.set('sort', params.sort);
+  if (params?.order) searchParams.set('order', params.order);
   const query = searchParams.toString();
   return api.get<ServerProfilesResponse>(`/server-profiles${query ? `?${query}` : ''}`);
+}
+
+/** The distinct tags on the profiles the caller may see (#79). */
+export async function getServerProfileTags(): Promise<string[]> {
+  const response = await api.get<{ tags: string[] }>('/server-profiles/tags');
+  return response?.tags ?? [];
+}
+
+/** Adds and removes tags on many profiles; the ids the caller may not change come back in `denied` (#79). */
+export async function bulkTagServerProfiles(input: {
+  ids: string[];
+  add?: string[];
+  remove?: string[];
+}): Promise<BulkTagsResult> {
+  return api.patch<BulkTagsResult>('/server-profiles/bulk-tags', input);
 }
 
 export async function getServerProfile(id: string): Promise<ServerProfile> {
@@ -100,8 +142,11 @@ export async function getSessions(params?: {
   page?: number;
   pageSize?: number;
   status?: string;
+  /** Only the caller's sessions on this server profile (#79). */
+  serverProfileId?: string;
 }): Promise<SessionsResponse> {
   const searchParams = new URLSearchParams();
+  if (params?.serverProfileId) searchParams.set('serverProfileId', params.serverProfileId);
   if (params?.page) searchParams.set('page', String(params.page));
   if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
   if (params?.status && params.status !== 'all') searchParams.set('status', params.status);

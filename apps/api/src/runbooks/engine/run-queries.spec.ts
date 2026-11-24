@@ -116,7 +116,7 @@ describe('RunbookRunsService.list (#65: the runs list and its filters)', () => {
     };
     (global as any).__tx = tx;
     const runbooks = { readableWhere: jest.fn().mockResolvedValue({ ownerUserId: 'user-1' }) };
-    const service = new RunbookRunsService({} as never, {} as never, runbooks as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+    const service = new RunbookRunsService({} as never, {} as never, runbooks as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
     const page = await service.list(principal, runsQuerySchema.parse({ status: 'failed', since: '24h' }));
     expect(page.items[0]).toMatchObject({ runbookName: 'Patch', targets: { total: 6, succeeded: 3, failed: 1, running: 2 } });
     const where = tx.runbookRun.findMany.mock.calls[0][0].where;

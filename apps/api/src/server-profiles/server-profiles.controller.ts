@@ -25,7 +25,13 @@ import { Auth, CurrentPrincipal } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
-import { ServerProfilesQueryDto } from './dto/server-profiles-query.dto';
+import {
+  SERVER_HEALTH,
+  SERVER_HOST_KEY_STATES,
+  SERVER_PROFILE_SORTS,
+  ServerProfilesQueryDto,
+} from './dto/server-profiles-query.dto';
+import { BulkTagsDto } from './dto/bulk-tags.dto';
 import { HostKeyError } from '../ssh/host-key.error';
 import { hostKeyErrorToHttp } from '../ssh/host-key-http';
 import { TrustHostKeyDto } from './dto/trust-host-key.dto';
@@ -43,14 +49,41 @@ export class ServerProfilesController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
-  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'q', required: false, type: String, description: 'Text search over the name, hostname and username' })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Older spelling of `q`' })
   @ApiQuery({ name: 'filter', required: false, enum: ['all', 'mine', 'shared'] })
-  @ApiResponse({ status: 200, description: 'Paginated server profiles' })
+  @ApiQuery({ name: 'owner', required: false, type: String, description: '`me`, `shared` or `group:<uuid>`' })
+  @ApiQuery({ name: 'tag', required: false, type: [String], description: 'Repeatable: profiles carrying every tag' })
+  @ApiQuery({ name: 'health', required: false, enum: SERVER_HEALTH })
+  @ApiQuery({ name: 'hostKey', required: false, enum: SERVER_HOST_KEY_STATES })
+  @ApiQuery({ name: 'sort', required: false, enum: SERVER_PROFILE_SORTS })
+  @ApiQuery({ name: 'order', required: false, enum: ['asc', 'desc'] })
+  @ApiResponse({ status: 200, description: 'Paginated server profiles (never a credential field)' })
   async findAll(
     @CurrentPrincipal() principal: Principal,
     @Query() query: ServerProfilesQueryDto,
   ) {
     return this.serverProfilesService.findAll(principal, query);
+  }
+
+  @Get('tags')
+  @Auth({ permissions: [PERMISSIONS.SERVERS_READ] })
+  @ApiOperation({ summary: 'The distinct tags on the server profiles the caller may see (requires servers:read)' })
+  @ApiResponse({ status: 200, description: '`{ tags: string[] }`, sorted' })
+  async listTags(@CurrentPrincipal() principal: Principal) {
+    return this.serverProfilesService.listTags(principal);
+  }
+
+  @Patch('bulk-tags')
+  @Auth({ permissions: [PERMISSIONS.SERVERS_WRITE] })
+  @ApiOperation({
+    summary:
+      'Add and remove tags on up to 200 server profiles (requires servers:write plus write access on each; ids without it are reported, not failed)',
+  })
+  @ApiResponse({ status: 200, description: '`{ updated, unchanged, denied }`: the ids in each outcome' })
+  @ApiResponse({ status: 400, description: 'More than 200 ids, no tag named, or a tag both added and removed' })
+  async bulkTags(@CurrentPrincipal() principal: Principal, @Body() dto: BulkTagsDto) {
+    return this.serverProfilesService.bulkTags(principal, dto);
   }
 
   @Get(':id')
@@ -108,7 +141,7 @@ export class ServerProfilesController {
   @Post(':id/test')
   @Auth({ permissions: [PERMISSIONS.SERVERS_READ] })
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Test SSH connection for a server profile' })
+  @ApiOperation({ summary: 'Test SSH connection for a server profile; the outcome is stored (lastTestAt, lastTestOk)' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Connection test result' })
   @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller' })
