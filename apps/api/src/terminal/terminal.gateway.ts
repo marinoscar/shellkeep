@@ -1,5 +1,8 @@
 import { ForbiddenException, Logger, NotFoundException, Optional, type OnModuleInit } from '@nestjs/common';
 import { SpanStatusCode, trace, type Span } from '@opentelemetry/api';
+import { OnEvent } from '@nestjs/event-emitter';
+import { SHARING_EVENTS, type GrantEventPayload, type GroupEventPayload, type GroupMemberEventPayload } from '@marinoscar/platform-api/sharing';
+import { SERVER_PROFILE_RESOURCE } from '../app-registrations/sharing';
 import { WebSocketGateway, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { ServerProfilesService } from '../server-profiles/server-profiles.service';
 import { PERMISSIONS } from '../common/constants/roles.constants';
@@ -25,6 +28,8 @@ interface AuthenticatedClient {
   permissions: readonly string[];
   roles: readonly string[];
   sessionId?: string;
+  /** The server profile of the attached session, for the share re-check. */
+  serverProfileId?: string;
   authenticated: boolean;
   authTimeout?: NodeJS.Timeout;
   pingInterval?: NodeJS.Timeout;
@@ -118,6 +123,72 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
       this.clients.delete(client);
       this.logger.log(`WebSocket disconnected (userId: ${clientState.userId || 'unauthenticated'})`);
     }
+  }
+
+  /**
+   * A share changed (#145): re-check every attached client the event can touch with the rule
+   * `connect` uses, and detach one that may no longer connect. Never throws.
+   */
+  @OnEvent(SHARING_EVENTS.GRANT_REVOKED)
+  @OnEvent(SHARING_EVENTS.GRANT_UPDATED)
+  async onGrantChanged(event: GrantEventPayload): Promise<void> {
+    if (event?.resourceType !== SERVER_PROFILE_RESOURCE) return;
+    await this.recheckAttached((c) => c.orgId === event.orgId && c.serverProfileId === event.resourceId);
+  }
+
+  @OnEvent(SHARING_EVENTS.MEMBER_REMOVED)
+  async onMemberRemoved(event: GroupMemberEventPayload): Promise<void> {
+    await this.recheckAttached((c) => c.orgId === event.orgId && c.userId === event.userId);
+  }
+
+  @OnEvent(SHARING_EVENTS.GROUP_DELETED)
+  async onGroupDeleted(event: GroupEventPayload): Promise<void> {
+    await this.recheckAttached((c) => c.orgId === event.orgId);
+  }
+
+  private async recheckAttached(affected: (c: AuthenticatedClient) => boolean): Promise<void> {
+    try {
+      const targets = [...this.clients.values()].filter(
+        (c) => c.authenticated && c.sessionId && c.serverProfileId && affected(c),
+      );
+      for (const state of targets) {
+        try {
+          await this.recheckClient(state);
+        } catch (err) {
+          this.logger.error(`Share re-check failed: ${(err as Error).message}`);
+        }
+      }
+    } catch (err) {
+      this.logger.error(`Share re-check failed: ${(err as Error).message}`);
+    }
+  }
+
+  private async recheckClient(state: AuthenticatedClient): Promise<void> {
+    const { sessionId, serverProfileId } = state;
+    if (!sessionId || !serverProfileId) return;
+    const principal = actingPrincipal({
+      userId: state.userId,
+      orgId: state.orgId,
+      permissions: state.permissions,
+      roles: state.roles,
+    });
+    try {
+      await this.serverProfilesService.assertCanConnect(serverProfileId, principal);
+      return;
+    } catch (err) {
+      // Only a refusal detaches; an unexpected error leaves the client attached (and is logged above).
+      if (!(err instanceof NotFoundException || err instanceof ForbiddenException)) throw err;
+    }
+    // The client may have moved on while the check ran.
+    if (state.sessionId !== sessionId) return;
+    if (state.ws.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify({ type: 'session_ended', reason: 'access_revoked' }));
+    }
+    this.sessionManager.detachWebSocket(sessionId, state.ws);
+    state.sessionId = undefined;
+    state.serverProfileId = undefined;
+    this.endSessionSpan(state);
+    this.logger.log(`Detached a client from session ${sessionId}: access revoked`);
   }
 
   private async handleControlMessage(
@@ -380,6 +451,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
       }
 
       clientState.sessionId = sessionId;
+      clientState.serverProfileId = session.serverProfileId;
       this.startSessionSpan(clientState, sessionId);
       client.send(JSON.stringify({ type: 'session_ready', sessionId }));
       this.logger.log(`WebSocket attached to session ${sessionId}`);
