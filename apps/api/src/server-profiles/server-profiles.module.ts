@@ -7,12 +7,15 @@ import { SshModule } from '../ssh/ssh.module';
 import { ServerProfilesController } from './server-profiles.controller';
 import { ServerProfilesService } from './server-profiles.service';
 import { ServerProfilesExportBinding } from './export/server-profiles-export.binding';
+import { ServersUserDataPurgeHandler } from './user-data/servers-purge.handler';
+import { UserDataHostModule } from '../platform/user-data/user-data-host.module';
 
 @Module({
-  imports: [PrismaModule, UserCredentialsModule, SshModule, TerminalWebhooksModule, sharingModule],
+  imports: [PrismaModule, UserCredentialsModule, SshModule, TerminalWebhooksModule, sharingModule, UserDataHostModule],
   controllers: [ServerProfilesController],
   // `ServerProfilesExportBinding` (#68) lets the `server-profiles` export source read the caller's groups through the slice.
-  providers: [ServerProfilesService, ServerProfilesExportBinding],
+  // `ServersUserDataPurgeHandler` (#69) is the delegated half of the user-data purge: profiles and their saved credentials.
+  providers: [ServerProfilesService, ServerProfilesExportBinding, ServersUserDataPurgeHandler],
   exports: [ServerProfilesService],
 })
 export class ServerProfilesModule {}

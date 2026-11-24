@@ -39,6 +39,8 @@ import { RunbookSecretsController } from './runbook-secrets.controller';
 import { RunbooksController } from './runbooks.controller';
 import { RunbooksService } from './runbooks.service';
 import { TargetResolverService } from './target-resolver.service';
+import { RunbooksUserDataPurgeHandler } from './user-data/runbooks-purge.handler';
+import { UserDataHostModule } from '../platform/user-data/user-data-host.module';
 
 /**
  * Runbooks: versioned multi-step procedure definitions, target resolution and the secret parameters of an
@@ -49,7 +51,7 @@ import { TargetResolverService } from './target-resolver.service';
  * `POST /api/ai/runbooks/draft`.
  */
 @Module({
-  imports: [PrismaModule, AiModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule],
+  imports: [PrismaModule, AiModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule, UserDataHostModule],
   controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController, RunbookAiController, RunbookDraftController],
   providers: [
     RunbooksService,
@@ -80,6 +82,8 @@ import { TargetResolverService } from './target-resolver.service';
     RunbookAgentHandler,
     RunbookAiStopService,
     RunbookDraftService,
+    // The delegated half of the user-data purge (#69).
+    RunbooksUserDataPurgeHandler,
   ],
   exports: [RunbooksService, TargetResolverService, RunbookRunsService, RunCoordinatorService, RunEventsService],
 })

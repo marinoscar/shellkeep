@@ -50,6 +50,8 @@ const SYSTEM_ALLOWLIST: Record<string, string> = {
     "purge, doctor, retention, link-resolution and invite-claim: the sharing slice's SHARING_DATA port (#71): the user-purge rule, the `sharing.groups.orphaned` Doctor check, the grants prune job and the two cross-organization lookups of an invite and a link token (links are disabled for both resource types)",
   'platform/exports/exports-host.module.ts':
     "export and purge: the exports slice's EXPORTS_SYSTEM_DATA port (#68): a source reads the requester's own rows across organizations with an explicit owner filter (never an org-wide read), the status and download routes look up the export file's storage object, and the expiry purge deletes export files",
+  'platform/user-data/user-data-db.adapter.ts':
+    "purge and admin-aggregate: the user-data slice's USER_DATA_DB port (#69): the per-user purge, the factory reset and offboarding delete a user's rows across organizations with an explicit owner or organization filter; ShellKeep's two delegated purge handlers receive it through the same port",
   'platform/ai/ai-host.module.ts':
     "purge and admin-aggregate: the AI slice's AI_SYSTEM_PRISMA port (#55): the ai_runs and ai_usage_events retention purges, the deployment-wide usage report and the catalogue sync's organization-less usage row",
 };
