@@ -3,6 +3,7 @@ import { Container, Typography, Box, IconButton, Snackbar, Alert } from '@mui/ma
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { ServerProfileList } from '../components/server-profiles/ServerProfileList';
+import { ExportServersButton } from '../components/server-profiles/ExportServersButton';
 
 interface SnackbarState {
   open: boolean;
@@ -55,9 +56,15 @@ export default function ServerProfilesPage() {
           <IconButton onClick={() => navigate('/')} aria-label="back to home">
             <ArrowBackIcon />
           </IconButton>
-          <Typography variant="h4" component="h1">
+          <Typography variant="h4" component="h1" sx={{ flexGrow: 1 }}>
             Server Profiles
           </Typography>
+          {/* #68: the packaged export dialog preset to `server-profiles` (no credential is ever exported). */}
+          <ExportServersButton
+            onCreated={() =>
+              showSnackbar('Export started. You will be notified when it is ready; find it under Settings, Download your data.', 'success')
+            }
+          />
         </Box>
         <Typography
           sx={{
