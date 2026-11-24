@@ -38,11 +38,12 @@ import {
   registerWebhooksEmailTemplates,
 } from '@marinoscar/platform-api/webhooks';
 
-import { SHELLKEEP_EMAIL_TEMPLATES } from '../email-templates';
+import { SHARING_EMAIL_TEMPLATES, SHELLKEEP_EMAIL_TEMPLATES } from '../email-templates';
 import { DB_BACKUP_NOTIFICATIONS } from '../platform/db-backup/db-backup.notifications';
 import { IDENTITY_NOTIFICATIONS } from '../notifications-registry/identity.notifications';
 import { TERMINAL_NOTIFICATIONS } from '../notifications-registry/terminal.notifications';
 import { EMAIL_MODULE_OPTIONS } from '../platform/email/email.options';
+import { SHARING_NOTIFICATIONS } from '../platform/sharing/sharing.notifications';
 
 let registered = false;
 
@@ -70,6 +71,8 @@ export function registerShellkeepNotifications(): void {
   // The alerts slice's two emails (#54) and the webhooks slice's one (`webhooks.endpoint_disabled`, #54).
   registerAlertsEmailTemplates();
   registerWebhooksEmailTemplates();
+  // The sharing slice's two emails (#71): `group-invitation` and `shared-with-you`.
+  registerEmailTemplates(SHARING_EMAIL_TEMPLATES);
 
   // 3. Notifications, in the order the preferences matrix shows them.
   registerNotifications([
@@ -84,6 +87,8 @@ export function registerShellkeepNotifications(): void {
     ...ALERTS_NOTIFICATIONS,
     // Webhooks (#54): `webhooks.endpoint_disabled`, to the owner of an endpoint the slice switched off.
     ...WEBHOOKS_NOTIFICATIONS,
+    // Sharing (#71): `groups.invitation` and `sharing.shared_with_you`, on the email and browser channels.
+    ...SHARING_NOTIFICATIONS,
   ]);
   // The runbook events are NOT here: `registerRunbookNotifications()` (#61).
 }

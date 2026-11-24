@@ -44,6 +44,8 @@ const SYSTEM_ALLOWLIST: Record<string, string> = {
     "doctor: the db-backup slice's DB_BACKUP_SYSTEM_DATA port (#52): the backup.rls-bypass check's read-only row counts",
   'platform/webhooks/webhooks-host.module.ts':
     "webhooks and retention: the webhooks slice's WEBHOOKS_SYSTEM_PRISMA port (#54): a system-scope endpoint and its deliveries have no organization, so only the bypass client sees them; the delivery purge crosses organizations",
+  'platform/sharing/sharing-data.adapter.ts':
+    "purge, doctor, retention, link-resolution and invite-claim: the sharing slice's SHARING_DATA port (#71): the user-purge rule, the `sharing.groups.orphaned` Doctor check, the grants prune job and the two cross-organization lookups of an invite and a link token (links are disabled for both resource types)",
 };
 
 /**

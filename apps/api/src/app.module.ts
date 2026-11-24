@@ -21,6 +21,7 @@ import { BroadcastsModule, notificationsModule } from './platform/notifications/
 import { dbBackupModule } from './platform/db-backup/db-backup.config';
 import { alertsModule } from './platform/alerts/alerts.config';
 import { webhooksModule } from './platform/webhooks/webhooks.config';
+import { sharingModule } from './platform/sharing/sharing.config';
 import { jobsModule, nodeCredentialModule, nodesModule } from './platform/jobs/jobs.config';
 import {
   ProfileImageModule,
@@ -118,6 +119,10 @@ import configuration from './config/configuration';
     // Alerts (#54): rules over the terminal metrics, node events and fleet health, incidents and
     // their notifications (`/api/admin/alerts`). After telemetry, notifications and webhooks.
     alertsModule,
+    // Sharing (#71): groups, members and invites (`/api/groups`), grants (`/api/grants`) and the
+    // "shared with me" list over `server_profile` and `runbook` (`app-registrations/sharing.ts`).
+    // Links are disabled per resource type. After notifications and the jobs queue it depends on.
+    sharingModule,
     ServerProfilesModule,
     TerminalModule,
     // Runbooks (#61): versioned procedure definitions, target preview and secret parameters.
