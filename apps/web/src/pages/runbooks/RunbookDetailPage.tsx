@@ -38,6 +38,7 @@ import { OwnerChip } from '../../features/runbooks/components/OwnerChip';
 import { StatusChip } from '../../features/runbooks/components/StatusChip';
 import { RunLauncherDialog } from '../../features/runbooks/components/RunLauncherDialog';
 import { VersionHistoryDrawer } from '../../features/runbooks/components/VersionHistoryDrawer';
+import { DestructiveBanner, RiskChip, findingFor } from '../../features/runbooks/components/RiskChip';
 
 export interface RunbookDetailPageProps {
   /** Open the launcher on arrival (the `/runbooks/:id/run` deep link). */
@@ -122,6 +123,11 @@ export default function RunbookDetailPage({ launch = false, launchServerIds }: R
         </Stack>
       </Stack>
 
+      {(rb.risk ?? rb.latestVersion?.risk)?.destructive && (
+        <Box sx={{ mb: 2 }}>
+          <DestructiveBanner risk={rb.risk ?? rb.latestVersion?.risk} />
+        </Box>
+      )}
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, minWidth: 0 }}>
         <Card variant="outlined" component="section" aria-labelledby="rb-steps">
           <CardContent>
@@ -137,7 +143,14 @@ export default function RunbookDetailPage({ launch = false, launchServerIds }: R
                       <meta.Icon fontSize="small" aria-label={meta.label} />
                     </ListItemIcon>
                     <ListItemText
-                      primary={`${index + 1}. ${step.name}`}
+                      primary={
+                        <Box component="span" sx={{ display: 'inline-flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                          {`${index + 1}. ${step.name}`}
+                          {findingFor(rb.risk ?? rb.latestVersion?.risk, index) && (
+                            <RiskChip finding={findingFor(rb.risk ?? rb.latestVersion?.risk, index)!} />
+                          )}
+                        </Box>
+                      }
                       secondary={`${meta.label} · runs ${step.when.replace('_', ' ')}${step.continueOnError ? ' · continues on error' : ''} · ${step.timeoutSec}s timeout`}
                     />
                   </ListItem>

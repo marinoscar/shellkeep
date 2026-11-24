@@ -25,6 +25,8 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { STEP_KINDS, type RunbookStep, type RunbookStepKind } from '../../api/types';
 import { STEP_KIND_META } from '../../lib/stepKinds';
+import type { RiskFinding } from '../../api/types';
+import { RiskChip } from '../RiskChip';
 
 export interface StepListProps {
   steps: readonly RunbookStep[];
@@ -35,11 +37,13 @@ export interface StepListProps {
   onAdd: (kind: RunbookStepKind) => void;
   errorCount: (index: number) => number;
   warningCount: (index: number) => number;
+  /** The destructive guard's finding for a step (#67). */
+  riskFor?: (index: number) => RiskFinding | undefined;
 }
 
 const WHEN_LABEL: Record<string, string> = { on_success: 'on success', on_failure: 'on failure', always: 'always' };
 
-export function StepList({ steps, selected, onSelect, onMove, onRemove, onAdd, errorCount, warningCount }: StepListProps) {
+export function StepList({ steps, selected, onSelect, onMove, onRemove, onAdd, errorCount, warningCount, riskFor }: StepListProps) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -105,6 +109,7 @@ export function StepList({ steps, selected, onSelect, onMove, onRemove, onAdd, e
                   primary={
                     <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
                       {index + 1}. {step.name}
+                      {riskFor?.(index) && <RiskChip finding={riskFor(index)!} />}
                       {warnings > 0 && (
                         <Tooltip title={`${warnings} warning${warnings === 1 ? '' : 's'}`}>
                           <WarningAmberIcon fontSize="small" sx={{ color: 'warning.main' }} aria-label={`${warnings} warnings`} />

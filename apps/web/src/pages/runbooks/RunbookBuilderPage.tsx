@@ -48,7 +48,8 @@ import {
   updateRunbookMetadata,
   validateDefinition,
 } from '../../features/runbooks/api/runbooksApi';
-import type { DefinitionWarning, RunbookDefinition, RunbookDetail, RunbookStep } from '../../features/runbooks/api/types';
+import type { DefinitionWarning, RunbookDefinition, RunbookDetail, RunbookRisk, RunbookStep } from '../../features/runbooks/api/types';
+import { DestructiveBanner, findingFor } from '../../features/runbooks/components/RiskChip';
 import { errorMessage } from '../../features/runbooks/hooks/useAsync';
 import { useUnsavedChangesGuard } from '../../features/runbooks/hooks/useUnsavedChangesGuard';
 import { emptyDefinition, issuesToFieldErrors, move, newStep, stepErrorCount } from '../../features/runbooks/lib/builder';
@@ -90,6 +91,8 @@ export default function RunbookBuilderPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [warnings, setWarnings] = useState<DefinitionWarning[]>([]);
+  /** The destructive guard's assessment (#67): from the read, refreshed by every validate. */
+  const [risk, setRisk] = useState<RunbookRisk | null>(null);
   const [changelog, setChangelog] = useState('');
   const [busy, setBusy] = useState<'validate' | 'save' | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -107,6 +110,7 @@ export default function RunbookBuilderPage() {
     setSelected(0);
     setErrors({});
     setWarnings([]);
+    setRisk(rb.risk ?? rb.latestVersion?.risk ?? null);
   };
 
   useEffect(() => {
@@ -134,6 +138,7 @@ export default function RunbookBuilderPage() {
       const result = await validateDefinition(definition);
       setErrors({});
       setWarnings(result.warnings);
+      setRisk(result.risk ?? null);
       setNotice(result.warnings.length ? `Valid, with ${result.warnings.length} warning(s)` : 'The definition is valid');
       return true;
     } catch (err) {
@@ -280,6 +285,9 @@ export default function RunbookBuilderPage() {
           {formError}
         </Alert>
       )}
+      <Box sx={{ mb: risk?.destructive ? 2 : 0 }}>
+        <DestructiveBanner risk={risk} />
+      </Box>
       {errors._root && <Alert severity="error" sx={{ mb: 2 }}>{errors._root}</Alert>}
 
       <Card variant="outlined" sx={{ mb: 2 }}>
@@ -341,6 +349,7 @@ export default function RunbookBuilderPage() {
             }}
             errorCount={errorCount}
             warningCount={(index) => warningsFor(index).length}
+            riskFor={(index) => findingFor(risk, index)}
           />
           {errors.steps && <Alert severity="error" sx={{ mt: 1 }}>{errors.steps}</Alert>}
         </Box>
