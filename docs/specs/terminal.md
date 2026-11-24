@@ -195,6 +195,57 @@ A directory (a symlink counts as its target) offers only Show in file browser an
 
 **Opt-in.** `TerminalView` takes a `fileLinks` prop (`{ profileId, onShowInFileBrowser? }`) and hands `useTerminal` an `options.fileLinks` source. Without them no link provider does any work and no stat is ever sent.
 
+### 5.7 Touch keys: model and encoder
+
+Issue #165 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). The data model and byte encoder behind the on-screen key bar. Code: `apps/web/src/lib/terminal/keys/` (`keyModel.ts`, `encodeKey.ts`, `legacyAdapter.ts`), `apps/api/src/terminal/settings/` (`key-layout.schema.ts`, `shortcuts.user-settings.ts`, `keys/key-model.ts`), `apps/api/prisma/settings-migrations/terminal-shortcuts-v2.ts`.
+
+**Catalog.** `KEY_CATALOG` lists every built-in key by a stable `id`. Ids are stored in the user's `shortcuts.layout`: never rename or remove one. Each entry has a `kind`, a `label`, a default `span` (1 or 2 cells of the 4-column grid) and `repeatable` (holding the key repeats it).
+
+| Kind | Entries (ids) | Notes |
+|---|---|---|
+| `key` | `esc`, `tab`, `shift+tab` (span 2), `enter`, `backspace` (span 2), arrows `left` `down` `up` `right`, `home`, `end`, `pgup`, `pgdn`, `insert`, `delete`, `f1` to `f12`, `ctrl+c`, `ctrl+d`, `ctrl+z`, `ctrl+\` | Carries a `chord`: what it sends. Repeatable: `backspace`, the arrows, `home`, `end`, `pgup`, `pgdn`, `delete` |
+| `modifier` | `ctrl`, `alt`, `shift` | Arms a modifier for the next key; sends nothing itself |
+| `action` | `ai`, `arrow-drag`, `attach-file`, `snippets` | Runs an app action; sends nothing |
+
+A layout entry can also be an inline, user-made key: a `macro` (1 to 8 chords sent in order, for example the tmux prefix `ctrl+b` then `o`) or a `custom` key (a label plus a literal sequence). A chord is `{ modifiers, key }` where `key` is a named key (`Escape`, `Tab`, `Enter`, `Backspace`, `Space`, arrows, `Home`, `End`, `PageUp`, `PageDown`, `Insert`, `Delete`, `F1` to `F12`) or one printable ASCII character; modifiers are `ctrl`, `shift`, `alt`, `meta`.
+
+**Mirrored model.** `keyModel.ts` is pure and import-free so the web app and the API share it. `packages/shared` is hand-written CommonJS the web app does not consume, so the file is mirrored: `apps/web/src/lib/terminal/keys/keyModel.ts` is the one to edit, and `apps/api/src/terminal/settings/keys/key-model.ts` is a byte-identical copy. The parity test in `keyModel.test.ts` (web, Vitest) fails if the two differ. Copy the web file over the API one after every edit. The encoder is web-only: the API never produces key bytes.
+
+**Layout shape and caps.** `shortcuts.layout` is `{ groups: [{ keys: [entry] }] }`; an entry is `{ id, span? }` (a catalog key) or `{ key, span? }` (an inline key). A group is one row of the grid. `shortcuts.layout` and `shortcuts.options` are both optional in the namespace and validated by `keyLayoutSchema` and `keyOptionsSchema` (`.strict()`, every field required).
+
+| Cap | Value |
+|---|---|
+| Groups per layout | 40 |
+| Keys per group | 4, spans totalling at most 4 cells |
+| Inline (macro and custom) keys per layout | 50 |
+| Chords per macro | 8 |
+| Label length | 1 to 40 characters |
+| Custom sequence | parsed result 1 to 64 characters |
+
+An inline key id must be a UUID and unique in the layout. A catalog id the model does not know is refused. A macro with more than one chord defaults to span 2 (`entrySpan`). A custom sequence accepts the escapes `\xNN`, `\e`, `\r`, `\n`, `\t` and `\\`; a lone trailing backslash, an unknown escape or a malformed `\x` is rejected, at save time by the schema and at encode time by `encodeKey`, which throws.
+
+**Options.** `shortcuts.options` is `{ autoHideWithHardwareKeyboard, haptics }`, both booleans, both true by default (`DEFAULT_KEY_OPTIONS`): hide the key row while a hardware keyboard is in use, and vibrate briefly on each press where supported. A user with no stored layout gets `DEFAULT_KEY_LAYOUT`: the four actions, `shift+tab esc ctrl`, the arrows, four tmux macros (prefix `ctrl+b`, then `o`, `x`, `%`, `"`), `alt tab ins del`, `home pgUp pgDn end`, then F1 to F12 in rows of four.
+
+**Encoder.** `encodeKey(key, { modifiers?, applicationCursor? })` returns the bytes to write to the terminal. `key` is a catalog id, a chord, or an inline key. It follows the sequences xterm.js sends for a hardware key.
+
+- **Cursor keys** (arrows, Home, End). Normal mode sends `ESC [ A` (`B` `C` `D`, `H`, `F`). Application cursor mode (DECCKM, passed as `applicationCursor`) sends `ESC O A`. With any modifier the application form never applies.
+- **Modifier parameter.** `m = 1 + shift(1) + alt(2) + ctrl(4) + meta(8)`. When `m > 1`, arrows, Home and End send `ESC [ 1 ; m X`.
+- **Tilde keys.** Insert `2~`, Delete `3~`, PageUp `5~`, PageDown `6~`: `ESC [ n ~`, or `ESC [ n ; m ~` when modified.
+- **F-keys.** F1 to F4 send `ESC O P/Q/R/S`, or `ESC [ 1 ; m P/Q/R/S` when modified. F5 to F12 send `ESC [ n ~` with n = 15, 17, 18, 19, 20, 21, 23, 24, or `ESC [ n ; m ~` when modified.
+- **Control characters.** Ctrl with a letter sends the control character (`ctrl+c` is `\x03`). Ctrl with `@`, space, `[`, `\`, `]`, `^`, `_`, `?` and `3` to `8` sends NUL, ESC, FS, GS, RS, US and DEL as xterm does; any other Ctrl character is sent unchanged. Ctrl+Backspace sends `\b`, plain Backspace `\x7f`, Ctrl+Space NUL. Shift with a lowercase letter sends the uppercase letter. Shift+Tab sends `ESC [ Z`.
+- **Alt.** Alt prefixes the base bytes with ESC (`alt+x` is `ESC x`), also on Tab, Enter, Backspace, Escape and Space. On cursor, tilde and F-keys Alt is part of the modifier parameter instead.
+- **Armed modifiers.** The `modifiers` option (the Ctrl, Alt and Shift keys of the bar) is added to the chord's own. A `modifier` or `action` catalog key encodes to the empty string.
+- **Macro.** Each chord is encoded by its own modifiers, concatenated in order. Armed modifiers do not apply; `applicationCursor` does.
+- **Custom.** The parsed sequence, verbatim.
+
+Deliberate differences from xterm.js: Alt+arrow is `ESC [ 1 ; 3 X` (xterm rewrites it to Ctrl+arrow on Linux), and Shift+PageUp, Shift+PageDown and a modified Insert are sent (xterm scrolls its own buffer or sends nothing). An unknown id or key name throws.
+
+**Settings migration (v1 to v2).** The v1 `shortcuts.keyShortcuts` list stays; `layout` is added beside it. `terminal-shortcuts-v2.ts` gives every stored row that has a v1 list and no `layout` one holding exactly that list: each shortcut becomes an inline macro (its keystrokes are the chords; id and label are kept), packed into rows of at most four cells (a multi-keystroke macro takes two). A malformed shortcut is skipped. The seed runs it (`prisma/seed-app.ts`, `migrateKeyLayout`). It is idempotent: a row that already has a `layout`, or has no list, is left alone. A written row's `version` is incremented, so clients refetch instead of saving over it (`If-Match`). `keyShortcuts` is not removed: it is the rollback source and feeds the legacy editor. The step is Nest-free because the seed image has no `src/`, so the packing is a copy of `legacyShortcutsToLayout`, and a test keeps the two equal. Logs carry counts only, never sequences.
+
+Rollback, before reverting #165, from `apps/api` with `DATABASE_URL` set: `npx ts-node --transpile-only -P prisma/tsconfig.json prisma/settings-migrations/terminal-shortcuts-v2.ts --revert`. It drops `layout` and `options` from every row that has either.
+
+**Current bar.** Until #167 replaces it, `TerminalKeyShortcutsBar` still renders and sends v1 shortcuts through `encodeKeystroke`. It is fed from the v2 layout by `toLegacyBarKeys` in `legacyAdapter.ts`, so what it draws and sends does not change: a catalog `key` becomes its chord (id `catalog:<id>`), a macro keeps its id, label and chords, and modifier, action and custom keys, which have no v1 form, are left out. `fromLegacyShortcuts` is the inverse for a v1 list.
+
 ## 6. Operations
 
 - **Reaper.** `@Cron('0 */5 * * * *')` in `terminal/tasks/session-cleanup.task.ts` enqueues `terminal.session.reap` (enqueue-only). The handler runs three bounded statements in order (detach, terminate, purge), reading the thresholds at run time, then sends one `terminal.session_reaped` notification per owner and one `terminal.session.terminated` webhook (reason `reaped`) per session it terminated, after the commit. It closes the live stream of each session it terminated (best effort, logged on failure; invariant 8) and does not kill remote tmux sessions. Counts go to `app.terminal.sessions.reaped` (`action`: `detached`, `terminated`, `purged`) and the log, never ids or names.
