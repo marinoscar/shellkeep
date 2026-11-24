@@ -1,0 +1,67 @@
+{
+  "items": [
+    {
+      "id": "session-alpha",
+      "name": "Build",
+      "status": "active",
+      "tmuxSessionId": "sk-session-alpha",
+      "cols": 120,
+      "rows": 32,
+      "lastActivityAt": "2025-01-15T11:58:00.000Z",
+      "terminatedAt": null,
+      "createdAt": "2025-01-15T09:00:00.000Z",
+      "updatedAt": "2025-01-15T11:58:00.000Z",
+      "serverProfileId": "server-1",
+      "serverProfile": {
+        "name": "server-a",
+        "hostname": "server-a.example.test",
+        "port": 22,
+        "username": "person-a",
+        "color": "primary"
+      }
+    },
+    {
+      "id": "session-beta",
+      "name": "Worker logs",
+      "status": "active",
+      "tmuxSessionId": "sk-session-beta",
+      "cols": 120,
+      "rows": 32,
+      "lastActivityAt": "2025-01-15T11:45:00.000Z",
+      "terminatedAt": null,
+      "createdAt": "2025-01-15T09:00:00.000Z",
+      "updatedAt": "2025-01-15T11:45:00.000Z",
+      "serverProfileId": "server-2",
+      "serverProfile": {
+        "name": "server-b",
+        "hostname": "server-b.example.test",
+        "port": 22,
+        "username": "person-a",
+        "color": "error"
+      }
+    },
+    {
+      "id": "session-gamma",
+      "name": "Deploy",
+      "status": "detached",
+      "tmuxSessionId": "sk-session-gamma",
+      "cols": 120,
+      "rows": 32,
+      "lastActivityAt": "2025-01-15T10:20:00.000Z",
+      "terminatedAt": null,
+      "createdAt": "2025-01-15T09:00:00.000Z",
+      "updatedAt": "2025-01-15T10:20:00.000Z",
+      "serverProfileId": "server-3",
+      "serverProfile": {
+        "name": "staging-a",
+        "hostname": "staging-a.example.test",
+        "port": 22,
+        "username": "person-a",
+        "color": "info"
+      }
+    }
+  ],
+  "total": 3,
+  "page": 1,
+  "pageSize": 100
+}

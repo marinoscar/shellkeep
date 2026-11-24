@@ -1,0 +1,20 @@
+{
+  "servers": {
+    "total": 0,
+    "reachable": 0,
+    "unreachable": 0,
+    "unknown": 0,
+    "hostKeyUntrusted": 0
+  },
+  "sessions": {
+    "active": 0,
+    "attached": 0,
+    "detached": 0,
+    "recent": []
+  },
+  "runs": {
+    "running": 0,
+    "failedLast24h": 0,
+    "recent": []
+  }
+}

@@ -40,6 +40,7 @@
     "openapi:dump": "ts-node -P scripts/tsconfig.json --transpile-only scripts/dump-openapi.ts",
     "openapi:typecheck": "tsc -p scripts/tsconfig.json",
     "catalog:permissions": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-permission-catalog.ts",
+    "permissions:dump": "ts-node -P scripts/tsconfig.json --transpile-only scripts/dump-web-permissions.ts",
     "catalog:settings": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-settings-catalog.ts"
   },
   "dependencies": {

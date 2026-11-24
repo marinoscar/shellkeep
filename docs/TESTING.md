@@ -12,6 +12,9 @@ This document describes the testing strategy, frameworks, and conventions used i
 6. [Writing New Tests](#writing-new-tests)
 7. [Test Configuration](#test-configuration)
 8. [Best Practices](#best-practices)
+9. [Platform conformance (web)](#platform-conformance-web)
+10. [Visual regression](#visual-regression)
+11. [E2E Testing with Playwright](#e2e-testing-with-playwright)
 
 ## Testing Framework Overview
 
@@ -822,6 +825,107 @@ npm run test:ui
 **Issue:** Async state not updating in tests
 - **Solution:** Use `await waitFor()` to wait for async updates
 
+## Platform conformance (web)
+
+`apps/web/src/__tests__/conformance.test.ts` runs `runPlatformWebConformance()` from `@marinoscar/platform-web/testing`. It proves, over what the web app declares, invariants that no component test sees:
+
+- every settings card's `permission` and `feature` is a string the API enforces, and no card invents one;
+- every card and destination has a route in `App.tsx` (the suite parses the file's `<Route>` elements as text), and every route belongs to exactly one destination;
+- a full-bleed page (the terminal workspace) still clears the phone bottom bar, and the Sessions context pane draws beside the expanded rail only.
+
+The test passes the app's own data: `ADMIN_SECTIONS`, `USER_SETTINGS_SECTIONS`, the two hub paths, the destination table, the text of `App.tsx` and `apiPermissions`.
+
+### The permission snapshot
+
+The web workspace cannot import the API's registries, so `apiPermissions` is read from a committed snapshot, `apps/web/src/__tests__/fixtures/api-permissions.json`. Regenerate it after a permission is registered or removed:
+
+```bash
+npm run prisma:generate --workspace=api       # once, if the client is not generated
+npm run permissions:dump --workspace=api      # rewrite the snapshot
+npm run permissions:dump --workspace=api -- --check   # exit 1 when it is stale
+```
+
+CI runs the `--check` form in the `Typecheck & Lint` job, so a stale snapshot fails the build. A card that names a permission missing from the snapshot fails the suite, which is the point.
+
+### Suites that run, and the one that is skipped
+
+| Suite | Result |
+|---|---|
+| `settings-registry-gates`, `settings-registry-shape`, `settings-ai-cards`, `settings-card-routes`, `settings-route-ownership` (`settings/testing`) | Run. |
+| `shell-layout-variants` (`shell/testing`) | Runs. |
+| `shell-local-host` (`shell/testing`) | **Skipped**, with the reason `ShellKeep always runs with a server and an AuthContext`: the suite proves a host with no API renders the shell, and this is not such a host. |
+
+Any other skip needs a written reason in the `suites` option; the harness refuses a skip without one and lists every skip in its summary.
+
+The `/testing` entries of the other web slices (exports, onboarding, sharing, notifications, ai) are not imported because the installed `@marinoscar/platform-web` does not export them. When a release adds one, import it in the conformance file (the import registers its suites). `datatable/testing` is the DataTable component's own regression suite, run by the package against its fixture; it registers no web conformance suite.
+
+### It can fail
+
+Remove a `<Route>` from `App.tsx`, or give a card a permission the API does not have, and the suite fails and names the card or route. Add a destination and `__tests__/config/e2eNavigation.test.ts` fails until `tests/e2e/specs/navigation.spec.ts` visits it.
+
+## Visual regression
+
+`tests/visual/` is a pixel-diff suite. jsdom has no layout engine, so it cannot see a truncated rail label, a terminal hidden behind the bottom bar or a key bar under the keyboard; this suite can.
+
+### How it works
+
+- It screenshots a **harness**, not the running app. `apps/web/visual/` is a separate Vite entry (port 5183) that mounts the app's real `AppRoutes` (the real `Layout`, destinations, hubs and pages) behind a fake auth context. It is built and served by `vite preview`; it is never part of the shipped build.
+- URL parameters pin the state: `?route=` (the initial route, query string included), `?perms=` (default: every permission the API has), `?roles=`, `?theme=light|dark` and `?fixture=` (recorded on `<html data-fixture>`).
+- No API runs. `tests/visual/support/api.ts` answers every `/api` call with `page.route()` from the JSON files in `tests/visual/support/fixtures/`. A request with no answer returns 404 and logs `visual: unhandled API ...`, so a screen that shows an error state because a fixture is missing is noticed. Fixtures hold placeholders only (`server-a.example.test`, `Person A`).
+- The terminal is fed by a fake WebSocket, `apps/web/visual/fakeTerminalWs.ts`, which speaks the gateway's protocol and replays a fixed byte stream. It never answers a heartbeat, so the status bar's latency stays empty instead of varying.
+- Determinism: a fixed `Date.now()` (`FIXED_NOW` in `support/harness.ts`, so every relative time is constant), UTC, `en-US`, one device pixel per CSS pixel, reduced motion and frozen animations, and the bundled JetBrains Mono terminal font (`@fontsource`). The UI text uses the fonts of the pinned image.
+- `maxDiffPixels: 4` (an absolute count, so a few moved pixels at an edge are not diluted), `threshold: 0.05`, and **no retries**.
+
+### What is pinned
+
+Each shot runs in light and dark:
+
+| Spec | Shots |
+|---|---|
+| `shell.spec.ts` | Home at 360, 768 and 1280; the phone More sheet open; Console mode at 1280. |
+| `settings.spec.ts` | The user hub and the Console hub at 360 and 1280; the Terminal settings card with its preview. |
+| `terminal.spec.ts` | The workspace at 1280 with a split and the Sessions context pane; at 1280 with the AI panel open; at 390x844 with the key bar shown over a simulated keyboard (a fixed `visualViewport` mock). It also asserts, to the pixel, that the key bar's bottom edge sits on the keyboard's top edge. |
+| `servers.spec.ts` | The table at 1280, the cards at 360, the detail drawer. |
+| `home.spec.ts` | The populated dashboard at 1280 and 360. |
+
+A page that adds its own visual specs (the runbook pages, for example) adds a file under `tests/visual/specs/` and fixtures under `support/fixtures/`; the harness already mounts every route of `App.tsx`.
+
+### The pinned browser
+
+A pixel baseline depends on the exact browser **build**, not on the Playwright API version. So `@playwright/test` is pinned with no caret in `tests/visual/package.json`, and baselines are generated and verified only in `mcr.microsoft.com/playwright:v<that version>-noble`. The version lives in three places that change together: `tests/visual/package.json`, the `visual` job of `.github/workflows/ci.yml` and `.github/workflows/visual-baselines.yml`. Baselines made with any other Chromium are wrong in a way that looks right locally and fails in CI.
+
+### Running it
+
+```bash
+cd tests/visual && npm ci
+npm test            # builds the harness, serves it and compares; fails on a diff or a missing baseline
+npm run typecheck
+```
+
+Run outside the pinned image, `npm test` fails on every shot (different fonts, different Chromium): use it to check that the pages render and the specs run, never to judge pixels. To use a Chromium that is not the one Playwright expects, set `VISUAL_CHROMIUM_PATH`; to keep locally written images out of the tree, set `VISUAL_SNAPSHOT_DIR` to a throwaway directory.
+
+### Regenerating baselines
+
+There is one canonical way, and it is the pinned image. On a machine with Docker, from the repository root:
+
+```bash
+npm ci && npm ci --prefix tests/visual      # Linux only: the container runs the host's native binaries
+REPO=$(git rev-parse --show-toplevel)
+docker run --rm --user "$(id -u):$(id -g)" -v "$REPO:$REPO" -w "$REPO" \
+  mcr.microsoft.com/playwright:v1.62.1-noble \
+  tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts --update-snapshots
+```
+
+On macOS or Windows the host's esbuild and Rollup binaries do not run in the Linux container, so install the dependencies inside a Linux container or use the workflow below. `--user` keeps `test-results/` and `playwright-report/` owned by you.
+
+Without Docker, run the **Regenerate visual baselines** workflow (`.github/workflows/visual-baselines.yml`, manual, branch input is the branch you run it on). It runs the same command in the same image and uploads the result as the `visual-baselines` artifact, the contents of `tests/visual/__screenshots__/`. It never commits. Unzip the artifact into `tests/visual/__screenshots__/`, so each file is `tests/visual/__screenshots__/<spec file>/<name>.png`, review the images, and commit them.
+
+Baselines change only on purpose. A diff on a screen your change did not touch is a finding, not a formality. A flaky shot is fixed at its cause (a fixture, a wait, a font), never by deleting baselines or raising `maxDiffPixels`.
+
+### The `visual` CI job
+
+`ci.yml`'s `visual` job runs the suite in the pinned image with no database, API or SSH server. It fails on any diff or missing baseline. On failure only, it uploads `visual-report` (expected, actual and diff images), then regenerates every baseline in the same image and uploads them as `visual-baselines` (the contents of `tests/visual/__screenshots__/`). The job stays failed. For a pull request from this repository it also pushes only `tests/visual/__screenshots__/` to a throwaway branch `ci/visual-baselines/<pr-number>-<run_id>`, cut from the PR head (never the PR branch, never `main`; a fork's PR gets no write). A reviewer who cannot download artifacts runs `git fetch origin ci/visual-baselines/<pr-number>-<run_id>`, checks the images out of that branch (`git checkout FETCH_HEAD -- tests/visual/__screenshots__`), reviews the PNGs and commits them to the PR branch. Delete the throwaway branch afterwards.
+
 ## E2E Testing with Playwright
 
 ### Overview
@@ -848,8 +952,17 @@ tests/e2e/
 │   └── auth.fixture.ts        # Pre-authenticated page fixtures
 └── specs/
     ├── auth.spec.ts           # Authentication tests
-    └── example.spec.ts        # Example feature tests
+    ├── example.spec.ts        # Example feature tests
+    ├── navigation.spec.ts     # Every destination answers; the Console needs an admin (#81)
+    ├── terminal-workspace.spec.ts  # The workspace on a phone (#77; needs an SSH test server)
+    └── terminal-ws.spec.ts    # The terminal WebSocket (#73)
 ```
+
+`playwright.config.ts` defaults `baseURL` to `http://localhost:8323` (the Nginx port of the Compose stack; override with `BASE_URL`) and, outside CI, starts the stack from `infra/compose` when nothing answers `/api/health/live`.
+
+### Navigation
+
+`specs/navigation.spec.ts` signs in through `/testing/login`, visits every destination of the shell (Home, Sessions, Servers, Runbooks, Runs, the approvals inbox, the settings hubs and the Console) and checks that each route loads, stays on its route and draws the shell with no error screen. It then signs in as a viewer and checks that `/admin/settings` sends them Home and the navigation has no Console. The route list mirrors `config/destinations.ts`; `apps/web/src/__tests__/config/e2eNavigation.test.ts` fails when a destination is missing from it.
 
 ### Auth Helper
 
@@ -918,6 +1031,7 @@ test.describe('Admin functionality', () => {
 ### Running E2E Tests
 
 ```bash
+# The stack must answer on http://localhost:8323 (see Key commands in CLAUDE.md)
 # Navigate to e2e test directory
 cd tests/e2e
 
