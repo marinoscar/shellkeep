@@ -324,7 +324,7 @@ Every page is a card in a registry (`apps/web/src/config/adminSections.tsx`, `us
 
 ## 8. Frontend
 
-- **Routes** (`apps/web/src/App.tsx`): `/` Home dashboard; `/sessions` list and `/sessions/:id` the terminal workspace; `/servers`; `/runbooks`, `/runbooks/new`, `/runbooks/:id`, `/:id/edit`, `/:id/run`, `/runbooks/approvals`; `/runs`, `/runs/:id`, `/runs/commands`; `/ai`; `/s` public link; `/activate` device approval; `/login`.
+- **Routes** (`apps/web/src/App.tsx`): `/` Home dashboard; `/sessions` list and `/sessions/:id` the terminal workspace; `/servers`; `/servers/:id/files/view` the remote file viewer deep link (`sessions:write`; [specs/files.md](specs/files.md#viewer)); `/runbooks`, `/runbooks/new`, `/runbooks/:id`, `/:id/edit`, `/:id/run`, `/runbooks/approvals`; `/runs`, `/runs/:id`, `/runs/commands`; `/ai`; `/s` public link; `/activate` device approval; `/login`.
 - **Shell.** `components/common/Layout.tsx` binds the platform `ShellLayout`; the five breakpoint gates (all at `sm`, 600 px) move together ([AGENTS.md](../AGENTS.md)).
 - **Platform host.** `apps/web/src/platform/` supplies the host ports (API client, auth, navigation); identity, settings, sharing, notifications and the other packaged pages are imported from `@marinoscar/platform-web/*`.
 - **Terminal.** `TerminalWorkspacePage` holds tabs and split panes (`components/terminal/workspace/`), each pane an xterm.js `TerminalView` driven by `services/terminal-ws.ts`; the AI panel, key bar, scroll buttons and status bar are siblings of the panes. Layout rules: [specs/terminal.md §5](specs/terminal.md#5-the-browser-terminal).
