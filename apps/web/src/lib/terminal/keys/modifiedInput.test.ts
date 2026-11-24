@@ -100,6 +100,44 @@ describe('createModifierInputInterceptor (#166)', () => {
   });
 });
 
+describe('createModifierInputInterceptor with a hardware key (#170)', () => {
+  function locked(modifier: 'ctrl' | 'alt') {
+    let t = 0;
+    const store = createModifierStore({ now: () => t });
+    store.tap(modifier);
+    t += 100;
+    store.tap(modifier);
+    return store;
+  }
+
+  it('passes a hardware key untouched while a soft modifier is locked', () => {
+    const store = locked('ctrl');
+    const input = createModifierInputInterceptor(store);
+    expect(input.transform('r', false, 'hardware')).toBe('r');
+    expect(input.transform(`${ESC}`, false, 'hardware')).toBe(ESC);
+    expect(input.transform(`${ESC}[15~`, false, 'hardware')).toBe(`${ESC}[15~`);
+    expect(store.getSnapshot().ctrl).toBe('locked');
+    // The lock is for soft keys.
+    expect(input.transform('r', false)).toBe('\x12');
+  });
+
+  it('applies and releases an armed one-shot on a hardware key', () => {
+    const store = createModifierStore();
+    const input = createModifierInputInterceptor(store);
+    store.tap('ctrl');
+    expect(input.transform('r', false, 'hardware')).toBe('\x12');
+    expect(store.getSnapshot().ctrl).toBe('off');
+  });
+
+  it('applies only the armed modifiers when locks are also on', () => {
+    const store = locked('ctrl');
+    const input = createModifierInputInterceptor(store);
+    store.tap('alt');
+    expect(input.transform('b', false, 'hardware')).toBe(`${ESC}b`);
+    expect(store.getSnapshot()).toMatchObject({ ctrl: 'locked', alt: 'off' });
+  });
+});
+
 describe('encodeBarShortcut (#166)', () => {
   const right: KeyShortcut = { id: 'r', label: '→', keystrokes: [{ modifiers: [], key: 'ArrowRight' }] };
   const ctrlC: KeyShortcut = { id: 'c', label: 'Ctrl+C', keystrokes: [{ modifiers: ['ctrl'], key: 'c' }] };

@@ -164,7 +164,7 @@ When tmux attaches, the terminal uses the **alternate screen**, which has no scr
 - `useKeyboardInset` derives the covered height from `visualViewport` (`innerHeight - (vv.height + vv.offsetTop)`, ignored under 75 px); the key bar sits at that inset above the keyboard.
 - xterm's helper textarea is given `inputmode="text"` so the alphanumeric keyboard opens; an earlier `inputmode=none` hid the keyboard on phones.
 - `TerminalKeyShortcutsBar` provides Esc, Tab, Ctrl, arrows and user-defined keystrokes (up to 50), encoded by `encodeKeystroke`.
-- **Android TWA.** The app opens at `/sessions` in Chrome's engine; Chrome 108+ resizes only the visual viewport for the keyboard, which `useKeyboardInset` already handles. Not exercised on a physical device in CI; verify by focusing the terminal, checking that the key bar rises above the keyboard, rotating with the keyboard open, and launching from the icon ([runbooks/android-app.md](../runbooks/android-app.md)).
+- **Android TWA.** The app opens at `/sessions` in Chrome's engine; Chrome 108+ resizes only the visual viewport for the keyboard, which `useKeyboardInset` already handles, and `index.html` pins it with `interactive-widget=resizes-visual` (section 5.12). Not exercised on a physical device in CI; verify by focusing the terminal, checking that the key bar rises above the keyboard, rotating with the keyboard open, and launching from the icon ([runbooks/android-app.md](../runbooks/android-app.md)).
 
 ### 5.5 Pitfalls
 
@@ -260,7 +260,7 @@ Issue #166 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Co
 
 **Pastes and IME (decision).** Input of several characters at once (a paste, bracketed or not, or an IME commit of a whole word) is sent unchanged and the modifiers stay as they are: applying Ctrl to a paste, or to only its first character, is never what the user meant. Any other escape sequence (focus reports, mouse reports) is also passed through without consuming, since the terminal sends those on its own. A single pasted character counts as one key.
 
-**Hardware keyboards win.** A keydown carrying a real `ctrlKey`, `altKey` or `metaKey` (seen in xterm's custom key handler) releases the armed one-shots, and the data xterm produces for that keydown (synchronously, within the same task) is sent unmodified, so nothing is applied twice. A locked modifier stays locked and applies again to the next soft key. A hardware key without modifiers is treated like a soft key.
+**Hardware keyboards win.** A keydown carrying a real `ctrlKey`, `altKey` or `metaKey` (seen in xterm's custom key handler) releases the armed one-shots, and the data xterm produces for that keydown (synchronously, within the same task) is sent unmodified, so nothing is applied twice. A locked modifier stays locked and applies again to the next soft key. A hardware key without modifiers takes the armed one-shots but never a lock (section 5.12).
 
 **Pop-ups.** A press of 450 ms that does not move more than 10 px, or the context menu (right-click, the Menu key, Shift+F10, a platform long press), opens a menu above the key: Ctrl gives Ctrl+C, D, Z, R, L, A, E, W, U, K; Alt gives Alt+B, Alt+F, Alt+.; an arrow gives Home, End, PgUp, PgDn. A long press never also taps the key. Since #168 a held arrow repeats instead, and its pop-up opens with an upward swipe or the context menu (section 5.10). The menu is an MUI `Menu` (keyboard navigable, closed by Escape or an outside tap); choosing an entry sends its chord with the consumed modifiers and closes it.
 
@@ -365,9 +365,45 @@ An inline key gets a fresh v4 UUID. A macro that defaults to two cells but finds
 
 **Phone width.** No breakpoint is read: the group cards stack, their headers and chips wrap, and every control is at least 44 px.
 
+### 5.12 Hardware keyboards and tablets
+
+Issue #170 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). Code: `apps/web/src/lib/terminal/keys/hardwareKeys.ts` (`looksLikeHardwareKey`, `isTypingKey`), `apps/web/src/hooks/useHardwareKeyboard.ts`, `hooks/useKeyboardInset.ts` (`readKeyboardInset`), `hooks/useTerminal.ts`, `lib/terminal/keys/modifiedInput.ts`, `TerminalKeyShortcutsBar.tsx`, `pages/TerminalWorkspacePage.tsx`, `apps/web/index.html`.
+
+**Which key is a hardware key.** Browsers do not say. A keydown counts as hardware when it carries a physical `code` and is not a soft-keyboard or IME placeholder (`key` `Unidentified`, `Process` or `Dead`, `keyCode` 229, `isComposing`) **and** no on-screen keyboard covers the page (`readKeyboardInset()` is 0). The second test guards against a soft keyboard that fills `code` in: a key seen while the on-screen keyboard is up is treated as soft.
+
+**Pass-through.** Real Ctrl, Alt, Meta, Esc, arrows, Home, End, PgUp, PgDn, Insert, Delete and F1 to F12 reach the PTY as xterm encodes them; the key row adds nothing.
+
+| A hardware key arrives with | Sent | Soft modifiers after |
+|---|---|---|
+| Nothing armed or locked | xterm's bytes | unchanged |
+| A real Ctrl, Alt or Meta (a chord) | xterm's bytes, once (section 5.8) | armed one-shots released, locks kept |
+| No real modifier, a soft one-shot armed | the key with the armed modifiers (Ctrl armed + `r` is `\x12`) | the one-shots released |
+| No real modifier, a soft modifier locked | xterm's bytes, untouched | the lock kept |
+
+**Decision: a lock applies to the next SOFT key only.** A locked soft Ctrl is for typing control keys on the glass; with a keyboard attached the user has a real Ctrl, and a lock that also caught hardware typing would turn every letter into a control code. A one-shot still applies to the next hardware key, because tapping Ctrl on the row and then pressing a key is a deliberate chord (some tablet keyboards have no Ctrl). With Ctrl locked and Alt armed, a hardware `b` sends `ESC b`. The interceptor gets the source from `useTerminal` (`transform(data, applicationCursor, 'hardware')`) and the store's `consumeArmed()`.
+
+**Detection (`useHardwareKeyboard`, `{ present }`).** Only on a touch-capable device (`navigator.maxTouchPoints > 0`; a desktop always has a keyboard). Listeners on `window` in the capture phase, so xterm never hides a key.
+
+| Event | Result |
+|---|---|
+| A hardware keydown of a printable key (one code point) or a navigation, editing or function key, with no keyboard inset | present; the idle timer restarts |
+| Modifier keys alone, placeholders, a key while the on-screen keyboard is up | nothing |
+| A text `input` after a touch while the on-screen keyboard is up (typing on the glass) | absent |
+| 10 minutes (`HARDWARE_KEYBOARD_IDLE_MS`) without a hardware key | absent |
+
+**Auto-hide.** While `present` and `shortcuts.options.autoHideWithHardwareKeyboard` (default on), the accessory row collapses to a small "Keys" pill (accessible name "Show key row") pinned at the right beside the panel toggle. The pill keeps the terminal's focus; tapping it shows the whole row again for the rest of the visit. The panel toggle stays, so the full key panel is always reachable (side panel or dock, section 5.9). With the option off, or with no hardware keyboard, the row is unchanged. The row hidden by `showKeyBar` stays hidden: the pill only replaces a visible row.
+
+**Tablets.** At `sm` to `md` (a tablet in portrait or landscape, an unfolded foldable) the key panel is a side panel (`!isPhone`, section 5.9) after the panes in the terminal body, `min(320px, 40%)` wide and not shrinking; the panes keep `minWidth: 0` and nothing on the chain has `overflow: hidden`. The Files and AI panels are bottom sheets there (their rule is `isWide`) and take turns with the key panel, so the three never compete for width. With a hardware keyboard the pill and the open side panel coexist and the terminal is never blurred. Layout is read only through `useTerminalLayout`; this section adds no breakpoint read.
+
+**Android TWA.** The TWA is Chrome, so its behaviour is the browser's. `useKeyboardInset` (`innerHeight - (visualViewport.height + offsetTop)`) only sees the keyboard when the keyboard resizes the **visual** viewport alone. That is Chrome 108+'s default; `index.html` pins it with `interactive-widget=resizes-visual` for older engines and other browsers. `interactive-widget=resizes-content` was considered and rejected: it shrinks the layout viewport too, so the inset would always be 0, the docked key panel would lose the keyboard's height and hardware detection would think no on-screen keyboard is ever up. `__tests__/android/viewportMeta.test.ts` pins the meta. The Android shell (`apps/android`) needs no change: `windowSoftInputMode` on the native activities does not apply inside Chrome's TWA.
+
+**Visual baselines (suggested, not yet captured).** At phone width and an sm tablet width (about 700 px), light and dark: the collapsed row (pill and toggle) on a phone; the collapsed row with the side key panel open on a tablet; the side key panel with two split panes on a tablet.
+
+**Only a device can prove.** That a given soft keyboard sends placeholders (or an inset) and a given hardware keyboard sends `code`; detection on an Android tablet with a Bluetooth or USB keyboard and on an iPad with a keyboard (whose shortcut bar is under the 75 px inset threshold); the pill appearing after the first hardware key and the row returning after typing on the glass; real Ctrl, Esc, F-keys and arrows in vim, htop and less with a locked soft Ctrl; and the inset in the TWA, including rotation with the keyboard open.
+
 ### 5.13 Snippets
 
-Issue #172 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). API: `apps/api/src/snippets/`. Web: `components/terminal/keys/snippets/` (`SnippetsTab`, `SnippetEditorDialog`, `PlaceholderDialog`), `hooks/useSnippets.ts`, `services/snippets-api.ts`, `lib/terminal/snippets/` (`placeholders.ts`, `insert.ts`), `TerminalKeyPanel.tsx`, `pages/TerminalWorkspacePage.tsx`. (Section 5.14 is the History tab.)
+Issue #172 (epic [#171](https://github.com/marinoscar/shellkeep/issues/171)). API: `apps/api/src/snippets/`. Web: `components/terminal/keys/snippets/` (`SnippetsTab`, `SnippetEditorDialog`, `PlaceholderDialog`), `hooks/useSnippets.ts`, `services/snippets-api.ts`, `lib/terminal/snippets/` (`placeholders.ts`, `insert.ts`), `TerminalKeyPanel.tsx`, `pages/TerminalWorkspacePage.tsx`.
 
 A snippet is saved text (a command, a few lines) the user inserts at the prompt from the key panel. It is **inserted, never run**: the user presses Enter.
 
@@ -458,4 +494,4 @@ The History tab lists the recent commands of the session's server, newest first,
 
 ## 8. Tests
 
-`apps/api/test/terminal/` (gateway authorization and maintenance, reaper, notification, alerts, Doctor, metrics, webhooks; `scripted-ssh-server.ts` is an in-process SSH server), `terminal.gateway.spec.ts`, `session-manager.service.spec.ts`, `session-history.service.spec.ts`, `test/ssh/` (factory, host-key policy, boundary); web: `__tests__/pages/TerminalWorkspace.workspace.test.tsx`, `__tests__/terminal-ws*.test.ts`, `TerminalKeyShortcutsBar.test.tsx`, `__tests__/pages/TerminalWorkspace.keys.test.tsx`, `lib/terminal/keys/keyRow.test.ts`, `lib/terminal/keys/arrowRepeat.test.ts`, `components/terminal/keys/holdKeys.test.tsx`, `__tests__/components/terminal/useTerminalArrowMode.test.tsx`, `lib/terminal/keys/layoutEdit.test.ts`, `__tests__/components/terminal/ShortcutsSettingsPage.test.tsx` (the key layout editor), `__tests__/components/terminal/SnippetsTab.test.tsx`, `__tests__/pages/TerminalWorkspace.snippets.test.tsx`, `__tests__/lib/terminal/snippets/snippets.test.ts`, `__tests__/components/terminal/HistoryTab.test.tsx`; API: `src/files/command-history/*.spec.ts` and `test/files/command-history.integration.spec.ts` (parsers, redaction, SFTP, access, rate limit, cache), `src/snippets/*.spec.ts` and `test/snippets/` (HTTP, boundary); and `apps/api/test/docs-consistency.spec.ts` for this page's reason tables ([TESTING.md](../TESTING.md)).
+`apps/api/test/terminal/` (gateway authorization and maintenance, reaper, notification, alerts, Doctor, metrics, webhooks; `scripted-ssh-server.ts` is an in-process SSH server), `terminal.gateway.spec.ts`, `session-manager.service.spec.ts`, `session-history.service.spec.ts`, `test/ssh/` (factory, host-key policy, boundary); web: `__tests__/pages/TerminalWorkspace.workspace.test.tsx`, `__tests__/terminal-ws*.test.ts`, `TerminalKeyShortcutsBar.test.tsx`, `__tests__/pages/TerminalWorkspace.keys.test.tsx`, `lib/terminal/keys/keyRow.test.ts`, `lib/terminal/keys/arrowRepeat.test.ts`, `components/terminal/keys/holdKeys.test.tsx`, `__tests__/components/terminal/useTerminalArrowMode.test.tsx`, `lib/terminal/keys/layoutEdit.test.ts`, `__tests__/components/terminal/ShortcutsSettingsPage.test.tsx` (the key layout editor), `__tests__/pages/TerminalWorkspace.hardware.test.tsx`, `__tests__/hooks/useHardwareKeyboard.test.ts`, `lib/terminal/keys/hardwareKeys.test.ts`, the `hardware keys pass through` block of `__tests__/hooks/useTerminal.test.ts`, `__tests__/android/viewportMeta.test.ts`, `__tests__/components/terminal/SnippetsTab.test.tsx`, `__tests__/pages/TerminalWorkspace.snippets.test.tsx`, `__tests__/lib/terminal/snippets/snippets.test.ts`, `__tests__/components/terminal/HistoryTab.test.tsx`; API: `src/files/command-history/*.spec.ts` and `test/files/command-history.integration.spec.ts` (parsers, redaction, SFTP, access, rate limit, cache), `src/snippets/*.spec.ts` and `test/snippets/` (HTTP, boundary); and `apps/api/test/docs-consistency.spec.ts` for this page's reason tables ([TESTING.md](../TESTING.md)).
