@@ -76,6 +76,8 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'ai.keys.recheck': 'AI key recheck',
   'ai.runs.purge': 'AI run purge',
   'ai.usage.purge': 'AI usage purge',
+  // Terminal AI (#59): a session summary, written in the background. Server-only, like every ai.* type.
+  'ai.session.summarize': 'Summarize terminal session',
 };
 
 /**
