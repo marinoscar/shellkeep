@@ -1,8 +1,9 @@
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { TerminalView } from '../TerminalView';
 import type { TerminalViewHandle, TerminalViewStatus } from '../TerminalView';
 import { TerminalConnectionAlert } from '../TerminalConnectionAlert';
 import type { ResolvedTerminalSettings } from '../../../lib/terminal/settings';
+import type { TerminalFileLinksConfig } from '../files/useTerminalFileLinks';
 
 /** What a pane reports to the workspace: its connection, latency, size and host-key state. */
 export interface PaneStatus extends Partial<TerminalViewStatus> {
@@ -18,6 +19,13 @@ export interface WorkspacePaneProps {
   isReservedKey?: (event: KeyboardEvent) => boolean;
   /** Explain this pane's selected text (#58). Omit when AI is unavailable. */
   onExplainSelection?: (sessionId: string) => void;
+  /**
+   * The session's server profile, for file links in the output (#155). Omitted (not yet
+   * loaded, or the user may not use the files API): no file links.
+   */
+  fileLinksProfileId?: string;
+  /** "Show in file browser" for a file link (#156). Omitted: the action is hidden. */
+  onShowInFileBrowser?: TerminalFileLinksConfig['onShowInFileBrowser'];
   /** Called with the pane's handle on mount and `null` on unmount. */
   registerView: (sessionId: string, handle: TerminalViewHandle | null) => void;
   /** Called with what changed in the pane's status. */
@@ -36,9 +44,15 @@ export const WorkspacePane = memo(function WorkspacePane({
   preferences,
   isReservedKey,
   onExplainSelection,
+  fileLinksProfileId,
+  onShowInFileBrowser,
   registerView,
   onStatus,
 }: WorkspacePaneProps) {
+  const fileLinks = useMemo<TerminalFileLinksConfig | null>(
+    () => (fileLinksProfileId ? { profileId: fileLinksProfileId, onShowInFileBrowser } : null),
+    [fileLinksProfileId, onShowInFileBrowser],
+  );
   const [error, setError] = useState<string | null>(null);
   const handle = useRef<TerminalViewHandle | null>(null);
 
@@ -76,6 +90,7 @@ export const WorkspacePane = memo(function WorkspacePane({
         preferences={preferences}
         isReservedKey={isReservedKey}
         onExplainSelection={onExplainSelection ? () => onExplainSelection(sessionId) : undefined}
+        fileLinks={fileLinks}
       />
       <TerminalConnectionAlert
         error={error}

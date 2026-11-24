@@ -312,6 +312,14 @@ export default function TerminalWorkspacePage() {
     void updateTerminal({ showKeyBar: keyShortcutsOpen ? 'never' : 'always' }).catch(() => undefined);
   }, [keyShortcutsOpen, updateTerminal]);
 
+  // File links in the output (#155): the files API takes the terminal's own rule
+  // (`sessions:write` plus connect rights on the server, which an open terminal implies).
+  const fileLinksProfileIdOf = useCallback(
+    (sessionId: string) =>
+      canWrite ? (sessions[sessionId]?.serverProfileId ?? sessions[sessionId]?.serverProfile.id) : undefined,
+    [canWrite, sessions],
+  );
+
   const renderPane = useCallback(
     (sessionId: string) => (
       <WorkspacePane
@@ -320,11 +328,12 @@ export default function TerminalWorkspacePage() {
         preferences={preferences ?? undefined}
         isReservedKey={isReservedKey}
         onExplainSelection={aiAvailable ? onExplainPaneSelection : undefined}
+        fileLinksProfileId={fileLinksProfileIdOf(sessionId)}
         registerView={registerView}
         onStatus={onPaneStatus}
       />
     ),
-    [showScrollButtons, preferences, isReservedKey, aiAvailable, onExplainPaneSelection, registerView, onPaneStatus],
+    [showScrollButtons, preferences, isReservedKey, aiAvailable, onExplainPaneSelection, fileLinksProfileIdOf, registerView, onPaneStatus],
   );
 
   const tabs = useMemo(
