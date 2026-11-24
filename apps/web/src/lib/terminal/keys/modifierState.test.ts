@@ -93,6 +93,19 @@ describe('createModifierStore (#166)', () => {
     expect(store.hasActive()).toBe(false);
   });
 
+  it('consumeArmed returns and releases only the one-shots (#170)', () => {
+    const { store, advance } = storeWithClock();
+    store.tap('ctrl');
+    advance(50);
+    store.tap('ctrl');
+    expect(store.hasArmed()).toBe(false);
+    expect(store.consumeArmed()).toEqual({});
+    store.tap('alt');
+    expect(store.hasArmed()).toBe(true);
+    expect(store.consumeArmed()).toEqual({ alt: true });
+    expect(store.getSnapshot()).toMatchObject({ ctrl: 'locked', alt: 'off' });
+  });
+
   it('keeps a stable snapshot object while nothing changes', () => {
     const { store } = storeWithClock();
     const a = store.getSnapshot();

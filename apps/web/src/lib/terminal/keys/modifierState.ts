@@ -40,12 +40,20 @@ export interface ModifierStore {
    * releases the armed ones. `{}` when none is active.
    */
   consume(): ActiveModifiers;
+  /**
+   * A HARDWARE key is being sent (#170): returns only the armed one-shots and
+   * releases them. Locked modifiers stay locked and are not returned: a lock
+   * applies to soft keys only. `{}` when none is armed.
+   */
+  consumeArmed(): ActiveModifiers;
   /** Turns the armed one-shots off; locked modifiers stay. */
   releaseArmed(): void;
   /** Turns every modifier off. */
   clear(): void;
   /** Whether any modifier is armed or locked. */
   hasActive(): boolean;
+  /** Whether any modifier is armed (a one-shot). */
+  hasArmed(): boolean;
 }
 
 export interface ModifierStoreOptions {
@@ -101,6 +109,12 @@ export function createModifierStore(options: ModifierStoreOptions = {}): Modifie
       set(withStatus((status) => (status === 'armed' ? 'off' : status)));
       return active;
     },
+    consumeArmed() {
+      const armed: ActiveModifiers = {};
+      for (const m of KEY_MODIFIERS) if (snapshot[m] === 'armed') armed[m] = true;
+      set(withStatus((status) => (status === 'armed' ? 'off' : status)));
+      return armed;
+    },
     releaseArmed() {
       set(withStatus((status) => (status === 'armed' ? 'off' : status)));
     },
@@ -108,5 +122,6 @@ export function createModifierStore(options: ModifierStoreOptions = {}): Modifie
       set(ALL_OFF);
     },
     hasActive: () => KEY_MODIFIERS.some((m) => snapshot[m] !== 'off'),
+    hasArmed: () => KEY_MODIFIERS.some((m) => snapshot[m] === 'armed'),
   };
 }

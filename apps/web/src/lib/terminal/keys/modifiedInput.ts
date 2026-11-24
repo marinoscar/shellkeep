@@ -22,6 +22,11 @@
 // Hardware keyboards win: a keydown carrying a real Ctrl, Alt or Meta releases
 // the armed one-shots (`onHardwareChord`) and the data that key produces is
 // sent as xterm encoded it, never modified twice.
+//
+// Locks are for soft keys (#170): a plain hardware key (no real modifier; source
+// `'hardware'`) gets the ARMED one-shots only, which it releases. A locked soft
+// Ctrl stays locked and does not touch it, so a tablet user who locked Ctrl on
+// the row and then types on the keyboard types letters, not control codes.
 // =============================================================================
 
 import type { KeyShortcut } from '../../../types';
@@ -92,10 +97,16 @@ export function applyModifiersToInput(
   }
 }
 
+/** Where one `onData` chunk came from: a soft key (the phone keyboard, a paste) or a hardware key (#170). */
+export type TerminalInputSource = 'soft' | 'hardware';
+
 /** What `useTerminal` asks before it sends typed input (#166). */
 export interface TerminalInputModifiers {
-  /** The bytes to send for one `onData` chunk; `data` itself when nothing applies. */
-  transform(data: string, applicationCursor: boolean): string;
+  /**
+   * The bytes to send for one `onData` chunk; `data` itself when nothing applies.
+   * `source` `'hardware'` (a plain physical key, #170) applies the armed one-shots only.
+   */
+  transform(data: string, applicationCursor: boolean, source?: TerminalInputSource): string;
   /** A hardware keydown carried a real Ctrl, Alt or Meta: drop the armed one-shots. */
   onHardwareChord(): void;
 }
@@ -103,7 +114,12 @@ export interface TerminalInputModifiers {
 /** The input interceptor over a modifier store: modifies single keys and consumes the one-shots. */
 export function createModifierInputInterceptor(store: ModifierStore): TerminalInputModifiers {
   return {
-    transform(data, applicationCursor) {
+    transform(data, applicationCursor, source = 'soft') {
+      if (source === 'hardware') {
+        if (!store.hasArmed() || !inputAsChord(data)) return data;
+        const encoded = applyModifiersToInput(data, store.consumeArmed(), applicationCursor);
+        return encoded ?? data;
+      }
       if (!store.hasActive() || !inputAsChord(data)) return data;
       const encoded = applyModifiersToInput(data, store.consume(), applicationCursor);
       return encoded ?? data;

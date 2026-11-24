@@ -16,6 +16,8 @@ import {
 } from '../lib/terminal/appearance';
 import { createFileLinkProvider, type TerminalFileLinkSource } from '../lib/terminal/file-link-provider';
 import type { TerminalInputModifiers } from '../lib/terminal/keys/modifiedInput';
+import { looksLikeHardwareKey } from '../lib/terminal/keys/hardwareKeys';
+import { readKeyboardInset } from './useKeyboardInset';
 
 /**
  * Apply attributes to the xterm.js helper textarea that suppress the
@@ -188,20 +190,27 @@ export function useTerminal(
     // A hardware key with a real Ctrl, Alt or Meta (#166): it wins over the key
     // bar's one-shots, which are released, and the data it produces (sent
     // synchronously by xterm inside this keydown) is not modified again.
-    let hardwareChord = false;
-    let hardwareChordTimer: ReturnType<typeof setTimeout> | null = null;
+    // A plain hardware key (#170: a physical key while no on-screen keyboard is
+    // up) takes the armed one-shots only; a locked soft modifier is for soft keys.
+    let keySource: 'chord' | 'hardware' | null = null;
+    let keySourceTimer: ReturnType<typeof setTimeout> | null = null;
+    const markKeySource = (source: 'chord' | 'hardware') => {
+      keySource = source;
+      if (keySourceTimer !== null) clearTimeout(keySourceTimer);
+      keySourceTimer = setTimeout(() => {
+        keySource = null;
+        keySourceTimer = null;
+      }, 0);
+    };
 
     // App shortcuts never reach the PTY (#57).
     terminal.attachCustomKeyEventHandler?.((event) => {
       if (event.type === 'keydown' && appearanceRef.current.isReservedKey?.(event)) return false;
       if (event.type === 'keydown' && (event.ctrlKey || event.altKey || event.metaKey)) {
         inputModifiersRef.current?.onHardwareChord();
-        hardwareChord = true;
-        if (hardwareChordTimer !== null) clearTimeout(hardwareChordTimer);
-        hardwareChordTimer = setTimeout(() => {
-          hardwareChord = false;
-          hardwareChordTimer = null;
-        }, 0);
+        markKeySource('chord');
+      } else if (event.type === 'keydown' && looksLikeHardwareKey(event) && readKeyboardInset() === 0) {
+        markKeySource('hardware');
       }
       return true;
     });
@@ -289,11 +298,16 @@ export function useTerminal(
     // and a keystroke is sent exactly once (issue #93).
     const encoder = new TextEncoder();
     const dataSubscription = terminal.onData((data: string) => {
-      // The key bar's modifiers apply to typed keys (#166), never to a hardware chord.
+      // The key bar's modifiers apply to typed keys (#166), never to a hardware
+      // chord; to a plain hardware key only the armed one-shots apply (#170).
       const modifiers = inputModifiersRef.current;
       const out =
-        modifiers && !hardwareChord
-          ? modifiers.transform(data, terminal.modes?.applicationCursorKeysMode ?? false)
+        modifiers && keySource !== 'chord'
+          ? modifiers.transform(
+              data,
+              terminal.modes?.applicationCursorKeysMode ?? false,
+              keySource === 'hardware' ? 'hardware' : 'soft',
+            )
           : data;
       wsRef.current?.send(encoder.encode(out));
     });
@@ -326,7 +340,7 @@ export function useTerminal(
 
     return () => {
       if (fitTimer !== null) clearTimeout(fitTimer);
-      if (hardwareChordTimer !== null) clearTimeout(hardwareChordTimer);
+      if (keySourceTimer !== null) clearTimeout(keySourceTimer);
       resizeObserver.disconnect();
       mutationObserver.disconnect();
       container.removeEventListener('focus', handleFocus, true);
