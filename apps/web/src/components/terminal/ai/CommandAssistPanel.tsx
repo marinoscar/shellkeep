@@ -20,11 +20,14 @@ const RISK_COLOR: Record<CommandRisk, 'success' | 'warning' | 'error'> = {
   high: 'error',
 };
 
-const ERROR_TEXT: Record<string, string> = {
+/** User-facing text for the codes the terminal AI routes answer with (#57, #58). */
+export const AI_ERROR_TEXT: Record<string, string> = {
   AI_ASSIST_UNPARSEABLE: "The answer could not be read as a single command. Try rephrasing, or regenerate.",
   AI_DISABLED: 'AI is turned off for this deployment.',
   AI_KEY_REQUIRED: 'Add your AI key in Settings to use the assistant.',
   AI_RATE_LIMITED: 'The AI provider is rate limiting requests. Try again shortly.',
+  AI_OUTPUT_SHARING_DISABLED: 'This server is set to never send terminal output to AI.',
+  AI_EXPLAIN_EMPTY: 'The assistant returned no answer. Try again.',
 };
 
 /** The suggested command, its risk and what Insert does. Exported for tests. */
@@ -35,7 +38,8 @@ export function CommandResultCard({
 }: {
   result: AssistResultFrame;
   onInsert: (command: string) => void;
-  onRegenerate: () => void;
+  /** Omit to hide Regenerate (explain re-runs from its own header). */
+  onRegenerate?: () => void;
 }) {
   const insertable = sanitizeForInsert(result.command) !== null;
   return (
@@ -76,9 +80,11 @@ export function CommandResultCard({
         <Button size="small" startIcon={<CopyIcon />} onClick={() => void navigator.clipboard?.writeText(result.command)}>
           Copy
         </Button>
-        <Button size="small" startIcon={<RegenerateIcon />} onClick={onRegenerate}>
-          Regenerate
-        </Button>
+        {onRegenerate && (
+          <Button size="small" startIcon={<RegenerateIcon />} onClick={onRegenerate}>
+            Regenerate
+          </Button>
+        )}
       </Box>
       <Typography variant="caption" color="text.secondary">
         Insert only types it at the prompt. You press Enter.
@@ -182,7 +188,7 @@ export function CommandAssistPanel({ sessionId, onInsert, focusRequest = 0 }: Co
       )}
       {state.status === 'error' && (
         <Alert severity="error">
-          {(state.errorCode && ERROR_TEXT[state.errorCode]) || state.errorMessage || 'The assistant could not answer.'}
+          {(state.errorCode && AI_ERROR_TEXT[state.errorCode]) || state.errorMessage || 'The assistant could not answer.'}
         </Alert>
       )}
       {state.result && <CommandResultCard result={state.result} onInsert={onInsert} onRegenerate={retry} />}

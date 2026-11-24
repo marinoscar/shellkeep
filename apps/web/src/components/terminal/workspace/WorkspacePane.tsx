@@ -16,6 +16,8 @@ export interface WorkspacePaneProps {
   preferences?: ResolvedTerminalSettings;
   /** Keys the page handles itself (the AI assist shortcut); never sent to the PTY (#57). */
   isReservedKey?: (event: KeyboardEvent) => boolean;
+  /** Explain this pane's selected text (#58). Omit when AI is unavailable. */
+  onExplainSelection?: (sessionId: string) => void;
   /** Called with the pane's handle on mount and `null` on unmount. */
   registerView: (sessionId: string, handle: TerminalViewHandle | null) => void;
   /** Called with what changed in the pane's status. */
@@ -33,6 +35,7 @@ export const WorkspacePane = memo(function WorkspacePane({
   showScrollButtons,
   preferences,
   isReservedKey,
+  onExplainSelection,
   registerView,
   onStatus,
 }: WorkspacePaneProps) {
@@ -72,6 +75,7 @@ export const WorkspacePane = memo(function WorkspacePane({
         showScrollButtons={showScrollButtons}
         preferences={preferences}
         isReservedKey={isReservedKey}
+        onExplainSelection={onExplainSelection ? () => onExplainSelection(sessionId) : undefined}
       />
       <TerminalConnectionAlert
         error={error}

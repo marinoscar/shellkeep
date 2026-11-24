@@ -15,8 +15,10 @@ import type { TerminalSession } from '../../types';
 // mocked), so the walk covers the actual component tree.
 // =============================================================================
 
-const { mockSendInput, layoutMock, prefsMock, mockUpdateTerminal } = vi.hoisted(() => ({
+const { mockSendInput, layoutMock, prefsMock, mockUpdateTerminal, termMock } = vi.hoisted(() => ({
   mockSendInput: vi.fn(),
+  // The terminal the mocked hook exposes (#58): `null` until a test gives it a selection.
+  termMock: { terminal: null as null | { hasSelection: () => boolean; getSelection: () => string; paste: (t: string) => void; focus: () => void }, hasSelection: false },
   layoutMock: { isPhone: false, isWide: true, isTouch: false },
   // The user's terminal preferences as the hook resolves them (#80).
   prefsMock: { showKeyBar: 'auto' as 'auto' | 'always' | 'never' },
@@ -30,7 +32,8 @@ vi.mock('../../hooks/useTerminal', () => ({
     reconnect: vi.fn(),
     search: vi.fn(),
     sendInput: mockSendInput,
-    terminal: { current: null },
+    terminal: { current: termMock.terminal },
+    hasSelection: termMock.hasSelection,
     hostKeyRefusal: null,
     retryConnect: vi.fn(),
     dismissHostKey: vi.fn(),
@@ -39,6 +42,10 @@ vi.mock('../../hooks/useTerminal', () => ({
   })),
 }));
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
+vi.mock('../../services/terminal-explain-api', () => ({
+  streamTerminalExplain: vi.fn(),
+  previewTerminalExplain: vi.fn(),
+}));
 vi.mock('../../components/terminal/useTerminalLayout', () => ({
   useTerminalLayout: () => layoutMock,
 }));
@@ -74,6 +81,8 @@ vi.mock('../../hooks/useTerminalSettings', async () => {
 
 import TerminalWorkspacePage, { keyDockOffset } from '../../pages/TerminalWorkspacePage';
 import { getSession, updateSession } from '../../services/terminal-api';
+import { useTerminal } from '../../hooks/useTerminal';
+import { previewTerminalExplain, streamTerminalExplain } from '../../services/terminal-explain-api';
 
 const session = (id: string, name: string): TerminalSession => ({
   id,
@@ -473,7 +482,7 @@ describe('TerminalWorkspacePage: the AI panel gate', () => {
     expect(screen.queryByRole('button', { name: 'AI' })).not.toBeInTheDocument();
   });
 
-  it('opens as a side panel with AI on and ai:use; Suggest is live, Explain and Summarize wait for their APIs', async () => {
+  it('opens as a side panel with AI on and ai:use; Suggest and Explain are live', async () => {
     renderWorkspace('/sessions/a?tabs=a', {
       wrap: aiOn,
       user: { ...writer, permissions: [...writer.permissions, 'ai:use'] },
@@ -482,7 +491,7 @@ describe('TerminalWorkspacePage: the AI panel gate', () => {
     const panel = screen.getByTestId('terminal-ai-panel');
     expect(within(panel).getByRole('button', { name: 'Suggest' })).toBeDisabled();
     await userEvent.click(within(panel).getByRole('button', { name: 'Explain' }));
-    expect(within(panel).getAllByText('Coming with Terminal AI').length).toBeGreaterThan(0);
+    expect(within(panel).getByRole('button', { name: 'Explain last error' })).toBeEnabled();
     await userEvent.click(within(panel).getByRole('button', { name: 'Close assistant' }));
     expect(screen.queryByTestId('terminal-ai-panel')).not.toBeInTheDocument();
   });
@@ -508,5 +517,117 @@ describe('TerminalWorkspacePage: the AI panel gate', () => {
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
     expect(screen.queryByTestId('terminal-ai-panel')).not.toBeInTheDocument();
+  });
+});
+
+describe('TerminalWorkspacePage: explain (#58)', () => {
+  const aiOn = (node: ReactNode) => (
+    <AiConfigContext.Provider
+      value={{ config: { ...AI_CONFIG_DISABLED, enabled: true }, isLoading: false, error: null, refresh: async () => {} }}
+    >
+      {node}
+    </AiConfigContext.Provider>
+  );
+  const asUser = { ...writer, permissions: [...writer.permissions, 'ai:use'] };
+  const paste = vi.fn();
+  const press = (init: KeyboardEventInit) => {
+    const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+    window.dispatchEvent(event);
+    return event;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    layoutMock.isPhone = false;
+    layoutMock.isWide = true;
+    termMock.terminal = null;
+    termMock.hasSelection = false;
+    vi.mocked(getSession).mockImplementation((id: string) => Promise.resolve(SESSIONS[id]));
+    vi.mocked(previewTerminalExplain).mockResolvedValue({ text: 'redacted text', findings: [], truncated: false });
+    vi.mocked(streamTerminalExplain).mockImplementation(async (_req, handlers) => {
+      handlers.onResult?.({
+        markdown: '## What happened\nIt failed.',
+        suggestedCommand: { command: 'systemctl status app.service', risk: 'low', destructive: false, reasons: [] },
+      });
+    });
+  });
+
+  const withSelection = (text: string) => {
+    termMock.terminal = { hasSelection: () => true, getSelection: () => text, paste, focus: vi.fn() };
+    termMock.hasSelection = true;
+  };
+
+  it('the Explain chip is absent while nothing is selected', async () => {
+    renderWorkspace('/sessions/a?tabs=a', { wrap: aiOn, user: asUser });
+    await waitFor(() => expect(tabs()).toHaveLength(1));
+    expect(screen.queryByRole('button', { name: 'Explain selection' })).not.toBeInTheDocument();
+  });
+
+  it('the Explain chip shows with a selection and opens the panel on a preview of it', async () => {
+    withSelection('make: *** error 2');
+    renderWorkspace('/sessions/a?tabs=a', { wrap: aiOn, user: asUser });
+    await userEvent.click(await screen.findByRole('button', { name: 'Explain selection' }));
+    const panel = await screen.findByTestId('terminal-ai-panel');
+    expect(await within(panel).findByTestId('explain-preview-text')).toHaveTextContent('redacted text');
+    expect(previewTerminalExplain).toHaveBeenCalledWith({ mode: 'selection', sessionId: 'a', selection: 'make: *** error 2' });
+    expect(streamTerminalExplain).not.toHaveBeenCalled();
+  });
+
+  it('is not drawn when AI is unavailable', async () => {
+    withSelection('text');
+    renderWorkspace('/sessions/a?tabs=a');
+    await waitFor(() => expect(tabs()).toHaveLength(1));
+    expect(screen.queryByRole('button', { name: 'Explain selection' })).not.toBeInTheDocument();
+  });
+
+  it('Ctrl+Shift+E with a selection previews it; the key is intercepted and never reaches the PTY', async () => {
+    withSelection('boom');
+    renderWorkspace('/sessions/a?tabs=a', { wrap: aiOn, user: asUser });
+    await waitFor(() => expect(tabs()).toHaveLength(1));
+    const event = press({ key: 'E', ctrlKey: true, shiftKey: true });
+    expect(event.defaultPrevented).toBe(true);
+    const panel = await screen.findByTestId('terminal-ai-panel');
+    await within(panel).findByTestId('explain-preview-text');
+    expect(previewTerminalExplain).toHaveBeenCalledWith({ mode: 'selection', sessionId: 'a', selection: 'boom' });
+    expect(mockSendInput).not.toHaveBeenCalled();
+    // The terminal's own key handler is told to leave the key alone.
+    const appearance = vi.mocked(useTerminal).mock.calls.at(-1)![2] as { isReservedKey: (e: KeyboardEvent) => boolean };
+    expect(appearance.isReservedKey(new KeyboardEvent('keydown', { key: 'E', ctrlKey: true, shiftKey: true }))).toBe(true);
+    expect(appearance.isReservedKey(new KeyboardEvent('keydown', { key: 'e', ctrlKey: true }))).toBe(false);
+  });
+
+  it('Ctrl+Shift+E with no selection explains the last error', async () => {
+    renderWorkspace('/sessions/a?tabs=a', { wrap: aiOn, user: asUser });
+    await waitFor(() => expect(tabs()).toHaveLength(1));
+    press({ key: 'E', ctrlKey: true, shiftKey: true });
+    const panel = await screen.findByTestId('terminal-ai-panel');
+    await within(panel).findByTestId('explain-result');
+    expect(streamTerminalExplain).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(streamTerminalExplain).mock.calls[0]![0]).toEqual({ mode: 'last_error', sessionId: 'a' });
+    expect(previewTerminalExplain).not.toHaveBeenCalled();
+    expect(mockSendInput).not.toHaveBeenCalled();
+  });
+
+  it('the shortcut does nothing without ai:use', async () => {
+    renderWorkspace('/sessions/a?tabs=a', { wrap: aiOn });
+    await waitFor(() => expect(tabs()).toHaveLength(1));
+    expect(press({ key: 'E', ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+    expect(screen.queryByTestId('terminal-ai-panel')).not.toBeInTheDocument();
+  });
+
+  it('the toolbar menu explains the last error, and Insert pastes the fix without a newline or sendInput', async () => {
+    withSelection('');
+    termMock.terminal = { hasSelection: () => false, getSelection: () => '', paste, focus: vi.fn() };
+    termMock.hasSelection = false;
+    renderWorkspace('/sessions/a?tabs=a', { wrap: aiOn, user: asUser });
+    await userEvent.click(await screen.findByRole('button', { name: 'Explain' }));
+    expect(screen.getByRole('menuitem', { name: /Explain selection/ })).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Explain last error' }));
+    const panel = await screen.findByTestId('terminal-ai-panel');
+    await userEvent.click(await within(panel).findByRole('button', { name: 'Insert' }));
+    expect(paste).toHaveBeenCalledTimes(1);
+    expect(paste).toHaveBeenCalledWith('systemctl status app.service');
+    expect(String(paste.mock.calls[0]![0])).not.toMatch(/[\r\n]/);
+    expect(mockSendInput).not.toHaveBeenCalled();
   });
 });
