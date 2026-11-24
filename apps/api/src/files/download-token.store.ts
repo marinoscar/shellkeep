@@ -31,20 +31,20 @@ const digest = (token: string): string => createHash('sha256').update(token).dig
 
 @Injectable()
 export class DownloadTokenStore {
-  private readonly grants = new Map<string, StoredGrant>();
+  private readonly pending = new Map<string, StoredGrant>();
 
   /** The clock; a test replaces it. */
   now: () => number = Date.now;
 
   issue(grant: DownloadGrant): { token: string; expiresAt: Date } {
     this.sweep();
-    const mine = [...this.grants.entries()].filter(([, g]) => g.userId === grant.userId);
+    const mine = [...this.pending.entries()].filter(([, g]) => g.userId === grant.userId);
     for (const [key] of mine.slice(0, Math.max(0, mine.length - MAX_PENDING_TOKENS_PER_USER + 1))) {
-      this.grants.delete(key);
+      this.pending.delete(key);
     }
     const token = randomBytes(32).toString('base64url');
     const expiresAt = this.now() + DOWNLOAD_TOKEN_TTL_MS;
-    this.grants.set(digest(token), { ...grant, expiresAt });
+    this.pending.set(digest(token), { userId: grant.userId, orgId: grant.orgId, serverProfileId: grant.serverProfileId, path: grant.path, size: grant.size, expiresAt });
     return { token, expiresAt: new Date(expiresAt) };
   }
 
@@ -52,22 +52,27 @@ export class DownloadTokenStore {
   consume(token: string): DownloadGrant | null {
     if (typeof token !== 'string' || token.length > 128) return null;
     const key = digest(token);
-    const stored = this.grants.get(key);
+    const stored = this.pending.get(key);
     if (!stored) return null;
-    this.grants.delete(key);
+    this.pending.delete(key);
     if (stored.expiresAt <= this.now()) return null;
-    const { expiresAt: _expiresAt, ...grant } = stored;
-    return grant;
+    return {
+      userId: stored.userId,
+      orgId: stored.orgId,
+      serverProfileId: stored.serverProfileId,
+      path: stored.path,
+      size: stored.size,
+    };
   }
 
   get size(): number {
-    return this.grants.size;
+    return this.pending.size;
   }
 
   private sweep(): void {
     const now = this.now();
-    for (const [key, grant] of this.grants) {
-      if (grant.expiresAt <= now) this.grants.delete(key);
+    for (const [key, grant] of this.pending) {
+      if (grant.expiresAt <= now) this.pending.delete(key);
     }
   }
 }

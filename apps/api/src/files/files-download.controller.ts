@@ -19,7 +19,7 @@ export function contentDisposition(filename: string): string {
  * credential (user, server, path and size are bound to it). The connect rule is checked again
  * on redemption. Every invalid token is the same 404.
  */
-@ApiTags('Server Files')
+@ApiTags('Server Profiles')
 @Controller('files/download')
 export class FilesDownloadController {
   constructor(private readonly files: FilesService) {}

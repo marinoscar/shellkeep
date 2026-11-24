@@ -41,7 +41,7 @@ describe('DownloadTokenStore', () => {
 
   it('keeps no plain token in memory', () => {
     const { token } = store.issue(grant);
-    expect([...(store as unknown as { grants: Map<string, unknown> }).grants.keys()]).not.toContain(token);
+    expect([...(store as unknown as { pending: Map<string, unknown> }).pending.keys()]).not.toContain(token);
   });
 
   it('sweeps expired tokens when it issues, and bounds the pending tokens per user', () => {

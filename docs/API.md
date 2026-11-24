@@ -95,7 +95,7 @@ Authenticate within 5 seconds; re-send `auth` after every token refresh. The Web
 
 ## Rate limits
 
-There is no global HTTP limiter. Targeted limits belong to the platform: AI (per user, org key and model, `429` with `details.reason: "AI_RATE_LIMITED"`), device-token polling (`slow_down`), member lookup and public link resolution. A run's fan-out is bounded by the `runbooks` system settings (`maxTargetsPerRun`, `maxConcurrency`).
+There is no global HTTP limiter. The files API limits content reads, download tokens and concurrent downloads per user (`files` system settings). Targeted limits belong to the platform: AI (per user, org key and model, `429` with `details.reason: "AI_RATE_LIMITED"`), device-token polling (`slow_down`), member lookup and public link resolution. A run's fan-out is bounded by the `runbooks` system settings (`maxTargetsPerRun`, `maxConcurrency`).
 
 ## Route groups
 
@@ -104,6 +104,7 @@ All under `/api`. Exact routes: `/api/docs`.
 | Prefix | What | Permission | Design doc |
 |---|---|---|---|
 | `server-profiles` | profiles, tags, connection test, host-key scan, trust and forget, facts refresh | `servers:read/write/delete` | [ARCHITECTURE §3.1](ARCHITECTURE.md#31-server-profiles) |
+| `server-profiles/:id/files`, `files/download` | files on a server over SFTP: list, stat, ranged text, single-use download token and streamed download | `sessions:write` plus the right to connect (no `files:*`); `files/download/:token` is public by token | [specs/files.md](specs/files.md) |
 | `sessions` | list, create, rename, terminate, batch-terminate, history download | `sessions:read/write/delete` | [specs/terminal.md](specs/terminal.md) |
 | `dashboard` | Home summary | `sessions:read` | [ARCHITECTURE §3.7](ARCHITECTURE.md#37-dashboard-cli-and-android) |
 | `ai/terminal` | assist, explain (+ `explain/preview`), consent, session summaries (`sessions/:id/summaries`) | `ai:use` | [specs/terminal-ai.md](specs/terminal-ai.md) |

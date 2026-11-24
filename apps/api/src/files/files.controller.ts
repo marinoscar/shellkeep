@@ -22,7 +22,7 @@ async function guarded<T>(profileId: string, call: () => Promise<T>): Promise<T>
   }
 }
 
-@ApiTags('Server Files')
+@ApiTags('Server Profiles')
 @Controller('server-profiles/:id/files')
 export class FilesController {
   constructor(private readonly files: FilesService) {}
