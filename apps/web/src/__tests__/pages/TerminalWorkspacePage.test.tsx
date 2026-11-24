@@ -45,6 +45,8 @@ vi.mock('../../services/terminal-api', () => ({
   updateSession: vi.fn(),
   createSession: vi.fn(),
   downloadSessionHistory: vi.fn(),
+  getServerProfile: vi.fn(() => new Promise(() => {})),
+  getSessions: vi.fn(() => Promise.resolve({ items: [], total: 0, page: 1, pageSize: 100 })),
 }));
 
 // Mock useTerminalSettings to avoid API calls in page tests

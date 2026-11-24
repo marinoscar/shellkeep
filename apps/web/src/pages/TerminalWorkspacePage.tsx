@@ -18,6 +18,8 @@ import { WorkspaceTabs } from '../components/terminal/workspace/WorkspaceTabs';
 import { WorkspacePane } from '../components/terminal/workspace/WorkspacePane';
 import type { PaneStatus } from '../components/terminal/workspace/WorkspacePane';
 import { SessionSwitcherMenu } from '../components/terminal/workspace/SessionSwitcherMenu';
+import { TerminalStatusBar } from '../components/terminal/workspace/TerminalStatusBar';
+import type { HostKeyStatus } from '../components/terminal/workspace/TerminalStatusBar';
 import { RenameSessionDialog } from '../components/terminal/workspace/RenameSessionDialog';
 import { useWorkspaceLayout } from '../components/terminal/workspace/useWorkspaceLayout';
 import {
@@ -31,8 +33,8 @@ import {
   unsplit,
   visiblePanes,
 } from '../components/terminal/workspace/workspaceLayout';
-import { getSession, updateSession } from '../services/terminal-api';
-import type { KeyShortcut, TerminalSession } from '../types';
+import { getServerProfile, getSession, updateSession } from '../services/terminal-api';
+import type { KeyShortcut, ServerProfile, TerminalSession } from '../types';
 import { encodeShortcut } from '../lib/terminal/encodeKeystroke';
 import { useTerminalSettings } from '../hooks/useTerminalSettings';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
@@ -94,8 +96,12 @@ export default function TerminalWorkspacePage() {
     if (handle) views.current.set(sessionId, handle);
     else views.current.delete(sessionId);
   }, []);
-  const onPaneStatus = useCallback((sessionId: string, next: PaneStatus) => {
-    setStatus((prev) => (prev[sessionId]?.connected === next.connected ? prev : { ...prev, [sessionId]: next }));
+  const onPaneStatus = useCallback((sessionId: string, patch: PaneStatus) => {
+    setStatus((prev) => {
+      const before = prev[sessionId] ?? {};
+      const changed = (Object.keys(patch) as Array<keyof PaneStatus>).some((k) => before[k] !== patch[k]);
+      return changed ? { ...prev, [sessionId]: { ...before, ...patch } } : prev;
+    });
   }, []);
   const activeId = layout?.active ?? null;
   const getView = useCallback(() => (activeId ? (views.current.get(activeId) ?? null) : null), [activeId]);
@@ -139,6 +145,27 @@ export default function TerminalWorkspacePage() {
     const timer = setTimeout(() => views.current.get(activeId)?.focus(), 0);
     return () => clearTimeout(timer);
   }, [activeId, isPhone]);
+
+  // The focused pane's server profile, for the status bar's host-key state
+  // (#60). Read again each time the pane connects: the user may just have
+  // trusted the key in the host-key dialog.
+  const activeProfileId = activeId ? sessions[activeId]?.serverProfile.id : undefined;
+  const activeConnected = activeId ? (status[activeId]?.connected ?? false) : false;
+  const [profiles, setProfiles] = useState<Record<string, ServerProfile>>({});
+  useEffect(() => {
+    if (!activeProfileId) return;
+    let cancelled = false;
+    getServerProfile(activeProfileId)
+      .then((profile) => {
+        if (!cancelled) setProfiles((prev) => ({ ...prev, [activeProfileId]: profile }));
+      })
+      .catch(() => {
+        // Without `servers:read` the bar just leaves the host key out.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProfileId, activeConnected]);
 
   const notify = useCallback((next: TerminalActionNotice) => setNotice({ ...next, open: true }), []);
   const activeSession = activeId ? (sessions[activeId] ?? null) : null;
@@ -220,6 +247,19 @@ export default function TerminalWorkspacePage() {
     .filter((t) => t !== activeId)
     .map((t) => ({ id: t, label: sessions[t]?.name ?? t }));
   const sessionName = (sessionId: string) => sessions[sessionId]?.name ?? '';
+
+  const activeStatus = status[activeId] ?? {};
+  const activeProfile = activeProfileId ? profiles[activeProfileId] : undefined;
+  const hostKey: HostKeyStatus | null =
+    activeStatus.hostKeyRefusal === 'HOST_KEY_MISMATCH'
+      ? 'mismatch'
+      : activeStatus.hostKeyRefusal === 'HOST_KEY_UNKNOWN'
+        ? 'unknown'
+        : activeProfile
+          ? activeProfile.fingerprint
+            ? 'trusted'
+            : 'unknown'
+          : null;
 
   const renderHeader = (sessionId: string, index: number) => (
     <Box
@@ -338,8 +378,18 @@ export default function TerminalWorkspacePage() {
           renderHeader={renderHeader}
           renderPane={renderPane}
         />
-        {/* The bottom gutter, outside the FitAddon host (docs/SCROLLING.md). */}
-        <Box sx={{ height: '30px', flexShrink: 0 }} aria-hidden />
+        {/* The status bar is the bottom gutter: outside the FitAddon host (docs/SCROLLING.md). */}
+        <TerminalStatusBar
+          session={activeSession}
+          connected={activeConnected}
+          latencyMs={activeStatus.latencyMs ?? null}
+          cols={activeStatus.cols ?? null}
+          rows={activeStatus.rows ?? null}
+          hostKey={hostKey}
+          fingerprint={activeProfile?.fingerprint ?? null}
+          algorithm={activeProfile?.hostKeyAlgorithm ?? null}
+          compact={isPhone}
+        />
 
         {/* Last in the frame, so it sits directly on the keyboard. */}
         <Box data-testid="terminal-key-dock" sx={{ flexShrink: 0 }}>

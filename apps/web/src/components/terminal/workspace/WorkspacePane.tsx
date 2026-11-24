@@ -1,11 +1,11 @@
 import { memo, useCallback, useRef, useState } from 'react';
 import { TerminalView } from '../TerminalView';
-import type { TerminalViewHandle } from '../TerminalView';
+import type { TerminalViewHandle, TerminalViewStatus } from '../TerminalView';
 import { TerminalConnectionAlert } from '../TerminalConnectionAlert';
 
-/** What a pane reports to the workspace about its connection. */
-export interface PaneStatus {
-  connected: boolean;
+/** What a pane reports to the workspace: its connection, latency, size and host-key state. */
+export interface PaneStatus extends Partial<TerminalViewStatus> {
+  connected?: boolean;
 }
 
 export interface WorkspacePaneProps {
@@ -13,7 +13,7 @@ export interface WorkspacePaneProps {
   showScrollButtons: boolean;
   /** Called with the pane's handle on mount and `null` on unmount. */
   registerView: (sessionId: string, handle: TerminalViewHandle | null) => void;
-  /** Called when the pane's connection state changes. */
+  /** Called with what changed in the pane's status. */
   onStatus: (sessionId: string, status: PaneStatus) => void;
 }
 
@@ -49,6 +49,11 @@ export const WorkspacePane = memo(function WorkspacePane({
     [onStatus, sessionId],
   );
 
+  const onStatusChange = useCallback(
+    (status: TerminalViewStatus) => onStatus(sessionId, status),
+    [onStatus, sessionId],
+  );
+
   return (
     <>
       <TerminalView
@@ -56,6 +61,7 @@ export const WorkspacePane = memo(function WorkspacePane({
         sessionId={sessionId}
         onConnectionChange={onConnectionChange}
         onError={setError}
+        onStatusChange={onStatusChange}
         showScrollButtons={showScrollButtons}
       />
       <TerminalConnectionAlert
