@@ -398,6 +398,30 @@ describeWithDb('The AI runbook step (real Postgres, real shell, scripted AI)', (
       expect(steps[1]!.status).toBe('succeeded');
     }, 90_000);
 
+    it('fails a step whose agent job died (EXECUTOR_LOST) and the run goes on', async () => {
+      const runId = await launch(definition(ai()));
+      for (const type of ['runbook.run.start', 'runbook.target.run']) {
+        const job = await h.prisma.job.findFirstOrThrow({ where: { type, status: 'pending' } });
+        await h.prisma.job.update({ where: { id: job.id }, data: { status: 'running' } });
+        await h.handlers.get(type)!.process(job as never);
+        await h.prisma.job.update({ where: { id: job.id }, data: { status: 'succeeded' } });
+      }
+      // the agent job exists, then dies without ever finishing; the parked target has been quiet a while
+      const agent = await h.prisma.job.findFirstOrThrow({ where: { type: 'ai.runbook.agent', status: 'pending' } });
+      await h.prisma.job.update({ where: { id: agent.id }, data: { status: 'failed' } });
+      await h.system.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.rls_bypass', 'on', true)`;
+        await tx.$executeRaw`UPDATE runbook_run_targets SET updated_at = now() - interval '10 minutes' WHERE run_id = ${runId}::uuid`;
+      });
+      const result = await h.compact.reconcile(new Date());
+      expect(result.lostAgents).toBe(1);
+      await h.drain();
+      const { steps } = await h.snapshot(runId);
+      expect(steps[0]).toMatchObject({ status: 'failed', errorCode: 'EXECUTOR_LOST' });
+      expect(steps[1]!.status).toBe('succeeded'); // the `always` step still ran
+      expect(providerCalls(h)).toBe(0);
+    }, 90_000);
+
     it('"Stop AI" fails a step parked behind an approval at once', async () => {
       h.script.push(call('echo parked-cmd'));
       runId2 = await launch(definition(ai({ approvalMode: 'per_command', allow: [] })));

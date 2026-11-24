@@ -339,7 +339,12 @@ export class RunbookAgentHandler implements JobHandler, OnModuleInit {
     const profileFacts = await this.prisma.serverProfile.findFirst({ where: { id: loaded.target.serverProfileId!, orgId }, select: { facts: true } });
     const params = stringifyParams(loaded.run.params);
     const secretParams = new Set(loaded.definition.parameters.filter((p) => p.type === 'secret').map((p) => p.name));
-    const plainParams = Object.fromEntries(Object.entries(params).filter(([name]) => !secretParams.has(name) && !(name in session.init.secrets)));
+    // Non-secret values only, and still redacted: a person may have typed something secret-shaped into a plain parameter.
+    const plainParams = Object.fromEntries(
+      Object.entries(params)
+        .filter(([name]) => !secretParams.has(name) && !(name in session.init.secrets))
+        .map(([name, value]) => [name, redactForStorage(value, session.literals, 500)]),
+    );
     const runAs = step.runAs;
     const runAsNote = runAs?.sudo ? `Commands run with sudo${runAs.user ? ` as ${runAs.user}` : ''}; do not prefix them with sudo.` : runAs?.user ? `Commands run as ${runAs.user}.` : null;
 

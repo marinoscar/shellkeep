@@ -296,7 +296,7 @@ describeWithDb('Runbook engine (real Postgres, real shell)', () => {
       steps: [
         { id: 'up', name: 'Upload', kind: 'file_upload', storageObjectId: object, destPath: '/tmp', overwrite: false, continueOnError: true },
         { id: 'pkg', name: 'Update', kind: 'package_update', packages: 'all', continueOnError: true },
-        { id: 'ai', name: 'Ask', kind: 'ai_task', goal: 'check', approvalMode: 'plan', continueOnError: true },
+        { id: 'logs', name: 'Logs', kind: 'collect_logs', paths: ['/var/log/syslog'], continueOnError: true },
       ],
     } as never);
     h.files.next = { name: 'a.txt', size: 1, stream: Readable.from(['x']) };

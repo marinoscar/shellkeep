@@ -73,10 +73,26 @@ export async function applyAiApproval(
   }
 
   const code = options.stopped ? AI_FAILURE_CODES.AI_STOPPED : outcome === 'rejected' ? FAILURE_CODES.APPROVAL_REJECTED : FAILURE_CODES.APPROVAL_EXPIRED;
-  assertTransition('step', 'waiting_approval', 'failed');
+  await failAiStep(tx, deps, { orgId, runId, targetId, stepIndex, stepId: step.id, from: 'waiting_approval' }, code, now, events);
+}
+
+/**
+ * Fails an AI step and hands the target back at the next step (`waiting -> queued`, one `runbook.target.run`), so
+ * `always` and `on_failure` steps after it still run. Also the reconcile sweep's answer to an agent job that died.
+ */
+export async function failAiStep(
+  tx: OrgTx,
+  deps: AiApprovalDeps,
+  at: { orgId: string; runId: string; targetId: string; stepIndex: number; stepId: string; from: 'waiting_approval' | 'running' },
+  code: string,
+  now: Date,
+  events: RunEvent[],
+): Promise<void> {
+  const { orgId, runId, targetId, stepIndex } = at;
+  assertTransition('step', at.from, 'failed');
   assertTransition('target', 'waiting', 'queued');
   await tx.runbookRunStep.update({
-    where: { id: step.id },
+    where: { id: at.stepId },
     data: { status: 'failed', errorCode: code, aiTranscript: Prisma.DbNull, finishedAt: now },
   });
   await tx.runbookRunTarget.update({ where: { id: targetId }, data: { status: 'queued', nextStepIndex: stepIndex + 1 } });
