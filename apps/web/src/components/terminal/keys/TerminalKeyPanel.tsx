@@ -9,9 +9,9 @@
  * - `dock` (phones): in the key dock under the accessory row, at the
  *   keyboard's last height, replacing it. The keyboard button brings it back.
  *
- * A tab strip heads the panel: Keys and Snippets (#172); history (#173)
- * appends to `KEY_PANEL_TABS`. The Snippets tab is drawn only when the host
- * can insert text (`onInsertSnippet`). Customize opens the shortcuts editor.
+ * A tab strip heads the panel: Keys, Snippets (#172) and History (#173). The
+ * Snippets and History tabs are drawn only when the host can insert text
+ * (`onInsertSnippet`); History also needs the active session (`sessionId`). Customize opens the shortcuts editor.
  * Escape inside the panel closes it.
  */
 import { forwardRef, useEffect, useState, type KeyboardEvent } from 'react';
@@ -25,13 +25,15 @@ import { Link as RouterLink } from 'react-router-dom';
 import { GRID_COLUMNS } from '../../../lib/terminal/keys/keyModel';
 import type { ResolvedGroup } from '../../../lib/terminal/keys/keyRow';
 import type { SnippetInsertResult } from '../../../lib/terminal/snippets/insert';
+import { HistoryTab } from './history/HistoryTab';
 import { SnippetsTab } from './snippets/SnippetsTab';
 import { KEY_GAP, TouchKey, useKeyPopup, type TouchKeyHandlers } from './TouchKey';
 
-/** The panel's tabs, in order. Later tabs (history) append here. */
+/** The panel's tabs, in order. */
 export const KEY_PANEL_TABS = [
   { id: 'keys', label: 'Keys' },
   { id: 'snippets', label: 'Snippets' },
+  { id: 'history', label: 'History' },
 ] as const;
 export type KeyPanelTabId = (typeof KEY_PANEL_TABS)[number]['id'];
 
@@ -62,6 +64,8 @@ export interface TerminalKeyPanelProps extends TouchKeyHandlers {
   onShowKeyboard?: () => void;
   /** Puts snippet text at the terminal's prompt (never runs it). Without it, there is no Snippets tab. */
   onInsertSnippet?: (text: string, options?: { confirmed?: boolean }) => SnippetInsertResult;
+  /** The terminal session whose server's command history the History tab lists. Without it, there is no History tab. */
+  sessionId?: string;
   /** The Snippets tab is taking text input (the phone keyboard rises over a docked panel). */
   onTextEntry?: (active: boolean) => void;
   /** Show this tab now (the snippets action key). */
@@ -69,10 +73,12 @@ export interface TerminalKeyPanelProps extends TouchKeyHandlers {
 }
 
 export const TerminalKeyPanel = forwardRef<HTMLDivElement, TerminalKeyPanelProps>(function TerminalKeyPanel(
-  { id, variant, height, groups, onClose, onShowKeyboard, onInsertSnippet, onTextEntry, tabRequest, ...handlers },
+  { id, variant, height, groups, onClose, onShowKeyboard, onInsertSnippet, onTextEntry, sessionId, tabRequest, ...handlers },
   ref,
 ) {
-  const tabs = KEY_PANEL_TABS.filter((t) => t.id !== 'snippets' || onInsertSnippet);
+  const tabs = KEY_PANEL_TABS.filter(
+    (t) => (t.id !== 'snippets' && t.id !== 'history') || onInsertSnippet,
+  ).filter((t) => t.id !== 'history' || sessionId);
   const [tab, setTab] = useState<KeyPanelTabId>(tabRequest?.tab ?? 'keys');
   useEffect(() => {
     if (tabRequest) setTab(tabRequest.tab);
@@ -193,6 +199,16 @@ export const TerminalKeyPanel = forwardRef<HTMLDivElement, TerminalKeyPanelProps
           sx={{ flex: 1, minHeight: 0, p: 1, display: 'flex', flexDirection: 'column' }}
         >
           <SnippetsTab onInsert={onInsertSnippet} onTextEntry={onTextEntry} />
+        </Box>
+      )}
+      {onInsertSnippet && sessionId && tab === 'history' && (
+        <Box
+          role="tabpanel"
+          id={`${id}-tabpanel-history`}
+          aria-labelledby={`${id}-tab-history`}
+          sx={{ flex: 1, minHeight: 0, p: 1, display: 'flex', flexDirection: 'column' }}
+        >
+          <HistoryTab key={sessionId} sessionId={sessionId} onInsert={onInsertSnippet} onTextEntry={onTextEntry} />
         </Box>
       )}
       {popup.menu}
