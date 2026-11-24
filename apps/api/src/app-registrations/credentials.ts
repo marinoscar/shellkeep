@@ -19,9 +19,12 @@
 // =============================================================================
 
 import {
+  registerCredentialPurpose,
   registerUserCredentialPurpose,
+  type CredentialPurposeDef,
   type UserCredentialPurposeDef,
 } from '@marinoscar/platform-api/credentials';
+import { TELEMETRY_GREPTIME_CREDENTIAL_PURPOSE } from '@marinoscar/platform-api/telemetry';
 
 import { SSH_CREDENTIAL_PURPOSE } from '../server-profiles/ssh-credentials';
 
@@ -36,11 +39,26 @@ export const APP_USER_CREDENTIAL_PURPOSES: readonly UserCredentialPurposeDef[] =
   },
 ];
 
+/**
+ * The deployment credential purposes ShellKeep stores (#53): the telemetry slice's two GreptimeDB
+ * passwords (`reader`, `admin`), saved from the admin telemetry page and held only in the
+ * deployment tier. The `GREPTIME_*` environment values are just the deployment default.
+ */
+export const APP_CREDENTIAL_PURPOSES: readonly CredentialPurposeDef[] = [
+  {
+    purpose: TELEMETRY_GREPTIME_CREDENTIAL_PURPOSE,
+    owner: 'telemetry',
+    label: 'GreptimeDB passwords',
+    tiers: ['system'],
+  },
+];
+
 let registered = false;
 
 /** Registers the purposes. Idempotent per process (registering twice is `DUPLICATE_ID`). */
 export function registerShellkeepCredentialPurposes(): void {
   if (registered) return;
   registered = true;
+  for (const def of APP_CREDENTIAL_PURPOSES) registerCredentialPurpose(def);
   for (const def of APP_USER_CREDENTIAL_PURPOSES) registerUserCredentialPurpose(def);
 }

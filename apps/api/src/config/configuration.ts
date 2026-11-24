@@ -1,5 +1,6 @@
 import { identityConfiguration } from '@marinoscar/platform-api/identity';
 import { jobsConfiguration } from '@marinoscar/platform-api/jobs';
+import { resolveServiceName } from '../common/otel/telemetry-identity';
 
 export default () => {
   // Construct DATABASE_URL from individual PostgreSQL variables
@@ -48,7 +49,7 @@ export default () => {
   otel: {
     enabled: process.env.OTEL_ENABLED === 'true',
     endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
-    serviceName: process.env.OTEL_SERVICE_NAME || 'shellkeep-api',
+    serviceName: resolveServiceName(),
   },
 
   // Storage Configuration

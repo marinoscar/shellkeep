@@ -13,6 +13,7 @@ import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { verifyEncryptionKeyAtStartup } from '@marinoscar/platform-api/core';
+import { registerRequestSpanAttributes } from '@marinoscar/platform-api/otel-core';
 import {
   buildCorsOptions,
   isSameOriginOnly,
@@ -44,6 +45,10 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter({ logger: true }),
   );
+
+  // Route and caller attributes on the HTTP server span (`http.route`, `app.request.bearer`). A no-op
+  // unless the SDK is installed (OTEL_ENABLED=true); the runtime gate decides what is exported.
+  registerRequestSpanAttributes(app.getHttpAdapter().getInstance(), process.env.OTEL_ENABLED === 'true');
 
   // Platform secrets key check (#48). Runs before the plugins and before `listen`, so
   // a deployment that cannot read its own stored credentials never binds the port: the

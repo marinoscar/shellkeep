@@ -113,6 +113,21 @@
       "scope": "system"
     },
     {
+      "name": "telemetry:read",
+      "description": "View telemetry settings and status",
+      "scope": "system"
+    },
+    {
+      "name": "telemetry:write",
+      "description": "Change telemetry settings",
+      "scope": "system"
+    },
+    {
+      "name": "telemetry:query",
+      "description": "Run SQL, export and use the AI assistant against telemetry",
+      "scope": "system"
+    },
+    {
       "name": "org_members:read",
       "description": "View the members of the organization and their organization roles",
       "scope": "org"
@@ -191,6 +206,11 @@
       "name": "sessions:delete",
       "description": "Terminate terminal sessions",
       "scope": "org"
+    },
+    {
+      "name": "ai:use",
+      "description": "Call AI models using a saved key",
+      "scope": "org"
     }
   ],
   "rolePermissions": {
@@ -209,6 +229,9 @@
       "nodes:write",
       "storage_config:read",
       "storage_config:write",
+      "telemetry:read",
+      "telemetry:write",
+      "telemetry:query",
       "organizations:read",
       "organizations:write",
       "oauth_clients:read",
@@ -224,7 +247,8 @@
       "servers:delete",
       "sessions:read",
       "sessions:write",
-      "sessions:delete"
+      "sessions:delete",
+      "ai:use"
     ],
     "viewer": [
       "user_settings:read",
@@ -249,7 +273,8 @@
       "servers:delete",
       "sessions:read",
       "sessions:write",
-      "sessions:delete"
+      "sessions:delete",
+      "ai:use"
     ]
   }
 }
