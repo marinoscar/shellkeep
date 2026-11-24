@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -24,6 +24,7 @@ import {
   UnfoldMore as UnfoldMoreIcon,
   UnfoldLess as UnfoldLessIcon,
   Keyboard as KeyboardIcon,
+  UploadFile as UploadFileIcon,
 } from '@mui/icons-material';
 
 interface TerminalToolbarProps {
@@ -38,6 +39,8 @@ interface TerminalToolbarProps {
   onDownload?: () => void;
   isDownloading?: boolean;
   onPaste?: () => void;
+  /** Upload a picked file and type its link at the prompt. */
+  onUpload?: (file: File) => void;
   onNewSession?: () => void;
   serverProfileName?: string;
   serverProfileColor?: ServerProfileColor;
@@ -57,6 +60,7 @@ export function TerminalToolbar({
   onDownload,
   isDownloading,
   onPaste,
+  onUpload,
   onNewSession,
   serverProfileName,
   serverProfileColor,
@@ -66,6 +70,7 @@ export function TerminalToolbar({
   const theme = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(sessionName);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleStartEdit = () => {
     setEditValue(sessionName);
@@ -203,6 +208,26 @@ export function TerminalToolbar({
               </IconButton>
             </span>
           </Tooltip>
+        )}
+        {onUpload && (
+          <Tooltip title="Upload file">
+            <IconButton size="small" onClick={() => fileInputRef.current?.click()} aria-label="Upload file">
+              <UploadFileIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        {onUpload && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            data-testid="terminal-upload-input"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) onUpload(file);
+            }}
+          />
         )}
         {onNewSession && (
           <Tooltip title="New session">

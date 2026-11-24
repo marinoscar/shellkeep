@@ -36,6 +36,7 @@ vi.mock('../../services/api', () => ({
 // Mock the storage objects flow (#50).
 vi.mock('../../services/storage', () => ({
   uploadPastedImage: vi.fn(),
+  uploadTerminalFile: vi.fn(),
   storageErrorMessage: vi.fn((_error: unknown, fallback: string) => fallback),
 }));
 
@@ -93,7 +94,7 @@ vi.mock('../../components/terminal/TerminalView', () => ({
   }),
 }));
 
-import TerminalPage from '../../pages/TerminalPage';
+import TerminalPage from '../../pages/TerminalWorkspacePage';
 import { EXPIRED_MESSAGE, FORBIDDEN_MESSAGE } from '../../services/terminal-ws';
 import { getSession, updateSession } from '../../services/terminal-api';
 
@@ -117,7 +118,7 @@ const mockSession: TerminalSession = {
   },
 };
 
-describe('TerminalPage', () => {
+describe('TerminalWorkspacePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getSession).mockResolvedValue(mockSession);
