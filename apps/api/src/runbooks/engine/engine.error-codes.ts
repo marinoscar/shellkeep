@@ -19,6 +19,8 @@ export const RUNBOOK_RUN_ERROR_CODES = {
   APPROVAL_NOT_PENDING: 'RUNBOOK_APPROVAL_NOT_PENDING',
   /** 409: the run is not in a state that allows this action. */
   RUN_STATE: 'RUNBOOK_RUN_STATE',
+  /** 428: the runbook has a destructive step and the launch carried no (or a wrong) confirmation (#67). */
+  CONFIRMATION_REQUIRED: 'RUNBOOK_CONFIRMATION_REQUIRED',
 } as const;
 
 let registered = false;
@@ -56,5 +58,11 @@ export function registerRunbookRunErrorCodes(): void {
     code: RUNBOOK_RUN_ERROR_CODES.RUN_STATE,
     status: 409,
     description: 'The run is not in a state that allows this action.',
+  });
+  registerErrorCode({
+    code: RUNBOOK_RUN_ERROR_CODES.CONFIRMATION_REQUIRED,
+    status: 428,
+    description:
+      'The runbook has a destructive step: repeat the launch with `confirm: { runbookName, targetCount }` naming the runbook exactly and the number of servers the run resolves to. `details` carries the findings and that count.',
   });
 }

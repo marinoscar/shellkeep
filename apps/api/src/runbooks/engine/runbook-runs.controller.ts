@@ -29,9 +29,18 @@ export class RunbookRunsController {
   @Post('runbooks/:id/runs')
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_RUN] })
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Start a run of a runbook version on a set of servers (requires runbooks:run)' })
+  @ApiOperation({ summary: 'Start a run (or a dry run: `dryRun: true`) of a runbook version on a set of servers (requires runbooks:run)' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
-  @ApiResponse({ status: 202, description: '`{ runId }`: the run is queued; follow it with GET /api/runbook-runs/{id}' })
+  @ApiResponse({
+    status: 202,
+    description:
+      '`{ runId, status: "queued", dryRun, awaitingApproval, approvalId }`: follow the run with GET /api/runbook-runs/{id}. `awaitingApproval: true` is a destructive run parked behind a second person (`approvalId`); it starts when someone else with runbooks:approve approves it.',
+  })
+  @ApiResponse({
+    status: 428,
+    description:
+      'RUNBOOK_CONFIRMATION_REQUIRED: the runbook has a destructive step. Send `confirm: { runbookName, targetCount }` (the exact name and the resolved server count, both in `details`, with the destructive `findings`). Not needed for `dryRun: true`.',
+  })
   @ApiResponse({ status: 422, description: 'RUNBOOK_PARAMS_INVALID (with `details.issues`) or RUNBOOK_SECRET_REF_UNKNOWN' })
   @ApiResponse({ status: 503, description: 'RUNBOOKS_DISABLED' })
   create(
@@ -133,10 +142,11 @@ export class RunbookRunsController {
   @Post('runbook-runs/:id/retry')
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_RUN] })
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiResponse({ status: 202, description: 'Accepted' })
+  @ApiResponse({ status: 202, description: 'Accepted: the same body as starting a run' })
+  @ApiResponse({ status: 428, description: 'RUNBOOK_CONFIRMATION_REQUIRED: a retry of a destructive runbook needs `confirm` too' })
   @ApiOperation({ summary: 'Start a new run with the same version and parameters on the failed (or all) servers (requires runbooks:run)' })
   retry(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal, @Body() dto: RetryRunDto) {
-    return this.runs.retry(principal, id, dto.only);
+    return this.runs.retry(principal, id, dto.only, dto.confirm);
   }
 
   @Post('runbook-runs/:id/resume')

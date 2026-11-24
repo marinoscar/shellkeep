@@ -48,6 +48,8 @@ export interface FinishedRun {
   targetsTotal: number;
   targetsSucceeded: number;
   targetsFailed: number;
+  /** A dry run: no webhook, no in-process finished event, an in-app-only notification (#67). */
+  dryRun: boolean;
 }
 
 /** An approval the advance created (to notify the approvers after the commit). */
@@ -59,7 +61,7 @@ export interface CreatedApproval {
   version: number;
   stepName: string;
   targetsTotal: number;
-  kind: 'gate' | 'step';
+  kind: 'gate' | 'step' | 'destructive_run';
 }
 
 export interface AdvanceOutcome {
@@ -260,6 +262,7 @@ export class RunCoordinatorService {
         targetsTotal: counts.reduce((sum, c) => sum + c._count._all, 0),
         targetsSucceeded: count('succeeded'),
         targetsFailed: count('failed'),
+        dryRun: run.dryRun,
       };
     }
     return outcome;
