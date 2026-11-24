@@ -7,23 +7,28 @@
 //   1. the union of `serverIds` and the servers whose tags match (`any` = overlap,
 //      `all` = contains; both given = both must hold) and the members of `groupIds`;
 //   2. minus `exclude`;
-//   3. partitioned by access: a server the principal may connect to becomes a target,
-//      the rest come back as `skipped` (`forbidden`), never silently dropped, so the
-//      run matrix and the audit show them. Today the principal may connect to the
-//      server profiles they OWN; sharing grants arrive with #71;
+//   3. partitioned by access (`AccessPolicy`, action `connect`): a server the principal may connect
+//      to (their own, one owned by a group of theirs, one shared with them as `operator` or better)
+//      becomes a target; the rest come back as `skipped` (`forbidden`), never silently dropped, so
+//      the run matrix and the audit show them. A server NAMED by id the caller cannot connect to is
+//      `forbidden`; a server matched only by TAG is considered only when the caller may read it, so a
+//      tag never reveals another user's private server (#71);
 //   4. sorted by `name, id` so batching is deterministic;
 //   5. capped at `runbooks.maxTargetsPerRun` (the organization's effective value).
 //
-// `groupIds` answers 422 RUNBOOK_TARGET_GROUPS_UNAVAILABLE until server groups exist (#71).
+// `groupIds` (groups OF SERVERS, a different thing from the sharing slice's user groups) still answers
+// 422 RUNBOOK_TARGET_GROUPS_UNAVAILABLE: no such concept exists yet.
 //
 // Server profiles are user-owned, not row-level-secured: every query names the organization.
 // =============================================================================
 
-import { Injectable, UnprocessableEntityException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnprocessableEntityException } from '@nestjs/common';
+import type { Principal } from '@marinoscar/platform-api/core';
 import { SettingsResolver } from '@marinoscar/platform-api/settings';
+import { AccessPolicy } from '@marinoscar/platform-api/sharing';
 import type { Prisma } from '@prisma/client';
 
-import type { OwnerScope } from '../common/types/owner-scope';
+import { SERVER_PROFILE_RESOURCE } from '../app-registrations/sharing';
 import { PrismaService } from '../prisma/prisma.service';
 import { readStoredFacts } from '../ssh/server-facts.service';
 import { RUNBOOK_ERROR_CODES } from './runbooks.error-codes';
@@ -70,6 +75,7 @@ export class TargetResolverService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsResolver,
+    private readonly access: AccessPolicy,
   ) {}
 
   /** The cap for an organization: `runbooks.maxTargetsPerRun` with the org layer applied. */
@@ -82,7 +88,7 @@ export class TargetResolverService {
     }
   }
 
-  async resolve(scope: OwnerScope, input: Partial<TargetSelector> | TargetSelector, options: { limit?: number } = {}): Promise<ResolvedTargets> {
+  async resolve(principal: Principal, input: Partial<TargetSelector> | TargetSelector, options: { limit?: number } = {}): Promise<ResolvedTargets> {
     const selector = targetSelectorSchema.parse(input);
 
     if (selector.groupIds.length > 0) {
@@ -93,7 +99,9 @@ export class TargetResolverService {
       });
     }
 
-    const limit = options.limit ?? (await this.maxTargetsPerRun(scope.orgId));
+    const orgId = principal.activeOrgId;
+    if (!orgId) throw new ForbiddenException('No active organization');
+    const limit = options.limit ?? (await this.maxTargetsPerRun(orgId));
     const excluded = new Set(selector.exclude);
 
     const tagClause = this.tagClause(selector);
@@ -103,14 +111,27 @@ export class TargetResolverService {
     if (or.length === 0) return { targets: [], skipped: [], total: 0, capped: false, limit };
 
     const rows = await this.prisma.serverProfile.findMany({
-      where: { orgId: scope.orgId, OR: or, ...(excluded.size > 0 ? { id: { notIn: [...excluded] } } : {}) },
-      select: { id: true, userId: true, name: true, hostname: true, tags: true, fingerprint: true, facts: true },
+      where: { orgId, OR: or, ...(excluded.size > 0 ? { id: { notIn: [...excluded] } } : {}) },
+      select: { id: true, name: true, hostname: true, tags: true, fingerprint: true, facts: true },
     });
+
+    // ONE decision per action for the whole batch (`connect`, and `read` for the tag matches).
+    const refs = rows.map((row) => ({ type: SERVER_PROFILE_RESOURCE, id: row.id }));
+    const [connect, read] = await Promise.all([
+      this.access.decideMany(principal, 'connect', refs),
+      this.access.decideMany(principal, 'read', refs),
+    ]);
+    const named = new Set(selector.serverIds);
 
     const skipped: SkippedTarget[] = [];
     const accessible: ResolvedTarget[] = [];
+    const considered: typeof rows = [];
     for (const row of rows) {
-      if (row.userId !== scope.userId) {
+      const key = `${SERVER_PROFILE_RESOURCE}:${row.id}`;
+      // Matched only by tag and not even readable: not the caller's to know about.
+      if (!named.has(row.id) && !read.get(key)?.allowed) continue;
+      considered.push(row);
+      if (!connect.get(key)?.allowed) {
         skipped.push({ serverProfileId: row.id, reason: 'forbidden' });
         continue;
       }
@@ -125,7 +146,7 @@ export class TargetResolverService {
     }
 
     // A server named by id that does not exist in this organization.
-    const found = new Set(rows.map((r) => r.id));
+    const found = new Set(considered.map((r) => r.id));
     for (const id of selector.serverIds) {
       if (!found.has(id) && !excluded.has(id)) skipped.push({ serverProfileId: id, reason: 'not_found' });
     }

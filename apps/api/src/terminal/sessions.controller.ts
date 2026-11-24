@@ -25,7 +25,8 @@ import { FastifyReply } from 'fastify';
 
 import { SessionsService } from './sessions.service';
 import { SshService } from './ssh.service';
-import { Auth, CurrentOrg, CurrentUser } from '@marinoscar/platform-api/identity';
+import type { Principal } from '@marinoscar/platform-api/core';
+import { Auth, CurrentOrg, CurrentPrincipal, CurrentUser } from '@marinoscar/platform-api/identity';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
@@ -81,20 +82,24 @@ export class SessionsController {
   @ApiResponse({ status: 404, description: 'Session or tmux session not found' })
   async getHistory(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
+    @CurrentPrincipal() principal: Principal,
     @Res() res: FastifyReply,
   ) {
     // findOne does ownership check
-    const session = await this.sessionsService.findOne(id, { userId, orgId });
+    const session = await this.sessionsService.findOne(id, {
+      userId: principal.userId,
+      orgId: principal.activeOrgId ?? '',
+    });
 
     if (session.status === 'terminated') {
       throw new BadRequestException('Cannot download history for a terminated session');
     }
 
+    // The session is the caller's own, but the credential is read only while they may still connect.
     const profile = await this.serverProfilesService.getDecryptedProfile(
       session.serverProfileId,
-      { userId, orgId },
+      principal,
+      'history',
     );
 
     try {
@@ -145,12 +150,9 @@ export class SessionsController {
   @Auth({ permissions: [PERMISSIONS.SESSIONS_WRITE] })
   @ApiOperation({ summary: 'Create a new terminal session' })
   @ApiResponse({ status: 201, description: 'Terminal session created' })
-  async create(
-    @CurrentUser('id') userId: string,
-    @CurrentOrg() orgId: string,
-    @Body() dto: CreateSessionDto,
-  ) {
-    return this.sessionsService.create({ userId, orgId }, dto);
+  @ApiResponse({ status: 404, description: 'Server profile not found, or not shared with the caller as operator or better' })
+  async create(@CurrentPrincipal() principal: Principal, @Body() dto: CreateSessionDto) {
+    return this.sessionsService.create(principal, dto);
   }
 
   @Patch(':id')

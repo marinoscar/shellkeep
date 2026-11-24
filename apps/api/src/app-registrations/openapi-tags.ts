@@ -204,6 +204,29 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'Sharing',
+    tags: [
+      {
+        name: 'Groups',
+        description:
+          'Groups inside the caller\'s active organization: their members (roles `admin`, `editor`, `viewer`) and ' +
+          'their invitations. Org permissions `groups:read`, `groups:write` and `groups:admin`; a group you may ' +
+          'not see is always 404, never 403. A group that still owns a server profile or a runbook cannot be ' +
+          'deleted (409 `GROUP_OWNS_RESOURCES`). Invitees answer from `/api/groups/invites/mine`.',
+      },
+      {
+        name: 'Grants',
+        description:
+          'Share one server profile or runbook with a user or a group of the caller\'s active organization, with a ' +
+          'role (server profile: `viewer`, `operator`, `editor`; runbook: `viewer`, `runner`, `editor`) and an ' +
+          'optional expiry; one role per grantee, revocation is soft. Org permissions `sharing:read`, ' +
+          '`sharing:write` and `sharing:admin`; a record you may not share is 404. Link shares are disabled for ' +
+          'both types (422 `ROLE_NOT_GRANTABLE`). `/api/grants/shared-with-me` lists what is shared with you. ' +
+          'A grant carries a role, never a credential.',
+      },
+    ],
+  },
+  {
     name: 'Notifications',
     tags: [
       {
