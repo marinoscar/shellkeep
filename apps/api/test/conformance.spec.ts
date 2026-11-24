@@ -54,7 +54,7 @@ import { runPlatformConformance } from '@marinoscar/platform-api/testing';
 import { AppModule } from '../src/app.module';
 // Registers the app's own metric groups (the "Terminal" group) before the suite reads them.
 import '../src/platform/telemetry/telemetry.config';
-import { aiConformanceFixture } from './conformance/ai-fixture';
+import { aiConformanceFixture, aiKillSwitchFixture } from './conformance/ai-fixture';
 import { doctorConformanceFixture } from './conformance/doctor-fixture';
 import {
   SETTINGS_CATALOG_STALE_MESSAGE,
@@ -203,7 +203,8 @@ runPlatformConformance({
     // ---- the AI platform's invariants (AGENTS.md "AI Platform Rules") ---------
     // The five that boot the app take the fixture (./conformance/ai-fixture.ts):
     // routes, job types and roles are DISCOVERED from the booted app, none skipped.
-    aiKillSwitch: { fixture: aiConformanceFixture },
+    // Boots without `ai.session.summarize`: see `aiKillSwitchFixture` for why and where it is proved instead.
+    aiKillSwitch: { fixture: aiKillSwitchFixture },
     aiRbacMatrix: { fixture: aiConformanceFixture },
     aiSecretEgress: { fixture: aiConformanceFixture },
     aiKeyPolicy: { fixture: aiConformanceFixture },

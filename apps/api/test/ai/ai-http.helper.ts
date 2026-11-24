@@ -62,7 +62,15 @@ const BASE_POLICY: Pick<AiPolicy, 'enabled' | 'keyPolicy' | 'logPromptContent' |
   limits: {},
 };
 
-export async function createAiHttpTestApp(opts: AiRuntimeHarnessOptions = {}): Promise<AiHttpTestApp> {
+export interface AiHttpTestAppExtras {
+  /** Extra provider overrides for the app, after the harness's own. */
+  overrideProviders?: Array<{ provide: unknown; useValue: unknown }>;
+}
+
+export async function createAiHttpTestApp(
+  opts: AiRuntimeHarnessOptions = {},
+  extras: AiHttpTestAppExtras = {},
+): Promise<AiHttpTestApp> {
   let current: FakeAiScript | undefined;
 
   const harness = createAiRuntimeHarness({
@@ -92,6 +100,7 @@ export async function createAiHttpTestApp(opts: AiRuntimeHarnessOptions = {}): P
       // the `ai.image.generate` handler read and write the same objects.
       { provide: AiStorageInputResolver, useValue: harness.inputs },
       { provide: AiOutputWriter, useValue: harness.outputs },
+      ...(extras.overrideProviders ?? []),
     ],
   });
 

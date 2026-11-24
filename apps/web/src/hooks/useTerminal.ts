@@ -133,6 +133,8 @@ export function useTerminal(
   const appearanceRef = useRef(appearance);
   appearanceRef.current = appearance;
   const [bellCount, setBellCount] = useState(0);
+  // Whether text is selected (#58: the floating Explain chip).
+  const [hasSelection, setHasSelection] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hostKeyRefusal, setHostKeyRefusal] = useState<HostKeyRefusal | null>(null);
@@ -176,7 +178,9 @@ export function useTerminal(
 
     // Copy on select (#80): a finished selection goes to the clipboard.
     const selectionSubscription = terminal.onSelectionChange?.(() => {
-      if (!appearanceRef.current.preferences.copyOnSelect || !terminal.hasSelection()) return;
+      const selected = terminal.hasSelection();
+      setHasSelection(selected);
+      if (!appearanceRef.current.preferences.copyOnSelect || !selected) return;
       const text = terminal.getSelection();
       if (text) void navigator.clipboard?.writeText(text).catch(() => undefined);
     });
@@ -378,5 +382,7 @@ export function useTerminal(
     size,
     /** Counts bells while `bell` is `visual`, so the view can flash (#80). */
     bellCount,
+    /** Whether terminal text is selected right now (#58). */
+    hasSelection,
   };
 }

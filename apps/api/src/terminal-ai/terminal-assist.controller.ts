@@ -1,14 +1,13 @@
 import { Body, Controller, ForbiddenException, HttpCode, HttpStatus, Post, Res, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiProduces, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { AI_SSE_HEADERS, AiEnabledGuard, AiOrgEnabledInterceptor } from '@marinoscar/platform-api/ai';
+import { AiEnabledGuard, AiOrgEnabledInterceptor } from '@marinoscar/platform-api/ai';
 import { Auth, CurrentOrg, CurrentUser } from '@marinoscar/platform-api/identity';
 import type { FastifyReply } from 'fastify';
 
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { TerminalAssistDto } from './terminal-assist.dto';
-import { TerminalAssistService, type AssistFrame } from './terminal-assist.service';
-
-const frameText = (frame: AssistFrame): string => `event: ${frame.type}\ndata: ${JSON.stringify(frame)}\n\n`;
+import { streamFrames } from './terminal-ai.sse';
+import { TerminalAssistService } from './terminal-assist.service';
 
 /**
  * Terminal command assist (issue #57). Sits under `/api/ai/*`: AI kill switch, organization AI
@@ -51,36 +50,6 @@ export class TerminalAssistController {
     if (!permissions?.includes(PERMISSIONS.SESSIONS_WRITE)) {
       throw new ForbiddenException('Terminal assist needs permission to write to sessions');
     }
-    const controller = new AbortController();
-    const res = reply.raw;
-    const onClose = () => {
-      if (!res.writableFinished) controller.abort(new Error('Client disconnected'));
-    };
-    res.on('close', onClose);
-
-    let frames: AsyncIterable<AssistFrame>;
-    try {
-      // Eager: every pre-stream failure rejects here and the global filter answers it as JSON.
-      frames = await this.assist.open({ userId, orgId }, dto, controller.signal);
-    } catch (err) {
-      res.off('close', onClose);
-      throw err;
-    }
-
-    const inherited: Record<string, number | string | string[] | undefined> = { ...reply.getHeaders() };
-    delete inherited['content-length'];
-    delete inherited['content-type'];
-    reply.hijack();
-    res.writeHead(200, { ...inherited, ...AI_SSE_HEADERS });
-    res.flushHeaders();
-    try {
-      for await (const frame of frames) {
-        if (res.destroyed || controller.signal.aborted) break;
-        res.write(frameText(frame));
-      }
-    } finally {
-      res.off('close', onClose);
-      if (!res.writableEnded) res.end();
-    }
+    await streamFrames(reply, (signal) => this.assist.open({ userId, orgId }, dto, signal));
   }
 }

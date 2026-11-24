@@ -132,7 +132,8 @@ model User {
   serverProfiles ServerProfile[]
 
   // composed from app:shellkeep.terminal.prisma
-  terminalSessions TerminalSession[]
+  terminalSessions         TerminalSession[]
+  terminalSessionSummaries TerminalSessionSummary[]
 
   @@map("users")
 }

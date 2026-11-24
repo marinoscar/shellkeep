@@ -38,5 +38,42 @@ model TerminalSession {
   @@index([orgId, userId])
   @@index([serverProfileId])
   @@index([status])
+  summaries TerminalSessionSummary[]
+
   @@map("terminal_sessions")
+}
+
+// A summary of one terminal session (#59), written by the `ai.session.summarize` job.
+//
+// Ownership: user-owned (`user_id`), `orgReference: 'orgId'` (a reference, not an isolation key).
+// Purge: Cascade on user delete and on delete of the session.
+// Everything stored here was redacted before it reached a model and again on the way out; the
+// table never holds terminal text, only the model's summary, the commands it listed and the
+// redaction kinds and counts.
+model TerminalSessionSummary {
+  id          String    @id @default(uuid()) @db.Uuid
+  sessionId   String    @map("session_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  orgId       String?   @map("org_id") @db.Uuid
+  jobId       String?   @map("job_id") @db.Uuid
+  /// 'pending' | 'succeeded' | 'failed'
+  status      String
+  summaryMd   String?   @map("summary_md")
+  /// [{ command, outcome? }], redacted
+  commands    Json?
+  /// Redaction kinds and counts: [{ kind, count }]
+  findings    Json?
+  sourceChars Int?      @map("source_chars")
+  truncated   Boolean   @default(false)
+  model       String?
+  errorCode   String?   @map("error_code")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+
+  session TerminalSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([userId])
+  @@map("terminal_session_summaries")
 }
