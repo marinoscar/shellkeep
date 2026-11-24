@@ -201,6 +201,13 @@ describe('admin settings routing (#46)', () => {
     signIn(ADMIN, ['admin']);
     const read: string[] = [];
     server.use(
+      // The config has a deep shape this routing test does not need: answer it with
+      // an error so the page renders its config alert instead of reading a list as a
+      // config. The runs request still proves the page reads its API.
+      http.get('*/api/admin/db-backup/config', ({ request }) => {
+        read.push(new URL(request.url).pathname);
+        return HttpResponse.json({ statusCode: 404, code: 'NOT_FOUND', message: 'not configured' }, { status: 404 });
+      }),
       http.get('*/api/admin/db-backup*', ({ request }) => {
         read.push(new URL(request.url).pathname);
         return HttpResponse.json({ data: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 } });
