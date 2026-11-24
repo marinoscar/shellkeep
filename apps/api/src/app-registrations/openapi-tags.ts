@@ -124,6 +124,13 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           'Persistent tmux-backed terminal sessions on a server profile: create, list, rename and terminate. ' +
           'The terminal itself is the WebSocket at `/api/terminal/ws`, which is not part of this document.',
       },
+      {
+        name: 'Runbooks',
+        description:
+          'Versioned multi-step procedures (command, script, package update, file upload, log collection, AI task, ' +
+          'approval gate) with parameters and target selectors: create, version with `If-Match`, archive, validate, ' +
+          'preview targets, and manage write-only secret parameters. Gated on `runbooks:read` and `runbooks:write`.',
+      },
     ],
   },
   {
@@ -257,6 +264,16 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           'The maintenance window: turning it on, the message callers see while it is open, and ' +
           'whether administrators keep access. Gated on `system_settings:read` and `system_settings:write`. ' +
           'New terminal WebSocket connections are refused while it is open; open ones keep streaming.',
+      },
+      {
+        name: 'Telemetry',
+        description:
+          'Observability: whether traces, logs and metrics are exported to the telemetry store ' +
+          '(GreptimeDB), how long they are retained, the runtime connection to the store, the explorer, ' +
+          'the dashboard (including the Terminal metric group) and the store\'s status. The policy is ' +
+          '`telemetry:read`/`telemetry:write`; running queries against the data is `telemetry:query`. ' +
+          '`GET /api/telemetry/config` is readable by any signed-in user: it is how a client learns ' +
+          'whether to show telemetry surfaces at all.',
       },
     ],
   },

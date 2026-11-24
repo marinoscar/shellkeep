@@ -55,6 +55,9 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'db.backup.sweep': 'Backup sweep',
   'db.restore.run': 'Database restore',
   'db.restore.old-db-drop': 'Restore cleanup',
+  // The telemetry slice (#53): the store's TTL and the managed stack's deploy. Both are server-only.
+  'telemetry.retention.apply': 'Telemetry retention',
+  'telemetry.stack.deploy': 'Telemetry services deploy',
   // The AI slice (#55): background runs, the catalogue and key rechecks and the two retention purges.
   // Every ai.* type is server-only (no node ever holds a provider key).
   'ai.response.run': 'AI background response',

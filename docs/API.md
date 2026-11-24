@@ -1382,6 +1382,36 @@ Permission `servers:write`. Probes the server now (one fixed read-only command) 
 
 ---
 
+### Runbooks
+
+Versioned, reusable multi-step procedures (#61). Definitions can hold sensitive commands, so every route requires a runbook permission in the caller's organization: `runbooks:read` for reads and target preview, `runbooks:write` for everything that changes a runbook, validates a definition or touches a secret. (`runbooks:run` and `runbooks:approve` are enforced by the run engine and the approvals inbox, #62.)
+
+| Route | Permission | Notes |
+|-------|------------|-------|
+| `GET /api/runbooks` | `runbooks:read` | Paginated (`page`, `pageSize`); filters `q` (name or description), `tag`, `includeArchived` |
+| `GET /api/runbooks/:id` | `runbooks:read` | Latest version embedded; `ETag: "v<version>"` |
+| `POST /api/runbooks` | `runbooks:write` | `{ name, description?, tags?, definition, changelog? }` creates the runbook and version 1 |
+| `PUT /api/runbooks/:id/definition` | `runbooks:write` | `{ definition, changelog? }`; needs `If-Match: "v<n>"` (the ETag of a GET). Creates version n+1 and returns the new `ETag`; a definition identical to the latest (same sha256) is a 200 with `created: false` and no new version |
+| `PATCH /api/runbooks/:id` | `runbooks:write` | Metadata only: `name`, `description`, `tags` |
+| `DELETE /api/runbooks/:id` | `runbooks:write` | Archives (soft delete), idempotent; 204 |
+| `POST /api/runbooks/:id/restore` | `runbooks:write` | Un-archives; 409 `RUNBOOK_NAME_TAKEN` if a live runbook has the name now |
+| `GET /api/runbooks/:id/versions` | `runbooks:read` | History, newest first, without definitions |
+| `GET /api/runbooks/:id/versions/:version` | `runbooks:read` | One version with its definition |
+| `POST /api/runbooks/validate` | `runbooks:write` | `{ definition }` returns `{ valid, definition (normalised), definitionSha256, warnings }`; nothing is saved |
+| `POST /api/runbooks/targets/preview` | `runbooks:read` | `{ selector }` returns `{ servers: [{ id, name, hostname, tags, hostKeyTrusted, facts: { prettyName } }], skipped: [{ serverProfileId, reason }], total, capped, limit }` |
+
+**Versions are immutable.** A definition change appends a version; nothing updates or deletes one. Names are unique among live (non-archived) runbooks of an organization, case-insensitively.
+
+**Definition.** `{ schemaVersion: 1, parameters[], steps[1..50], defaultTargets, strategy }`; step kinds `command`, `script`, `package_update`, `file_upload`, `collect_logs`, `ai_task`, `approval_gate`. The schema is `apps/api/src/runbooks/schema/runbook-definition.schema.ts` (types: `RunbookDefinition`, `RunbookStep`, `RunbookParameter`, `TargetSelector`, `RunStrategy`). Parameters reach commands only as environment variables; there is no template substitution into command text. `allow`, `deny` and parameter `pattern` values are RE2 expressions. A definition that fails answers `422 RUNBOOK_DEFINITION_INVALID` with `details.issues: [{ path, code, message }]`, `path` being the JSON path into the definition.
+
+**Target resolution.** The selector is the union of `serverIds` and the servers whose tags match (`any` = overlap, `all` = contains; both given means both must hold), minus `exclude`. Servers the caller may connect to (today: the profiles they own; sharing arrives with #71) are targets, sorted by `name, id` and capped at the organization's effective `runbooks.maxTargetsPerRun` (`total` is the count before the cap, `capped` says it was cut). Every other matched server is listed in `skipped` with `reason: "forbidden"`, and a named id that does not exist in the organization with `"not_found"`. `groupIds` answers `422 RUNBOOK_TARGET_GROUPS_UNAVAILABLE` until server groups exist.
+
+**Secret parameters.** `GET /api/runbook-secrets`, `PUT /api/runbook-secrets/:name` (`{ value, label? }`) and `DELETE /api/runbook-secrets/:name` (all `runbooks:write`; `name` matches `^[a-z][a-z0-9_-]{0,63}$`) manage the organization's `runbook_secret` credentials. Values are write-only: responses carry `name`, `label`, `hint` (masked, at most the last four characters), `createdAt`, `updatedAt` and `updatedBy`, never the value. A run names the credential for a `secret` parameter (`secretRefs`); the value never appears in a definition, a run row or a job payload.
+
+**Audit events** (`audit_events`): `runbook.created`, `runbook.version_created` (with `definition_sha256`), `runbook.archived`, `runbook.restored`, `runbook_secret.set`, `runbook_secret.deleted`.
+
+**Settings.** The `runbooks` system namespace (`enabled`, `maxTargetsPerRun` 200, `maxConcurrency` 20, `defaultStepTimeoutSec` 600, `maxLogBytesPerStep` 5 MiB, `approvals.allowSelfApproval` false, `approvals.defaultExpirySec` 86400, `ai.agentEnabled` true) can be tightened, never loosened, per organization through `/api/org-settings`.
+
 ### Health
 
 **Public endpoints** - Used for Kubernetes liveness/readiness probes.
@@ -1472,6 +1502,12 @@ Readiness check - includes database connectivity test.
 | `HOST_KEY_CHANGED_DURING_TRUST` | 409 | The key presented now is not the fingerprint the user confirmed |
 | `HOST_KEY_CONFIRMATION_REQUIRED` | 400 | Replacing a trusted host key needs the profile hostname typed as `confirmHostname` |
 | `SSH_HOST_UNREACHABLE` | 502 | The SSH server could not be reached to read its host key |
+| `PRECONDITION_FAILED` | 412 | A stale `If-Match` (for example replacing a runbook definition that has a newer version) |
+| `RUNBOOK_DEFINITION_INVALID` | 422 | The runbook definition failed validation; `details.issues` lists each problem with its path |
+| `RUNBOOK_TARGET_GROUPS_UNAVAILABLE` | 422 | The target selector names server groups, which are not available yet |
+| `RUNBOOK_NAME_TAKEN` | 409 | Another live runbook in the organization has this name |
+| `RUNBOOK_ARCHIVED` | 409 | The runbook is archived; restore it before changing it |
+| `RUNBOOK_IF_MATCH_REQUIRED` | 428 | Replacing a definition needs an `If-Match` header |
 
 ---
 

@@ -33,7 +33,10 @@ COPY prisma.config.ts ./
 COPY scripts ./scripts/
 # Using npm install since this is a workspace package without its own lock file
 # Set dummy DATABASE_URL for Prisma generate (actual connection not needed at build time)
+# `re2` (runbook pattern validation) is native: --ignore-scripts skips its install step, so rebuild it
+# explicitly (prebuilt binary download, node-gyp fallback).
 RUN npm install --ignore-scripts && \
+    npm rebuild re2 && \
     DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npm run prisma:generate
 
 # -----------------------------------------------------------------------------

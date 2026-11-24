@@ -46,6 +46,8 @@ interface Harness {
   prisma: { serverProfile: { updateMany: jest.Mock; findFirst: jest.Mock } };
   audit: jest.Mock;
   metrics: jest.Mock;
+  /** `AppMetricsService.record`: the connect-duration histogram. */
+  record: jest.Mock;
   clients: any[];
 }
 
@@ -81,13 +83,14 @@ function harness(policy: HostKeyPolicy = 'tofu_prompt'): Harness {
   };
   const audit = jest.fn().mockResolvedValue(undefined);
   const metrics = jest.fn();
+  const record = jest.fn();
   const factory = new SshConnectionFactory(
     prisma as never,
     { record: audit } as never,
     { getNamespace: jest.fn().mockResolvedValue({ hostKeyPolicy: policy }) } as never,
-    { add: metrics } as never,
+    { add: metrics, record } as never,
   );
-  return { factory, serverKey, auth, configs, prisma, audit, metrics, clients };
+  return { factory, serverKey, auth, configs, prisma, audit, metrics, record, clients };
 }
 
 const open = (h: Harness, profile: Partial<DecryptedServerProfile>, purpose: 'interactive' | 'test' | 'exec', policy?: HostKeyPolicy) =>

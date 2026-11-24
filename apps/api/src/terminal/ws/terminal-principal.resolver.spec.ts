@@ -66,7 +66,7 @@ describe('TerminalPrincipalResolver', () => {
   it('refuses an expired token', async () => {
     const expired = sign({}, { expiresIn: -10 });
 
-    expect(await resolver.resolve(expired)).toEqual({ ok: false, reason: 'invalid_token' });
+    expect(await resolver.resolve(expired)).toEqual({ ok: false, reason: 'expired' });
   });
 
   it('refuses a token with no expiry (it would keep a terminal open forever)', async () => {

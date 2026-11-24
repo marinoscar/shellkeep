@@ -1,4 +1,5 @@
-import { Logger, NotFoundException } from '@nestjs/common';
+import { Logger, NotFoundException, Optional, type OnModuleInit } from '@nestjs/common';
+import { SpanStatusCode, trace, type Span } from '@opentelemetry/api';
 import { WebSocketGateway, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { ServerProfilesService } from '../server-profiles/server-profiles.service';
 import { PERMISSIONS } from '../common/constants/roles.constants';
@@ -8,6 +9,8 @@ import { SessionManagerService } from './session-manager.service';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
 import { TERMINAL_MAINTENANCE_REASON, TerminalMaintenancePolicy } from './ws/terminal-maintenance.policy';
 import { HostKeyError } from '../ssh/host-key.error';
+import { TerminalMetricsService } from './telemetry/terminal-metrics.service';
+import type { WsAuthDeniedReason } from './telemetry/terminal.metrics';
 import * as WebSocket from 'ws';
 
 /** setTimeout cannot hold a delay above 2^31 - 1 ms (about 24.8 days). */
@@ -27,10 +30,14 @@ interface AuthenticatedClient {
   /** Closes the socket with `auth_expired` when the access token expires. */
   expiryTimeout?: NodeJS.Timeout;
   expiresAtMs: number;
+  /** The `terminal.ws.session` span: the lifetime of the socket's attachment to a session. */
+  sessionSpan?: Span;
 }
 
+const tracer = trace.getTracer('shellkeep.terminal');
+
 @WebSocketGateway({ path: '/api/terminal/ws' })
-export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
   private readonly logger = new Logger(TerminalGateway.name);
   private readonly clients = new Map<WebSocket, AuthenticatedClient>();
 
@@ -40,7 +47,20 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     private readonly sessionsService: SessionsService,
     private readonly sessionManager: SessionManagerService,
     private readonly maintenance: TerminalMaintenancePolicy,
+    @Optional() private readonly metrics?: TerminalMetricsService,
   ) {}
+
+  onModuleInit(): void {
+    // The `app.terminal.ws.connections` gauge: authenticated sockets held by THIS process.
+    this.metrics?.bindWsConnections(() => this.authenticatedCount());
+  }
+
+  /** Authenticated sockets in this process. */
+  authenticatedCount(): number {
+    let count = 0;
+    for (const state of this.clients.values()) if (state.authenticated) count += 1;
+    return count;
+  }
 
   handleConnection(client: WebSocket): void {
     this.logger.log('New WebSocket connection');
@@ -59,6 +79,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     clientState.authTimeout = setTimeout(() => {
       if (!clientState.authenticated) {
         this.logger.warn('Auth timeout, closing connection');
+        this.metrics?.authDenied('timeout');
         client.send(JSON.stringify({ type: 'auth_fail', reason: 'Authentication timeout' }));
         client.close();
       }
@@ -92,6 +113,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
       if (clientState.authTimeout) clearTimeout(clientState.authTimeout);
       if (clientState.pingInterval) clearInterval(clientState.pingInterval);
       if (clientState.expiryTimeout) clearTimeout(clientState.expiryTimeout);
+      this.endSessionSpan(clientState);
       this.clients.delete(client);
       this.logger.log(`WebSocket disconnected (userId: ${clientState.userId || 'unauthenticated'})`);
     }
@@ -151,7 +173,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
       result = await this.principals.resolve(token);
     } catch (err) {
       this.logger.error(`Principal resolution failed: ${(err as Error).message}`);
-      this.denyAuth(client, clientState, 'Invalid token', 'invalid_token');
+      this.denyAuth(client, clientState, 'Invalid token', 'invalid_token', undefined, 'invalid_token');
       return;
     }
 
@@ -161,6 +183,10 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
         clientState,
         result.reason === 'invalid_user' ? 'Invalid user' : 'Invalid token',
         result.reason,
+        undefined,
+        // An inactive user or one with no organization is refused as `forbidden`; an expired token
+        // is told apart from a malformed or forged one.
+        result.reason === 'invalid_user' ? 'forbidden' : result.reason,
       );
       return;
     }
@@ -168,7 +194,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     const { principal } = result;
 
     if (!principal.permissions.includes(PERMISSIONS.SESSIONS_WRITE)) {
-      this.denyAuth(client, clientState, 'forbidden', 'forbidden', principal.userId);
+      this.denyAuth(client, clientState, 'forbidden', 'forbidden', principal.userId, 'forbidden');
       return;
     }
 
@@ -179,12 +205,19 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     // A token refresh on an already authenticated socket is never refused, so a window does
     // not cut off a terminal that is already open.
     if (!reauth && (await this.maintenance.refuses({ userId: principal.userId, roles: principal.roles }))) {
-      this.denyAuth(client, clientState, TERMINAL_MAINTENANCE_REASON, TERMINAL_MAINTENANCE_REASON, principal.userId);
+      this.denyAuth(
+        client,
+        clientState,
+        TERMINAL_MAINTENANCE_REASON,
+        TERMINAL_MAINTENANCE_REASON,
+        principal.userId,
+        'maintenance',
+      );
       return;
     }
 
     if (reauth && (principal.userId !== clientState.userId || principal.orgId !== clientState.orgId)) {
-      this.denyAuth(client, clientState, 'forbidden', 'identity_changed', principal.userId);
+      this.denyAuth(client, clientState, 'forbidden', 'identity_changed', principal.userId, 'forbidden');
       return;
     }
 
@@ -218,14 +251,19 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.logger.log(`WebSocket authenticated for user ${principal.userId}`);
   }
 
-  /** Refuses an authentication attempt: log the denial (never the token), tell the client, close. */
+  /**
+   * Refuses an authentication attempt: count it (`metricReason`, a bounded value, never an id), log
+   * the denial (never the token), tell the client, close.
+   */
   private denyAuth(
     client: WebSocket,
     clientState: AuthenticatedClient,
     reason: string,
     logReason: string,
-    userId?: string,
+    userId: string | undefined,
+    metricReason: WsAuthDeniedReason,
   ): void {
+    this.metrics?.authDenied(metricReason);
     this.logger.warn(
       `ws.auth.denied userId=${userId ?? (clientState.userId || 'unknown')} reason=${logReason}`,
     );
@@ -244,6 +282,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
   private expire(client: WebSocket, clientState: AuthenticatedClient): void {
     if (!clientState.authenticated) return;
     clientState.authenticated = false;
+    this.metrics?.authDenied('expired');
     this.logger.log(`WebSocket token expired for user ${clientState.userId}`);
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({ type: 'auth_expired' }));
@@ -320,6 +359,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
       }
 
       clientState.sessionId = sessionId;
+      this.startSessionSpan(clientState, sessionId);
       client.send(JSON.stringify({ type: 'session_ready', sessionId }));
       this.logger.log(`WebSocket attached to session ${sessionId}`);
     } catch (err) {
@@ -343,6 +383,25 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
       this.logger.error(`Session connect error: ${errorMsg}`);
       client.send(JSON.stringify({ type: 'session_error', error: errorMsg, code: 'CONNECTION_FAILED' }));
     }
+  }
+
+  /**
+   * `terminal.ws.session`: the lifetime of the socket's attachment to a session, ended when the
+   * socket closes (or attaches elsewhere). The ids live on the span only, never on a metric.
+   */
+  private startSessionSpan(clientState: AuthenticatedClient, sessionId: string): void {
+    this.endSessionSpan(clientState);
+    clientState.sessionSpan = tracer.startSpan('terminal.ws.session', {
+      attributes: { 'session.id': sessionId, 'org.id': clientState.orgId },
+    });
+  }
+
+  private endSessionSpan(clientState: AuthenticatedClient): void {
+    const span = clientState.sessionSpan;
+    if (!span) return;
+    clientState.sessionSpan = undefined;
+    span.setStatus({ code: SpanStatusCode.OK });
+    span.end();
   }
 
   private isJsonMessage(data: Buffer): boolean {
