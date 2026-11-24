@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter } from 'events';
+import { HostKeyError } from '../ssh/host-key.error';
 import { TerminalGateway } from './terminal.gateway';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
 import { TerminalMaintenancePolicy } from './ws/terminal-maintenance.policy';
@@ -514,6 +515,38 @@ describe('TerminalGateway', () => {
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'session_error', error: 'SSH refused', code: 'CONNECTION_FAILED' }),
       );
+    });
+
+    it.each([
+      ['HOST_KEY_UNKNOWN', undefined],
+      ['HOST_KEY_MISMATCH', 'SHA256:' + 'T'.repeat(43)],
+    ] as const)('should send a %s session_error with both fingerprints, not CONNECTION_FAILED', async (code, expected) => {
+      const ws = createMockWebSocket();
+      gateway.handleConnection(ws);
+      await authenticateWs(ws);
+
+      const presented = { fingerprint: 'SHA256:' + 'P'.repeat(43), algorithm: 'ssh-ed25519' };
+      sessionsService.findOne.mockResolvedValue(mockSession as any);
+      sessionManager.isSessionRunning.mockReturnValue(false);
+      serverProfilesService.getDecryptedProfile.mockResolvedValue(mockDecryptedProfile as any);
+      sessionManager.startSession.mockRejectedValue(new HostKeyError(code, presented, expected, 'profile-1'));
+
+      emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+
+      const sent = ws.send.mock.calls.map(([payload]: [string]) => JSON.parse(payload));
+      expect(sent).toContainEqual({
+        type: 'session_error',
+        error: expect.any(String),
+        code,
+        presented,
+        expected: expected ?? null,
+        serverProfileId: 'profile-1',
+      });
+      expect(sent.some((m: { code?: string }) => m.code === 'CONNECTION_FAILED')).toBe(false);
+      // The session is not marked active and nothing is attached.
+      expect(sessionsService.updateStatus).not.toHaveBeenCalledWith(SESSION_ID, 'active');
+      expect(sessionManager.attachWebSocket).not.toHaveBeenCalled();
     });
   });
 

@@ -7,6 +7,7 @@ import { SessionsService } from './sessions.service';
 import { SessionManagerService } from './session-manager.service';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
 import { TERMINAL_MAINTENANCE_REASON, TerminalMaintenancePolicy } from './ws/terminal-maintenance.policy';
+import { HostKeyError } from '../ssh/host-key.error';
 import * as WebSocket from 'ws';
 
 /** setTimeout cannot hold a delay above 2^31 - 1 ms (about 24.8 days). */
@@ -322,6 +323,22 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
       client.send(JSON.stringify({ type: 'session_ready', sessionId }));
       this.logger.log(`WebSocket attached to session ${sessionId}`);
     } catch (err) {
+      if (err instanceof HostKeyError) {
+        // Refused before any credential was sent. The client shows the fingerprints and asks
+        // the user to trust the key (UNKNOWN) or warns of a possible interception (MISMATCH).
+        this.logger.warn(`Session connect refused: ${err.code} profile=${err.serverProfileId ?? 'unknown'}`);
+        client.send(
+          JSON.stringify({
+            type: 'session_error',
+            error: err.message,
+            code: err.code,
+            presented: err.presented,
+            expected: err.expected ?? null,
+            serverProfileId: err.serverProfileId ?? null,
+          }),
+        );
+        return;
+      }
       const errorMsg = (err as Error).message;
       this.logger.error(`Session connect error: ${errorMsg}`);
       client.send(JSON.stringify({ type: 'session_error', error: errorMsg, code: 'CONNECTION_FAILED' }));
