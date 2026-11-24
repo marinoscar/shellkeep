@@ -49,8 +49,10 @@ const HOST_KEY_RESET = {
   hostKeyTrustedBy: null,
 } as const;
 
-/** The connection-defining columns and the secrets: only the user who holds the credentials may change them. */
-const CREDENTIAL_HOLDER_FIELDS = ['hostname', 'port', 'username', 'authMethod', 'password', 'privateKey', 'passphrase'] as const;
+/** The connection-defining columns: only the user who holds the credentials may CHANGE them. */
+const CONNECTION_FIELDS = ['hostname', 'port', 'username', 'authMethod'] as const;
+/** The secrets: only the user who holds the credentials may set or clear them. */
+const SECRET_FIELDS = ['password', 'privateKey', 'passphrase'] as const;
 
 /** The owner shown on a row, and the relations that name it. */
 const OWNER_INCLUDE = {
@@ -326,7 +328,12 @@ export class ServerProfilesService {
     const existing = await this.loadFor(id, principal, 'write');
 
     if (existing.userId !== principal.userId) {
-      const touched = CREDENTIAL_HOLDER_FIELDS.filter((field) => dto[field] !== undefined);
+      // A form sends the whole connection back with every save: naming a field with its CURRENT value
+      // is not a change.
+      const touched: string[] = [
+        ...CONNECTION_FIELDS.filter((field) => dto[field] !== undefined && dto[field] !== existing[field]),
+        ...SECRET_FIELDS.filter((field) => dto[field] !== undefined),
+      ];
       if (touched.length > 0) {
         throw new ForbiddenException({
           code: 'SERVER_PROFILE_CREDENTIAL_HOLDER_ONLY',

@@ -925,13 +925,19 @@ describe('ServerProfilesService', () => {
       await expect(service.update(mockProfileId, principal, { name: 'Renamed', tags: ['x'] })).resolves.toBeDefined();
       expect(access.require).toHaveBeenCalledWith(principal, 'write', { type: 'server_profile', id: mockProfileId });
 
+      // The same connection sent back with a rename (what an edit form does) is not a change.
+      await expect(
+        service.update(mockProfileId, principal, { name: 'Again', hostname: 'example.com', port: 22, username: 'admin', authMethod: 'password' }),
+      ).resolves.toBeDefined();
+      (prisma.serverProfile.update as jest.Mock).mockClear();
+
       for (const change of [{ hostname: 'evil.example.test' }, { port: 2222 }, { username: 'root' }, { authMethod: 'agent' as const }, { password: 'x' }, { privateKey: 'k' }]) {
         await expect(service.update(mockProfileId, principal, change)).rejects.toMatchObject({
           response: { code: 'SERVER_PROFILE_CREDENTIAL_HOLDER_ONLY' },
         });
       }
       expect(credentials.setSecret).not.toHaveBeenCalled();
-      expect(prisma.serverProfile.update).toHaveBeenCalledTimes(1);
+      expect(prisma.serverProfile.update).not.toHaveBeenCalled();
     });
 
     it('writes a secret change to the credential store of the holder', async () => {
