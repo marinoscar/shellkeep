@@ -6,12 +6,14 @@ import { DeploymentResolutionError, resolveDeployment, type ResolvedDeployment }
 // =============================================================================
 //
 // The platform's `deploy uninstall` has no typed confirmation and no
-// environment backup. This module looks at the argument vector BEFORE it
-// reaches the platform's parser and answers one of:
+// environment backup, and its `deploy update` has no `--check`. This module
+// looks at the argument vector BEFORE it reaches the platform's parser and
+// answers one of:
 //
 //   run      hand `argv` to the platform CLI, after running `before` (the
 //            environment backup) and printing `notes` on stderr;
-//   refuse   print `message` and exit with the usage code.
+//   refuse   print `message` and exit with the usage code;
+//   update-check  answer `deploy update --check` itself (extensions/update-check.ts).
 //
 // Help and version are never inspected: they must describe the real surface.
 // =============================================================================
@@ -30,7 +32,13 @@ export type DeployPlan =
       /** Work to do first (the environment backup); each returns a line to print. */
       before: Array<() => string | undefined>;
     }
-  | { kind: 'refuse'; message: string };
+  | { kind: 'refuse'; message: string }
+  | {
+      kind: 'update-check';
+      selector: { root?: string | undefined; name?: string | undefined; appsRoot?: string | undefined };
+      ref?: string | undefined;
+      json: boolean;
+    };
 
 /** What {@link planDeployArgs} needs from the process. */
 export interface DeployPlanContext {
@@ -107,6 +115,19 @@ export function planDeployArgs(argv: readonly string[], context: DeployPlanConte
 
   const head = argv.slice(0, subAt + 1);
   const items = scan(argv.slice(subAt + 1));
+
+  if (sub === 'update' && has(items, '--check')) {
+    return {
+      kind: 'update-check',
+      selector: {
+        root: valueOf(items, '--root'),
+        name: valueOf(items, '--name'),
+        appsRoot: valueOf(items, '--apps-root'),
+      },
+      ref: valueOf(items, '--ref'),
+      json: has(items, '--json'),
+    };
+  }
 
   if (sub === 'uninstall') {
     const before: Array<() => string | undefined> = [];

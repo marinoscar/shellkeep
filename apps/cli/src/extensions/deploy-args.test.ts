@@ -20,7 +20,7 @@ function install(name: string): void {
 const plan = (argv: string[]): DeployPlan => planDeployArgs(argv, { cli: 'shellkeep', cwd: work, now: () => NOW });
 const run = (argv: string[]): Extract<DeployPlan, { kind: 'run' }> => {
   const result = plan(argv);
-  if (result.kind !== 'run') throw new Error(`expected run, got ${result.message}`);
+  if (result.kind !== 'run') throw new Error(`expected run, got ${result.kind}`);
   return result;
 };
 const refusal = (argv: string[]): string => {
@@ -116,5 +116,26 @@ describe('deploy uninstall names the deployment before it removes it', () => {
     expect(readdirSync(appsRoot).sort()).toEqual(['shellkeep', 'shellkeep.env.2026-11-24T10-20-30-456Z.bak']);
     expect(line).toContain('before it is removed');
     expect(line).toContain('mode 0600');
+  });
+});
+
+describe('deploy update --check', () => {
+  it('is answered here, with the deployment selectors and --ref', () => {
+    expect(plan(['deploy', 'update', '--check', '--json', '--name', 'x', '--ref=v1', '--apps-root', '/a'])).toEqual({
+      kind: 'update-check',
+      selector: { root: undefined, name: 'x', appsRoot: '/a' },
+      ref: 'v1',
+      json: true,
+    });
+    expect(plan(['deploy', 'update', '--check'])).toMatchObject({ kind: 'update-check', json: false });
+  });
+
+  it('does not intercept an update without --check, or --check on another command', () => {
+    expect(plan(['deploy', 'update', '--force']).kind).toBe('run');
+    expect(plan(['deploy', 'status', '--check']).kind).toBe('run');
+  });
+
+  it('leaves help alone even with --check', () => {
+    expect(plan(['deploy', 'update', '--check', '--help']).kind).toBe('run');
   });
 });

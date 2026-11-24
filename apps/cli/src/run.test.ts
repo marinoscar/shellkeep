@@ -158,4 +158,55 @@ describe('runApp', () => {
       expect(fakeRuns).toHaveLength(1);
     });
   });
+
+  describe('deploy update --check (#150)', () => {
+    let apps: string;
+    const SHA = 'a'.repeat(40);
+    const NEWER = 'b'.repeat(40);
+
+    beforeEach(() => {
+      apps = mkdtempSync(join(tmpdir(), 'run-check-'));
+      mkdirSync(join(apps, 'shellkeep', 'repo', '.git'), { recursive: true });
+      writeFileSync(join(apps, 'shellkeep', '.env'), 'X=1\n');
+      writeFileSync(join(apps, 'shellkeep', '.appctl-deploy.json'), JSON.stringify({ commitSha: SHA, ref: 'main' }));
+    });
+    afterEach(() => rmSync(apps, { recursive: true, force: true }));
+
+    const git = (async (_cwd: string, args: readonly string[]) =>
+      ({ fetch: '', 'rev-parse': `${NEWER}\n`, 'rev-list': '3\n', log: `${NEWER}\tfix(api): x\n` })[args[0] as string] ?? '') as never;
+    const noCli = (() => {
+      throw new Error('the platform CLI must not be built for --check');
+    }) as unknown as typeof createCli;
+
+    it('prints the check as JSON without building the platform CLI', async () => {
+      const code = await runApp(['deploy', 'update', '--check', '--json', '--apps-root', apps], {
+        createCli: noCli,
+        runGit: git,
+        now: () => new Date('2026-11-24T00:00:00.000Z'),
+      });
+
+      expect(code).toBe(0);
+      expect(JSON.parse(stdout)).toEqual({
+        current: SHA,
+        latest: NEWER,
+        commitsBehind: 3,
+        commits: [{ sha: NEWER.slice(0, 12), subject: 'fix(api): x' }],
+        checkedAt: '2026-11-24T00:00:00.000Z',
+      });
+    });
+
+    it('prints the headline for a human', async () => {
+      expect(await runApp(['deploy', 'update', '--check', '--apps-root', apps], { createCli: noCli, runGit: git })).toBe(0);
+      expect(stdout).toContain('3 commits behind');
+    });
+
+    it('exits 2 when no deployment is found and 1 when git fails', async () => {
+      expect(await runApp(['deploy', 'update', '--check', '--apps-root', join(apps, 'none')], { createCli: noCli })).toBe(2);
+      const failing = (async () => {
+        throw new Error('offline');
+      }) as never;
+      expect(await runApp(['deploy', 'update', '--check', '--apps-root', apps], { createCli: noCli, runGit: failing })).toBe(1);
+      expect(stderr).toContain('offline');
+    });
+  });
 });
