@@ -23,8 +23,8 @@
 //     rebuilt the same way from its `keyShortcuts` (or, with none, from its
 //     macros). `layoutVersion: 2` makes it run once: a row that has it is never
 //     touched again, so the step is idempotent and cannot loop.
-//   `keyShortcuts` is NOT removed: it is the rollback and the source of the
-//   legacy editor until #169.
+//   `keyShortcuts` is NOT removed: it is the rollback (since #169 no client
+//   writes it).
 //   inverse (`removeKeyLayout`, the rollback): drops `layout` and `options`.
 //
 // A written row's `version` is incremented (clients refetch instead of saving
