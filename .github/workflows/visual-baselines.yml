@@ -1,0 +1,78 @@
+name: Regenerate visual baselines
+
+# =============================================================================
+# The one way to produce the baselines of ci.yml's `visual` job (issue #81)
+# =============================================================================
+#
+# A pixel baseline depends on the exact browser BUILD, so it is valid only when
+# generated inside the SAME `mcr.microsoft.com/playwright:v<version>-noble`
+# image the `visual` job runs in. A locally installed Chromium is a different
+# build: images made from it look right on a laptop and fail in CI. This
+# workflow runs the suite there with `--update-snapshots` and publishes every
+# image as an artifact.
+#
+# It deliberately NEVER commits. It runs on `workflow_dispatch` only (never on
+# `pull_request` or `push`, so a red `visual` job cannot heal itself by
+# overwriting the evidence), and it has read-only access. A person reviews the
+# images in the artifact, then commits them.
+#
+# HOW TO USE IT. Actions, "Regenerate visual baselines", Run workflow, pick the
+# branch. Download the `visual-baselines` artifact. It is the contents of the
+# directory tests/visual/__screenshots__/ (one folder per spec file, an image
+# per screenshot). Unzip it INTO that directory so the files land at
+#
+#   tests/visual/__screenshots__/<spec file>/<name>.png
+#
+# for example tests/visual/__screenshots__/shell.spec.ts/home-360-dark.png.
+# Review the images, commit them to the branch and let the `visual` job verify.
+# =============================================================================
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  regenerate:
+    name: Regenerate baselines (pinned Playwright image)
+    runs-on: ubuntu-latest
+
+    # THIS TAG MUST MATCH ci.yml's `visual` job AND the exact `@playwright/test`
+    # pin in tests/visual/package.json. Three places, one version, no carets.
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+
+    steps:
+      # A manual dispatch checks out the branch it was run on.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm ci
+        working-directory: tests/visual
+
+      # `--update-snapshots` writes every missing or changed baseline instead of
+      # failing on it. The binary directly, not `npx playwright` (see ci.yml).
+      - run: tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts --update-snapshots
+
+      # Uploaded even when a spec failed, so a partial run can be inspected.
+      # A single directory: the artifact root is that directory's contents.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-baselines
+          path: tests/visual/__screenshots__/
+          if-no-files-found: error
+          retention-days: 14

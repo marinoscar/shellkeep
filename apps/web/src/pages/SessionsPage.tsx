@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Container,
   Typography,
@@ -18,7 +18,7 @@ import {
   TextField,
 } from '@mui/material';
 import { Add as AddIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSessions } from '../hooks/useSessions';
 import { SessionCard } from '../components/terminal/SessionCard';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
@@ -36,6 +36,7 @@ const STATUS_TABS = ['all', 'active', 'detached', 'terminated'] as const;
 
 export default function SessionsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     sessions,
     isLoading,
@@ -50,6 +51,22 @@ export default function SessionsPage() {
   const aiAvailable = useTerminalAiAvailable();
   const [summarySession, setSummarySession] = useState<TerminalSession | null>(null);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
+
+  // `?new=1` (onboarding #70, the "Open a session" step): open the create dialog once, then
+  // drop the flag so a reload or the back button does not reopen it. Like the New Session
+  // button, it is not gated here: the API decides (`sessions:write`).
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    setNewDialogOpen(true);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('new');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [searchParams, setSearchParams]);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);

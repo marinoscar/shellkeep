@@ -1,0 +1,26 @@
+{
+  "theme": "dark",
+  "profile": {
+    "displayName": "Person A",
+    "useProviderImage": false,
+    "customImageUrl": null
+  },
+  "navigation": {
+    "railCollapsed": false
+  },
+  "terminal": {
+    "showScrollButtons": false,
+    "showKeyBar": "auto",
+    "fontFamily": "jetbrains-mono",
+    "fontSize": 14,
+    "lineHeight": 1.2,
+    "cursorStyle": "block",
+    "cursorBlink": false,
+    "scrollback": 10000,
+    "theme": "follow-app",
+    "bell": "none",
+    "copyOnSelect": false
+  },
+  "version": 3,
+  "updatedAt": "2025-01-10T09:00:00.000Z"
+}

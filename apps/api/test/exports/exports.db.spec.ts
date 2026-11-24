@@ -14,12 +14,15 @@
 //   - the requester's own rows only; `includeShared` adds a profile another user shared with them, and
 //     still never its credentials;
 //   - `terminal-sessions` exports metadata (the tmux session name) for the requested range only;
+//   - `runbook-runs` exports the requester's own runs of the range (runs, targets, steps, approvals, command metadata),
+//     while the run's parameters, output, AI text, command text, approval text and storage keys, all seeded with the
+//     sentinel, appear in no byte of any output;
 //   - the export file is ready with a signed URL that forces a download; someone else's export is a 404.
 //
 // Run with `npm run test:db` (as the bootstrap superuser, then as the application role).
 // =============================================================================
 
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 
 import request from 'supertest';
@@ -81,6 +84,7 @@ describe('Data export (real database)', () => {
   let aPasswordProfileId: string;
   let bSharedProfileId: string;
   let bPrivateProfileId: string;
+  const rb = { janRun: randomUUID(), marRun: randomUUID(), bRun: randomUUID(), runbookId: randomUUID(), otherRunbookId: randomUUID(), bRunbookId: randomUUID() };
 
   async function login(name: string): Promise<Person> {
     const email = `${name}-${RUN}@example.test`;
@@ -168,6 +172,61 @@ describe('Data export (real database)', () => {
       await tx.terminalSession.create({
         data: { ...base, userId: B.userId, serverProfileId: bPrivateProfileId, name: `b-session-${RUN}`, tmuxSessionId: `tmux-b-${RUN}`, createdAt: new Date('2026-01-16T12:00:00Z') },
       });
+
+      // Runbook runs: A's January run (every secret-bearing column filled with the sentinel), A's March run,
+      // A's January run of ANOTHER runbook, and B's January run.
+      const mk = async (id: string, owner: string, name: string) => {
+        await tx.runbook.create({ data: { id, orgId: A.orgId, ownerUserId: owner, name } });
+        await tx.runbookVersion.create({
+          data: { orgId: A.orgId, runbookId: id, version: 1, definition: { schemaVersion: 1, steps: [] }, definitionSha256: 'a'.repeat(64), createdBy: owner },
+        });
+      };
+      await mk(rb.runbookId, A.userId, `rbrun-${RUN}`);
+      await mk(rb.otherRunbookId, A.userId, `rbother-${RUN}`);
+      await mk(rb.bRunbookId, B.userId, `rbb-${RUN}`);
+      const otherRun = randomUUID();
+      const runs: Array<[string, string, string, string, Date]> = [
+        [rb.janRun, rb.runbookId, A.userId, `jan-run-${RUN}`, new Date('2026-01-15T12:00:00Z')],
+        [rb.marRun, rb.runbookId, A.userId, `mar-run-${RUN}`, new Date('2026-03-15T12:00:00Z')],
+        [otherRun, rb.otherRunbookId, A.userId, `other-run-${RUN}`, new Date('2026-01-16T12:00:00Z')],
+        [rb.bRun, rb.bRunbookId, B.userId, `b-run-${RUN}`, new Date('2026-01-17T12:00:00Z')],
+      ];
+      for (const [runId, runbookId, owner, label, createdAt] of runs) {
+        await tx.runbookRun.create({
+          data: {
+            id: runId, orgId: A.orgId, runbookId, version: 1, initiatedBy: owner, status: 'failed', createdAt,
+            params: { token: `${SENTINEL_SSH_SECRET}-param` }, secretRefs: { pw: `${SENTINEL_SSH_SECRET}-secret-ref` },
+            targetSelector: { tag: `${SENTINEL_SSH_SECRET}-selector` }, strategy: { note: `${SENTINEL_SSH_SECRET}-strategy` },
+          },
+        });
+        const targetId = randomUUID();
+        const stepId = randomUUID();
+        await tx.runbookRunTarget.create({
+          data: {
+            id: targetId, orgId: A.orgId, runId, position: 0, serverName: `srv-${label}`, status: 'failed',
+            hostname: `${SENTINEL_SSH_SECRET}-host.example.test`, port: 22, username: `${SENTINEL_SSH_SECRET}-user`,
+            hostKeyFingerprint: `${SENTINEL_SSH_SECRET}-fp`, errorMessage: `${SENTINEL_SSH_SECRET}-error`,
+          },
+        });
+        await tx.runbookRunStep.create({
+          data: {
+            id: stepId, orgId: A.orgId, runId, runTargetId: targetId, stepIndex: 0, stepId: 'c1', kind: 'command', name: `step-${label}`,
+            status: 'failed', exitCode: 7, durationMs: 1234, outputTail: `${SENTINEL_SSH_SECRET}-output`,
+            aiTranscript: [{ role: 'user', text: `${SENTINEL_SSH_SECRET}-transcript` }], aiSummary: `${SENTINEL_SSH_SECRET}-summary`,
+            logStorageKey: `${SENTINEL_SSH_SECRET}-log-key`,
+          },
+        });
+        await tx.runbookCommandExecution.create({
+          data: { orgId: A.orgId, runStepId: stepId, origin: 'step', commandSha256: 'b'.repeat(64), commandPreview: `echo ${SENTINEL_SSH_SECRET}-command`, exitCode: 7 },
+        });
+        await tx.runbookApproval.create({
+          data: {
+            orgId: A.orgId, runId, scopeKey: 'run', scope: 'run', kind: 'gate', stepIndex: 0, stepName: `gate-${label}`,
+            message: `${SENTINEL_SSH_SECRET}-message`, comment: `${SENTINEL_SSH_SECRET}-comment`, payload: { command: `${SENTINEL_SSH_SECRET}-payload` },
+            expiresAt: new Date('2027-01-01T00:00:00Z'), status: 'approved', decidedBy: owner,
+          },
+        });
+      }
       const rows = await tx.userCredential.findMany({ where: { userId: { in: [A.userId, B.userId] }, purpose: 'ssh' } });
       ciphertexts = rows.map((row: { secret: string }) => row.secret);
     });
@@ -178,6 +237,7 @@ describe('Data export (real database)', () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     await bypass(async (tx) => {
       await tx.grant.deleteMany({ where: { orgId: A.orgId, resourceType: 'server_profile' } });
+      await tx.runbook.deleteMany({ where: { name: { endsWith: `-${RUN}` } } });
       await tx.terminalSession.deleteMany({ where: { name: { endsWith: `-${RUN}` } } });
       await tx.serverProfile.deleteMany({ where: { name: { endsWith: `-${RUN}` } } });
     });
@@ -264,11 +324,45 @@ describe('Data export (real database)', () => {
     expect(text).not.toContain(`tmux-jan-${RUN}`);
   }, 60_000);
 
-  it('runbook-runs: queued and completed, with an empty file until the run tables exist (#62)', async () => {
-    const { id } = await runExport(A, { source: 'runbook-runs', format: 'json', request: { from: '2026-01-01', to: '2026-12-31' } });
-    const view = await request(server()).get(`/api/exports/${id}`).set(bearer(A.token)).expect(200);
-    expect(view.body.data.status).toBe('ready');
-    expectNoSecret(await fileTextOf(id));
+  describe.each(FORMATS)('runbook-runs ($id)', ({ id: format }) => {
+    it('exports the requester’s own runs of the range with their metadata and no secret byte', async () => {
+      const { id } = await runExport(A, { source: 'runbook-runs', format, request: { from: '2026-01-01', to: '2026-01-31' } });
+      const view = await request(server()).get(`/api/exports/${id}`).set(bearer(A.token)).expect(200);
+      expect(view.body.data.status).toBe('ready');
+      const text = await fileTextOf(id);
+
+      expectNoSecret(text);
+      for (const column of ['params', 'secretRefs', 'outputTail', 'aiTranscript', 'logStorageKey', 'commandPreview', 'hostKeyFingerprint']) {
+        expect(text).not.toContain(column);
+      }
+      // A's January runs: both runbooks, with their targets, steps, approvals and commands.
+      for (const label of [`jan-run-${RUN}`, `other-run-${RUN}`]) {
+        expect(text).toContain(`srv-${label}`);
+        expect(text).toContain(`step-${label}`);
+        expect(text).toContain(`gate-${label}`);
+      }
+      expect(text).toContain(rb.janRun);
+      expect(text).toContain('b'.repeat(64));
+      // Out of range, and someone else's.
+      expect(text).not.toContain(`mar-run-${RUN}`);
+      expect(text).not.toContain(rb.marRun);
+      expect(text).not.toContain(`b-run-${RUN}`);
+      expect(text).not.toContain(rb.bRun);
+    }, 60_000);
+  });
+
+  it('runbook-runs: runbookId narrows every table to one runbook', async () => {
+    const { id } = await runExport(A, {
+      source: 'runbook-runs',
+      format: 'json',
+      request: { from: '2026-01-01', to: '2026-12-31', runbookId: rb.runbookId },
+    });
+    const text = await fileTextOf(id);
+    expectNoSecret(text);
+    expect(text).toContain(`srv-jan-run-${RUN}`);
+    expect(text).toContain(`srv-mar-run-${RUN}`);
+    expect(text).not.toContain(`other-run-${RUN}`);
+    expect(text).not.toContain(`b-run-${RUN}`);
   }, 60_000);
 
   it('answers 404, never 403, for someone else’s export, and lists only the caller’s own', async () => {

@@ -1671,8 +1671,33 @@ The Home page's one read (#78). `GET /api/dashboard/summary` requires `sessions:
 
 - **Scope.** `servers` counts the profiles the caller may see (own, owned by a group of theirs, shared with them; the sharing slice's `accessibleWhere`) and is `null` without `servers:read`. `sessions` covers the caller's own non-terminated sessions in the request's organization; `recent` is newest activity first, at most five, and carries the server's name, never its hostname.
 - **Reachability.** Counted from the stored outcome of each server's last connection test (#79), with the same definition as the Servers page's `health` filter, so `/servers?health=unreachable` lists exactly the servers the tile counts; a server never tested is `unknown`. The dashboard never opens SSH. `hostKeyUntrusted` counts servers with no trusted fingerprint (#60), the same set as `/servers?hostKey=untrusted`.
-- **Runs.** `null` without `runbooks:read`, and `null` until the runbook engine (#62) binds `DASHBOARD_RUNS_SOURCE` (`apps/api/src/dashboard/dashboard-runs.source.ts`), after which it is `{ running, failedLast24h, recent: [{ id, runbookId, runbookName, status, targets: { total, succeeded, failed, running }, startedAt }] }`.
+- **Runs.** `null` without `runbooks:read`; otherwise `{ running, failedLast24h, recent: [{ id, runbookId, runbookName, status, targets: { total, succeeded, failed, running }, startedAt }] }` over the runs the caller started or may read through a runbook shared with them (the Runs list's rule), from `DASHBOARD_RUNS_SOURCE` (`apps/api/src/dashboard/dashboard-runs.source.ts`), bound by `RunbooksModule`. `running` counts status `running` and `failedLast24h` status `failed` queued in the last 24 hours, so each tile equals the total of the Runs list it links to; `recent` is the five newest.
 - The response is validated against `dashboardSummarySchema` (`apps/api/src/dashboard/dashboard.schema.ts`). One span per request, `dashboard.summary`; no hostname in a log or span.
+
+---
+
+### Onboarding
+
+The Getting started checklist, the administrator's Setup guide and the activation metrics (#70), from the platform onboarding slice (`@marinoscar/platform-api/onboarding`, bound in `apps/api/src/platform/onboarding/`). Nothing is stored but the caller's UI state in the `onboarding` user-settings namespace; every step is derived per request, so creating a server or opening a session completes its step on the next read.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /api/onboarding` | `user_settings:read` | `{ settings, user, admin }`. `admin` (the Doctor-backed Setup guide: storage, email, allowlist, AI, Web Push, backups) is non-null only with `system_settings:read`. `?refresh=true` re-runs the Doctor checks. Read-only: never creates a settings row |
+| `GET /api/admin/onboarding/metrics` | `system_settings:read` | Aggregate activation metrics over new users (`?days=`): the cohort, the step funnel and the `shellkeep_first_session_opened` milestone (first terminal session within 7 days). Counts only; no hostname or row content |
+| `PATCH /api/user-settings` `{ onboarding: { welcomeSeenAt?, checklistDismissedAt?, adminDismissedAt?, skipped? } }` | `user_settings:write` | Stores the UI state. A `skipped` id that is not a registered, skippable step is `400` |
+
+ShellKeep's steps (audience `user`; ids are permanent, a user's `skipped` list stores them). Each reads one count over the caller's own rows in the request's organization (`apps/api/src/app-registrations/onboarding.ts` lists them; each is declared beside its domain):
+
+| Order | Step | Tier | Done when | Link | Permission |
+|---|---|---|---|---|---|
+| 10 | `shellkeep.add-server` | required | `shellkeep.serverProfileCount` > 0 | `/servers?new=1` | `servers:write` |
+| 20 | `shellkeep.trust-host-key` | required | `shellkeep.trustedHostKeyCount` > 0 (a stored fingerprint, #60) | `/servers` | `servers:write` |
+| 30 | `shellkeep.open-session` | required | `shellkeep.sessionCount` > 0 (any status) | `/sessions?new=1` | `sessions:write` |
+| 40 | `shellkeep.add-ai-key` | recommended, skippable, `feature: 'ai'` | `shellkeep.aiKeyCount` > 0 (`user_ai_keys`) | `/settings/ai` | `ai:use` |
+| 50 | `shellkeep.first-runbook` | recommended, skippable | `shellkeep.runbookCount` > 0 (authored, not archived; read under RLS) | `/runbooks` | `runbooks:write` |
+
+- A step whose permission the caller lacks is omitted, never shown blocked; while the AI kill switch is off `shellkeep.add-ai-key` is omitted. A fact that fails (no active organization on the credential) omits its steps and never fails the response.
+- The platform's own user steps (`user.profile`, `user.notifications`) follow ShellKeep's in the same block. Boot fails if a step names an unregistered fact (`assertOnboardingRegistries`); the `onboarding` conformance suite runs in `apps/api/test/onboarding/onboarding-conformance.spec.ts`.
 
 ---
 
@@ -1692,7 +1717,7 @@ Every signed-in user can download their own data (#68). The exports slice (`@mar
 | `user-data` | `user_settings:read` | none | The caller's whole record, one dataset per user-owned model (server profiles without any credential, terminal sessions, runbooks the caller authored with their versions, settings, tokens' metadata) |
 | `server-profiles` | `servers:read` | `{ includeShared?: boolean }` | Name, host, port, user, auth method, tags, color, host key fingerprint, timestamps. `includeShared` adds profiles other people shared with the caller (decided by the sharing slice), with the same columns |
 | `terminal-sessions` | `sessions:read` | `{ from, to, status? }` (`YYYY-MM-DD`, both days inclusive, in the caller's time zone, by creation day) | Metadata only: name, status, tmux session name, size, server profile id, timestamps |
-| `runbook-runs` | `runbooks:read` | `{ from, to, runbookId? }` | Run, target and step status, timings, exit codes and artifact object ids (the run tables arrive with #62; until then the file has no dataset). Log contents are never exported |
+| `runbook-runs` | `runbooks:read` | `{ from, to, runbookId? }` | The requester's own runs created in the range, as five datasets: runs, targets, steps, approvals and command executions (status, timings, exit codes, counts, command SHA-256). Parameters, secret references, step output, AI text, command text, approval comments and artifacts are never exported |
 
 Formats: `json`, `csv` (a zip of one CSV per dataset) and `xlsx`. Audit: `export:create` after the job commits. Metrics: `app.exports`, `app.export.duration`, `app.export.size` (no user id label). Notifications: `export.ready` and `export.failed` (a fixed message).
 

@@ -1,0 +1,10 @@
+{
+  "tags": [
+    "database",
+    "edge",
+    "prod",
+    "staging",
+    "web",
+    "worker"
+  ]
+}

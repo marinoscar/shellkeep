@@ -12,6 +12,7 @@ import { RunbookAiController } from './ai/runbook-ai.controller';
 import { RunbookAiStopService } from './ai/runbook-ai-stop.service';
 import { RunbookDraftController } from './ai/runbook-draft.controller';
 import { RunbookDraftService } from './ai/runbook-draft.service';
+import { DASHBOARD_RUNS_SOURCE } from '../dashboard/dashboard-runs.source';
 import { EngineAccessService } from './engine/engine-access.service';
 import { EngineMetricsService } from './engine/engine-metrics.service';
 import { LogArchiveService } from './engine/log-archive.service';
@@ -22,6 +23,7 @@ import { RunEventsService } from './engine/run-events.service';
 import { RunFileSource } from './engine/run-file-source';
 import { RunLifecycleService } from './engine/run-lifecycle.service';
 import { RunStartHandler } from './engine/run-start.handler';
+import { RunsDashboardSource } from './engine/runs-dashboard.source';
 import { RunStreamService } from './engine/run-stream.service';
 import { RunbookApprovalsController } from './engine/runbook-approvals.controller';
 import { RunbookApprovalsService } from './engine/runbook-approvals.service';
@@ -79,6 +81,8 @@ import { UserDataHostModule } from '../platform/user-data/user-data-host.module'
     RunLifecycleService,
     RunbookRunsService,
     RunbookApprovalsService,
+    RunsDashboardSource,
+    { provide: DASHBOARD_RUNS_SOURCE, useExisting: RunsDashboardSource },
     RunStreamService,
     LogArchiveService,
     RunFileSource,
@@ -107,6 +111,6 @@ import { UserDataHostModule } from '../platform/user-data/user-data-host.module'
     // The delegated half of the user-data purge (#69).
     RunbooksUserDataPurgeHandler,
   ],
-  exports: [RunbooksService, TargetResolverService, RunbookRunsService, RunCoordinatorService, RunEventsService],
+  exports: [RunbooksService, TargetResolverService, RunbookRunsService, RunCoordinatorService, RunEventsService, DASHBOARD_RUNS_SOURCE],
 })
 export class RunbooksModule {}

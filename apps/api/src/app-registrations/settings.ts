@@ -7,7 +7,7 @@
 // ORDER IS THE STORED KEY ORDER: append, never insert.
 //
 //   system: ui, features (the keys the `global` row has always held), terminal
-//   user:   terminal (the `terminal` key of `user_settings.value`), shortcuts (#80), terminalAi (#56)
+//   user:   terminal (the `terminal` key of `user_settings.value`), shortcuts (#80), terminalAi (#56), onboarding (#70, the platform's)
 //
 // The platform's own system namespaces (notifications, jobs, nodes,
 // databaseBackup, maintenance, storage, ...) are registered by the issue that
@@ -25,6 +25,7 @@ import type {
   UserSettingsNamespace,
   UserSettingsNamespaceExtension,
 } from '@marinoscar/platform-api/settings';
+import { ONBOARDING_USER_SETTINGS } from '@marinoscar/platform-api/onboarding';
 
 import { FEATURES_SYSTEM_SETTINGS, UI_SYSTEM_SETTINGS } from '../platform/settings/app-system-settings';
 import { TERMINAL_SYSTEM_SETTINGS } from '../terminal/settings/terminal.system-settings';
@@ -58,6 +59,11 @@ export const APP_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [
   SHORTCUTS_USER_SETTINGS as UserSettingsNamespace,
   // Terminal AI consent (#56); appended, so no stored key moves.
   TERMINAL_AI_USER_SETTINGS as UserSettingsNamespace,
+  // The platform onboarding slice's namespace (#70): welcomeSeenAt, checklistDismissedAt,
+  // adminDismissedAt, skipped. Appended here (not in the platform list, which is assembled
+  // first) so no stored key moves. Its merge refuses a `skipped` id that is not a
+  // registered, skippable step (`onboarding/onboarding.manifest.ts`).
+  ONBOARDING_USER_SETTINGS as UserSettingsNamespace,
 ];
 
 /** Fields the app adds inside platform system namespaces. None: every stored key has a home. */

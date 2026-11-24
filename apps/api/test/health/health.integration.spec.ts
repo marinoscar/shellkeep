@@ -160,16 +160,29 @@ describe('Health Endpoints (Integration)', () => {
       expect(context.prismaMock.$queryRaw).not.toHaveBeenCalled();
     });
 
-    it('should return quickly', async () => {
-      const startTime = Date.now();
+    it('performs no database query and no downstream call (what "fast" guarantees)', async () => {
+      const fetchSpy = jest.spyOn(globalThis, 'fetch');
+      const dbCalls = () =>
+        ['$queryRaw', '$queryRawUnsafe', '$executeRaw', '$executeRawUnsafe', '$transaction', '$connect'].reduce(
+          (n, m) => n + (context.prismaMock[m]?.mock?.calls.length ?? 0),
+          0,
+        );
+      try {
+        await request(context.app.getHttpServer()).get('/api/health/live').expect(200);
 
-      await request(context.app.getHttpServer())
-        .get('/api/health/live')
-        .expect(200);
+        expect(dbCalls()).toBe(0);
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    }, 5_000);
 
-      const duration = Date.now() - startTime;
-      // Liveness check should be very fast (under 100ms)
-      expect(duration).toBeLessThan(100);
+    it('the spy is real: the readiness probe does hit the database', async () => {
+      context.prismaMock.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+
+      await request(context.app.getHttpServer()).get('/api/health/ready').expect(200);
+
+      expect(context.prismaMock.$queryRaw).toHaveBeenCalled();
     });
   });
 
