@@ -171,8 +171,11 @@ export interface TerminalSession {
   terminatedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The session's server profile (the API returns it; `serverProfile` carries no id). */
+  serverProfileId?: string;
   serverProfile: {
-    id: string;
+    /** Not returned by `GET /api/sessions*`; read `serverProfileId`. */
+    id?: string;
     name: string;
     hostname: string;
     port: number;

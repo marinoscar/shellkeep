@@ -161,7 +161,9 @@ export default function TerminalWorkspacePage() {
   // The focused pane's server profile, for the status bar's host-key state
   // (#60). Read again each time the pane connects: the user may just have
   // trusted the key in the host-key dialog.
-  const activeProfileId = activeId ? sessions[activeId]?.serverProfile.id : undefined;
+  const activeProfileId = activeId
+    ? (sessions[activeId]?.serverProfileId ?? sessions[activeId]?.serverProfile.id)
+    : undefined;
   const activeConnected = activeId ? (status[activeId]?.connected ?? false) : false;
   const [profiles, setProfiles] = useState<Record<string, ServerProfile>>({});
   useEffect(() => {
