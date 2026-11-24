@@ -361,7 +361,7 @@ export default function TerminalWorkspacePage() {
         />
         <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, bgcolor: 'background.default' }}>
           <Tooltip title="Back to sessions">
-            <IconButton onClick={() => navigate('/sessions')} sx={{ ml: 1 }} aria-label="Back to sessions">
+            <IconButton onClick={() => navigate('/sessions')} sx={{ ml: { xs: 0, sm: 1 } }} aria-label="Back to sessions">
               <ArrowBackIcon />
             </IconButton>
           </Tooltip>
@@ -384,6 +384,8 @@ export default function TerminalWorkspacePage() {
               serverProfileColor={activeSession?.serverProfile.color}
               keyShortcutsOpen={keyShortcutsOpen}
               onToggleKeyShortcuts={() => setKeyShortcutsOpen((o) => !o)}
+              compact={isPhone}
+              onRequestRename={() => setRenaming(activeId)}
             />
           </Box>
         </Box>
