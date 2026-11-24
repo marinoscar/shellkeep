@@ -123,7 +123,7 @@ export const runbookStepSchema = z.discriminatedUnion('kind', [
     kind: z.literal('collect_logs'),
     // A path or glob travels as ONE line of an environment variable: no line break or other control character.
     paths: z
-      .array(absPath.refine((p) => !/[\u0000-\u001f\u007f]/.test(p), { message: 'Path must not contain control characters' }))
+      .array(absPath.refine((p) => ![...p].some((c) => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f), { message: 'Path must not contain control characters' }))
       .max(50)
       .default([]),
     journalUnits: z
