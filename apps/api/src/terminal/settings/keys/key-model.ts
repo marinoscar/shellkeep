@@ -4,7 +4,7 @@
 // =============================================================================
 //
 // PURE and import-free, so the same file is used by the web app and the API.
-// There are two byte-identical copies, which `keyModel.test.ts` (web, "parity with the API copy")
+// There are two byte-identical copies, which `keyModel.parity.test.ts` (web)
 // keeps equal:
 //
 //   apps/web/src/lib/terminal/keys/keyModel.ts          (edit this one)
@@ -227,6 +227,12 @@ export interface KeyOptions {
   autoHideWithHardwareKeyboard: boolean;
   /** A short vibration on each key press where the device supports it. */
   haptics: boolean;
+  /**
+   * Set to 2 by the v1 -> v2 settings migration once the layout holds the
+   * default keys (epic #171), so it never upgrades the row again. Absent on a
+   * row the user saved themselves.
+   */
+  layoutVersion?: 2;
 }
 
 export const GRID_COLUMNS = 4;
@@ -302,6 +308,34 @@ export interface LegacyShortcut {
   keystrokes: Chord[];
 }
 
+function packEntries(groups: KeyGroup[], entries: LayoutEntry[]): void {
+  let cells = 0;
+  let open = false;
+  for (const entry of entries) {
+    const span = entrySpan(entry);
+    const last = groups[groups.length - 1];
+    if (open && last && last.keys.length < MAX_KEYS_PER_GROUP && cells + span <= GRID_COLUMNS) {
+      last.keys.push(entry);
+      cells += span;
+    } else {
+      groups.push({ keys: [entry] });
+      cells = span;
+      open = true;
+    }
+  }
+}
+
+function macroEntry(shortcut: LegacyShortcut): LayoutEntry {
+  return {
+    key: {
+      kind: 'macro',
+      id: shortcut.id,
+      label: shortcut.label,
+      chords: shortcut.keystrokes.map((k) => ({ modifiers: [...k.modifiers], key: k.key })),
+    },
+  };
+}
+
 /**
  * The v2 layout holding exactly a v1 shortcut list: each shortcut becomes an
  * inline macro key (its keystrokes are its chords; the id and label are kept)
@@ -309,25 +343,81 @@ export interface LegacyShortcut {
  */
 export function legacyShortcutsToLayout(shortcuts: readonly LegacyShortcut[]): KeyLayout {
   const groups: KeyGroup[] = [];
-  let cells = 0;
-  for (const shortcut of shortcuts) {
-    const entry: LayoutEntry = {
-      key: {
-        kind: 'macro',
-        id: shortcut.id,
-        label: shortcut.label,
-        chords: shortcut.keystrokes.map((k) => ({ modifiers: [...k.modifiers], key: k.key })),
-      },
-    };
-    const span = entrySpan(entry);
-    const last = groups[groups.length - 1];
-    if (last && last.keys.length < MAX_KEYS_PER_GROUP && cells + span <= GRID_COLUMNS) {
-      last.keys.push(entry);
-      cells += span;
-    } else {
-      groups.push({ keys: [entry] });
-      cells = span;
+  packEntries(groups, shortcuts.map(macroEntry));
+  return { groups };
+}
+
+/** A chord sequence as a comparable string: the same bytes give the same signature. */
+function chordsSignature(chords: readonly Chord[]): string {
+  return chords.map((c) => `${[...c.modifiers].sort().join('+')}:${c.key}`).join(' ');
+}
+
+const c = (modifiers: KeyModifier[], key: string): Chord[] => [{ modifiers, key }];
+
+/**
+ * The v1 default shortcuts (`DEFAULT_KEY_SHORTCUTS`, stable ids) with their
+ * chords. A stored shortcut with one of these ids and the same chords is a v1
+ * default, which `DEFAULT_KEY_LAYOUT` replaces whether or not it has the key.
+ */
+const LEGACY_DEFAULT_SIGNATURES: Readonly<Record<string, string>> = {
+  '11111111-1111-4111-8111-111111111101': chordsSignature(c([], 'Escape')),
+  '11111111-1111-4111-8111-111111111102': chordsSignature(c([], 'Tab')),
+  '11111111-1111-4111-8111-111111111103': chordsSignature(c(['shift'], 'Tab')),
+  '11111111-1111-4111-8111-111111111104': chordsSignature(c(['ctrl'], 'c')),
+  '11111111-1111-4111-8111-111111111105': chordsSignature(c(['ctrl'], 'd')),
+  '11111111-1111-4111-8111-111111111106': chordsSignature(c([], 'ArrowUp')),
+  '11111111-1111-4111-8111-111111111107': chordsSignature(c([], 'ArrowDown')),
+  '11111111-1111-4111-8111-111111111108': chordsSignature(c([], 'ArrowLeft')),
+  '11111111-1111-4111-8111-111111111109': chordsSignature(c([], 'ArrowRight')),
+};
+
+/** The signatures of every key `DEFAULT_KEY_LAYOUT` sends. */
+function defaultLayoutSignatures(): Set<string> {
+  const out = new Set<string>();
+  for (const group of DEFAULT_KEY_LAYOUT.groups) {
+    for (const entry of group.keys) {
+      if (isInlineEntry(entry)) {
+        if (entry.key.kind === 'macro') out.add(chordsSignature(entry.key.chords));
+      } else {
+        const chord = getCatalogKey(entry.id)?.chord;
+        if (chord) out.add(chordsSignature([chord]));
+      }
     }
   }
-  return { groups };
+  return out;
+}
+
+/**
+ * The v2 layout of a user migrated from v1 shortcuts (epic #171): the default
+ * layout (the Ctrl/Alt toggles and every default key), then the user's
+ * shortcuts that the default does not already send (same bytes, or a v1
+ * default), as inline macro keys in appended rows of at most four cells. Stays
+ * within `MAX_KEY_GROUPS` and `MAX_INLINE_KEYS`: what does not fit is dropped.
+ * Pure and deterministic; a v1 default list gives exactly `DEFAULT_KEY_LAYOUT`.
+ */
+export function legacyShortcutsToDefaultLayout(shortcuts: readonly LegacyShortcut[]): KeyLayout {
+  const groups: KeyGroup[] = JSON.parse(JSON.stringify(DEFAULT_KEY_LAYOUT.groups)) as KeyGroup[];
+  const covered = defaultLayoutSignatures();
+  const ids = new Set<string>();
+  let inline = 0;
+  for (const group of groups) {
+    for (const entry of group.keys) {
+      if (isInlineEntry(entry)) {
+        ids.add(entry.key.id);
+        inline += 1;
+      }
+    }
+  }
+  const extra: LayoutEntry[] = [];
+  for (const shortcut of shortcuts) {
+    const signature = chordsSignature(shortcut.keystrokes);
+    if (covered.has(signature) || LEGACY_DEFAULT_SIGNATURES[shortcut.id] === signature) continue;
+    if (ids.has(shortcut.id) || inline >= MAX_INLINE_KEYS) continue;
+    ids.add(shortcut.id);
+    inline += 1;
+    extra.push(macroEntry(shortcut));
+  }
+  const appended: KeyGroup[] = [];
+  packEntries(appended, extra);
+  return { groups: [...groups, ...appended].slice(0, MAX_KEY_GROUPS) };
 }

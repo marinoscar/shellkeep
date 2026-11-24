@@ -7,7 +7,7 @@ import { useTerminalSettings } from '../../hooks/useTerminalSettings';
 import { DEFAULT_KEY_SHORTCUTS, DEFAULT_TERMINAL_SETTINGS } from '../../lib/terminal/settings';
 import type { KeyShortcut } from '../../types/terminal';
 import { DEFAULT_KEY_LAYOUT, DEFAULT_KEY_OPTIONS } from '../../lib/terminal/keys/keyModel';
-import { fromLegacyShortcuts } from '../../lib/terminal/keys/legacyAdapter';
+import { fromLegacyShortcuts, layoutFromLegacyShortcuts } from '../../lib/terminal/keys/legacyAdapter';
 
 const custom: KeyShortcut = {
   id: '22222222-2222-4222-8222-222222222201',
@@ -136,9 +136,10 @@ describe('useTerminalSettings', () => {
     });
 
     expect(body).toEqual({
-      shortcuts: { keyShortcuts: [custom, other], layout: fromLegacyShortcuts([custom, other]) },
+      shortcuts: { keyShortcuts: [custom, other], layout: layoutFromLegacyShortcuts([custom, other]) },
     });
-    expect(result.current.keyShortcuts).toEqual([custom, other]);
+    // the bar is fed from the layout: the default keys, then the user's own
+    expect(result.current.keyShortcuts.slice(-2)).toEqual([custom, other]);
   });
 
   it('hands a saved document to the other open instances without a refetch', async () => {

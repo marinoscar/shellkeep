@@ -4,6 +4,7 @@ import type { TerminalViewHandle, TerminalViewStatus } from '../TerminalView';
 import { TerminalConnectionAlert } from '../TerminalConnectionAlert';
 import type { ResolvedTerminalSettings } from '../../../lib/terminal/settings';
 import type { TerminalFileLinksConfig } from '../files/useTerminalFileLinks';
+import type { TerminalInputModifiers } from '../../../lib/terminal/keys/modifiedInput';
 
 /** What a pane reports to the workspace: its connection, latency, size and host-key state. */
 export interface PaneStatus extends Partial<TerminalViewStatus> {
@@ -26,6 +27,8 @@ export interface WorkspacePaneProps {
   fileLinksProfileId?: string;
   /** "Show in file browser" for a file link (#156). Omitted: the action is hidden. */
   onShowInFileBrowser?: TerminalFileLinksConfig['onShowInFileBrowser'];
+  /** The key bar's modifiers, applied to typed input (#166); shared by every pane. */
+  inputModifiers?: TerminalInputModifiers | null;
   /** Called with the pane's handle on mount and `null` on unmount. */
   registerView: (sessionId: string, handle: TerminalViewHandle | null) => void;
   /** Called with what changed in the pane's status. */
@@ -46,6 +49,7 @@ export const WorkspacePane = memo(function WorkspacePane({
   onExplainSelection,
   fileLinksProfileId,
   onShowInFileBrowser,
+  inputModifiers,
   registerView,
   onStatus,
 }: WorkspacePaneProps) {
@@ -91,6 +95,7 @@ export const WorkspacePane = memo(function WorkspacePane({
         isReservedKey={isReservedKey}
         onExplainSelection={onExplainSelection ? () => onExplainSelection(sessionId) : undefined}
         fileLinks={fileLinks}
+        inputModifiers={inputModifiers}
       />
       <TerminalConnectionAlert
         error={error}

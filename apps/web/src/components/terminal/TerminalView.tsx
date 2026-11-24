@@ -12,6 +12,7 @@ import type { Terminal } from '@xterm/xterm';
 import type { HostKeyErrorCode } from '../../types/terminal';
 import { DEFAULT_TERMINAL_SETTINGS, type ResolvedTerminalSettings } from '../../lib/terminal/settings';
 import { resolveTerminalTheme } from '../../lib/terminal/appearance';
+import type { TerminalInputModifiers } from '../../lib/terminal/keys/modifiedInput';
 import '@xterm/xterm/css/xterm.css';
 
 export interface TerminalViewHandle {
@@ -58,10 +59,12 @@ interface TerminalViewProps {
    * may use the files API (`sessions:write`, the terminal's own rule). Omitted: no file links.
    */
   fileLinks?: TerminalFileLinksConfig | null;
+  /** The key bar's armed or locked modifiers, applied to typed input (#166). */
+  inputModifiers?: TerminalInputModifiers | null;
 }
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
-  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS, isReservedKey, onExplainSelection, fileLinks }, ref) {
+  function TerminalView({ sessionId, onConnectionChange, onError, onStatusChange, showScrollButtons = false, preferences = DEFAULT_TERMINAL_SETTINGS, isReservedKey, onExplainSelection, fileLinks, inputModifiers }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appMode = useTheme().palette.mode;
   const appearance = useMemo(() => ({ preferences, appMode, isReservedKey }), [preferences, appMode, isReservedKey]);
@@ -69,7 +72,10 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
   const xtermHolder = useRef<{ current: Terminal | null } | null>(null);
   const getXterm = useCallback(() => xtermHolder.current?.current ?? null, []);
   const fileLinkState = useTerminalFileLinks(sessionId, containerRef, getXterm, fileLinks);
-  const terminalOptions = useMemo(() => ({ fileLinks: fileLinkState.source }), [fileLinkState.source]);
+  const terminalOptions = useMemo(
+    () => ({ fileLinks: fileLinkState.source, inputModifiers }),
+    [fileLinkState.source, inputModifiers],
+  );
   const background = resolveTerminalTheme(preferences.theme, appMode).background;
   const {
     isConnected,

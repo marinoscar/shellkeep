@@ -5,7 +5,7 @@
 // The `shortcuts.layout` and `shortcuts.options` fields of the `shortcuts`
 // user-settings namespace. The key model (catalog ids, caps, defaults) is the
 // mirrored `keys/key-model.ts`. Every object is `.strict()` and every field is
-// required: the platform refuses `.default()` in a user namespace.
+// required (but `options.layoutVersion`): the platform refuses `.default()` in a user namespace.
 // =============================================================================
 
 import { z } from 'zod';
@@ -99,5 +99,10 @@ export const keyLayoutSchema = z
   });
 
 export const keyOptionsSchema = z
-  .object({ autoHideWithHardwareKeyboard: z.boolean(), haptics: z.boolean() })
+  .object({
+    autoHideWithHardwareKeyboard: z.boolean(),
+    haptics: z.boolean(),
+    // Optional, the only such field: the settings migration's marker (see `KeyOptions`).
+    layoutVersion: z.literal(2).optional(),
+  })
   .strict();

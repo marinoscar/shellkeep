@@ -32,7 +32,7 @@ import {
   terminalPatch,
   type ResolvedTerminalSettings,
 } from '../lib/terminal/settings';
-import { fromLegacyShortcuts } from '../lib/terminal/keys/legacyAdapter';
+import { layoutFromLegacyShortcuts } from '../lib/terminal/keys/legacyAdapter';
 import type { KeyLayout, KeyOptions } from '../lib/terminal/keys/keyModel';
 import { publishTerminalSettings, subscribeTerminalSettings } from '../lib/terminal/settingsSync';
 import type {
@@ -164,7 +164,7 @@ export function useTerminalSettings(): UseTerminalSettingsResult {
         // A stored v2 layout would otherwise outlive the list the bar is fed from:
         // the legacy editor's list becomes the layout too (#165), until #169.
         const layout =
-          change.shortcuts.layout ?? (stored?.shortcuts?.layout ? fromLegacyShortcuts(keyShortcuts) : undefined);
+          change.shortcuts.layout ?? (stored?.shortcuts?.layout ? layoutFromLegacyShortcuts(keyShortcuts) : undefined);
         const options = change.shortcuts.options ?? stored?.shortcuts?.options;
         body.shortcuts = {
           keyShortcuts,

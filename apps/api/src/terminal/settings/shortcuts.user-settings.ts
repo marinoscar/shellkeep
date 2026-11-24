@@ -207,7 +207,13 @@ export const SHORTCUTS_USER_SETTINGS: UserSettingsNamespace<
     const base = current ?? DEFAULT_SHORTCUTS_SETTINGS;
     const actions = patch.actions !== undefined ? patch.actions : base.actions;
     const layout = patch.layout !== undefined ? patch.layout : base.layout;
-    const options = patch.options !== undefined ? patch.options : base.options;
+    // `layoutVersion` is the migration's marker: a client saving options without it must not drop it.
+    const options =
+      patch.options !== undefined
+        ? base.options?.layoutVersion !== undefined && patch.options.layoutVersion === undefined
+          ? { ...patch.options, layoutVersion: base.options.layoutVersion }
+          : patch.options
+        : base.options;
     return {
       keyShortcuts: patch.keyShortcuts !== undefined ? patch.keyShortcuts : base.keyShortcuts,
       ...(actions !== undefined ? { actions } : {}),

@@ -7,6 +7,7 @@ import {
   entrySpan,
   getCatalogKey,
   isChordKey,
+  legacyShortcutsToDefaultLayout,
   legacyShortcutsToLayout,
   parseSequenceEscapes,
 } from './key-model';
@@ -156,5 +157,32 @@ describe('legacyShortcutsToLayout', () => {
 
   it('is empty for an empty list', () => {
     expect(legacyShortcutsToLayout([])).toEqual({ groups: [] });
+  });
+});
+
+describe('legacyShortcutsToDefaultLayout', () => {
+  const one = (n: number, mod: 'ctrl' | 'alt', key: string) => ({
+    id: `22222222-2222-4222-8222-2222222222${String(n).padStart(2, '0')}`,
+    label: `K${n}`,
+    keystrokes: [{ modifiers: [mod], key }],
+  });
+
+  it('is the default layout for no shortcuts', () => {
+    expect(legacyShortcutsToDefaultLayout([])).toEqual(DEFAULT_KEY_LAYOUT);
+  });
+
+  it('appends the shortcuts the default does not send, after it, four per row', () => {
+    const list = [1, 2, 3, 4, 5].map((n) => one(n, 'alt', 'q'));
+    const layout = legacyShortcutsToDefaultLayout([{ ...one(9, 'ctrl', 'x'), keystrokes: [{ modifiers: [], key: 'Escape' }] }, ...list]);
+    const base = DEFAULT_KEY_LAYOUT.groups.length;
+    expect(layout.groups.slice(0, base)).toEqual(DEFAULT_KEY_LAYOUT.groups);
+    expect(layout.groups.slice(base).map((g) => g.keys.length)).toEqual([4, 1]);
+  });
+
+  it('stays within 40 groups and 50 inline keys', () => {
+    const list = Array.from({ length: 50 }, (_, i) => ({ ...one(i, 'alt', 'q'), id: `22222222-2222-4222-8222-${String(i).padStart(12, '0')}`, keystrokes: [{ modifiers: ['alt' as const], key: 'q' }, { modifiers: ['alt' as const], key: 'w' }] }));
+    const layout = legacyShortcutsToDefaultLayout(list);
+    expect(layout.groups.length).toBeLessThanOrEqual(40);
+    expect(layout.groups.flatMap((g) => g.keys).filter((e) => 'key' in e).length).toBeLessThanOrEqual(50);
   });
 });
