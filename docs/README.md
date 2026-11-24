@@ -19,7 +19,9 @@ ShellKeep is a browser-based terminal workspace with persistent tmux-backed sess
 | Work with Claude Code or OpenCode on this repo | [AI-ASSISTANTS.md](AI-ASSISTANTS.md), [../AGENTS.md](../AGENTS.md) |
 | Baseline an existing database, create the application role | [runbooks/database-baseline.md](runbooks/database-baseline.md), [runbooks/application-role.md](runbooks/application-role.md) |
 | Move the SSH secrets of a deployed database into the credential store | [runbooks/ssh-secret-reencryption.md](runbooks/ssh-secret-reencryption.md) |
-| See the original build specs | [specs/README.md](specs/README.md) |
+| See the original build specs | [runbooks/webhooks.md](runbooks/webhooks.md) | Outbound webhooks: events, endpoints, signature verification, rotation, redelivery, private receivers |
+| [runbooks/alerts.md](runbooks/alerts.md) | Alerts: the four ShellKeep starter rules, enabling, tuning, incidents |
+| [specs/README.md](specs/README.md) |
 
 ## Index
 
