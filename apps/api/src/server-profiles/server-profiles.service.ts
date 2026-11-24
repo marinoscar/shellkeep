@@ -719,6 +719,8 @@ export class ServerProfilesService {
         role,
         via: decision?.via ?? null,
         shared: !(role === 'owner' && !profile.ownerGroupId),
+        // Whether the caller saved the credentials: only they may change the connection or the secrets.
+        credentialHolder: holder,
         can: capabilitiesOf(SERVER_PROFILE_RESOURCE, role, RESPONSE_ACTIONS, principal.permissions),
       },
       createdAt: profile.createdAt,

@@ -846,7 +846,7 @@ describe('ServerProfilesService', () => {
       // The holder's credential metadata is not even read for a grantee.
       expect(credentials.list).not.toHaveBeenCalledWith(OWNER_ID, 'ssh');
       expect(result.owner).toEqual({ kind: 'user', id: OWNER_ID, name: 'Person B' });
-      expect(result.access).toMatchObject({ role: 'operator', via: 'user_grant', shared: true });
+      expect(result.access).toMatchObject({ role: 'operator', via: 'user_grant', shared: true, credentialHolder: false });
       expect(result.access.can).toEqual({ connect: true, test: true, write: false, share: false, delete: false });
     });
 
