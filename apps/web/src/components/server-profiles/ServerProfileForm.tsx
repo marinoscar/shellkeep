@@ -28,6 +28,14 @@ interface ServerProfileFormProps {
   onProfileChanged?: (profile: ServerProfile) => void;
 }
 
+/**
+ * A profile shared with the viewer whose credentials someone else saved: its connection and secrets
+ * are read-only here (the API refuses a change from anyone but the user who saved them, #71).
+ */
+function isConnectionLocked(profile: ServerProfile | null | undefined): boolean {
+  return profile?.access?.credentialHolder === false;
+}
+
 const AUTH_METHOD_OPTIONS = [
   { value: 'password', label: 'Password' },
   { value: 'key', label: 'SSH Key' },
@@ -72,6 +80,7 @@ export function ServerProfileForm({
   const [passphraseChanged, setPassphraseChanged] = useState(false);
 
   const isEditing = Boolean(profile);
+  const connectionLocked = isConnectionLocked(profile);
   // A PATCH of the hostname or port clears the trusted host key (#60).
   const endpointChanged =
     !!profile?.fingerprint && (hostname.trim() !== profile.hostname || port !== profile.port);
@@ -195,13 +204,19 @@ export function ServerProfileForm({
               sx={{ mb: 2 }}
               autoFocus
             />
+            {connectionLocked && (
+              <Alert severity="info" sx={{ mb: 2 }} data-testid="connection-locked-note">
+                This server is shared with you. Only the person who saved its credentials can change the connection or the
+                secrets; you can change its name, tags, color and host-key trust.
+              </Alert>
+            )}
             <TextField
               label="Hostname"
               fullWidth
               required
               value={hostname}
               onChange={(e) => setHostname(e.target.value)}
-              disabled={isSubmitting}
+              disabled={isSubmitting || connectionLocked}
               sx={{ mb: 2 }}
             />
             <TextField
@@ -210,7 +225,7 @@ export function ServerProfileForm({
               fullWidth
               value={port}
               onChange={(e) => setPort(parseInt(e.target.value, 10) || 22)}
-              disabled={isSubmitting}
+              disabled={isSubmitting || connectionLocked}
               sx={{ mb: 2 }}
               helperText={
                 endpointChanged
@@ -227,7 +242,7 @@ export function ServerProfileForm({
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              disabled={isSubmitting}
+              disabled={isSubmitting || connectionLocked}
               sx={{ mb: 2 }}
             />
             <FormControl fullWidth sx={{ mb: 2 }}>
@@ -240,7 +255,7 @@ export function ServerProfileForm({
                     e.target.value as 'password' | 'key' | 'agent',
                   )
                 }
-                disabled={isSubmitting}
+                disabled={isSubmitting || connectionLocked}
               >
                 {AUTH_METHOD_OPTIONS.map((opt) => (
                   <MenuItem key={opt.value} value={opt.value}>
@@ -250,7 +265,7 @@ export function ServerProfileForm({
               </Select>
             </FormControl>
 
-            {authMethod === 'password' && (
+            {!connectionLocked && authMethod === 'password' && (
               <TextField
                 label="Password"
                 type="password"
@@ -273,7 +288,7 @@ export function ServerProfileForm({
               />
             )}
 
-            {authMethod === 'key' && (
+            {!connectionLocked && authMethod === 'key' && (
               <>
                 <TextField
                   label="Private Key"

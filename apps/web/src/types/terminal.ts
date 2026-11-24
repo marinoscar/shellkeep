@@ -57,6 +57,25 @@ export interface TerminalUserSettingsUpdate {
 // Server Profiles
 export type ServerProfileColor = 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success';
 
+/** Who owns a shared record: a user or a group (#71). */
+export interface SharedOwner {
+  kind: 'user' | 'group';
+  id: string | null;
+  name: string | null;
+}
+
+/** What the caller is to a server profile, and what that lets them do (#71). */
+export interface ServerProfileAccess {
+  /** `owner`, or the role a share or the owning group gives them (`viewer`, `operator`, `editor`). */
+  role: string | null;
+  via: string | null;
+  /** False only for a profile the caller owns outright. */
+  shared: boolean;
+  /** Whether the caller saved the SSH credentials: only they may change the connection or the secrets. */
+  credentialHolder: boolean;
+  can: { connect: boolean; test: boolean; write: boolean; share: boolean; delete: boolean };
+}
+
 export interface ServerProfile {
   id: string;
   name: string;
@@ -64,9 +83,19 @@ export interface ServerProfile {
   port: number;
   username: string;
   authMethod: 'password' | 'key' | 'agent';
-  hasPassword: boolean;
-  hasPrivateKey: boolean;
-  hasPassphrase: boolean;
+  /**
+   * Which secrets the credential store holds. Sent to the user who saved them ONLY (a grantee gets
+   * none of these three fields), so absent means "not yours to know".
+   */
+  hasPassword?: boolean;
+  hasPrivateKey?: boolean;
+  hasPassphrase?: boolean;
+  /** The user who created the profile and holds its credentials. */
+  userId?: string;
+  /** Who owns it (#71). Absent only in a hand-built fixture. */
+  owner?: SharedOwner;
+  /** What the caller may do with it (#71). Absent only in a hand-built fixture: treated as the owner. */
+  access?: ServerProfileAccess;
   /** The trusted host key's `SHA256:` fingerprint, or `null` while no key is trusted (#60). */
   fingerprint: string | null;
   /** The trusted key's algorithm (`ssh-ed25519`, ...), or `null`. */
