@@ -6,7 +6,7 @@
 // own source and registrations. Suites adopted with their slice are added here:
 // `cron-enqueue-only`, `user-owned-data` and `identity` from #47, `settings` and
 // `credentials` from #48, `host` and `doctor-read-only` from #46, `on-event-no-io` and
-// `nodes` from #49, `storage` from #50, `email` and `notifications` from #51, `dbBackup` from #52; AI and the rest follow with #53-#55.
+// `nodes` from #49, `storage` from #50, `email` and `notifications` from #51, `dbBackup` from #52, `telemetry` from #53, `webhooks` and `alerts` from #54; AI follows with #55.
 //
 // The registries are filled by the first two imports, as `main.ts` fills them.
 // =============================================================================
@@ -39,6 +39,10 @@ import '@marinoscar/platform-api/email/testing';
 import '@marinoscar/platform-api/notifications/testing';
 // Register the `dbBackup` suite (#52).
 import '@marinoscar/platform-api/db-backup/testing';
+// Register the `webhooks` (#54) and `alerts` (#54) suites.
+import '@marinoscar/platform-api/webhooks/testing';
+import '@marinoscar/platform-api/alerts/testing';
+import { RAW_SQL_INDEXES } from '@marinoscar/platform-db';
 import { discoverControllers } from '@marinoscar/platform-api/identity/testing';
 import '@marinoscar/platform-api/settings/testing';
 // Register the `telemetry` suite (metric groups, routes, retention cron).
@@ -177,5 +181,13 @@ runPlatformConformance({
     // an empty schema without throwing, and every telemetry route declares its permission.
     telemetry: {},
     doctorReadOnly: { fixture: doctorConformanceFixture, minChecks: 34 },
+    // The webhooks slice (#54): exact route permissions on its three tiers, signing and rotation, the egress
+    // guard (private targets, DNS rebinding), secrecy (no secret, signature or URL query in a response, row
+    // or log line), nothing sent inline, and visibility across owners and organizations.
+    webhooks: {},
+    // The alerts slice (#54): routes, kinds (the five built-in and ShellKeep's two), starter rules, the
+    // one-open-incident partial index (on the raw-SQL list), idempotent evaluation, dispatch after the
+    // committed write.
+    alerts: { rawSqlIndexNames: RAW_SQL_INDEXES.map((index) => index.name) },
   },
 });

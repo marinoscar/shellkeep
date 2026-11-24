@@ -19,6 +19,8 @@ import { credentialsModules } from './platform/credentials/credentials.config';
 import { emailModule } from './platform/email/email.config';
 import { BroadcastsModule, notificationsModule } from './platform/notifications/notifications.config';
 import { dbBackupModule } from './platform/db-backup/db-backup.config';
+import { alertsModule } from './platform/alerts/alerts.config';
+import { webhooksModule } from './platform/webhooks/webhooks.config';
 import { jobsModule, nodeCredentialModule, nodesModule } from './platform/jobs/jobs.config';
 import {
   ProfileImageModule,
@@ -107,6 +109,14 @@ import configuration from './config/configuration';
     // storage provider, schedule and retention, in-app restore), its four job types and
     // Doctor checks. After storage, notifications and the jobs queue it depends on.
     dbBackupModule,
+    // Outbound webhooks (#54): signed, retried deliveries of ShellKeep and platform events to the
+    // endpoints a member, an organization or the deployment registers (`/api/webhooks`,
+    // `/api/org/webhooks`, `/api/admin/webhooks`), and the `webhook` notification channel.
+    // After the jobs queue, notifications and credentials it depends on.
+    webhooksModule,
+    // Alerts (#54): rules over the terminal metrics, node events and fleet health, incidents and
+    // their notifications (`/api/admin/alerts`). After telemetry, notifications and webhooks.
+    alertsModule,
     ServerProfilesModule,
     TerminalModule,
   ],

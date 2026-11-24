@@ -176,6 +176,27 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'Webhooks & Alerts',
+    tags: [
+      {
+        name: 'Webhooks',
+        description:
+          'Outbound, signed webhooks (#54): endpoints a member (`/api/webhooks`, `webhooks:read`/`webhooks:write`), an ' +
+          'organization (`/api/org/webhooks`, `org_webhooks:*`) or the deployment (`/api/admin/webhooks`, ' +
+          '`system_webhooks:*`) registers, the event catalog (including `terminal.session.created`, ' +
+          '`terminal.session.terminated` and `server_profile.host_key_changed`), the secret rotation, the test ping and ' +
+          'the delivery log with redelivery. A delivery carries ids and names, never terminal content or a secret.',
+      },
+      {
+        name: 'Alerts',
+        description:
+          'Alert rules over the terminal metrics, node events and fleet health, their incidents (pending, firing, ' +
+          'resolved), acknowledgement and a dry-run test. Reading is `alerts:read`, everything else `alerts:write`. ' +
+          'The starter rules ship disabled. Administrators only.',
+      },
+    ],
+  },
+  {
     name: 'Notifications',
     tags: [
       {

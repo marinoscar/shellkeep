@@ -213,6 +213,46 @@
       "scope": "org"
     },
     {
+      "name": "webhooks:read",
+      "description": "View your own webhook endpoints and their deliveries",
+      "scope": "org"
+    },
+    {
+      "name": "webhooks:write",
+      "description": "Create, change, delete, rotate and test your own webhook endpoints",
+      "scope": "org"
+    },
+    {
+      "name": "org_webhooks:read",
+      "description": "View the active organization's webhook endpoints and their deliveries",
+      "scope": "org"
+    },
+    {
+      "name": "org_webhooks:write",
+      "description": "Create, change, delete, rotate and test the active organization's webhook endpoints",
+      "scope": "org"
+    },
+    {
+      "name": "system_webhooks:read",
+      "description": "View the deployment's webhook endpoints and their deliveries",
+      "scope": "system"
+    },
+    {
+      "name": "system_webhooks:write",
+      "description": "Create, change, delete, rotate and test the deployment's webhook endpoints",
+      "scope": "system"
+    },
+    {
+      "name": "alerts:read",
+      "description": "View alert rules, incidents and the firing summary",
+      "scope": "system"
+    },
+    {
+      "name": "alerts:write",
+      "description": "Create, edit and delete alert rules; test them; acknowledge incidents",
+      "scope": "system"
+    },
+    {
       "name": "oauth_clients:read",
       "description": "View OAuth clients",
       "scope": "system"
@@ -286,6 +326,10 @@
       "telemetry:query",
       "organizations:read",
       "organizations:write",
+      "system_webhooks:read",
+      "system_webhooks:write",
+      "alerts:read",
+      "alerts:write",
       "oauth_clients:read",
       "oauth_clients:write"
     ],
@@ -294,6 +338,8 @@
       "user_settings:write",
       "storage:read",
       "storage:write",
+      "webhooks:read",
+      "webhooks:write",
       "servers:read",
       "servers:write",
       "servers:delete",
@@ -306,6 +352,8 @@
       "user_settings:read",
       "user_settings:write",
       "storage:read",
+      "webhooks:read",
+      "webhooks:write",
       "servers:read",
       "sessions:read"
     ],
@@ -322,6 +370,10 @@
       "org_settings:write",
       "org_broadcasts:read",
       "org_broadcasts:write",
+      "webhooks:read",
+      "webhooks:write",
+      "org_webhooks:read",
+      "org_webhooks:write",
       "servers:read",
       "servers:write",
       "servers:delete",
