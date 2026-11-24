@@ -81,7 +81,7 @@ type SettingsRows = Pick<PrismaClient, 'userSettings'>;
 
 const PAGE_SIZE = 500;
 
-async function rewriteRows(
+export async function rewriteRows(
   prisma: SettingsRows,
   map: (value: unknown) => Json | null,
 ): Promise<number> {
