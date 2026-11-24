@@ -31,6 +31,8 @@ export interface AttachDeps {
   stderr: { write(text: string): unknown };
   /** Runs the bridge; the real one by default. */
   bridge?: ((options: BridgeOptions) => Promise<BridgeResult>) | undefined;
+  /** Signals and exit; `process` by default. */
+  processEvents?: BridgeOptions['processEvents'] | undefined;
   /** `{ serverUrl, token }`; the stored login by default. */
   credentials?: (() => { serverUrl: string; token: string }) | undefined;
 }
@@ -66,6 +68,7 @@ export async function attachSession(sessionId: string, deps: AttachDeps = defaul
     sessionId,
     stdin: deps.stdin,
     stdout: deps.stdout,
+    processEvents: deps.processEvents,
     userAgent: `shellkeep/${cliVersion()}`,
     debug: debugSink(deps.stderr),
   });
