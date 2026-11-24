@@ -57,9 +57,8 @@ describe('RunbooksService', () => {
   beforeEach(() => {
     tx = {
       runbook: { delete: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findFirst: jest.fn(), findFirstOrThrow: jest.fn(), findMany: jest.fn(), count: jest.fn() },
-      runbookRun: { count: jest.fn().mockResolvedValue(0) },
       runbookVersion: { create: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn() },
-      runbookRun: { findMany: jest.fn().mockResolvedValue([]) },
+      runbookRun: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
     };
     (global as any).__tx = tx;
     audit = { record: jest.fn().mockResolvedValue(undefined) };
