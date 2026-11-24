@@ -166,3 +166,19 @@ export function listingErrorMessage(error: unknown): string {
 export function listingErrorCode(error: unknown): string | undefined {
   return error instanceof ApiError ? error.code : undefined;
 }
+
+/**
+ * Where "Show in file browser" lands for a path: a folder opens itself, a
+ * file opens its folder with the file selected. A relative path (the API
+ * could not resolve it) keeps its folder relative, so the listing resolves
+ * it against the session's working directory.
+ */
+export function revealOf(path: string, type: 'file' | 'dir' | 'other'): { dir: string; select?: string } {
+  if (type === 'dir') return { dir: path };
+  const trimmed = path.replace(/\/+$/, '');
+  const at = trimmed.lastIndexOf('/');
+  const select = trimmed.slice(at + 1);
+  if (at < 0) return { dir: '.', select };
+  if (at === 0) return { dir: '/', select };
+  return { dir: trimmed.slice(0, at), select };
+}
