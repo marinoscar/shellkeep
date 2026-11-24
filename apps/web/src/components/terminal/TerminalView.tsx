@@ -3,6 +3,8 @@ import { Box } from '@mui/material';
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTouchScroll } from '../../hooks/useTouchScroll';
 import { TerminalScrollButtons } from './TerminalScrollButtons';
+import { HostKeyDialog } from '../server-profiles/HostKeyDialog';
+import { HOST_KEY_MISMATCH_MESSAGE, HOST_KEY_UNTRUSTED_MESSAGE } from '../../services/terminal-ws';
 import type { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 
@@ -24,7 +26,16 @@ interface TerminalViewProps {
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
   function TerminalView({ sessionId, onConnectionChange, onError, showScrollButtons = false }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { isConnected, error, terminal, sendInput, reconnect } = useTerminal(sessionId, containerRef);
+  const {
+    isConnected,
+    error,
+    terminal,
+    sendInput,
+    reconnect,
+    hostKeyRefusal,
+    retryConnect,
+    dismissHostKey,
+  } = useTerminal(sessionId, containerRef);
   useTouchScroll(containerRef);
 
   useImperativeHandle(ref, () => ({
@@ -70,6 +81,21 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
         }}
       />
       <TerminalScrollButtons containerRef={containerRef} visible={showScrollButtons} />
+      {/* An unknown or changed host key (#60): trust it, then ask for the session again. */}
+      <HostKeyDialog
+        refusal={hostKeyRefusal ?? null}
+        onTrusted={() => {
+          retryConnect?.();
+          terminal.current?.focus();
+        }}
+        onCancel={() =>
+          dismissHostKey?.(
+            hostKeyRefusal?.code === 'HOST_KEY_MISMATCH'
+              ? HOST_KEY_MISMATCH_MESSAGE
+              : HOST_KEY_UNTRUSTED_MESSAGE,
+          )
+        }
+      />
     </Box>
   );
 });
