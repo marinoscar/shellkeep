@@ -130,3 +130,123 @@ export async function downloadRemoteFile(ref: RemoteFileRef): Promise<void> {
     anchor.remove();
   }
 }
+
+// ---------------------------------------------------------------------------
+// Uploads (issue #157)
+// ---------------------------------------------------------------------------
+
+/** `POST /server-profiles/:id/files/upload`: the file as it now exists on the server. */
+export interface UploadedRemoteFile {
+  path: string;
+  name: string;
+  size: number;
+  /** An existing file was replaced. */
+  overwritten: boolean;
+}
+
+/** Bytes sent so far (the request body, which is the file's bytes). */
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+}
+
+export interface UploadRemoteFileRequest {
+  profileId: string;
+  /** The target folder (absolute: the folder the browser lists). */
+  dir: string;
+  /** The file name on the server. */
+  name: string;
+  file: Blob;
+  /** Replace an existing file of that name. Default false: an existing file is a 409 `FILE_EXISTS`. */
+  overwrite?: boolean;
+  sessionId?: string;
+  onProgress?: (progress: UploadProgress) => void;
+  /** Aborting cancels the request; the API removes the partial file. */
+  signal?: AbortSignal;
+}
+
+/** A refused or failed upload, with the API's code (`FILE_EXISTS`, `FILE_TOO_LARGE`, ...) and details. */
+export class RemoteUploadError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string | undefined,
+    readonly details: Record<string, unknown> | undefined,
+  ) {
+    super(message);
+    this.name = 'RemoteUploadError';
+  }
+}
+
+/** The existing file's facts a `FILE_EXISTS` answer carries (all optional: it is a hint for the prompt). */
+export interface ExistingFileDetails {
+  size?: number;
+  mtime?: string;
+}
+
+export function isUploadCancelled(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
+function sendUpload(request: UploadRemoteFileRequest, token: string | null): Promise<{ status: number; body: unknown }> {
+  return new Promise((resolve, reject) => {
+    if (request.signal?.aborted) return reject(new DOMException('Upload cancelled', 'AbortError'));
+    const xhr = new XMLHttpRequest();
+    const url =
+      `${API_BASE_URL}${base(request.profileId)}/upload?` +
+      query({ path: request.dir, name: request.name, overwrite: request.overwrite ? 'true' : 'false', sessionId: request.sessionId });
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => {
+      request.onProgress?.({ loaded: event.loaded, total: event.lengthComputable ? event.total : request.file.size });
+    };
+    const onAbort = () => {
+      xhr.abort();
+      // Do not wait for the browser's own abort event: Cancel answers at once.
+      reject(new DOMException('Upload cancelled', 'AbortError'));
+    };
+    request.signal?.addEventListener('abort', onAbort, { once: true });
+    const done = () => request.signal?.removeEventListener('abort', onAbort);
+    xhr.onload = () => {
+      done();
+      let body: unknown;
+      try {
+        body = xhr.responseText ? JSON.parse(xhr.responseText) : undefined;
+      } catch {
+        body = undefined;
+      }
+      resolve({ status: xhr.status, body });
+    };
+    xhr.onerror = () => {
+      done();
+      reject(new RemoteUploadError('The connection was lost during the upload', 0, undefined, undefined));
+    };
+    xhr.onabort = () => {
+      done();
+      reject(new DOMException('Upload cancelled', 'AbortError'));
+    };
+    xhr.send(request.file);
+  });
+}
+
+/**
+ * Streams one file to a folder on the server (the file's bytes are the body,
+ * never a multipart form). Progress is the browser's upload progress. A 401 is
+ * retried once after a token refresh, like every other call.
+ */
+export async function uploadRemoteFile(request: UploadRemoteFileRequest): Promise<UploadedRemoteFile> {
+  let result = await sendUpload(request, api.getAccessToken());
+  if (result.status === 401 && (await api.refreshToken())) {
+    request.onProgress?.({ loaded: 0, total: request.file.size });
+    result = await sendUpload(request, api.getAccessToken());
+  }
+  const body = result.body as { data?: UploadedRemoteFile; code?: string; message?: string; details?: Record<string, unknown> } | undefined;
+  if (result.status >= 200 && result.status < 300 && body?.data) return body.data;
+  throw new RemoteUploadError(
+    body?.message || `The upload failed (${result.status})`,
+    result.status,
+    body?.code,
+    body?.details,
+  );
+}
