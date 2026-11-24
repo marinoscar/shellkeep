@@ -27,6 +27,7 @@ import type { HostKeyStatus } from '../components/terminal/workspace/TerminalSta
 import { TerminalAiPanel } from '../components/terminal/ai/TerminalAiPanel';
 import { useTerminalAiAvailable } from '../components/terminal/ai/useTerminalAiAvailable';
 import { insertSuggestedCommand } from '../components/terminal/ai/insertCommand';
+import { AI_ASSIST_ACTION, matchesAiAssistShortcut } from '../lib/terminal/aiAssistShortcut';
 import { RenameSessionDialog } from '../components/terminal/workspace/RenameSessionDialog';
 import { useWorkspaceLayout } from '../components/terminal/workspace/useWorkspaceLayout';
 import {
@@ -87,8 +88,8 @@ export default function TerminalWorkspacePage() {
   // The AI panel: only with the `ai` feature on and `ai:use` (fail closed).
   const aiAvailable = useTerminalAiAvailable();
   const [aiOpen, setAiOpen] = useState(false);
-  // The last "Suggest command" answer; #57 sets it from its API.
-  const [aiSuggestion] = useState<string | null>(null);
+  // Bumped by the AI assist shortcut and the key bar's AI key: the prompt takes focus (#57).
+  const [aiFocus, setAiFocus] = useState(0);
 
   const { layout, commit, current } = useWorkspaceLayout(routeId, user?.id ?? null);
   const [sessions, setSessions] = useState<Record<string, TerminalSession>>({});
@@ -99,10 +100,35 @@ export default function TerminalWorkspacePage() {
   const [renaming, setRenaming] = useState<string | null>(null);
   // The user's terminal preferences and key shortcuts (#80): one source of
   // truth for the panes, the key bar and the toolbar toggles.
-  const { terminal: preferences, keyShortcuts: storedShortcuts, updateTerminal } =
-    useTerminalSettings();
+  const {
+    terminal: preferences,
+    keyShortcuts: storedShortcuts,
+    actionShortcuts,
+    updateTerminal,
+  } = useTerminalSettings();
   const showScrollButtons = preferences?.showScrollButtons ?? DEFAULT_TERMINAL_SETTINGS.showScrollButtons;
   const keyShortcuts = storedShortcuts ?? [];
+  // Mod+Shift+A (or the user's rebinding) opens the assistant with the prompt focused; the
+  // terminal keeps the key from the PTY through `isReservedKey` (#57).
+  const aiAssistBinding = actionShortcuts[AI_ASSIST_ACTION];
+  const isReservedKey = useCallback(
+    (event: KeyboardEvent) => aiAvailable && matchesAiAssistShortcut(event, aiAssistBinding),
+    [aiAvailable, aiAssistBinding],
+  );
+  const openAssistant = useCallback(() => {
+    setAiOpen(true);
+    setAiFocus((n) => n + 1);
+  }, []);
+  useEffect(() => {
+    if (!aiAvailable) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!matchesAiAssistShortcut(event, aiAssistBinding)) return;
+      event.preventDefault();
+      openAssistant();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [aiAvailable, aiAssistBinding, openAssistant]);
   // `auto` (the default) shows the key bar on a phone or a touch screen, where
   // there is no Esc, Tab or Ctrl key; `always` and `never` are the user's.
   const keyShortcutsOpen = isKeyBarVisible(
@@ -250,11 +276,12 @@ export default function TerminalWorkspacePage() {
         sessionId={sessionId}
         showScrollButtons={showScrollButtons}
         preferences={preferences ?? undefined}
+        isReservedKey={isReservedKey}
         registerView={registerView}
         onStatus={onPaneStatus}
       />
     ),
-    [showScrollButtons, preferences, registerView, onPaneStatus],
+    [showScrollButtons, preferences, isReservedKey, registerView, onPaneStatus],
   );
 
   const tabs = useMemo(
@@ -427,7 +454,8 @@ export default function TerminalWorkspacePage() {
               open={aiOpen}
               onClose={() => setAiOpen(false)}
               variant={isWide ? 'side' : 'sheet'}
-              suggestion={aiSuggestion}
+              sessionId={activeId}
+              focusRequest={aiFocus}
               onInsert={(command) => {
                 insertSuggestedCommand(getView(), command);
                 if (!isWide) setAiOpen(false);
@@ -450,7 +478,12 @@ export default function TerminalWorkspacePage() {
 
         {/* Last in the frame, so it sits directly on the keyboard. */}
         <Box data-testid="terminal-key-dock" sx={{ flexShrink: 0 }}>
-          <TerminalKeyShortcutsBar open={keyShortcutsOpen} shortcuts={keyShortcuts} onSend={handleSendShortcut} />
+          <TerminalKeyShortcutsBar
+            open={keyShortcutsOpen}
+            shortcuts={keyShortcuts}
+            onSend={handleSendShortcut}
+            onAiAssist={aiAvailable ? openAssistant : undefined}
+          />
         </Box>
       </Box>
 

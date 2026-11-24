@@ -62,6 +62,11 @@ export interface TerminalAiOptions {
   lines?: number;
   /** Text the user selected in the terminal; used instead of a capture (explain). */
   selection?: string;
+  /**
+   * `false`: do not capture any pane text, even where the server shares output (command assist with
+   * "include screen" off). Only metadata (os, shell, cwd) comes back; the audit row says so.
+   */
+  includeText?: boolean;
 }
 
 export interface TerminalAiContext {
@@ -75,6 +80,9 @@ export interface TerminalAiContext {
   sharing: 'full' | 'metadata_only';
   os: string | null;
   shell: string | null;
+  /** The distribution's display name (`prettyName`) and package manager, when probed. */
+  distro: string | null;
+  packageManager: string | null;
 }
 
 const lastLines = (text: string, n: number): { text: string; cut: boolean } => {
@@ -157,10 +165,17 @@ export class TerminalContextService {
     const facts = readStoredFacts(profile.facts);
     const cwdRaw = await this.history.currentPath(session, scope);
     const cwd = cwdRaw === null ? null : redactText(stripAnsi(cwdRaw), { mode: policy.redactionMode }).text;
-    const base = { cwd, os: facts?.os ?? null, shell: facts?.shell ?? null };
+    const base = {
+      cwd,
+      os: facts?.os ?? null,
+      shell: facts?.shell ?? null,
+      distro: facts?.prettyName ?? null,
+      packageManager: facts?.packageManager ?? null,
+    };
 
-    // Switch off, assist: metadata only. No pane text is captured at all.
-    if (!sharing) {
+    // Switch off, or the caller asked for no pane text (assist, "include screen" off): metadata only.
+    // No pane text is captured at all.
+    if (!sharing || options.includeText === false) {
       const context: TerminalAiContext = {
         text: '',
         findings: [],
