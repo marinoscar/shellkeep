@@ -54,7 +54,7 @@ export function ActiveSessionsPanel({ sessions, total, isLoading = false, hasSer
                 Start one from Quick connect.
               </Typography>
             ) : (
-              <Button size="small" variant="outlined" component={RouterLink} to="/servers" sx={{ mt: 1 }}>
+              <Button size="small" variant="outlined" component={RouterLink} to="/servers?new=1" sx={{ mt: 1 }}>
                 Add your first server
               </Button>
             )}

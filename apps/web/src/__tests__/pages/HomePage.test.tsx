@@ -86,8 +86,8 @@ describe('HomePage', () => {
 
     const empty = screen.getByTestId('home-empty-servers');
     expect(within(empty).getByRole('heading', { name: 'Add your first server' })).toBeInTheDocument();
-    expect(within(empty).getByRole('link', { name: 'Add a server' })).toHaveAttribute('href', '/servers');
-    expect(screen.getByRole('link', { name: 'Add your first server' })).toHaveAttribute('href', '/servers');
+    expect(within(empty).getByRole('link', { name: 'Add a server' })).toHaveAttribute('href', '/servers?new=1');
+    expect(screen.getByRole('link', { name: 'Add your first server' })).toHaveAttribute('href', '/servers?new=1');
   });
 
   it('shows no empty-fleet card while the caller has servers', async () => {

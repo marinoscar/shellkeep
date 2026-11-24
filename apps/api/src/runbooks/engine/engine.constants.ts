@@ -16,14 +16,25 @@ export const RUNBOOK_RUN_ADVANCE_TYPE = 'runbook.run.advance';
 /** The reconcile sweep (system job): stuck runs, lost executors, expired approvals, orphan log chunks. */
 export const RUNBOOK_LOGS_COMPACT_TYPE = 'runbook.logs.compact';
 
+/** Builds the zip bundle of a run from its collected log archives and step logs (#63). Node-eligible. */
+export const RUNBOOK_ARTIFACTS_BUNDLE_TYPE = 'runbook.artifacts.bundle';
+/** The retention purge of runbook artifacts and step logs (#63). Server-only (it deletes by prefix and row). */
+export const RUNBOOK_ARTIFACTS_PURGE_TYPE = 'runbook.artifacts.purge';
+/** The `retention` policy key of the runbook artifacts. */
+export const RUNBOOK_ARTIFACTS_RETENTION_KEY = 'runbookArtifacts';
+
 /** The `jobs.reason` of every run job. Registered in `app-registrations/jobs.ts`. */
 export const RUNBOOK_JOB_REASON = 'runbook_run';
 
 export const RUNBOOK_RUN_SUBJECT = 'runbook_run';
 export const RUNBOOK_RUN_TARGET_SUBJECT = 'runbook_run_target';
+/** The subject of an artifact job (the run's id). */
+export const RUNBOOK_ARTIFACTS_SUBJECT = 'runbook_artifacts';
 
 /** The system access reason of the reconcile job (registered by `runbooks.registrations.ts`; ids take hyphens, never dots). */
 export const RUNBOOKS_RECONCILE_REASON = 'runbooks-reconcile';
+/** The system access reason of the artifact retention purge (#63). */
+export const RUNBOOKS_ARTIFACTS_PURGE_REASON = 'runbooks-artifacts-purge';
 
 /** EVENT_BUS channels. The payloads stay under the 7,500-byte envelope. */
 export const RUNBOOK_RUN_CHANNEL = 'runbooks.run';
@@ -74,6 +85,8 @@ export const FAILURE_CODES = {
   CANCELLED: 'CANCELLED',
   SECRET_UNAVAILABLE: 'SECRET_UNAVAILABLE',
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  /** A `collect_logs` archive grew past the step's `maxTotalBytes` (#63): nothing was stored. */
+  ARTIFACT_TOO_LARGE: 'ARTIFACT_TOO_LARGE',
   UPLOAD_CHECKSUM_MISMATCH: 'UPLOAD_CHECKSUM_MISMATCH',
   FORBIDDEN: 'FORBIDDEN',
   INTERNAL: 'INTERNAL',

@@ -23,8 +23,9 @@ import { AppModule } from '../../src/app.module';
 //   - every model of the composed schema with an `owner_group_id` column is a registered
 //     group-owned resource (`ServerProfile` and `Runbook`);
 //   - every route reachable from `AppModule` that serves links is behind `LinkGrantGuard` and
-//     carries `@Public()` (the slice's own `GET /api/public/links/current`; ShellKeep adds none:
-//     both resource types answer 422 ROLE_NOT_GRANTABLE to a link);
+//     carries `@Public()` (the slice's own `GET /api/public/links/current` and ShellKeep's
+//     `GET /api/public/runbook-runs/bundle`, #63; `server_profile` and `runbook` answer
+//     422 ROLE_NOT_GRANTABLE to a link);
 //   - the raw-SQL partial unique indexes of the slice are in prisma/migrations;
 //   - the registered resource type ids equal the snapshot below.
 // =============================================================================
@@ -36,7 +37,7 @@ const API_ROOT = join(__dirname, '..', '..');
  * leaves this list only with a migration of its grants. Terminal sessions are deliberately absent:
  * each person who may connect opens their own.
  */
-const RESOURCE_TYPE_IDS: readonly string[] = ['server_profile', 'runbook'];
+const RESOURCE_TYPE_IDS: readonly string[] = ['server_profile', 'runbook', 'runbook_run'];
 
 runPlatformConformance({
   sourceRoots: [join(API_ROOT, 'src')],

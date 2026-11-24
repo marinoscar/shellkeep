@@ -76,7 +76,7 @@ export default function HomePage() {
                 Save a server profile, verify its host key, then open a session that keeps running after you close the tab.
               </Typography>
             </Box>
-            <Button variant="outlined" component={RouterLink} to="/servers">
+            <Button variant="outlined" component={RouterLink} to="/servers?new=1">
               Add a server
             </Button>
           </CardContent>

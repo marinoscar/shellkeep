@@ -15,9 +15,11 @@ import { InstallPrompt, MaintenanceGate, UpdatePrompt } from '@marinoscar/platfo
 import { APP_NAME } from './config/app';
 import { TerminalAccessGate } from './components/terminal/TerminalAccessGate';
 import { AppPlatformHostProvider } from './platform/platformHost';
+import { PublicLinkPage } from '@marinoscar/platform-web/sharing/ui';
+import { registerRunbookLinkRenderers } from './features/runbooks/registerLinkRenderers';
+import { platformApi } from './services/api';
 import { JobsNodesProviders } from './platform/jobsAdapters';
 import { appAiAdapters } from './platform/aiAdapters';
-import { platformApi } from './services/api';
 // The deployment feature map (#55): registers `ai` for the cards and the
 // destination that carry `feature: 'ai'`. Imported for its side effect.
 import './platform/settingsFeatures';
@@ -164,6 +166,14 @@ const UserNotificationsPage = lazy(() =>
     default: m.UserNotificationsPage,
   })),
 );
+// Onboarding (#70): the packaged Getting started and Setup guide pages. Their
+// state comes from the shell's one `OnboardingProvider` (`Layout.tsx`).
+const GettingStartedPage = lazy(() =>
+  import('@marinoscar/platform-web/onboarding/ui').then((m) => ({ default: m.GettingStartedPage })),
+);
+const SetupGuidePage = lazy(() =>
+  import('@marinoscar/platform-web/onboarding/ui').then((m) => ({ default: m.SetupGuidePage })),
+);
 
 // Test login page (development only). The platform's test login endpoint
 // (`POST /api/auth/test/login`) has no packaged page; this form posts to it.
@@ -217,6 +227,8 @@ const SHELL_PROVIDERS: readonly ShellProvider[] = [
   JobsNodesShellProvider,
 ];
 
+registerRunbookLinkRenderers();
+
 function AppRoutes() {
   return (
     <ErrorBoundary>
@@ -228,6 +240,8 @@ function AppRoutes() {
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
+            {/* A share link (#63): public, the token is in the URL fragment and goes to the API in a header. */}
+            <Route path="/s" element={<PublicLinkPage apiClient={platformApi} />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             {/* A failed sign-in: the packaged page shows the screen for `?error=<code>`. */}
             <Route path="/auth/error" element={<AuthCallbackPage />} />
@@ -374,6 +388,8 @@ function AppRoutes() {
                 <Route path="/settings/terminal" element={<TerminalSettingsPage />} />
                 <Route path="/settings/shortcuts" element={<ShortcutsSettingsPage />} />
                 <Route path="/settings/notifications" element={<UserNotificationsPage />} />
+                {/* Getting started (#70): `GET /api/onboarding` needs `user_settings:read`, every role's. */}
+                <Route path="/settings/getting-started" element={<GettingStartedPage />} />
                 <Route path="/settings/tokens" element={<UserTokensPage />} />
                 {/* AI keys (#55): `ai:use` is what the `/api/ai/keys` controller
                     enforces, a grant a deployment can withhold from a role (it is
@@ -457,6 +473,16 @@ function AppRoutes() {
                   element={
                     <RequirePermission permission="system_settings:read" fallback={HOME}>
                       <AboutPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Setup guide (#70): `system_settings:read`, the permission the onboarding slice
+                    adds the admin block for and gates the activation metrics on. */}
+                <Route
+                  path="/admin/settings/setup"
+                  element={
+                    <RequirePermission permission="system_settings:read" fallback={HOME}>
+                      <SetupGuidePage />
                     </RequirePermission>
                   }
                 />

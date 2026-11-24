@@ -34,6 +34,13 @@ import { RunbookRunsService } from './engine/runbook-runs.service';
 import { RunbookSettingsService } from './engine/runbook-settings.service';
 import { SshExecutor } from './engine/ssh-executor';
 import { TargetRunHandler } from './engine/target-run.handler';
+import { ArtifactsPurgeHandler } from './artifacts/artifacts-purge.handler';
+import { BundleHandler } from './artifacts/bundle.handler';
+import { PublicRunbookBundleController } from './artifacts/public-runbook-bundle.controller';
+import { PublicRunbookBundleService } from './artifacts/public-runbook-bundle.service';
+import { RunbookArtifactsController } from './artifacts/runbook-artifacts.controller';
+import { RunbookArtifactsListeners } from './artifacts/runbook-artifacts.listeners';
+import { RunbookArtifactsService } from './artifacts/runbook-artifacts.service';
 import { RunbookAuditController } from './safety/runbook-audit.controller';
 import { RunbookAuditService } from './safety/runbook-audit.service';
 import { RunbookRiskService } from './safety/runbook-risk.service';
@@ -54,7 +61,7 @@ import { UserDataHostModule } from '../platform/user-data/user-data-host.module'
  */
 @Module({
   imports: [PrismaModule, AiModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule, UserDataHostModule],
-  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController, RunbookAiController, RunbookDraftController],
+  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController, RunbookAiController, RunbookDraftController, RunbookArtifactsController, PublicRunbookBundleController],
   providers: [
     RunbooksService,
     TargetResolverService,
@@ -82,6 +89,12 @@ import { UserDataHostModule } from '../platform/user-data/user-data-host.module'
     LogsCompactHandler,
     RunbookJobSettledListener,
     RunbookReconcileTask,
+    // Collected logs and the run bundle (#63)
+    RunbookArtifactsService,
+    PublicRunbookBundleService,
+    RunbookArtifactsListeners,
+    BundleHandler,
+    ArtifactsPurgeHandler,
     // AI steps (#64): the agent job (server-only), "Stop AI" and drafting
     RunbookAgentHandler,
     RunbookAiStopService,
