@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw';
 import { render, mockUser, type MockUser } from '../../utils/test-utils';
 import { server } from '../../mocks/server';
 import { Layout } from '../../../components/common/Layout';
+import { APP_NAME, APP_VERSION } from '../../../config/app';
 
 /**
  * The shell binding (#76) at the three window classes: 360 (phone), 768
@@ -161,6 +162,25 @@ describe('Layout (the platform shell binding)', () => {
     renderShell('/', viewer);
     expect(screen.getByText('ShellKeep')).toBeInTheDocument();
     expect(document.querySelector('main')).toHaveAttribute('data-main-variant', 'padded');
+  });
+});
+
+describe('Layout: the user-menu version line', () => {
+  /** The avatar button that opens the user menu (the one holding the avatar). */
+  const avatarButton = () => document.querySelector('.MuiAvatar-root')!.closest('button')!;
+
+  it('shows "<APP_NAME> <APP_VERSION>" in the footer once the menu opens, to a viewer too', async () => {
+    restore = installWidth(1280);
+    renderShell('/', viewer);
+    // Inside the menu, which is closed until the avatar is clicked.
+    expect(screen.queryByText(`${APP_NAME} ${APP_VERSION}`)).toBeNull();
+
+    await userEvent.click(avatarButton());
+    const menu = await screen.findByRole('menu');
+    const line = within(menu).getByText(`${APP_NAME} ${APP_VERSION}`);
+    expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+/);
+    // A label, not an action.
+    expect(line.closest('[role="menuitem"]')).toBeNull();
   });
 });
 
