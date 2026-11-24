@@ -32,6 +32,7 @@ import { ADOPTED_PLATFORM_SLICES } from './platform-slices';
 import { APP_PERMISSIONS } from './permissions';
 import { APP_USER_OWNED_MODELS } from './user-owned-models';
 import { registerShellkeepCredentialPurposes } from './credentials';
+import { registerSshErrorCodes } from '../ssh/ssh.error-codes';
 
 registerPlatformPermissions({
   slices: [...ADOPTED_PLATFORM_SLICES],
@@ -40,3 +41,4 @@ registerPlatformPermissions({
 registerPlatformUserOwnedModels(APP_USER_OWNED_MODELS);
 registerPlatformModelOwnership(APP_MODEL_OWNERSHIP);
 registerShellkeepCredentialPurposes();
+registerSshErrorCodes();
