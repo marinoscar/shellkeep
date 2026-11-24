@@ -18,9 +18,15 @@ export interface CommandRiskPattern {
   re: RegExp;
   /** Human-readable reason, returned in `reasons`. */
   reason: string;
-  /** `true`: data or availability loss, risk `high`. `false`: risk `medium`. */
+  /** `true`: data or availability loss, risk `high`. `false`: risk `medium` (or `high` for a `HIGH_PATTERNS` row). */
   destructive: boolean;
 }
+
+/**
+ * A shell variable reference that is the WHOLE path (optionally followed by `/` and `*`). `${X:?msg}` and
+ * `${X:-default}` are guarded expansions and are deliberately not matched.
+ */
+const VARIABLE = String.raw`\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)`;
 
 const RM_RECURSIVE = String.raw`\brm\s+(?:-[a-zA-Z]*\s+)*?(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\b(?:\s+-[-a-zA-Z]+)*`;
 
@@ -72,6 +78,25 @@ export const DESTRUCTIVE_PATTERNS: readonly CommandRiskPattern[] = [
   },
   { id: 'docker_prune', re: /\bdocker\s+system\s+prune\b[^\n]*(?:-a\b|--all\b)/, reason: 'Removes all unused Docker data', destructive: true },
   { id: 'git_force_push', re: /\bgit\s+push\b[^\n]*(?:--force\b|--force-with-lease\b|\s-f\b)/, reason: 'Force-pushes and can overwrite remote history', destructive: true },
+  // ---- Runbook rows (#67) -------------------------------------------------------------------------
+  {
+    id: 'rm_unquoted_variable',
+    re: new RegExp(`${RM_RECURSIVE}\\s+(?:--\\s+)?${VARIABLE}/?\\*?(?=\\s|$|;|&|\\|)`),
+    reason: 'Recursive delete of an unquoted variable path: an unset variable expands to /',
+    destructive: true,
+  },
+  {
+    id: 'find_delete_root',
+    re: /\bfind\s+(?:-[HLPD]\w*\s+)*\/(?=\s)[^\n;&|]*\s-delete\b/,
+    reason: 'find -delete starting at the filesystem root',
+    destructive: true,
+  },
+  {
+    id: 'truncate_var_lib',
+    re: /\btruncate\s+[^\n;&|]*(?:-s\s*0|--size[=\s]0)(?=\s|$)[^\n;&|]*\s\/var\/lib\/[^\s;&|]*/,
+    reason: 'Truncates files under /var/lib to zero bytes',
+    destructive: true,
+  },
   { id: 'pipe_to_shell', re: /\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b/, reason: 'Downloads and runs a script unreviewed', destructive: true },
 ];
 
@@ -91,4 +116,18 @@ export const MEDIUM_PATTERNS: readonly CommandRiskPattern[] = [
   },
   { id: 'rm_recursive', re: new RegExp(RM_RECURSIVE), reason: 'Recursive delete', destructive: false },
   { id: 'kill_all', re: /\b(?:killall|pkill)\b/, reason: 'Kills processes by name', destructive: false },
+];
+
+/**
+ * Rows that are `high` risk but not destructive: they need a human's eye, not a confirmation gate on their
+ * own. A quoted variable path still deletes everything when the variable is empty, but a strict shell
+ * (`set -u`, which command and bash steps run under) stops on an unset one.
+ */
+export const HIGH_PATTERNS: readonly CommandRiskPattern[] = [
+  {
+    id: 'rm_quoted_variable',
+    re: new RegExp(`${RM_RECURSIVE}\\s+(?:--\\s+)?(?:"${VARIABLE}/?\\*?"|"${VARIABLE}/?"\\*?|"${VARIABLE}"/\\*?)(?=\\s|$|;|&|\\|)`),
+    reason: 'Recursive delete of a variable path: make sure the variable is set',
+    destructive: false,
+  },
 ];

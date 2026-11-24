@@ -5,7 +5,8 @@
 // Pure. `classifyCommand` tests a command line against the table in
 // `destructive-patterns.ts`:
 //
-//   high    a destructive row matched
+//   high    a destructive row matched (`destructive: true`), or a high-risk row that is not
+//           destructive matched (`HIGH_PATTERNS`, `destructive: false`, #67)
 //   medium  a medium row matched (sudo, package removal, service restart, rm -r),
 //           or a destructive row matched only inside a quoted echo/printf argument
 //   low     nothing matched
@@ -15,7 +16,7 @@
 // executed, but a human should still look). Extend the table, not this function.
 // =============================================================================
 
-import { DESTRUCTIVE_PATTERNS, MEDIUM_PATTERNS } from './destructive-patterns';
+import { DESTRUCTIVE_PATTERNS, HIGH_PATTERNS, MEDIUM_PATTERNS } from './destructive-patterns';
 
 export type CommandRisk = 'low' | 'medium' | 'high';
 
@@ -36,6 +37,7 @@ export function classifyCommand(command: string): CommandClassification {
   const reasons: string[] = [];
   let destructive = false;
   let medium = false;
+  let high = false;
 
   for (const row of DESTRUCTIVE_PATTERNS) {
     if (!row.re.test(cmd)) continue;
@@ -43,10 +45,16 @@ export function classifyCommand(command: string): CommandClassification {
     if (quotedOnly) medium = true;
     else destructive = true;
   }
+  for (const row of HIGH_PATTERNS) {
+    if (!row.re.test(cmd)) continue;
+    if (!reasons.includes(row.reason)) reasons.push(row.reason);
+    if (quotedOnly) medium = true;
+    else high = true;
+  }
   for (const row of MEDIUM_PATTERNS) {
     if (!row.re.test(cmd)) continue;
     // A destructive `rm -r` row already explains the generic one.
-    if (row.id === 'rm_recursive' && destructive) continue;
+    if (row.id === 'rm_recursive' && (destructive || high)) continue;
     if (!reasons.includes(row.reason)) reasons.push(row.reason);
     medium = true;
   }
@@ -55,5 +63,6 @@ export function classifyCommand(command: string): CommandClassification {
   }
 
   if (destructive) return { risk: 'high', destructive: true, reasons };
+  if (high) return { risk: 'high', destructive: false, reasons };
   return { risk: medium ? 'medium' : 'low', destructive: false, reasons };
 }

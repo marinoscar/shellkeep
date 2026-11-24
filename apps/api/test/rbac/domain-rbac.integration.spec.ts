@@ -76,6 +76,8 @@ describe('Server profile and session RBAC (Integration)', () => {
 
     it('rejects an unauthenticated caller with 401', async () => {
       await request(server()).get('/api/server-profiles').expect(401);
+      await request(server()).get('/api/server-profiles/tags').expect(401);
+      await request(server()).patch('/api/server-profiles/bulk-tags').send({}).expect(401);
       await request(server()).get('/api/sessions').expect(401);
     });
 
@@ -87,6 +89,8 @@ describe('Server profile and session RBAC (Integration)', () => {
       const user = await make(context);
 
       await request(server()).get('/api/server-profiles').set(authHeader(user.accessToken)).expect(200);
+      await request(server()).get('/api/server-profiles?tag=prod&health=unreachable').set(authHeader(user.accessToken)).expect(200);
+      await request(server()).get('/api/server-profiles/tags').set(authHeader(user.accessToken)).expect(200);
       await request(server()).get('/api/sessions').set(authHeader(user.accessToken)).expect(200);
     });
 
@@ -101,6 +105,11 @@ describe('Server profile and session RBAC (Integration)', () => {
 
       await request(server()).patch(`/api/server-profiles/${id}`).set(authHeader(viewer.accessToken)).send({ name: 'x' }).expect(403);
       await request(server()).delete(`/api/server-profiles/${id}`).set(authHeader(viewer.accessToken)).expect(403);
+      await request(server())
+        .patch('/api/server-profiles/bulk-tags')
+        .set(authHeader(viewer.accessToken))
+        .send({ ids: [id], add: ['x'] })
+        .expect(403);
       await request(server()).post('/api/sessions').set(authHeader(viewer.accessToken)).send({ serverProfileId: id }).expect(403);
       await request(server()).patch(`/api/sessions/${id}`).set(authHeader(viewer.accessToken)).send({ name: 'x' }).expect(403);
       await request(server()).delete(`/api/sessions/${id}`).set(authHeader(viewer.accessToken)).expect(403);
@@ -114,6 +123,7 @@ describe('Server profile and session RBAC (Integration)', () => {
       const user = await make(context);
 
       await request(server()).post('/api/server-profiles').set(authHeader(user.accessToken)).send({}).expect(400);
+      await request(server()).patch('/api/server-profiles/bulk-tags').set(authHeader(user.accessToken)).send({}).expect(400);
       await request(server()).post('/api/sessions').set(authHeader(user.accessToken)).send({}).expect(400);
     });
   });

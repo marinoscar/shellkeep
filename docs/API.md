@@ -1374,6 +1374,22 @@ The storage system provides file upload and management capabilities with support
 
 ---
 
+### Server Profiles: the list, tags and health
+
+The Servers page (#79) reads one list route and two tag routes. No list response ever carries a credential field (the `has*` flags go to the credential holder only, see Sharing).
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /api/server-profiles` | `servers:read` | Paginated (`page`, `pageSize` up to 100). Filters, all ANDed: `q` (name, hostname or username; `search` is the older spelling), `tag` (repeatable or comma-separated, every tag must match), `owner` (`me`, `shared`, `group:<uuid>`; `filter=all|mine|shared` still works), `health` (`reachable`, `unreachable`, `unknown`), `hostKey` (`trusted`, `untrusted`, `mismatch`). `sort` is `name`, `hostname`, `health`, `lastSession` or `updatedAt` (default, newest first), `order` `asc`/`desc`. An unknown value is a 400 |
+| `GET /api/server-profiles/tags` | `servers:read` | `{ tags: string[] }`: the distinct tags on the profiles the caller may see, sorted |
+| `PATCH /api/server-profiles/bulk-tags` | `servers:write` | `{ ids: uuid[] (1..200), add?: string[], remove?: string[] }` (at least one tag; never the same tag in both). Each id needs `write` access; returns `{ updated, unchanged, denied }`, where `denied` holds the ids that do not exist, are not visible or may not be changed (reported, never a failure). Each changed profile is audited as `server_profile.update` with `bulk: true` |
+
+Each item also carries `health`, `hostKeyState`, `lastTestAt`, `lastTestOk` and `lastSessionAt`:
+
+- **Health** is the outcome of the last `POST /server-profiles/:id/test`, stored on the profile (`last_test_at`, `last_test_ok`, `last_test_code`): `reachable` (the test logged in), `unreachable` (it failed), `unknown` (never tested, or stopped by a host-key refusal, which proves neither way). Trusting or forgetting the key after a refusal, or changing the hostname or port, clears it. The health definition is `apps/api/src/server-profiles/server-health.ts`, shared with the dashboard.
+- **Host key state**: `untrusted` without a trusted fingerprint, `mismatch` while the last test was refused with `HOST_KEY_MISMATCH`, else `trusted`.
+- **Last session** is when the CALLER last used the server (their own sessions only); `sort=lastSession` orders a server never used last. `GET /api/sessions?serverProfileId=<uuid>` lists those sessions.
+
 ### Server Profiles: host keys and facts
 
 SSH host keys are verified before any credential is sent (#60). A profile trusts at most one key (`fingerprint`, OpenSSH `SHA256:` format, with its `hostKeyAlgorithm`); the system setting `ssh.hostKeyPolicy` decides what happens to a server whose key is not trusted yet.
@@ -1415,7 +1431,7 @@ Replacing a different trusted key also needs `confirmHostname` equal to the prof
 Permission `servers:write`. Forgets the trusted key (`fingerprint`, `hostKeyAlgorithm`, `hostKeyTrustedAt` null; the next connection asks again; the probed `facts` stay). Returns the updated profile. Audited as `server_profile.host_key_forgotten`.
 
 #### POST /server-profiles/:id/test
-Permission `servers:read`. `{ "success": true }`, or `{ "success": false, "error": "..." }`. A refused host key adds `"code": "HOST_KEY_UNKNOWN" | "HOST_KEY_MISMATCH"`, `"presented": { "fingerprint", "algorithm" }` and `"expected": "<fingerprint>" | null`. A successful test also refreshes the server facts.
+Permission `servers:read`. `{ "success": true }`, or `{ "success": false, "error": "..." }`. A refused host key adds `"code": "HOST_KEY_UNKNOWN" | "HOST_KEY_MISMATCH"`, `"presented": { "fingerprint", "algorithm" }` and `"expected": "<fingerprint>" | null`. A successful test also refreshes the server facts. The outcome is stored (`lastTestAt`, `lastTestOk`, and the refusal code) and feeds the health column and the dashboard (#79); the log line carries only the profile id and the outcome.
 
 #### POST /server-profiles/:id/facts/refresh
 Permission `servers:write`. Probes the server now (one fixed read-only command) and returns `{ "facts": { "kernel", "os", "distroId?", "distroVersion?", "prettyName?", "shell?", "has": [], "packageManager?" }, "factsProbedAt" }`. `409 HOST_KEY_UNKNOWN | HOST_KEY_MISMATCH` (with `details.presented`, `details.expected`, `details.serverProfileId`) when the key is not trusted. `GET /sessions/:id/history` answers the same 409 for a refused key.
@@ -1437,8 +1453,8 @@ Versioned, reusable multi-step procedures (#61). Definitions can hold sensitive 
 | `DELETE /api/runbooks/:id/permanent` | `runbooks:write` + `owner` on the runbook | Deletes the runbook with its versions, runs and grants in one transaction; 204. `404` below `owner`, `409 RUNBOOK_HAS_ACTIVE_RUNS` while a run is unfinished. A group that owns a runbook (archived or not) cannot be deleted until this runs |
 | `POST /api/runbooks/:id/restore` | `runbooks:write` | Un-archives; 409 `RUNBOOK_NAME_TAKEN` if a live runbook has the name now |
 | `GET /api/runbooks/:id/versions` | `runbooks:read` | History, newest first, without definitions |
-| `GET /api/runbooks/:id/versions/:version` | `runbooks:read` | One version with its definition |
-| `POST /api/runbooks/validate` | `runbooks:write` | `{ definition }` returns `{ valid, definition (normalised), definitionSha256, warnings }`; nothing is saved |
+| `GET /api/runbooks/:id/versions/:version` | `runbooks:read` | One version with its definition and its `risk` (the embedded latest version of `GET /api/runbooks/:id` carries `risk` too) |
+| `POST /api/runbooks/validate` | `runbooks:write` | `{ definition }` returns `{ valid, definition (normalised), definitionSha256, warnings, risk }`; nothing is saved. `risk` is the destructive-command assessment, see Runbook safety below |
 | `POST /api/runbooks/targets/preview` | `runbooks:read` | `{ selector }` returns `{ servers: [{ id, name, hostname, tags, hostKeyTrusted, facts: { prettyName } }], skipped: [{ serverProfileId, reason }], total, capped, limit }` |
 
 **Versions are immutable.** A definition change appends a version; nothing updates or deletes one. Names are unique among live (non-archived) runbooks of an organization, case-insensitively.
@@ -1459,14 +1475,17 @@ The execution engine (#62). A run executes one runbook version on a set of serve
 
 | Route | Permission | Notes |
 |-------|------------|-------|
-| `POST /api/runbooks/:id/runs` | `runbooks:run` | `{ version?, params, secretRefs?, targets?, strategy? }`; `202 { runId }`. Params are checked against the definition (types, required, enum, pattern: `422 RUNBOOK_PARAMS_INVALID` with `details.issues`), each `secretRefs` name must exist (`422 RUNBOOK_SECRET_REF_UNKNOWN`); `503 RUNBOOKS_DISABLED` while `runbooks.enabled` is off |
+| `POST /api/runbooks/:id/runs` | `runbooks:run` | `{ version?, params, secretRefs?, targets?, strategy?, dryRun?, confirm? }`; `202 { runId, status: 'queued', dryRun, awaitingApproval, approvalId }`; `428 RUNBOOK_CONFIRMATION_REQUIRED` for a destructive runbook (see Runbook safety). Params are checked against the definition (types, required, enum, pattern: `422 RUNBOOK_PARAMS_INVALID` with `details.issues`), each `secretRefs` name must exist (`422 RUNBOOK_SECRET_REF_UNKNOWN`); `503 RUNBOOKS_DISABLED` while `runbooks.enabled` is off |
 | `GET /api/runbook-runs` | `runbooks:read` | Paginated; filters `runbookId`, `status`, `trigger`, `initiatedBy` |
-| `GET /api/runbook-runs/:id` | `runbooks:read` | The run, its targets with their step matrix, and `counts` |
+| `GET /api/runbook-runs/:id` | `runbooks:read` | The run (`dryRun`, `destructive`, `errorCode`), its targets with their step matrix, its `approvals` and `counts` |
 | `GET /api/runbook-runs/:id/targets/:targetId/steps/:stepIndex/log` | `runbooks:read` | `text/plain`, redacted; from storage once the step ended, else from the chunks; `?tail=N` lines |
 | `GET /api/runbook-runs/:id/logs/stream` | `runbooks:read` | SSE: `snapshot`, then `chunk` (id `<stepRowId>:<seq>`), `step`, `target`, `run`, `approval` and a `heartbeat` every 15 s. `Last-Event-ID` replays the chunks after it. `.../targets/:targetId/logs/stream` filters to one server. Send `Authorization: Bearer`, so use a fetch-based reader, not `EventSource` |
 | `POST /api/runbook-runs/:id/cancel` | `runbooks:run` | `202`; pending targets are cancelled, running ones stop within seconds (INT, then KILL after 10 s) |
 | `POST /api/runbook-runs/:id/targets/:targetId/cancel` | `runbooks:run` | One server |
-| `POST /api/runbook-runs/:id/retry` | `runbooks:run` | `{ only: 'failed' \| 'all' }`; a NEW run with the same version, params, secret references and strategy on those servers; only for a finished run |
+| `POST /api/runbook-runs/:id/retry` | `runbooks:run` | `{ only: 'failed' \| 'all', confirm? }`; a NEW run with the same version, params, secret references and strategy on those servers (a retry of a dry run is a dry run; of a destructive runbook it needs `confirm` and the same approval); only for a finished run |
+| `GET /api/runbook-runs/:id/audit` | `runbooks:read` | The audit trail of one run, see Runbook safety |
+| `GET /api/runbook-runs/:id/audit/export` | `runbooks:read` | `?format=csv\|json`: the same trail as a streamed download |
+| `GET /api/runbook-commands` | `runbooks:read` | Every command runbooks executed, org-wide, see Runbook safety |
 | `POST /api/runbook-runs/:id/resume` | `runbooks:run` + `runbooks:approve` | Releases a run paused after its canary batch (an approval decision) |
 | `GET /api/runbook-approvals` | `runbooks:read` | The inbox; `status=pending` by default (`approved`, `rejected`, `expired`, `all`) |
 | `POST /api/runbook-approvals/:id/decision` | `runbooks:approve` | `{ decision: 'approve' \| 'reject', comment? }`. `403 RUNBOOK_SELF_APPROVAL` for the person who started the run unless `runbooks.approvals.allowSelfApproval`; `409 RUNBOOK_APPROVAL_NOT_PENDING` |
@@ -1481,9 +1500,27 @@ The execution engine (#62). A run executes one runbook version on a set of serve
 
 **Failure codes** (on `error_code` of a target or step): `PERMISSION_REVOKED` (the starter lost `runbooks:run` or the server since the run was queued), `HOST_KEY_UNKNOWN`, `HOST_KEY_MISMATCH`, `SSH_UNREACHABLE`, `SSH_AUTH_FAILED`, `STEP_FAILED`, `STEP_TIMED_OUT`, `SUDO_PASSWORD_REQUIRED`, `PACKAGE_MANAGER_UNKNOWN`, `UNSUPPORTED_OPTION`, `DEST_EXISTS`, `FILE_TOO_LARGE`, `UPLOAD_CHECKSUM_MISMATCH`, `SECRET_UNAVAILABLE`, `APPROVAL_REJECTED`, `APPROVAL_EXPIRED`, `EXECUTOR_LOST` (the reconcile sweep found a running target whose job is gone), `CANCELLED`.
 
+### Runbook safety
+
+Dry run, the destructive guard, the two-person rule and the audit trail (#67). The assessment is `apps/api/src/runbooks/safety/runbook-risk.service.ts`; the command table it reads is `apps/api/src/command-safety/destructive-patterns.ts` (data: add a row, with a true positive and a look-alike in the spec).
+
+**Risk.** `risk: { destructive, risk: 'low'|'medium'|'high', findings: [{ stepId, stepIndex, kind, risk, destructive, reasons[], lines? }] }`, returned by `POST /api/runbooks/validate` and by the runbook and version reads. A `command` or `script` body is classified line by line (`classifyCommand`); `package_update` with `packages: 'all'` is `medium`; a `file_upload` to `/etc/`, `/boot/` or `/usr/` is `medium` (`high`, never destructive, with `overwrite`); an `ai_task` in `autonomous_within_allowlist` mode is `medium` ("AI may run allowlisted commands without approval"). Runbook rows: `rm -rf $X/` and `${X}/*` with an UNQUOTED variable ("unset variable expands to /"), `find / ... -delete`, `truncate -s 0 /var/lib/...` are destructive; `rm -rf "$DIR/"` with a QUOTED variable is `high` but not destructive. A finding names the step and the reasons, never the command text. A definition is destructive when any step is; saving is never blocked.
+
+**Launching a destructive runbook.** `POST /api/runbooks/:id/runs` with no (or a wrong) `confirm` answers `428 RUNBOOK_CONFIRMATION_REQUIRED` with `details: { runbookName, targetCount, requiresApproval, findings }`. Repeat it with `confirm: { runbookName, targetCount }`: the exact name and the number of servers the selector resolves to NOW (so a wrong tag cannot silently widen the blast radius). Unless `runbooks.approvals.allowSelfApproval` is on, the run is then created `queued` with a pending approval of kind `destructive_run` (`awaitingApproval: true`, `approvalId`) and NO start job: it is not dispatched until a different user with `runbooks:approve` approves it (`POST /api/runbook-approvals/:id/decision`; the starter gets `403 RUNBOOK_SELF_APPROVAL`). A rejection (or the approval expiring) sets the run `cancelled` with `errorCode` `APPROVAL_REJECTED` (`APPROVAL_EXPIRED`) and nothing ever ran; cancelling the run while it waits closes the approval. `ai_task` agents never run a destructive command in any mode (#64). Audit events `runbook_run.destructive_confirmed` and `runbook_approval.decided`; metric `app.runbooks.destructive_runs` (`outcome`: `confirmed`, `approved`, `rejected`, `blocked`).
+
+**Dry run.** `dryRun: true` (permission `runbooks:run`, no confirmation) creates a run with `dryRun: true` (badge it DRY RUN). Per target it connects (host key and credential verified as in a real run), refreshes the server facts and then sends one read-only probe per step, recorded as an execution with origin `dry_run`: `command` is not executed (`bash -n` plus `command -v <argv0>` of each binary); `script` is `bash -n` / `sh -n` or `python3 -m py_compile` of a temp file that is removed; `package_update` is the manager's simulation (`apt-get -s`, `dnf|yum --assumeno`, `apk --simulate`, `zypper --dry-run`; brew is `skipped`); `file_upload` checks the directory (`test -d`, `test -w`) and the destination against `overwrite`; `collect_logs` is `ls -la` of the paths estimated against the caps; `ai_task` and `approval_gate` are `skipped` ("not simulated"). Step statuses: `succeeded` (would run), `failed` (`errorCode: DRY_RUN_PRECONDITION`), `skipped`. A dry run creates no approvals (no canary pause), emits no in-process `runbooks.run.finished` event (so no webhook or log collection), and notifies in the app only (`runbooks.dry_run_finished`). Metric `app.runbooks.dry_runs`.
+
+| Route | Permission | Notes |
+|-------|------------|-------|
+| `GET /api/runbook-runs/:id/audit` | `runbooks:read` | `?page&pageSize` (200, max 1000). `{ items, total, events, commands, page, pageSize }`, oldest first. An item is `{ at, kind: 'event'\|'command', event, userId, approverUserId, serverProfileId, serverName, stepIndex, stepName, origin, commandPreview, commandSha256, exitCode, signal, timedOut, durationMs, outcome, detail, dryRun }`. Events: `run.created`, `run.destructive_confirmed`, `run.started`, `approval.requested`, `approval.decided`, `run.cancel_requested`, `target.cancelled`, `run.finished`. Every executed command appears once |
+| `GET /api/runbook-runs/:id/audit/export` | `runbooks:read` | `?format=csv` (default) or `json`: a streamed attachment, not enveloped. CSV is RFC 4180 with CRLF; a text cell starting with `=`, `+`, `-`, `@`, tab or CR is prefixed with `'` |
+| `GET /api/runbook-commands` | `runbooks:read` | `?serverId&userId&runId&from&to&page&pageSize`: newest first, paginated, only runs the caller may see; each item is a command row plus `id`, `runId`, `runbookId`, `runbookName` |
+
+A command row holds the sha256 of the exact command and its redacted 2 KiB preview, never output; secret values are redacted before storage.
+
 **Reconcile.** A cron queues `runbook.logs.compact` every minute: it fails lost executors, advances stuck runs, expires approvals past `expires_at` (same effect as a rejection, code `APPROVAL_EXPIRED`) and moves log chunks older than an hour to storage.
 
-**Audit events:** `runbook_run.created`, `runbook_run.cancelled`, `runbook_run.target_cancelled`, `runbook_approval.decided`. **Metrics:** `app.runbooks.runs_finished`, `app.runbooks.target_duration`, `app.runbooks.commands`, `app.runbooks.approvals` (bounded labels only). **Nginx:** the stream paths need buffering off (`infra/nginx/app.d/locations/runbook-streams.conf`).
+**Audit events:** `runbook_run.created`, `runbook_run.cancelled`, `runbook_run.target_cancelled`, `runbook_run.destructive_confirmed`, `runbook_approval.decided`. **Metrics:** `app.runbooks.runs_finished`, `app.runbooks.target_duration`, `app.runbooks.commands`, `app.runbooks.approvals`, `app.runbooks.destructive_runs`, `app.runbooks.dry_runs` (bounded labels only). **Nginx:** the stream paths need buffering off (`infra/nginx/app.d/locations/runbook-streams.conf`).
 ### Sharing: groups, shared servers and shared runbooks
 
 Server profiles and runbooks are private to their owner until shared (#71). The sharing slice (`@marinoscar/platform-api/sharing`) provides the routes; ShellKeep registers two resource types, `server_profile` and `runbook`, and every decision is `AccessPolicy`'s. A record the caller may not see is **404, never 403**, so existence is never disclosed; a missing RBAC permission (for example `sessions:write` to connect) is a 403 naming it. A grant carries a **role, never a credential**.
@@ -1517,7 +1554,7 @@ The Home page's one read (#78). `GET /api/dashboard/summary` requires `sessions:
 ```json
 {
   "data": {
-    "servers": { "total": 14, "reachable": 0, "unreachable": 0, "unknown": 14, "hostKeyUntrusted": 3 },
+    "servers": { "total": 14, "reachable": 9, "unreachable": 2, "unknown": 3, "hostKeyUntrusted": 3 },
     "sessions": {
       "active": 5, "attached": 2, "detached": 3,
       "recent": [{ "id": "…", "name": "deploy-hotfix", "status": "active", "serverProfileId": "…", "serverName": "server-a", "lastActivityAt": "…", "createdAt": "…" }]
@@ -1528,7 +1565,7 @@ The Home page's one read (#78). `GET /api/dashboard/summary` requires `sessions:
 ```
 
 - **Scope.** `servers` counts the profiles the caller may see (own, owned by a group of theirs, shared with them; the sharing slice's `accessibleWhere`) and is `null` without `servers:read`. `sessions` covers the caller's own non-terminated sessions in the request's organization; `recent` is newest activity first, at most five, and carries the server's name, never its hostname.
-- **Reachability.** Counted from stored connection-test results only, and the dashboard never opens SSH. No result is stored yet, so every visible server is `unknown`; `hostKeyUntrusted` counts servers with no trusted fingerprint (#60).
+- **Reachability.** Counted from the stored outcome of each server's last connection test (#79), with the same definition as the Servers page's `health` filter, so `/servers?health=unreachable` lists exactly the servers the tile counts; a server never tested is `unknown`. The dashboard never opens SSH. `hostKeyUntrusted` counts servers with no trusted fingerprint (#60), the same set as `/servers?hostKey=untrusted`.
 - **Runs.** `null` without `runbooks:read`, and `null` until the runbook engine (#62) binds `DASHBOARD_RUNS_SOURCE` (`apps/api/src/dashboard/dashboard-runs.source.ts`), after which it is `{ running, failedLast24h, recent: [{ id, runbookId, runbookName, status, targets: { total, succeeded, failed, running }, startedAt }] }`.
 - The response is validated against `dashboardSummarySchema` (`apps/api/src/dashboard/dashboard.schema.ts`). One span per request, `dashboard.summary`; no hostname in a log or span.
 

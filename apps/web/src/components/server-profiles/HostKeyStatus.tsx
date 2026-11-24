@@ -1,22 +1,41 @@
 /**
  * A profile's host-key trust state as an icon plus text (issue #60), never
- * colour alone: a filled shield and "Trusted", or an outlined shield and
- * "Not trusted". The tooltip carries the fingerprint.
+ * colour alone: a filled shield and "Trusted", an outlined shield and
+ * "Not trusted", or a crossed shield and "Mismatch" while the last test was
+ * refused for a changed key (#79). The tooltip carries the fingerprint.
  */
 
 import { Box, Chip, Tooltip, Typography } from '@mui/material';
 import {
+  GppBad as MismatchIcon,
   RemoveModerator as UntrustedIcon,
   VerifiedUser as TrustedIcon,
 } from '@mui/icons-material';
 import { algorithmLabel, isHostKeyTrusted } from '../../lib/terminal/host-key';
 import type { ServerProfile } from '../../types/terminal';
 
-type Profile = Pick<ServerProfile, 'fingerprint' | 'hostKeyAlgorithm'>;
+type Profile = Pick<ServerProfile, 'fingerprint' | 'hostKeyAlgorithm'> & Partial<Pick<ServerProfile, 'hostKeyState'>>;
 
 /** The compact form used in the server list row. */
 export function HostKeyStatus({ profile }: { profile: Profile }) {
   const trusted = isHostKeyTrusted(profile);
+  // The last connection test was refused for a changed key (#79): say so, never only by colour.
+  if (trusted && profile.hostKeyState === 'mismatch') {
+    return (
+      <Tooltip title={`The server presented a different key than the trusted ${profile.fingerprint}. Verify it before connecting.`}>
+        <Box
+          data-testid="host-key-status"
+          data-trusted="mismatch"
+          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap' }}
+        >
+          <MismatchIcon fontSize="small" color="error" aria-hidden />
+          <Typography variant="body2" component="span">
+            Mismatch
+          </Typography>
+        </Box>
+      </Tooltip>
+    );
+  }
   const label = trusted ? 'Trusted' : 'Not trusted';
   const tooltip = trusted
     ? `${algorithmLabel(profile.hostKeyAlgorithm)} ${profile.fingerprint}`

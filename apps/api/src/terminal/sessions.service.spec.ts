@@ -117,6 +117,18 @@ describe('SessionsService', () => {
       );
     });
 
+    it('narrows to one server profile, still the caller\'s own sessions only (#79)', async () => {
+      (prisma.terminalSession.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.terminalSession.count as jest.Mock).mockResolvedValue(0);
+      const serverProfileId = '00000000-0000-4000-8000-000000000009';
+
+      await service.findAll(mockScope, { page: 1, pageSize: 5, serverProfileId });
+
+      expect(prisma.terminalSession.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: mockUserId, orgId: mockOrgId, serverProfileId } }),
+      );
+    });
+
     it('should not filter by status when "all"', async () => {
       (prisma.terminalSession.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.terminalSession.count as jest.Mock).mockResolvedValue(0);

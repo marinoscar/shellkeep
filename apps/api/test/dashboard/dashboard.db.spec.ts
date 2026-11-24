@@ -122,9 +122,27 @@ describeWithDb('Home dashboard summary (real database)', () => {
     await closeTestApp(context);
   }, 60_000);
 
-  it("counts the owner's servers, with the untrusted host keys, and every one as unknown", async () => {
+  it("counts the owner's servers, with the untrusted host keys, and every untested one as unknown", async () => {
     const { servers } = await summaryOf(A);
     expect(servers).toEqual({ total: 3, reachable: 0, unreachable: 0, unknown: 3, hostKeyUntrusted: 2 });
+  });
+
+  it('counts reachability from the stored connection-test outcome (#79)', async () => {
+    await bypass(async (tx) => {
+      await tx.serverProfile.update({ where: { id: profiles['server-a1'] }, data: { lastTestAt: new Date(), lastTestOk: true } });
+      await tx.serverProfile.update({ where: { id: profiles['server-a2'] }, data: { lastTestAt: new Date(), lastTestOk: false } });
+    });
+    try {
+      const { servers } = await summaryOf(A);
+      expect(servers).toEqual({ total: 3, reachable: 1, unreachable: 1, unknown: 1, hostKeyUntrusted: 2 });
+    } finally {
+      await bypass((tx) =>
+        tx.serverProfile.updateMany({
+          where: { id: { in: [profiles['server-a1'], profiles['server-a2']] } },
+          data: { lastTestAt: null, lastTestOk: null },
+        }),
+      );
+    }
   });
 
   it('counts a server shared with the caller, and never another user\'s unshared ones', async () => {

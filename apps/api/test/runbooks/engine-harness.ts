@@ -36,7 +36,9 @@ import { RunStreamService } from '../../src/runbooks/engine/run-stream.service';
 import { RunbookApprovalsService } from '../../src/runbooks/engine/runbook-approvals.service';
 import { RunbookRunsService } from '../../src/runbooks/engine/runbook-runs.service';
 import { RunbookSettingsService } from '../../src/runbooks/engine/runbook-settings.service';
+import { PrismaAuditSink } from '../../src/platform/audit-sink.adapter';
 import { SshExecutor } from '../../src/runbooks/engine/ssh-executor';
+import { RunbookRiskService } from '../../src/runbooks/safety/runbook-risk.service';
 import { TargetRunHandler } from '../../src/runbooks/engine/target-run.handler';
 import { DEFAULT_RUNBOOKS_SYSTEM_SETTINGS, type RunbooksSystemSettings } from '../../src/runbooks/settings/runbooks.system-settings';
 import { runbookDefinitionSchema, type RunbookDefinitionInput } from '../../src/runbooks/schema/runbook-definition.schema';
@@ -83,6 +85,8 @@ export interface Harness {
   archive: LogArchiveService;
   settings: { current: RunbooksSystemSettings };
   files: { next?: RunFile | Error };
+  factsService: { tryProbeClient: jest.Mock };
+  audit: { record: jest.Mock };
   finishedEvents: unknown[];
   userA: string;
   userB: string;
@@ -134,7 +138,9 @@ export async function createHarness(label: string): Promise<Harness> {
     await tx.user.create({ data: { id: userB, email: 'person-b@example.test', providerDisplayName: 'Person B' } });
   });
 
-  const audit: AuditSink = { record: jest.fn(async () => undefined) } as unknown as AuditSink;
+  // The real audit table, so the audit trail reads what the services wrote; `record` is a spy.
+  const auditTable = new PrismaAuditSink(prisma);
+  const audit = { record: jest.fn((event: Parameters<AuditSink['record']>[0]) => auditTable.record(event)) } as unknown as AuditSink;
   const notifications = { notify: jest.fn(async () => undefined), notifyPermissionHolders: jest.fn(async () => undefined) };
   const emitter = new EventEmitter2();
   emitter.on('runbooks.run.finished', (event) => finishedEvents.push(event));
@@ -182,18 +188,20 @@ export async function createHarness(label: string): Promise<Harness> {
     },
     requireRun: async () => undefined,
   } as unknown as EngineAccessService;
-  const runs = new RunbookRunsService(prisma, jobs, runbooksFake as never, credentials as never, settingsService, coordinator, lifecycle, audit);
+  const runs = new RunbookRunsService(prisma, jobs, runbooksFake as never, credentials as never, settingsService, coordinator, lifecycle, audit, new RunbookRiskService(), resolver, metrics);
   const factory = new SshConnectionFactory(prisma, audit, { getNamespace: async () => ({ hostKeyPolicy: 'strict' }) } as never);
   const fileSource = { open: async () => { const next = files.next; if (!next) throw new Error('no file'); if (next instanceof Error) throw next; return next; } } as unknown as RunFileSource;
 
+  // The facts probe is #60's own (its specs): here it is a recorder, so a dry run's refresh is observable.
+  const factsService = { tryProbeClient: jest.fn(async () => null) };
   const start = new RunStartHandler(registry, prisma, jobScope, coordinator, lifecycle, access, settingsService);
-  const target = new TargetRunHandler(registry, prisma, jobScope, coordinator, lifecycle, access, factory, new SshExecutor(), archive, events, settingsService, credentials as never, fileSource, metrics);
+  const target = new TargetRunHandler(registry, prisma, jobScope, coordinator, lifecycle, access, factory, new SshExecutor(), archive, events, settingsService, credentials as never, fileSource, metrics, factsService as never);
   const advance = new RunAdvanceHandler(registry, jobScope, coordinator, lifecycle);
   const compact = new LogsCompactHandler(registry, prisma, system, jobs, coordinator, lifecycle, approvals, archive);
   const handlers = new Map<string, JobHandler>([start, target, advance, compact].map((h) => [h.type, h]));
 
   const harness: Harness = {
-    db, prisma, system, fixture, bus, storage, secrets, notifications, runs, approvals, compact, archive, settings, files, finishedEvents, userA, userB, handlers,
+    db, prisma, system, fixture, bus, storage, secrets, notifications, runs, approvals, compact, archive, settings, files, finishedEvents, userA, userB, handlers, factsService, audit: audit as never,
     stream: new RunStreamService(prisma, events),
     async addServer(name, over = {}) {
       const row = await prisma.serverProfile.create({

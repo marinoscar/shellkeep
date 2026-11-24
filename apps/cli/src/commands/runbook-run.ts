@@ -4,7 +4,7 @@ import type { Command } from 'commander';
 
 import { CommandExit } from './exit.js';
 import { writeJson } from './output.js';
-import { type RunRow, renderRunMatrix, summarizeRun } from './runbook-model.js';
+import { type RunRow, dryRunPlan, renderDryRunPlan, renderRunMatrix, summarizeRun } from './runbook-model.js';
 import { fetchRun } from './runbook-status.js';
 import type { RunbookDeps } from './runbook-http.js';
 
@@ -21,9 +21,11 @@ import type { RunbookDeps } from './runbook-http.js';
 // is refused, so a value cannot end up in argv or a shell history through this
 // command. The output carries no parameter values at all.
 //
-// `--dry-run`: the dry-run contract is issue #67 (runbook safety), which is not
-// part of the run route yet. Until it is, the flag is refused with exit 2 rather
-// than silently starting a REAL run.
+// `--dry-run` (issue #67): sends `dryRun: true`. The server connects to every target and checks every step
+// with read-only probes (syntax, binaries, package-manager simulation, destination writable) and executes
+// nothing that changes a server. The command always waits for the dry run to end, prints the per-target
+// plan (`--json`: the run plus `plan`) and exits 0 only when every target would run cleanly (1 otherwise).
+// A runbook with a destructive step needs no confirmation for a dry run.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -160,9 +162,6 @@ export async function waitForRun(
  * @returns the run id and, when waiting, its final state.
  */
 export async function startRun(deps: RunbookDeps, id: string, options: RunOptions): Promise<{ runId: string; run?: RunRow; timedOut?: boolean }> {
-  if (options.dryRun === true) {
-    throw new CommandExit('--dry-run is not available until the runbook safety work (#67) lands; no run was started', 2);
-  }
   const intervalSeconds = positiveSeconds('--interval', options.interval, 3);
   const timeoutSeconds = options.timeout === undefined ? undefined : positiveSeconds('--timeout', options.timeout, 0);
   const targets = options.targets === undefined ? undefined : parseTargets(options.targets);
@@ -180,8 +179,10 @@ export async function startRun(deps: RunbookDeps, id: string, options: RunOption
     params,
     secretRefs,
     ...(targets !== undefined ? { targets } : {}),
+    ...(options.dryRun === true ? { dryRun: true } : {}),
   });
-  if (options.wait !== true) return { runId };
+  // A dry run is only useful for its plan: it is always followed to the end.
+  if (options.wait !== true && options.dryRun !== true) return { runId };
 
   const { run, timedOut } = await waitForRun(deps, runId, {
     intervalSeconds,
@@ -202,7 +203,7 @@ export function registerRunbookRun(group: Command, deps: RunbookDeps): void {
     .option('--param <NAME=value>', 'a parameter value (repeatable)', collect)
     .option('--secret-ref <NAME=secret>', 'a secret parameter: the name of a stored runbook secret (repeatable)', collect)
     .option('--runbook-version <n>', 'run this version (default: the latest)')
-    .option('--dry-run', 'resolve and plan without executing (not available until #67)')
+    .option('--dry-run', 'rehearse: check every step on every server with read-only probes and print the plan; nothing is executed (implies --wait)')
     .option('--wait', 'wait for the run to end')
     .option('--interval <seconds>', 'seconds between polls with --wait', '3')
     .option('--timeout <seconds>', 'stop waiting after this long (the run continues)')
@@ -216,11 +217,11 @@ export function registerRunbookRun(group: Command, deps: RunbookDeps): void {
         return;
       }
       if (options.json === true) {
-        writeJson(deps.stdout, { ...run, timedOut: started.timedOut === true });
+        writeJson(deps.stdout, { ...run, timedOut: started.timedOut === true, ...(run.dryRun ? { plan: dryRunPlan(run) } : {}) });
       } else {
-        deps.stdout.write(`${summarizeRun(run)}\n\n${renderRunMatrix(run)}\n`);
+        deps.stdout.write(`${summarizeRun(run)}\n\n${run.dryRun ? renderDryRunPlan(run) : renderRunMatrix(run)}\n`);
       }
       if (started.timedOut === true) throw new CommandExit(`timed out waiting for run ${run.id} (still ${run.status})`, 1);
-      if (!run.succeeded) throw new CommandExit(`run ${run.id} ${run.status}: not every target succeeded`, 1);
+      if (!run.succeeded) throw new CommandExit(run.dryRun ? `dry run ${run.id}: ${run.status}; not every target would run cleanly` : `run ${run.id} ${run.status}: not every target succeeded`, 1);
     });
 }

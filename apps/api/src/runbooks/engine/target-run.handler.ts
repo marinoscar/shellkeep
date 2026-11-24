@@ -21,6 +21,13 @@
 //   4. settle the target and call `advance` IN THE SAME TRANSACTION (JobScope), then publish after the
 //      commit; the SSH connection closes in `finally`.
 //
+// DRY RUN (#67). A run with `dry_run` takes the same path (the host key is verified, the facts are
+// refreshed) but `runDryStep` replaces every step: one read-only probe per step (`dry-run.ts`: syntax
+// checks, `command -v`, package-manager simulations, `test -w`, `ls -la`), recorded as a
+// `runbook_command_executions` row with origin `dry_run`. Nothing that changes the server is sent; a
+// failed precondition fails the step `DRY_RUN_PRECONDITION`; an `ai_task` and an `approval_gate` are
+// skipped ("not simulated"), so a dry run creates no approvals.
+//
 // A secret value lives only in this process's memory, between its decryption and the end of the
 // segment. It is never in a payload, a row, a log line, a span or an event: the sink redacts every chunk
 // with the exact values.
@@ -41,7 +48,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { HostKeyError } from '../../ssh/host-key.error';
 import { SshConnectionFactory } from '../../ssh/ssh-connection.factory';
 import { classifySshConnectError } from '../../ssh/ssh-connect-outcome';
-import { readStoredFacts } from '../../ssh/server-facts.service';
+import { ServerFactsService, readStoredFacts } from '../../ssh/server-facts.service';
 import { RUNBOOK_SECRET_PURPOSE } from '../runbooks.credentials';
 import type { RunbookDefinition, RunbookStep } from '../schema/runbook-definition.schema';
 import { CancelWatch } from './cancel-watch';
@@ -54,6 +61,8 @@ import {
   RUNBOOK_TARGET_RUN_TYPE,
   type FailureCode,
 } from './engine.constants';
+import { SERVER_FACTS_COMMAND } from '../../ssh/server-facts';
+import { estimateLogCollection, planDryRunStep } from './dry-run';
 import { LogArchiveService } from './log-archive.service';
 import { LogSink, splitUtf8 } from './log-sink';
 import { renderPackageUpdate } from './package-commands';
@@ -90,6 +99,7 @@ interface Segment {
   secrets: Record<string, string>;
   maxLogBytes: number;
   allowSelfApproval: boolean;
+  dryRun: boolean;
   target: { serverProfileId: string | null };
   client: Client;
   watch: CancelWatch;
@@ -133,6 +143,7 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
     private readonly credentials: OrgCredentialsService,
     private readonly files: RunFileSource,
     private readonly metrics: EngineMetricsService,
+    private readonly factsService: ServerFactsService,
   ) {}
 
   onModuleInit(): void {
@@ -227,6 +238,7 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
         secrets,
         maxLogBytes: effective.maxLogBytesPerStep,
         allowSelfApproval: effective.approvals.allowSelfApproval,
+        dryRun: run.dryRun,
         target: { serverProfileId: target.serverProfileId },
         client,
         watch,
@@ -234,6 +246,7 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
         profileId: profile.id,
         rows: new Map(steps.map((s) => [s.stepIndex, { id: s.id, status: s.status }])),
       };
+      if (segment.dryRun) segment.facts = await this.refreshFacts(segment, client, profile, steps[0]?.id ?? null);
       final = await this.runSteps(segment, payload.fromStepIndex);
     } catch (error) {
       this.logger.error(`segment failed: ${errorName(error)}`);
@@ -335,6 +348,7 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
   }
 
   private async runStep(seg: Segment, index: number, step: RunbookStep, rowId: string): Promise<StepOutcome> {
+    if (seg.dryRun) return this.runDryStep(seg, index, step, rowId);
     switch (step.kind) {
       case 'command':
         return this.runScript(seg, index, step, rowId, {
@@ -446,7 +460,7 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
   }
 
   /** The audit row of one command: hash and redacted preview, never the raw text. */
-  private async recordExecution(seg: Segment, rowId: string, script: string): Promise<string> {
+  private async recordExecution(seg: Segment, rowId: string, script: string, origin: 'step' | 'dry_run' = seg.dryRun ? 'dry_run' : 'step'): Promise<string> {
     const literals = Object.values(seg.secrets).filter((s) => s.length > 0);
     const clipped = splitUtf8(script, COMMAND_PREVIEW_BYTES)[0] ?? '';
     const preview = redactText(clipped, { extraLiterals: literals }).text;
@@ -455,8 +469,9 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
         data: {
           orgId: seg.orgId,
           serverProfileId: seg.profileId,
-          runStepId: null,
-          origin: 'step',
+          // Attached to its step at once: a command that never finishes still belongs to its run's audit trail.
+          runStepId: rowId,
+          origin,
           commandSha256: sha256Hex(script),
           commandPreview: preview,
         },
@@ -466,11 +481,11 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
     });
   }
 
-  private async finishExecution(seg: Segment, id: string, rowId: string, r: { exitCode: number | null; signal: string | null; timedOut: boolean; bytes: number }) {
+  private async finishExecution(seg: Segment, id: string, r: { exitCode: number | null; signal: string | null; timedOut: boolean; bytes: number }) {
     await this.inOrg(seg.orgId, (tx) =>
       tx.runbookCommandExecution.update({
         where: { id },
-        data: { runStepId: rowId, exitCode: r.exitCode, signal: r.signal, timedOut: r.timedOut, bytes: r.bytes, finishedAt: new Date() },
+        data: { exitCode: r.exitCode, signal: r.signal, timedOut: r.timedOut, bytes: r.bytes, finishedAt: new Date() },
       }),
     );
   }
@@ -517,7 +532,7 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
       const result = await this.executor.exec(seg.client, request);
       exitCode = result.exitCode;
       await sink.close();
-      await this.finishExecution(seg, executionId, rowId, result);
+      await this.finishExecution(seg, executionId, result);
       if (result.aborted) {
         status = 'cancelled';
         code = FAILURE_CODES.CANCELLED;
@@ -545,6 +560,113 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
   }
 
   // ---------------------------------------------------------------------------
+  // Dry run (#67)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Refreshes the server's facts over the verified connection (best effort, read-only). The probe is one
+   * fixed command; it is recorded like any other command, attached to the first step of the run.
+   */
+  private async refreshFacts(seg: Segment, client: Client, profile: Parameters<ServerFactsService['tryProbeClient']>[1], firstStepId: string | null): Promise<Segment['facts']> {
+    const first = seg.rows.get(0);
+    let executionId: string | null = null;
+    if (first && firstStepId) executionId = await this.recordExecution(seg, first.id, SERVER_FACTS_COMMAND, 'dry_run').catch(() => null);
+    const fresh = await this.factsService.tryProbeClient(client, profile);
+    if (executionId) await this.finishExecution(seg, executionId, { exitCode: fresh ? 0 : null, signal: null, timedOut: false, bytes: 0 }).catch(() => undefined);
+    return fresh ?? seg.facts;
+  }
+
+  /** A step a dry run does not simulate: `skipped`, with one line saying why. */
+  private async skipStep(seg: Segment, index: number, rowId: string, reason: string): Promise<StepOutcome> {
+    assertTransition('step', 'pending', 'skipped');
+    const sink = this.sinkFor(seg, index, rowId);
+    sink.system(`DRY RUN: ${reason}\n`);
+    await sink.close();
+    await this.inOrg(seg.orgId, (tx) =>
+      tx.runbookRunStep.update({
+        where: { id: rowId },
+        data: { status: 'skipped', outputTail: sink.outputTail() || null, logBytes: sink.bytes, logTruncated: sink.truncated, finishedAt: new Date() },
+      }),
+    );
+    seg.rows.set(index, { id: rowId, status: 'skipped' });
+    await this.archive.archiveStep(seg.orgId, rowId);
+    await this.events.publish({ type: 'step', runId: seg.runId, targetId: seg.targetId, stepIndex: index, status: 'skipped', exitCode: null, durationMs: null });
+    // A skipped step is not a failure: the segment goes on (it reports as a succeeded outcome for `failed` bookkeeping).
+    return { status: 'succeeded' };
+  }
+
+  /** One step of a dry run: a single read-only probe. Step statuses: succeeded (would run), failed, skipped. */
+  private async runDryStep(seg: Segment, index: number, step: RunbookStep, rowId: string): Promise<StepOutcome> {
+    const plan = planDryRunStep(step, { factsManager: seg.facts?.packageManager, seed: `${seg.runId}:${index}` });
+    if (plan.kind === 'skip') return this.skipStep(seg, index, rowId, plan.reason);
+    if (plan.kind === 'fail') return this.failStep(seg, index, rowId, plan.code, `DRY RUN: ${plan.message}`);
+
+    const started = Date.now();
+    await this.setStep(seg, index, rowId, 'pending', 'running', { startedAt: new Date(started) });
+    const sink = this.sinkFor(seg, index, rowId);
+    const literals = Object.values(seg.secrets).filter((v) => v.length > 0);
+    sink.system('DRY RUN: nothing is changed on this server\n');
+    for (const line of plan.preview) sink.system(`${redactText(line, { extraLiterals: literals }).text}\n`);
+    const executionId = await this.recordExecution(seg, rowId, plan.script, 'dry_run');
+
+    let listing = '';
+    const runAs = 'runAs' in step ? step.runAs : undefined;
+    const request: SshExecRequest = {
+      script: plan.script,
+      interpreter: 'bash',
+      strict: false,
+      env: seg.params,
+      secrets: seg.secrets,
+      ...(runAs ? { runAs: { sudo: runAs.sudo ?? false, ...(runAs.user ? { user: runAs.user } : {}) } } : {}),
+      timeoutSec: Math.min(step.timeoutSec, 300),
+      signal: seg.watch.signal,
+      onChunk: (chunk) => {
+        sink.push(chunk.stream, chunk.data);
+        if (step.kind === 'collect_logs' && chunk.stream === 'stdout' && listing.length < 1_000_000) listing += chunk.data.toString('utf8');
+      },
+      span: { stepKind: step.kind, stepIndex: index, serverProfileId: seg.profileId },
+    };
+
+    let status: StepStatus;
+    let code: FailureCode | undefined;
+    let exitCode: number | null = null;
+    try {
+      const result = await this.executor.exec(seg.client, request);
+      exitCode = result.exitCode;
+      if (step.kind === 'collect_logs' && result.exitCode !== null && plan.okExitCodes.includes(result.exitCode)) {
+        const estimate = estimateLogCollection(listing, { maxBytesPerFile: step.maxBytesPerFile, maxTotalBytes: step.maxTotalBytes });
+        sink.system(
+          `DRY RUN: ${estimate.files} file(s), ${estimate.totalBytes} bytes in total` +
+            `${estimate.oversized > 0 ? `; ${estimate.oversized} larger than the per-file cap of ${step.maxBytesPerFile} bytes would be cut` : ''}` +
+            `${estimate.overTotal ? `; the total exceeds the cap of ${step.maxTotalBytes} bytes` : ''}\n`,
+        );
+      }
+      await sink.close();
+      await this.finishExecution(seg, executionId, result);
+      if (result.aborted) {
+        status = 'cancelled';
+        code = FAILURE_CODES.CANCELLED;
+      } else if (result.timedOut) {
+        status = 'timed_out';
+        code = FAILURE_CODES.STEP_TIMED_OUT;
+      } else if (result.exitCode !== null && plan.okExitCodes.includes(result.exitCode)) {
+        status = 'succeeded';
+      } else {
+        status = 'failed';
+        code = FAILURE_CODES.DRY_RUN_PRECONDITION;
+      }
+    } catch (error) {
+      this.logger.warn(`dry-run probe failed: ${errorName(error)}`);
+      await sink.close();
+      status = 'failed';
+      code = FAILURE_CODES.SSH_UNREACHABLE;
+    }
+    this.metrics.command('dry_run', status === 'succeeded' ? 'succeeded' : status === 'timed_out' ? 'timed_out' : status === 'cancelled' ? 'cancelled' : 'failed');
+    await this.finishStep(seg, index, rowId, sink, 'running', status, { ...(code ? { code } : {}), exitCode, durationMs: Date.now() - started });
+    return { status, ...(code ? { code } : {}) };
+  }
+
+  // ---------------------------------------------------------------------------
   // file_upload
   // ---------------------------------------------------------------------------
 
@@ -563,7 +685,7 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
         if (c.stream === 'stdout' && stdout.length < 4096) stdout += c.data.toString('utf8');
       },
     });
-    await this.finishExecution(seg, executionId, rowId, result);
+    await this.finishExecution(seg, executionId, result);
     this.metrics.command('step', result.exitCode === 0 ? 'succeeded' : 'failed');
     return { exitCode: result.exitCode, stdout };
   }
