@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- matching terminal control characters is this file's whole job */
 // Pure: removes terminal control sequences and normalises line endings.
 
 // OSC: ESC ] ... (BEL | ESC \)    DCS/PM/APC/SOS: ESC (P|^|_|X) ... ESC \

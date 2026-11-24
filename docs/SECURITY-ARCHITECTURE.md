@@ -1743,3 +1743,19 @@ A man-in-the-middle on the path to a server could harvest the password or key of
 - **Observability**: counter `app.ssh.host_key_checks` with the single label `outcome` (`match`, `unknown`, `mismatch`, `auto_trusted`; never a host), span attribute `ssh.host_key.outcome` on `ssh.connect`. A mismatch logs at `warn` with the profile id and both fingerprints (public values), never a credential.
 - **Audit actions**: `server_profile.host_key_trusted`, `server_profile.host_key_replaced` (old and new fingerprints), `server_profile.host_key_forgotten`, `server_profile.host_key_auto_trusted`.
 - **Rollback**: the new columns are nullable and ignored by older code. Without a revert, set `ssh.hostKeyPolicy` to `tofu_auto` so unknown keys are trusted automatically; mismatches are still refused.
+
+---
+
+## Terminal AI Safety (issue #56)
+
+Terminal output routinely holds secrets (`env`, `cat .env`, `kubectl get secret -o yaml`, private keys). It reaches a model only through one door.
+
+- **One door**: `TerminalContextService.forAi` (`apps/api/src/terminal-ai/`). Every AI feature that needs terminal text calls it; none reads a pane. `tmux capture-pane` appears only in `terminal/session-history.service.ts` (`test/terminal-ai/capture-boundary.spec.ts` fails on any other file).
+- **Order**: session ownership (no access is 404), consent (`409 AI_CONSENT_REQUIRED`), the per-server switch, capture or the client's selection, ANSI stripping, redaction, size cap (the most recent text is kept), audit.
+- **Per-server switch**: `server_profiles.ai_output_sharing` (API `aiOutputSharing`, default true). When false, explain and summary answer `409 AI_OUTPUT_SHARING_DISABLED`, assist gets only OS, shell and working directory (no pane is captured), and `ai_task` runbook steps must fail on that target (#64). This is the hard control; redaction is defence in depth and the consent text says so.
+- **Redaction** (`apps/api/src/command-safety/redact.ts`, pure, reused by the runbook engine): `[REDACTED:<kind>]` for AWS keys, GitHub, Slack, Google and LLM keys, JWTs, whole PEM private-key blocks, URL credentials (scheme and host kept), `Authorization` headers, `key=value` secrets (key kept), platform tokens, exact literals and a high-entropy pass that spares UUIDs, git SHAs and `sha256:` digests. `strict` mode also replaces every line that had a finding with `[REDACTED LINE]`. The mode comes from the `terminalAi` system setting, which an organization may only tighten.
+- **Consent**: user setting `terminalAi.consentAcceptedAt`; `GET` and `POST /api/ai/terminal/consent` (`ai:use`, behind the AI kill switch). Required unless `terminalAi.requireConsent` is off.
+- **Audit and metrics**: one `terminal_ai.request` event per call with the feature, profile and session ids, finding kinds and counts, `bytesSent` and `truncated`, never content; `terminal_ai.consent` on acceptance. Counter `app.terminal_ai.redactions` with the single label `kind`.
+- **Never logged**: terminal text and matched secrets appear in no log line, span, audit row, metric or error. The integration test feeds a sentinel AWS key and a PEM block through the real `AiService` over `FakeAiProvider` and asserts none of them is in the provider's call log, the audit rows, the metrics, the logs or the response.
+- **Command risk**: `classifyCommand` (`command-safety/classify-command.ts`) over the data table `destructive-patterns.ts` reports `low`, `medium` or `high` for runbook approvals (#67). A quoted `echo "rm -rf /"` is an accepted `medium`.
+- **Rollback**: revert the PR. The `ai_output_sharing` column can stay (it defaults to true and is ignored).
