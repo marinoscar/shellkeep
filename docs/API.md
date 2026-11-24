@@ -92,7 +92,7 @@ Binary frames are terminal input and output; `resize` and `ping` are unchanged. 
 
 ## Terminal command assist
 
-`POST /api/ai/terminal/assist` (`ai:use` and `sessions:write`, behind the AI kill switch and the organization AI switch). Body `{ "sessionId": "<uuid>", "prompt": "<1..2000 chars>", "includeScreen": true }`. The answer is `text/event-stream`:
+`POST /api/ai/terminal/assist` (`ai:use` in the route declaration plus `sessions:write` checked in the handler, behind the AI kill switch and the organization AI switch). Body `{ "sessionId": "<uuid>", "prompt": "<1..2000 chars>", "includeScreen": true }`. The answer is `text/event-stream`:
 
 | Event | Data | Meaning |
 |---|---|---|

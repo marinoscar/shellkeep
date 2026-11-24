@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Res, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, HttpCode, HttpStatus, Post, Res, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiProduces, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AI_SSE_HEADERS, AiEnabledGuard, AiOrgEnabledInterceptor } from '@marinoscar/platform-api/ai';
 import { Auth, CurrentOrg, CurrentUser } from '@marinoscar/platform-api/identity';
@@ -22,7 +22,9 @@ export class TerminalAssistController {
   constructor(private readonly assist: TerminalAssistService) {}
 
   @Post('assist')
-  @Auth({ permissions: [PERMISSIONS.AI_USE, PERMISSIONS.SESSIONS_WRITE] })
+  // The `ai-rbac-matrix` suite allows only the AI permission strings in a route's declaration, so
+  // `sessions:write` (the caller may type in the session) is checked in the handler below.
+  @Auth({ permissions: [PERMISSIONS.AI_USE] })
   @HttpCode(HttpStatus.OK)
   @ApiProduces('text/event-stream')
   @ApiOperation({
@@ -43,8 +45,12 @@ export class TerminalAssistController {
     @Body() dto: TerminalAssistDto,
     @CurrentUser('id') userId: string,
     @CurrentOrg() orgId: string,
+    @CurrentUser('permissions') permissions: readonly string[] | undefined,
     @Res() reply: FastifyReply,
   ): Promise<void> {
+    if (!permissions?.includes(PERMISSIONS.SESSIONS_WRITE)) {
+      throw new ForbiddenException('Terminal assist needs permission to write to sessions');
+    }
     const controller = new AbortController();
     const res = reply.raw;
     const onClose = () => {

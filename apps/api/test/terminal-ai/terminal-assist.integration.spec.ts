@@ -63,6 +63,7 @@ describe('POST /api/ai/terminal/assist', () => {
   let profile: { aiOutputSharing: boolean; facts: unknown };
   let exec: jest.Mock;
   let audit: jest.Mock;
+  let permissions: string[] = ['ai:use', 'sessions:write'];
   let scripted: { outputText: string } = { outputText: '' };
   let logged: string[];
   const spies: jest.SpyInstance[] = [];
@@ -72,6 +73,7 @@ describe('POST /api/ai/terminal/assist', () => {
     for (const method of ['log', 'warn', 'error', 'debug', 'verbose', 'fatal'] as const) {
       spies.push(jest.spyOn(Logger.prototype, method).mockImplementation((...args: unknown[]) => void logged.push(JSON.stringify(args))));
     }
+    permissions = ['ai:use', 'sessions:write'];
     scripted = { outputText: '' };
     harness = createAiRuntimeHarness({ fake: { responses: () => scripted } });
     profile = {
@@ -137,7 +139,7 @@ describe('POST /api/ai/terminal/assist', () => {
       .getInstance()
       .addHook('onRequest', (async (req: { requestUser?: unknown; user?: unknown }) => {
         req.user = { id: HARNESS_USER, activeOrgId: HARNESS_ORG };
-        req.requestUser = { id: HARNESS_USER, activeOrgId: HARNESS_ORG, roles: [], permissions: [] };
+        req.requestUser = { id: HARNESS_USER, activeOrgId: HARNESS_ORG, roles: [], permissions };
       }) as never);
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
@@ -228,6 +230,14 @@ describe('POST /api/ai/terminal/assist', () => {
     expect((await post({ sessionId: SESSION_ID, prompt: '' })).statusCode).toBe(400);
     expect((await post({ sessionId: SESSION_ID, prompt: 'x'.repeat(2001) })).statusCode).toBe(400);
     expect((await post({ sessionId: 'nope', prompt: 'hi' })).statusCode).toBe(400);
+  });
+
+  it('answers 403 without sessions:write, before any context or model call', async () => {
+    permissions = ['ai:use'];
+    const res = await post({ sessionId: SESSION_ID, prompt: 'hello' });
+    expect(res.statusCode).toBe(403);
+    expect(harness.fake.calls).toHaveLength(0);
+    expect(exec).not.toHaveBeenCalled();
   });
 
   it('never logs the command, the prompt or the screen', async () => {
