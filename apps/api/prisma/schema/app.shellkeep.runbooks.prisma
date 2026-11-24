@@ -255,7 +255,7 @@ model RunbookCommandExecution {
   signal          String?   @db.VarChar(16)
   timedOut        Boolean   @default(false) @map("timed_out")
   bytes           Int       @default(0)
-  /// An AI agent command (#64): `succeeded`, `failed`, `timed_out`, `cancelled`, or `refused` (policy said no; nothing ran). NULL for other origins.
+  /// An AI agent command (#64): `succeeded`, `failed`, `timed_out`, `cancelled`, `refused` (the policy said no) or `rejected` (a person declined); nothing ran for the last two. NULL for other origins.
   outcome         String?   @db.VarChar(16)
   /// The person who approved an AI agent command (a plain id, no foreign key: the audit row outlives the user); NULL when no approval was needed.
   approvedBy      String?   @map("approved_by") @db.Uuid
