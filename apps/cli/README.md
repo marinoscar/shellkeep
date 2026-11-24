@@ -117,7 +117,25 @@ ShellKeep serves behind the shared host proxy on loopback port **8323**: the sta
 
 The VPS stack does not run the platform's `stack-agent` container: `vps.compose.yml` builds it from `apps/stack-agent/`, which this repository does not have, so `infra/compose/app.vps.no-stack-agent.compose.yml` switches it off (`src/infra-conformance.test.ts` pins that). The API still needs `STACK_AGENT_TOKEN` set, which the deploy generates; nothing listens for it, so the admin UI's telemetry redeploy action has no agent to call.
 
-The exit codes that matter for scripting: `0` success; `1` a step failed, or `status` found it unhealthy; `2` usage error or nothing installed where asked; `6` a required `doctor` check failed before anything was changed.
+Step by step (a fresh server, the database role, updating, certificates, the layout and uninstalling): [docs/deployment/vps.md](../../docs/deployment/vps.md).
+
+To build the CLI on a fresh Ubuntu or Debian server, run `bootstrap-vps.sh` (`curl -fsSLo bootstrap-vps.sh https://raw.githubusercontent.com/marinoscar/shellkeep/main/apps/cli/bootstrap-vps.sh && bash bootstrap-vps.sh`). It installs `gh` and Node when missing, builds the CLI from `/opt/infra/cli/shellkeep` with `install.sh`, creates `/opt/infra/apps`, then runs `deploy doctor`. Options `--repo` (default `marinoscar/shellkeep`), `--ref`, `--yes`, `--no-tui`, `--update` (pull and rebuild the CLI) and `--dry-run`.
+
+### Command reference
+
+| Command | Does |
+|---|---|
+| `deploy doctor [--domain d]` | Read-only prerequisite checks, plus the ShellKeep checks below |
+| `deploy install [--domain d]` | First install: clone, wizard, role, build, migrate, seed, start, proxy and certificate, renewal, verify. `--non-interactive --answers-file f` for unattended; `--skip-proxy` for no proxy and no certificate |
+| `deploy update [--check [--json]]` | Move to the latest revision. `--check` (ShellKeep's) only reports `current`, `latest`, `commitsBehind`, `commits` and `checkedAt`, and changes nothing. `--no-version-bump` for a server that cannot push |
+| `deploy status [--json]` | Health and migration state |
+| `deploy list`, `deploy about [--json]` | The deployments on this server; the record in `deploy-info/info.json` |
+| `deploy certs [--renew]` | Report, or renew inside the 30-day window |
+| `deploy uninstall [--dry-run] --confirm <name>` | Remove a deployment. `--confirm` (ShellKeep's) takes the deployment's own name and is required for a real run; `.env` is first copied to `<apps-root>/<name>.env.<timestamp>.bak` (mode 0600), because it holds `SECRETS_ENCRYPTION_KEY` |
+
+`--check` and `--confirm` are handled before the platform parses the command (`src/extensions/deploy-args.ts`), so they do not appear in `deploy --help`.
+
+The exit codes: `0` success; `1` a step failed, or `status` found it unhealthy; `2` usage error, nothing installed where asked, or `uninstall` without `--confirm`; `3` the server answered with a non-2xx status; `4` it could not be reached; `5` the credential is missing or was rejected (log in again); `6` a required `doctor` check failed before anything was changed. `update --check` exits 0 whether or not an update is waiting, 2 when no deployment is found, 1 when git fails.
 
 ### Checks ShellKeep adds to `doctor`
 

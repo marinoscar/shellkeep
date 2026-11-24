@@ -16,7 +16,7 @@ const { spawn } = require('child_process');
 
 // Requiring prisma-env loads the same .env files and exports the one
 // DATABASE_URL builder; it does not run Prisma (it only runs when invoked directly).
-const { constructDatabaseUrl } = require('./prisma-env');
+const { buildDatabaseUrl } = require('./prisma-env');
 
 function main() {
   const args = process.argv.slice(2);
@@ -27,7 +27,7 @@ function main() {
   }
 
   const child = spawn('npx', ['--no-install', 'platform', ...args], {
-    env: { ...process.env, DATABASE_URL: constructDatabaseUrl() },
+    env: { ...process.env, DATABASE_URL: buildDatabaseUrl() },
     stdio: 'inherit',
     shell: true,
   });

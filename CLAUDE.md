@@ -30,6 +30,7 @@ Full index with a "Doc map by task": [docs/README.md](docs/README.md). Read docs
 | Where ShellKeep deviates from the platform (shims, standing constraints) | [docs/platform-adoption/local-exceptions.md](docs/platform-adoption/local-exceptions.md) |
 | Host proxy, TLS and the WebSocket | [docs/ssl-nginx-setup.md](docs/ssl-nginx-setup.md) |
 | Deployment (VPS install, update, adopting an old install) and the `shellkeep` CLI | [apps/cli/README.md](apps/cli/README.md#deploying-to-a-server) |
+| VPS runbook: fresh server (`bootstrap-vps.sh`), install, database role, updating (CLI first, version step), certificates, layout and the `SECRETS_ENCRYPTION_KEY` warning, uninstall, troubleshooting | [docs/deployment/vps.md](docs/deployment/vps.md) |
 | Recipes (skills) | [add-job-type](.claude/skills/add-job-type/SKILL.md), [add-settings-page](.claude/skills/add-settings-page/SKILL.md), [add-notification](.claude/skills/add-notification/SKILL.md), [platform-migration](.claude/skills/platform-migration/SKILL.md): each applies once its slice is adopted |
 | Area rules | [apps/api/AGENTS.md](apps/api/AGENTS.md), [apps/web/AGENTS.md](apps/web/AGENTS.md), [apps/cli/AGENTS.md](apps/cli/AGENTS.md) |
 | How Claude Code and OpenCode share these files, guard specs | [docs/AI-ASSISTANTS.md](docs/AI-ASSISTANTS.md) |

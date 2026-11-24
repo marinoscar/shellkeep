@@ -1,4 +1,16 @@
+import { createRequire } from 'node:module';
+
 import { defineConfig } from '@prisma/config';
+
+// Why derive the URL here: the platform CLI's migration probe (`deploy status`,
+// install/update verify) runs a bare `npx prisma migrate status` in the api
+// container, skipping the npm wrapper, so DATABASE_URL is unset and the schema
+// state would be reported as unknown. An already-set DATABASE_URL still wins.
+// `createRequire` because prisma-env.js is CommonJS and this file may load as
+// either module kind.
+const { constructDatabaseUrl } = createRequire(import.meta.url)('./scripts/prisma-env.js') as {
+  constructDatabaseUrl: (env?: NodeJS.ProcessEnv) => string;
+};
 
 /**
  * Prisma configuration for v7+.
@@ -21,7 +33,7 @@ import { defineConfig } from '@prisma/config';
 export default defineConfig({
   schema: 'prisma/schema',
   datasource: {
-    url: process.env.DATABASE_URL as string,
+    url: constructDatabaseUrl(),
     shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
   },
   migrations: {
