@@ -48,6 +48,88 @@ jobs:
       - name: "Infra conformance: compose config per mode and nginx -t"
         run: npm run test:infra
 
+  docker:
+    name: Docker (images, generated stack, nginx -t)
+    runs-on: ubuntu-24.04
+    needs: [check]
+    timeout-minutes: 20
+    env:
+      COMPOSE_FILES: -f base.compose.yml -f prod.compose.yml -f devdb.compose.yml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the API image (as deploy.yml does)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          target: production
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      - name: Build the web image (as deploy.yml does)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          target: production
+          push: false
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - name: Write a throwaway .env (every secret generated, nothing literal)
+        working-directory: infra/compose
+        run: |
+          cp .env.example .env
+          {
+            echo "NGINX_PORT=8323"
+            echo "APP_URL=http://localhost:8323"
+            echo "GOOGLE_CALLBACK_URL=http://localhost:8323/api/auth/google/callback"
+            echo "POSTGRES_HOST=db"
+            echo "POSTGRES_USER=app"
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "POSTGRES_DB=appdb"
+            echo "JWT_SECRET=$(openssl rand -hex 32)"
+            echo "COOKIE_SECRET=$(openssl rand -hex 32)"
+            echo "SECRETS_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            echo "INITIAL_ADMIN_EMAIL=ci-admin@example.test"
+          } >> .env
+      - name: Create the shared network and build the stack images
+        working-directory: infra/compose
+        run: |
+          docker network create devnet
+          docker compose $COMPOSE_FILES build
+      - name: Start the database and migrate and seed as the application role
+        working-directory: infra/compose
+        run: |
+          docker compose $COMPOSE_FILES up -d --wait db
+          docker compose $COMPOSE_FILES run --rm -T api npm run prisma:migrate
+          docker compose $COMPOSE_FILES run --rm -T api npm run prisma:seed
+      - name: Start the stack
+        working-directory: infra/compose
+        run: docker compose $COMPOSE_FILES up -d
+      - name: "Smoke: /api/health/ready and / answer 200 on port 8323"
+        run: |
+          for i in $(seq 1 60); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8323/api/health/ready || true)"
+            [ "$code" = "200" ] && break
+            sleep 3
+          done
+          echo "ready: $code"
+          [ "$code" = "200" ]
+          curl -fsS -D - -o /tmp/index.html http://localhost:8323/ | head -20
+          grep -qi '<html' /tmp/index.html
+      - name: nginx -t inside the nginx container
+        working-directory: infra/compose
+        run: docker compose $COMPOSE_FILES exec -T nginx nginx -t
+      - name: Show logs on failure
+        if: failure()
+        working-directory: infra/compose
+        run: docker compose $COMPOSE_FILES logs --tail 200
+      - name: Tear the stack down
+        if: always()
+        working-directory: infra/compose
+        run: docker compose $COMPOSE_FILES down -v
+
   test:
     name: Tests
     runs-on: ubuntu-latest
