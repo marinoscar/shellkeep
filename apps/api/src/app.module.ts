@@ -18,6 +18,7 @@ import { credentialsModules } from './platform/credentials/credentials.config';
 import { emailModule } from './platform/email/email.config';
 import { BroadcastsModule, notificationsModule } from './platform/notifications/notifications.config';
 import { dbBackupModule } from './platform/db-backup/db-backup.config';
+import { AiModule } from './platform/ai/ai.config';
 import { jobsModule, nodeCredentialModule, nodesModule } from './platform/jobs/jobs.config';
 import {
   ProfileImageModule,
@@ -105,6 +106,10 @@ import configuration from './config/configuration';
     // storage provider, schedule and retention, in-app restore), its four job types and
     // Doctor checks. After storage, notifications and the jobs queue it depends on.
     dbBackupModule,
+    // The platform AI slice (#55): `GET /api/ai/config`, `/api/ai/*` behind the kill switch and `ai:use`,
+    // `/api/admin/ai/*`, the `ai.*` job types and the key stores. No provider key in the environment.
+    // Feature modules import this same `AiModule`, never the platform's.
+    AiModule,
     ServerProfilesModule,
     TerminalModule,
   ],

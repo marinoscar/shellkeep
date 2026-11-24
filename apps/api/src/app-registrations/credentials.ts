@@ -7,6 +7,7 @@
 // under it. `ssh` is permanent.
 //
 //   smtp, email_ses, push_vapid  the deployment's mail and Web Push secrets (#51)
+//   the AI slice's deployment key purpose (#55)
 //   ssh  a user's SSH secrets, one credential per field of a server profile
 //        (`profile.<profileId>.password | private_key | passphrase`)
 //
@@ -25,6 +26,7 @@ import {
   type UserCredentialPurposeDef,
 } from '@marinoscar/platform-api/credentials';
 
+import { AI_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/ai';
 import { SES_CREDENTIAL_PURPOSE_DEF, SMTP_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/email';
 import { PUSH_VAPID_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/notifications';
 import { STORAGE_CREDENTIAL_PURPOSE_DEF } from '@marinoscar/platform-api/storage';
@@ -56,5 +58,7 @@ export function registerShellkeepCredentialPurposes(): void {
   registerCredentialPurpose(SMTP_CREDENTIAL_PURPOSE_DEF);
   registerCredentialPurpose(SES_CREDENTIAL_PURPOSE_DEF);
   registerCredentialPurpose(PUSH_VAPID_CREDENTIAL_PURPOSE_DEF);
+  // The AI slice's deployment key purpose (#55): provider keys an administrator saves at runtime.
+  registerCredentialPurpose(AI_CREDENTIAL_PURPOSE_DEF);
   for (const def of APP_USER_CREDENTIAL_PURPOSES) registerUserCredentialPurpose(def);
 }
