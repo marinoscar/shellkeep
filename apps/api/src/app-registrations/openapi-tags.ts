@@ -107,6 +107,12 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           'namespaces, with the effective (system then organization) value of each. Needs ' +
           '`org_settings:read` / `org_settings:write`.',
       },
+      {
+        name: 'Onboarding',
+        description:
+          'The caller\'s Getting started checklist and, with `system_settings:read`, the Setup guide, derived per ' +
+          'request from read-only counts and the Doctor; plus the aggregate new-user activation metrics (admin).',
+      },
     ],
   },
   {
