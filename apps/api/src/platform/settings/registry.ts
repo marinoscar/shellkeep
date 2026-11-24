@@ -43,6 +43,7 @@ import {
 import { APP_RETENTION_POLICIES } from '../../app-registrations/jobs';
 import { RUNBOOKS_SYSTEM_SETTINGS } from '../../runbooks/settings/runbooks.system-settings';
 import { SSH_SYSTEM_SETTINGS } from '../../ssh/ssh.system-settings';
+import { TELEMETRY_SYSTEM_SETTINGS } from '../telemetry/telemetry.system-settings';
 
 // The app's retention policies BEFORE anything reads RETENTION_SYSTEM_SETTINGS: the
 // namespace is composed once, from the policies registered by then. None yet.
@@ -54,7 +55,7 @@ export const PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespa
 /**
  * The platform's system namespaces appended AFTER the app's own, so the stored key order
  * of the `global` row stays the app's own namespaces first, then the platform's additions:
- * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49), `storage` (#50) `notifications` (#51) and `databaseBackup` (#52). Registered here, before `SettingsModule.forRoot()`
+ * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49), `storage` (#50), `notifications` (#51), `ssh` (#60), `databaseBackup` (#52) and `telemetry` (#53). Registered here, before `SettingsModule.forRoot()`
  * composes the request bodies, so the host core does not have to (its `forRoot()` registers
  * the namespace only when nothing did).
  */
@@ -69,11 +70,14 @@ export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettin
   STORAGE_SYSTEM_SETTINGS as SystemSettingsNamespace,
   // The notifications slice's deployment policy (#51): browser toggle, per-event and per-channel switches.
   NOTIFICATIONS_SYSTEM_SETTINGS as SystemSettingsNamespace,
-  // The SSH host-key policy (#60), appended last so no stored key moves.
+  // The SSH host-key policy (#60), appended before telemetry so no stored key moves.
   SSH_SYSTEM_SETTINGS as SystemSettingsNamespace,
   // The db-backup slice's schedule, retention and restore policy (#52): `databaseBackup`.
   DATABASE_BACKUP_SYSTEM_SETTINGS as SystemSettingsNamespace,
-  // The runbooks policy (#61), with a tighten-only org layer; appended after `ssh` so no stored key moves.
+  // The telemetry slice's policy (#53): collection, retention, query bounds and the assistant.
+  // The package ships the schema, defaults and merge; the declaration is the app's.
+  TELEMETRY_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The runbooks policy (#61), with a tighten-only org layer; appended after `telemetry` so no stored key moves.
   RUNBOOKS_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 

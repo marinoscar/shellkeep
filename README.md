@@ -91,7 +91,7 @@ Built with Material UI. Dark mode by default, because terminals. Responsive layo
 | Terminal | xterm.js, WebSocket I/O |
 | Auth | Google OAuth, JWT with refresh token rotation |
 | Infra | Docker, Docker Compose, Nginx |
-| Observability | OpenTelemetry, Uptrace, Pino |
+| Observability | OpenTelemetry, GreptimeDB, Pino |
 
 ---
 
@@ -126,11 +126,11 @@ ShellKeep is now running:
 - **Application:** http://localhost:8323
 - **API + Swagger:** http://localhost:8323/api/docs
 
-To start with the full observability stack (Uptrace traces and metrics):
+To start with the full observability stack (collector plus GreptimeDB; the explorer is in the admin UI):
 
 ```bash
-cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f otel.compose.yml up
-# Uptrace UI: http://localhost:14318
+cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f telemetry.compose.yml up
+# GreptimeDB dashboard: http://localhost:14000/dashboard
 ```
 
 For production:

@@ -148,6 +148,21 @@
       "scope": "system"
     },
     {
+      "name": "telemetry:read",
+      "description": "View telemetry settings and status",
+      "scope": "system"
+    },
+    {
+      "name": "telemetry:write",
+      "description": "Change telemetry settings",
+      "scope": "system"
+    },
+    {
+      "name": "telemetry:query",
+      "description": "Run SQL, export and use the AI assistant against telemetry",
+      "scope": "system"
+    },
+    {
       "name": "org_members:read",
       "description": "View the members of the organization and their organization roles",
       "scope": "org"
@@ -238,6 +253,11 @@
       "scope": "org"
     },
     {
+      "name": "ai:use",
+      "description": "Call AI models using a saved key",
+      "scope": "org"
+    },
+    {
       "name": "runbooks:read",
       "description": "View runbooks, their versions, runs and logs",
       "scope": "org"
@@ -281,6 +301,9 @@
       "push:write",
       "storage_config:read",
       "storage_config:write",
+      "telemetry:read",
+      "telemetry:write",
+      "telemetry:query",
       "organizations:read",
       "organizations:write",
       "oauth_clients:read",
@@ -297,6 +320,7 @@
       "sessions:read",
       "sessions:write",
       "sessions:delete",
+      "ai:use",
       "runbooks:read",
       "runbooks:write",
       "runbooks:run"
@@ -328,6 +352,7 @@
       "sessions:read",
       "sessions:write",
       "sessions:delete",
+      "ai:use",
       "runbooks:read",
       "runbooks:write",
       "runbooks:run",

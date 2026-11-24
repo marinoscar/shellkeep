@@ -73,7 +73,7 @@ describe('SshConnectionFactory against a real ssh2 server', () => {
     table = profileTable({ fingerprint: null, hostKeyAlgorithm: null });
     audit = jest.fn().mockResolvedValue(undefined);
     policy = 'tofu_prompt';
-    const metrics = { add: jest.fn() };
+    const metrics = { add: jest.fn(), record: jest.fn() };
     factory = new SshConnectionFactory(
       table as never,
       { record: audit } as never,

@@ -242,6 +242,16 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
           'whether administrators keep access. Gated on `system_settings:read` and `system_settings:write`. ' +
           'New terminal WebSocket connections are refused while it is open; open ones keep streaming.',
       },
+      {
+        name: 'Telemetry',
+        description:
+          'Observability: whether traces, logs and metrics are exported to the telemetry store ' +
+          '(GreptimeDB), how long they are retained, the runtime connection to the store, the explorer, ' +
+          'the dashboard (including the Terminal metric group) and the store\'s status. The policy is ' +
+          '`telemetry:read`/`telemetry:write`; running queries against the data is `telemetry:query`. ' +
+          '`GET /api/telemetry/config` is readable by any signed-in user: it is how a client learns ' +
+          'whether to show telemetry surfaces at all.',
+      },
     ],
   },
 ];

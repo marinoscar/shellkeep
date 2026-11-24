@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { SshService, SshConnection, DecryptedServerProfile } from './ssh.service';
 import { SessionsService } from './sessions.service';
+import { TerminalMetricsService } from './telemetry/terminal-metrics.service';
 import * as WebSocket from 'ws';
 
 interface ManagedSession {
@@ -10,14 +11,20 @@ interface ManagedSession {
 }
 
 @Injectable()
-export class SessionManagerService {
+export class SessionManagerService implements OnModuleInit {
   private readonly logger = new Logger(SessionManagerService.name);
   private readonly sessions = new Map<string, ManagedSession>();
 
   constructor(
     private readonly sshService: SshService,
     private readonly sessionsService: SessionsService,
+    @Optional() private readonly metrics?: TerminalMetricsService,
   ) {}
+
+  onModuleInit(): void {
+    // The `app.terminal.ssh.connections` gauge: live SSH connections held by THIS process.
+    this.metrics?.bindSshConnections(() => this.sessions.size);
+  }
 
   async startSession(
     sessionId: string,

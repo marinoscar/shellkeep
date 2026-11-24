@@ -96,6 +96,23 @@
     "oldDatabaseRetentionHours": 48,
     "nodeOffloadEnabled": false
   },
+  "telemetry": {
+    "enabled": false,
+    "retentionDays": 30,
+    "instanceId": null,
+    "query": {
+      "maxRows": 10000,
+      "timeoutSeconds": 30
+    },
+    "assistant": {
+      "enabled": false,
+      "provider": null,
+      "modelId": null,
+      "shareResults": true,
+      "maxResultRowsToModel": 100,
+      "maxSteps": 15
+    }
+  },
   "runbooks": {
     "enabled": true,
     "maxTargetsPerRun": 200,

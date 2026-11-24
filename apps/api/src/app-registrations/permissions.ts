@@ -118,3 +118,24 @@ export const RUNBOOK_PERMISSIONS = {
     defaultGrants: ['org_admin'],
   },
 } as const satisfies Readonly<Record<string, PermissionDeclaration>>;
+
+/**
+ * PLATFORM-ADOPTION-SHIM(#55): `ai:use`, mirrored from the platform's `AI_PERMISSIONS.AI_USE`.
+ *
+ * The telemetry assistant's routes name `ai:use` (the telemetry slice's host permission), so the
+ * identity conformance rule "every permission a route names is registered" needs it declared even
+ * though ShellKeep has not adopted the AI slice (the assistant itself is reported as disabled,
+ * `platform/telemetry/telemetry-ai.adapter.ts`). It is registered on its own, not as the `ai`
+ * slice, so no other AI permission is seeded. #55 adopts the slice (`ADOPTED_PLATFORM_SLICES`
+ * gains `ai`) and deletes this declaration, which would otherwise be a `DUPLICATE_ID`.
+ *
+ * Same grants as the platform's: `org_admin` and `contributor`, never `viewer`.
+ */
+export const AI_USE_SHIM_PERMISSIONS = {
+  AI_USE: {
+    id: 'ai:use',
+    description: 'Call AI models using a saved key',
+    scope: 'org',
+    defaultGrants: ORG_WRITERS,
+  },
+} as const satisfies Readonly<Record<string, PermissionDeclaration>>;
