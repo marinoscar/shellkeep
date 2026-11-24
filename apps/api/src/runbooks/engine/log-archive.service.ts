@@ -13,6 +13,7 @@
 // last N lines.
 // =============================================================================
 
+import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
@@ -78,6 +79,14 @@ export class LogArchiveService {
       this.logger.warn(`step log not archived (the chunks are kept): ${error instanceof Error ? error.name : 'error'}`);
       return null;
     }
+  }
+
+  /**
+   * Uploads a local file (a `collect_logs` archive, already redacted) to `key`, streaming it: the bytes are
+   * never held in memory. A failure propagates (the caller fails its step); nothing is half-recorded.
+   */
+  async uploadFile(key: string, path: string, sizeBytes: number, mimeType: string): Promise<void> {
+    await this.storage.upload(key, createReadStream(path), { mimeType, contentLength: sizeBytes });
   }
 
   /** The (redacted) log of one step, or `null` when the step does not exist. */

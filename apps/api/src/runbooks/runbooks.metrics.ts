@@ -13,6 +13,16 @@ export const RUNBOOK_COMMANDS_METRIC = 'runbookCommands';
 export const RUNBOOK_APPROVALS_METRIC = 'runbookApprovals';
 export const RUNBOOK_DESTRUCTIVE_RUNS_METRIC = 'runbookDestructiveRuns';
 export const RUNBOOK_DRY_RUNS_METRIC = 'runbookDryRuns';
+export const RUNBOOK_ARTIFACT_BYTES_METRIC = 'runbookArtifactBytes';
+export const RUNBOOK_BUNDLE_BUILDS_METRIC = 'runbookBundleBuilds';
+
+/** What a stored artifact is (#63): a per-server log archive or the zip bundle of a run. */
+export const ARTIFACT_KINDS = ['target_archive', 'bundle'] as const;
+export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
+/** How a bundle build ended (#63). */
+export const BUNDLE_OUTCOMES = ['built', 'empty', 'failed'] as const;
+export type BundleOutcome = (typeof BUNDLE_OUTCOMES)[number];
+const ARTIFACT_BYTES_BUCKETS = [1024, 65_536, 1_048_576, 10_485_760, 104_857_600, 524_288_000, 2_147_483_648];
 
 /** What happened to a destructive run launch (#67): never a run, org, server or runbook id. */
 export const DESTRUCTIVE_RUN_OUTCOMES = ['confirmed', 'approved', 'rejected', 'blocked'] as const;
@@ -96,5 +106,22 @@ export const RUNBOOK_APP_METRICS: readonly AppMetricDef[] = [
     unit: '{run}',
     description: 'Runbook dry runs launched.',
     attributes: {},
+  },
+  {
+    key: RUNBOOK_ARTIFACT_BYTES_METRIC,
+    name: 'app.runbooks.artifact_bytes',
+    kind: 'histogram',
+    unit: 'By',
+    description: 'Size of a stored runbook artifact: a per-server log archive (target_archive) or a run bundle (bundle).',
+    buckets: ARTIFACT_BYTES_BUCKETS,
+    attributes: { kind: { kind: 'enum', values: ARTIFACT_KINDS } },
+  },
+  {
+    key: RUNBOOK_BUNDLE_BUILDS_METRIC,
+    name: 'app.runbooks.bundle_builds',
+    kind: 'counter',
+    unit: '{bundle}',
+    description: 'Run bundle builds by outcome: built, empty (nothing to bundle) or failed.',
+    attributes: { outcome: { kind: 'enum', values: BUNDLE_OUTCOMES } },
   },
 ];

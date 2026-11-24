@@ -3,6 +3,10 @@ import { AppMetricsService } from '@marinoscar/platform-api/host';
 
 import {
   RUNBOOK_APPROVALS_METRIC,
+  RUNBOOK_ARTIFACT_BYTES_METRIC,
+  RUNBOOK_BUNDLE_BUILDS_METRIC,
+  type ArtifactKind,
+  type BundleOutcome,
   RUNBOOK_COMMANDS_METRIC,
   RUNBOOK_DESTRUCTIVE_RUNS_METRIC,
   RUNBOOK_DRY_RUNS_METRIC,
@@ -34,6 +38,14 @@ export class EngineMetricsService {
 
   destructiveRun(outcome: DestructiveRunOutcome): void {
     this.safely(() => this.metrics?.add(RUNBOOK_DESTRUCTIVE_RUNS_METRIC, 1, { outcome }));
+  }
+
+  artifactBytes(kind: ArtifactKind, bytes: number): void {
+    this.safely(() => this.metrics?.record(RUNBOOK_ARTIFACT_BYTES_METRIC, bytes, { kind }));
+  }
+
+  bundleBuild(outcome: BundleOutcome): void {
+    this.safely(() => this.metrics?.add(RUNBOOK_BUNDLE_BUILDS_METRIC, 1, { outcome }));
   }
 
   dryRun(): void {
