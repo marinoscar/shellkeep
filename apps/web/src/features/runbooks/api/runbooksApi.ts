@@ -24,6 +24,7 @@ import type {
   TargetPreview,
   TargetSelector,
   ValidationResult,
+  DraftResult,
 } from './types';
 
 function query(params: Record<string, string | number | boolean | undefined | null>): string {
@@ -100,6 +101,14 @@ export const getVersion = (id: string, version: number): Promise<RunbookVersionV
 
 export const validateDefinition = (definition: RunbookDefinitionInput): Promise<ValidationResult> =>
   api.post('/runbooks/validate', { definition });
+
+/** Drafts a runbook definition from a prompt (#64). Never saves: the caller loads it into the builder. */
+export const draftRunbook = (prompt: string, targetHint?: { serverIds?: string[]; tags?: string[] }): Promise<DraftResult> =>
+  api.post('/ai/runbooks/draft', { prompt, ...(targetHint ? { targetHint } : {}) });
+
+/** "Stop AI": the AI steps of a run end before their next command (#64). */
+export const stopRunAi = (id: string): Promise<{ id: string; stopRequested: true; stoppedSteps: number }> =>
+  api.post(`/runbook-runs/${id}/ai/stop`);
 
 export const previewTargets = (selector: Partial<TargetSelector>): Promise<TargetPreview> =>
   api.post('/runbooks/targets/preview', { selector });

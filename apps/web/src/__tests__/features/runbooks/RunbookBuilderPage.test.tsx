@@ -9,6 +9,9 @@ import { render } from '../../utils/test-utils';
 import RunbookBuilderPage from '../../../pages/runbooks/RunbookBuilderPage';
 import { makeDefinition, makeDetail, RUNBOOK_ID, runbookUser } from './fixtures';
 
+const { aiOn } = vi.hoisted(() => ({ aiOn: { value: true } }));
+vi.mock('../../../features/runbooks/hooks/useRunbookAiAvailable', () => ({ useRunbookAiAvailable: () => aiOn.value }));
+
 const user = runbookUser(['runbooks:read', 'runbooks:write']);
 
 function renderEdit() {
@@ -142,5 +145,48 @@ describe('RunbookBuilderPage', () => {
     const { container } = renderEdit();
     await screen.findByRole('textbox', { name: 'Command' });
     expect((await axe(container)).violations).toEqual([]);
+  });
+
+  it('drafts with AI: shows the warnings and risk, loads the draft into the builder and saves nothing', async () => {
+    const draftDefinition = makeDefinition({
+      steps: [{ ...makeDefinition().steps[0]!, id: 'clean', name: 'Clean the cache', command: 'rm -rf /var/cache/x' }],
+    });
+    const bodies: unknown[] = [];
+    let saves = 0;
+    server.use(
+      http.get(`*/api/runbooks/${RUNBOOK_ID}`, () => HttpResponse.json({ data: makeDetail() })),
+      http.post('*/api/ai/runbooks/draft', async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({
+          data: { definition: draftDefinition, warnings: [{ code: 'RISK_MEDIUM', path: ['steps', 0], message: 'Recursive delete' }], risk: { destructive: false, risk: 'medium', findings: [] } },
+        });
+      }),
+      http.put(`*/api/runbooks/${RUNBOOK_ID}/definition`, () => {
+        saves += 1;
+        return HttpResponse.json({}, { status: 500 });
+      }),
+    );
+    renderEdit();
+    await screen.findByRole('textbox', { name: 'Command' });
+    await userEvent.click(screen.getByRole('button', { name: 'Draft with AI' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Draft with AI' });
+    expect(within(dialog).getByRole('button', { name: 'Load into builder' })).toBeDisabled();
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /What should the runbook do/ }), 'Clean the cache');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Draft' }));
+    expect(await within(dialog).findByText('Recursive delete')).toBeInTheDocument();
+    expect(within(dialog).getByText(/risk medium/)).toBeInTheDocument();
+    expect(bodies).toEqual([{ prompt: 'Clean the cache' }]);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Load into builder' }));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Command' })).toHaveValue('rm -rf /var/cache/x'));
+    expect(saves).toBe(0);
+  });
+
+  it('hides Draft with AI while AI is off or the viewer lacks ai:use', async () => {
+    aiOn.value = false;
+    server.use(http.get(`*/api/runbooks/${RUNBOOK_ID}`, () => HttpResponse.json({ data: makeDetail() })));
+    renderEdit();
+    await screen.findByRole('textbox', { name: 'Command' });
+    expect(screen.queryByRole('button', { name: 'Draft with AI' })).not.toBeInTheDocument();
+    aiOn.value = true;
   });
 });

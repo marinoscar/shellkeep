@@ -30,6 +30,7 @@ import { JobsService, type JobsTx } from '@marinoscar/platform-api/jobs';
 import { recordAudit } from '../../common/audit/record-audit';
 import type { OwnerScope } from '../../common/types/owner-scope';
 import { PrismaService } from '../../prisma/prisma.service';
+import { applyAiApproval, isAiApproval } from '../ai/ai-approvals';
 import { RunbooksService } from '../runbooks.service';
 import { EngineMetricsService } from './engine-metrics.service';
 import {
@@ -67,6 +68,8 @@ export interface ApprovalView {
   runbookName: string | null;
   runbookVersion: number;
   initiatedBy: string | null;
+  /** What an AI approval asks for (#64): the redacted command and reason, or the plan; `null` for the other kinds. */
+  payload: unknown;
   /** Who started the run, for the "requested by" line (#65); `null` once the user is gone. */
   initiatedByName: string | null;
   /** The server of a target-scope approval (its name at run time); `null` for a run-scope one. */
@@ -159,6 +162,7 @@ export class RunbookApprovalsService {
         runbookName: r.run.runbook.name,
         runbookVersion: r.run.version,
         initiatedBy: r.run.initiatedBy,
+        payload: r.payload ?? null,
         initiatedByName: r.run.initiator?.displayName ?? r.run.initiator?.email ?? null,
         targetName: r.target?.serverName ?? null,
       }));
@@ -328,6 +332,12 @@ export class RunbookApprovalsService {
     const local: AdvanceOutcome = { runId, events, cancelRequests: [], finished: null, approvals: [], dispatched: 0 };
 
     if (approval.kind === 'destructive_run') return this.applyDestructiveRun(tx, approval, outcome, now, events);
+
+    if (isAiApproval(approval.kind)) {
+      // An AI step's approval (#64): wakes the agent or fails the step.
+      await applyAiApproval(tx, { jobs: this.jobs, coordinator: this.coordinator }, approval, outcome, now, events);
+      return mergeOutcomes(runId, local, await this.coordinator.advance(tx, runId, now));
+    }
 
     if (approval.kind === 'gate') {
       if (outcome === 'approved') {

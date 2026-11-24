@@ -13,6 +13,9 @@
 //   2. STUCK RUNS. A run `running` with nothing in flight is advanced.
 //   3. EXPIRED APPROVALS. Pending approvals past `expires_at` are decided `expired`.
 //   4. ORPHAN LOG CHUNKS older than an hour (a segment that died before archiving) are moved to storage.
+//   5. LOST AI AGENTS (#64). A target `waiting` on an AI step that is `running`, with no `ai.runbook.agent` job
+//      pending or running (the job died mid-step; it is never retried, a retry would repeat commands): the step
+//      fails `EXECUTOR_LOST` and the target goes on at the next step.
 //
 // Idempotent and bounded per pass, so the queue's at-least-once delivery is safe.
 // =============================================================================
@@ -32,10 +35,12 @@ import {
   RUNBOOK_RUN_TARGET_SUBJECT,
   RUNBOOK_TARGET_RUN_TYPE,
 } from './engine.constants';
+import { RUNBOOK_AGENT_TYPE } from '../ai/runbook-agent.constants';
 import { LogArchiveService } from './log-archive.service';
 import { RunCoordinatorService } from './run-coordinator.service';
 import { RunLifecycleService } from './run-lifecycle.service';
 import { RunbookApprovalsService } from './runbook-approvals.service';
+import { failAiStep } from '../ai/ai-approvals';
 import { assertTransition } from './state-machine';
 
 /** A target must have been quiet this long before its job is judged lost (the job row may lag the target's). */
@@ -48,6 +53,7 @@ export interface CompactResult {
   advancedRuns: number;
   expiredApprovals: number;
   archivedSteps: number;
+  lostAgents: number;
 }
 
 @Injectable()
@@ -76,12 +82,12 @@ export class LogsCompactHandler implements JobHandler, OnModuleInit {
   async process(_job: Job): Promise<void> {
     const result = await this.reconcile(new Date());
     this.logger.log(
-      `reconcile: ${result.lostExecutors} lost, ${result.requeued} requeued, ${result.advancedRuns} advanced, ${result.expiredApprovals} expired, ${result.archivedSteps} archived`,
+      `reconcile: ${result.lostExecutors} lost, ${result.lostAgents} lost agents, ${result.requeued} requeued, ${result.advancedRuns} advanced, ${result.expiredApprovals} expired, ${result.archivedSteps} archived`,
     );
   }
 
   async reconcile(now: Date): Promise<CompactResult> {
-    const result: CompactResult = { lostExecutors: 0, requeued: 0, advancedRuns: 0, expiredApprovals: 0, archivedSteps: 0 };
+    const result: CompactResult = { lostExecutors: 0, requeued: 0, advancedRuns: 0, expiredApprovals: 0, archivedSteps: 0, lostAgents: 0 };
     const quiet = new Date(now.getTime() - LOST_EXECUTOR_GRACE_MS);
 
     // Everything below is FOUND with the bypass client and CHANGED in the owning organization.
@@ -94,6 +100,17 @@ export class LogsCompactHandler implements JobHandler, OnModuleInit {
       const active = candidates.length
         ? await tx.job.findMany({
             where: { subjectType: RUNBOOK_RUN_TARGET_SUBJECT, subjectId: { in: candidates.map((c) => c.id) }, status: { in: ['pending', 'running'] } },
+            select: { subjectId: true },
+          })
+        : [];
+      const waitingAi = await tx.runbookRunTarget.findMany({
+        where: { status: 'waiting', updatedAt: { lt: quiet }, steps: { some: { kind: 'ai_task', status: 'running' } } },
+        select: { id: true, orgId: true, runId: true },
+        take: BATCH,
+      });
+      const agentJobs = waitingAi.length
+        ? await tx.job.findMany({
+            where: { type: RUNBOOK_AGENT_TYPE, subjectType: RUNBOOK_RUN_TARGET_SUBJECT, subjectId: { in: waitingAi.map((c) => c.id) }, status: { in: ['pending', 'running'] } },
             select: { subjectId: true },
           })
         : [];
@@ -114,7 +131,7 @@ export class LogsCompactHandler implements JobHandler, OnModuleInit {
         orderBy: { orgId: 'asc' },
         take: 100,
       });
-      return { candidates, activeIds: new Set(active.map((a) => a.subjectId)), stuckRuns, approvalOrgs, orphans };
+      return { candidates, activeIds: new Set(active.map((a) => a.subjectId)), waitingAi, agentIds: new Set(agentJobs.map((a) => a.subjectId)), stuckRuns, approvalOrgs, orphans };
     });
 
     for (const target of found.candidates.filter((c) => !found.activeIds.has(c.id))) {
@@ -140,6 +157,14 @@ export class LogsCompactHandler implements JobHandler, OnModuleInit {
       }
     }
 
+    for (const target of found.waitingAi.filter((c) => !found.agentIds.has(c.id))) {
+      try {
+        if (await this.failLostAgent(target.orgId, target.runId, target.id, now)) result.lostAgents += 1;
+      } catch (error) {
+        this.logger.warn(`reconcile of an AI step failed: ${error instanceof Error ? error.name : 'error'}`);
+      }
+    }
+
     for (const run of found.stuckRuns) {
       try {
         const outcome = await runInOrg(this.prisma, { orgId: run.orgId }, (tx) => this.coordinator.advance(tx, run.id, now));
@@ -156,6 +181,20 @@ export class LogsCompactHandler implements JobHandler, OnModuleInit {
       if (await this.archive.archiveStep(orphan.orgId, orphan.runStepId)) result.archivedSteps += 1;
     }
     return result;
+  }
+
+  /** Fails the running AI step of a parked target whose agent job is gone (#64); the target goes on at the next step. */
+  private async failLostAgent(orgId: string, runId: string, targetId: string, now: Date): Promise<boolean> {
+    const events: Parameters<typeof failAiStep>[5] = [];
+    const failed = await runInOrg(this.prisma, { orgId }, async (tx) => {
+      const target = await tx.runbookRunTarget.findUnique({ where: { id: targetId }, select: { status: true } });
+      const step = await tx.runbookRunStep.findFirst({ where: { runTargetId: targetId, kind: 'ai_task', status: 'running' }, select: { id: true, stepIndex: true } });
+      if (target?.status !== 'waiting' || !step) return false;
+      await failAiStep(tx, { jobs: this.jobs, coordinator: this.coordinator }, { orgId, runId, targetId, stepIndex: step.stepIndex, stepId: step.id, from: 'running' }, FAILURE_CODES.EXECUTOR_LOST, now, events);
+      return true;
+    });
+    if (failed) await this.lifecycle.afterCommit({ runId, events, cancelRequests: [], finished: null, approvals: [], dispatched: 0 });
+    return failed;
   }
 
   /** Fails a `running` target whose job is gone: `EXECUTOR_LOST`; its running step too; then advance. */
