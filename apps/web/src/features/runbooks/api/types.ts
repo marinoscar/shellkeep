@@ -1,11 +1,8 @@
 /**
- * The runbooks wire types (issue #65).
- *
- * The DEFINITION types are the API's own (`import type` from the #61 schema module, erased at
- * build time, so no zod or RE2 code reaches the bundle) and the run events are the engine's
- * (#62). Never redeclare them here. The response envelopes below mirror the services that build
- * them (`runbooks.service.ts`, `engine/runbook-runs.service.ts`, `engine/runbook-approvals.service.ts`,
- * `engine/run-stream.service.ts`): those return plain objects, not exported schemas.
+ * The runbooks wire types (issue #65). The definition and run-event shapes are in
+ * `./definition.ts` (the web never imports API source); the response envelopes below mirror the
+ * services that build them (`runbooks.service.ts`, `engine/runbook-runs.service.ts`,
+ * `engine/runbook-approvals.service.ts`, `engine/run-stream.service.ts`, `safety/`).
  */
 import type {
   RunbookDefinition,
@@ -15,8 +12,8 @@ import type {
   RunbookStepKind,
   RunStrategy,
   TargetSelector,
-} from '../../../../../api/src/runbooks/schema/runbook-definition.schema';
-import type { RunEvent } from '../../../../../api/src/runbooks/engine/run-events';
+  RunEvent,
+} from './definition';
 
 export type {
   RunbookDefinition,
@@ -29,7 +26,7 @@ export type {
   RunEvent,
 };
 
-/** Every step kind, in the builder's "Add step" order. Checked against the schema's union. */
+/** Every step kind, in the builder's "Add step" order. Checked against the step union. */
 export const STEP_KINDS = [
   'command',
   'script',

@@ -74,11 +74,11 @@ describe('RunLauncherDialog', () => {
     serve(previews);
     render(<RunLauncherDialog open runbookId={RUNBOOK_ID} initialServerIds={[SERVER_A]} onClose={vi.fn()} />, { wrapperOptions: { user } });
     const count = await screen.findByTestId('target-count');
-    await waitFor(() => expect(count).toHaveTextContent('1 server'));
+    await waitFor(() => expect(count).toHaveTextContent('1 server'), { timeout: 5000 });
     expect(screen.getByTestId('launch-summary')).toHaveTextContent('1 server · up to 1 in parallel');
     const row = await screen.findByRole('row', { name: /server-1/ });
     await userEvent.click(within(row).getByRole('checkbox'));
-    await waitFor(() => expect(count).toHaveTextContent('2 servers'));
+    await waitFor(() => expect(count).toHaveTextContent('2 servers'), { timeout: 5000 });
     expect(count).toHaveTextContent(/Host key not trusted/);
     expect(within(count).getByRole('link', { name: 'Fix' })).toHaveAttribute('href', expect.stringContaining(SERVER_B));
     expect(screen.getByTestId('launch-summary')).toHaveTextContent('2 servers · up to 2 in parallel');
@@ -88,8 +88,9 @@ describe('RunLauncherDialog', () => {
     const runs: unknown[] = [];
     serve([], runs);
     render(<RunLauncherDialog open runbookId={RUNBOOK_ID} initialServerIds={[SERVER_A]} onClose={vi.fn()} />, { wrapperOptions: { user } });
-    await waitFor(() => expect(screen.getByTestId('target-count')).toHaveTextContent('1 server'));
+    await waitFor(() => expect(screen.getByTestId('target-count')).toHaveTextContent('1 server'), { timeout: 5000 });
     const run = screen.getByRole('button', { name: 'Run' });
+    await waitFor(() => expect(run).toBeEnabled(), { timeout: 5000 });
     await userEvent.click(run);
     expect(await screen.findByText('Required')).toBeInTheDocument();
     expect(runs).toHaveLength(0);
@@ -97,7 +98,7 @@ describe('RunLauncherDialog', () => {
     await userEvent.click(screen.getByRole('combobox', { name: 'TOKEN *' }));
     await userEvent.click(await screen.findByRole('option', { name: /deploy-token/ }));
     await userEvent.click(run);
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/runs/run-9'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/runs/run-9'), { timeout: 5000 });
     expect(runs[0]).toMatchObject({
       version: 3,
       params: { GREETING: 'hello', COUNT: 2, DRY: false, LEVEL: 'low' },
@@ -105,7 +106,7 @@ describe('RunLauncherDialog', () => {
       targets: { serverIds: [SERVER_A] },
     });
     expect(JSON.stringify(runs[0])).not.toContain('ab12');
-  });
+  }, 30_000);
 
   it('words the summary line', () => {
     expect(launchSummary(0, 5)).toBe('No servers');

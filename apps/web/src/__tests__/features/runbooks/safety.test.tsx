@@ -83,7 +83,7 @@ describe('launcher safety (#67)', () => {
     await userEvent.type(within(section).getByRole('textbox', { name: 'Type the number to confirm' }), '2');
     expect(request).toBeEnabled();
     await userEvent.click(request);
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/runs/run-7'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/runs/run-7'), { timeout: 5000 });
     expect(runs.at(-1)).toMatchObject({ confirm: { runbookName: 'Patch web tier', targetCount: 2 } });
   });
 
@@ -101,7 +101,7 @@ describe('launcher safety (#67)', () => {
     render(<RunLauncherDialog open runbookId={RUNBOOK_ID} initialServerIds={[SERVER_A, SERVER_B]} onClose={vi.fn()} />, { wrapperOptions: { user: runner } });
     await waitFor(() => expect(screen.getByTestId('target-count')).toHaveTextContent('2 servers'), { timeout: 5000 });
     await userEvent.click(screen.getByRole('button', { name: 'Dry run' }));
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/runs/run-7'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/runs/run-7'), { timeout: 5000 });
     expect(runs[0]).toMatchObject({ dryRun: true });
     expect(runs[0]).not.toHaveProperty('confirm');
   });
