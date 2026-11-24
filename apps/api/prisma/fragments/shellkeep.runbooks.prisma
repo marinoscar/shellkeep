@@ -34,6 +34,7 @@ model Runbook {
   ownerGroup   Group?          @relation("RunbookOwnerGroup", fields: [ownerGroupId, orgId], references: [id, orgId], onDelete: NoAction)
   versions     RunbookVersion[]
   runs         RunbookRun[]
+  schedules    RunbookSchedule[]
 
   @@unique([id, orgId])
   @@index([orgId])
@@ -108,6 +109,8 @@ model RunbookRun {
   trigger           String    @default("manual")
   initiatedBy       String?   @map("initiated_by") @db.Uuid
   retryOfRunId      String?   @map("retry_of_run_id") @db.Uuid
+  /// The schedule that fired this run (#66); NULL for a manual or API run and once the schedule is deleted.
+  scheduleId        String?   @map("schedule_id") @db.Uuid
   /// Non-secret parameter values. A secret parameter has no value here: see `secretRefs`.
   params            Json      @default("{}") @db.JsonB
   /// Parameter name to the NAME of an organization credential (purpose `runbook_secret`); never a value.
@@ -131,6 +134,7 @@ model RunbookRun {
   runbook        Runbook            @relation(fields: [runbookId, orgId], references: [id, orgId], onDelete: Cascade)
   runbookVersion RunbookVersion     @relation(fields: [runbookId, version], references: [runbookId, version], onDelete: Cascade)
   initiator      User?              @relation("RunbookRunInitiator", fields: [initiatedBy], references: [id], onDelete: SetNull)
+  schedule       RunbookSchedule?   @relation("RunbookScheduleRuns", fields: [scheduleId, orgId], references: [id, orgId], onDelete: NoAction)
   targets        RunbookRunTarget[]
   steps          RunbookRunStep[]
   chunks         RunbookRunLogChunk[]
@@ -141,6 +145,7 @@ model RunbookRun {
   @@index([orgId, status])
   @@index([runbookId])
   @@index([initiatedBy])
+  @@index([scheduleId])
   @@map("runbook_runs")
 }
 
@@ -315,4 +320,77 @@ extend model Organization {
 
 extend model Group {
   ownedRunbooks Runbook[] @relation("RunbookOwnerGroup")
+}
+
+// =============================================================================
+// Runbook schedules (issue #66)
+// =============================================================================
+//
+// One `org` table under forced row-level security (`runbook_schedules_org_isolation`, listed under
+// `rlsPolicies` in prisma/platform.lock). A schedule reaches its runbook through the COMPOSITE key
+// (runbook_id, org_id) -> runbooks (id, org_id), cascading with it; a run reaches the schedule that fired it
+// the same way (`runbook_runs.schedule_id`), with NO ACTION: Postgres cannot null one column of a composite
+// key on delete (SET NULL would also null the NOT NULL org_id), so deleting a schedule nulls its runs'
+// `schedule_id` first, in the same transaction (`RunbookSchedulesService.remove`).
+//
+// A schedule acts AS `run_as_user_id` (its creator); permissions are re-checked on every fire. A user who is
+// deleted nulls the column, and the next tick disables the schedule (`PERMISSION_REVOKED`).
+// `overlap` is text with a CHECK constraint (migration SQL): skip | queue | allow.
+// `version_pin` is `latest` or the id of one of the runbook's versions (validated by the service, no key).
+// APPROVAL (#67): a schedule of a destructive runbook version fires only while `approved_version` equals the
+// version it would run; `approved_by`/`approved_at` record who approved it and when.
+// `next_run_at` is NULL while the schedule is disabled.
+
+model RunbookSchedule {
+  id              String    @id @default(uuid()) @db.Uuid
+  orgId           String    @map("org_id") @db.Uuid
+  runbookId       String    @map("runbook_id") @db.Uuid
+  name            String    @db.VarChar(120)
+  /// A 5-field cron expression, evaluated in `timezone`.
+  cron            String    @db.Text
+  /// An IANA time zone name.
+  timezone        String    @db.Text
+  versionPin      String    @default("latest") @map("version_pin") @db.Text
+  /// Non-secret parameter values; a secret parameter is named in `secretRefs`, never valued.
+  params          Json      @default("{}") @db.JsonB
+  secretRefs      Json      @default("{}") @map("secret_refs") @db.JsonB
+  targetSelector  Json      @map("target_selector") @db.JsonB
+  strategy        Json?     @db.JsonB
+  overlap         String    @default("skip")
+  enabled         Boolean   @default(true)
+  nextRunAt       DateTime? @map("next_run_at") @db.Timestamptz
+  lastRunId       String?   @map("last_run_id") @db.Uuid
+  lastFiredAt     DateTime? @map("last_fired_at") @db.Timestamptz
+  runAsUserId     String?   @map("run_as_user_id") @db.Uuid
+  /// Why a schedule that was switched off by the system is off (`PERMISSION_REVOKED`, `APPROVAL_REQUIRED`, ...).
+  disabledReason  String?   @map("disabled_reason") @db.VarChar(64)
+  approvedBy      String?   @map("approved_by") @db.Uuid
+  approvedAt      DateTime? @map("approved_at") @db.Timestamptz
+  /// The version number the approval covers (destructive runbooks only).
+  approvedVersion Int?      @map("approved_version")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  runbook      Runbook      @relation(fields: [runbookId, orgId], references: [id, orgId], onDelete: Cascade)
+  runAsUser    User?        @relation("RunbookScheduleRunAs", fields: [runAsUserId], references: [id], onDelete: SetNull)
+  approver     User?        @relation("RunbookScheduleApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  runs         RunbookRun[] @relation("RunbookScheduleRuns")
+
+  @@unique([id, orgId])
+  @@index([enabled, nextRunAt])
+  @@index([orgId])
+  @@index([runbookId])
+  @@index([runAsUserId])
+  @@index([approvedBy])
+  @@map("runbook_schedules")
+}
+
+extend model User {
+  runbookSchedules         RunbookSchedule[] @relation("RunbookScheduleRunAs")
+  approvedRunbookSchedules RunbookSchedule[] @relation("RunbookScheduleApprover")
+}
+
+extend model Organization {
+  runbookSchedules RunbookSchedule[]
 }

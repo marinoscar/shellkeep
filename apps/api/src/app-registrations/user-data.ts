@@ -19,12 +19,13 @@
 //                    platform's `keepWhenReferenced` cannot express this (it keeps any row with a
 //                    version), so ownership is decided by the delegate.
 //   RunbookVersion, RunbookRun, RunbookRunTarget, RunbookRunStep, RunbookRunLogChunk,
-//   RunbookCommandExecution, RunbookApproval
+//   RunbookCommandExecution, RunbookApproval, RunbookSchedule
 //                    not owner models (`created_by`, `initiated_by` and `decided_by` are actors, set null):
 //                    they follow their runbook (every key to it cascades), so a runbook only the user owns
 //                    takes its versions, runs, targets, steps, log chunks, command audit rows and approvals
 //                    with it. Runs the user started and approvals they decided on a runbook that stays are
-//                    kept with the actor id nulled. The hints record the decision for the factory reset's
+//                    kept with the actor id nulled; a schedule the user created on a runbook that stays is
+//                    detached from them and switched off (`PERMISSION_REVOKED`). The hints record the decision for the factory reset's
 //                    organization step and for the Danger Zone; the work is in `runbooks.user_data.purge`.
 //
 // STORAGE OBJECTS. The user's `StorageObject` rows (every object they uploaded) are deleted by the
@@ -120,6 +121,7 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
       'RunbookRunLogChunk',
       'RunbookCommandExecution',
       'RunbookApproval',
+      'RunbookSchedule',
     ] as const
   ).map((model): UserDataModelHint<Prisma.ModelName> => ({ model, category: SHELLKEEP_USER_DATA_CATEGORY_IDS.RUNBOOKS })),
 ];
