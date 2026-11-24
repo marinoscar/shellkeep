@@ -1,4 +1,4 @@
-import type { TuiScreenProps } from '@marinoscar/platform-cli/tui';
+import { type TuiScreenProps, textColor, useTuiTheme } from '@marinoscar/platform-cli/tui';
 import { Box, Text, useInput } from 'ink';
 import { type ComponentType, type ReactNode, useEffect, useState } from 'react';
 
@@ -39,6 +39,7 @@ function describeReport(report: ServerTestReport): string {
 export function createServersScreen(source: () => ServersScreenSource = defaultServersSource): ComponentType<TuiScreenProps> {
   return function ServersScreen({ onDone }: TuiScreenProps): ReactNode {
     const [data] = useState<ServersScreenSource>(() => source());
+    const theme = useTuiTheme();
     const [rows, setRows] = useState<ServerRow[] | undefined>(undefined);
     const [error, setError] = useState<string | undefined>(undefined);
     const [cursor, setCursor] = useState(0);
@@ -78,7 +79,7 @@ export function createServersScreen(source: () => ServersScreenSource = defaultS
     if (error !== undefined) {
       return (
         <Box flexDirection="column">
-          <Text color="red">{error}</Text>
+          <Text {...textColor(theme.error)}>{error}</Text>
           <Text dimColor>esc back</Text>
         </Box>
       );
