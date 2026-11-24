@@ -93,9 +93,13 @@ export function StepList({ steps, selected, onSelect, onMove, onRemove, onAdd, e
                 sx={{ pr: 15, borderRadius: 1 }}
               >
                 <ListItemIcon sx={{ minWidth: 40 }}>
-                  <Badge color="error" badgeContent={errors} invisible={errors === 0}>
+                  {errors > 0 ? (
+                    <Badge color="error" badgeContent={errors}>
+                      <meta.Icon aria-label={meta.label} />
+                    </Badge>
+                  ) : (
                     <meta.Icon aria-label={meta.label} />
-                  </Badge>
+                  )}
                 </ListItemIcon>
                 <ListItemText
                   primary={
