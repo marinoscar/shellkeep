@@ -1,48 +1,69 @@
 // =============================================================================
-// TELEMETRY_AI adapter: the assistant, reported as disabled (issue #53)
+// TELEMETRY_AI adapter: the AI platform, as the telemetry assistant uses it
+// (issue #55)
 // =============================================================================
 //
-// PLATFORM-ADOPTION-SHIM(#55): ShellKeep has no AI platform yet, so the telemetry
-// assistant has nothing to call. This adapter answers the port honestly:
-// `assertEnabled()` throws the platform's 403 `AI_DISABLED` (the very error
-// `TelemetryAiEnabledGuard` surfaces while AI is off), so every assistant route
-// refuses and the rest of the slice (explorer, dashboard, status, Doctor) is
-// unaffected. #55 adopts the AI slice and replaces this with an adapter over
-// `AiService.forUser(...).runTools`.
-//
-// No key, prompt or model call exists here to leak.
+// Every model call goes through `AiService.forUser(userId).runTools` (the
+// gate, the key policy, the usage row), so the AI platform rules hold: no
+// provider SDK and no key material ever reaches the telemetry slice.
+// `assertEnabled` is `AiConfigService.assertEnabled()`, the very call
+// `AiEnabledGuard` makes, so "AI is off" answers the same 403 `AI_DISABLED`.
+// `defineTool` returns the platform's own tool object, opaque to telemetry
+// and handed back unchanged.
 // =============================================================================
 
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+
+import { AiConfigService } from '@marinoscar/platform-api/ai';
+import { AiError } from '@marinoscar/platform-api/ai';
+import { defineTool, type AiDefinedTool } from '@marinoscar/platform-api/ai';
+import type { AiInputItem } from '@marinoscar/platform-api/ai';
+import { AiService } from '@marinoscar/platform-api/ai';
 import type {
   TelemetryAiError,
   TelemetryAiPort,
   TelemetryAiSession,
   TelemetryAiTool,
   TelemetryAiToolDefinition,
+  TelemetryAiToolLoopResult,
 } from '@marinoscar/platform-api/telemetry';
 import type { z } from 'zod';
 
-const AI_DISABLED_MESSAGE = 'AI is not available in this deployment';
-
 @Injectable()
 export class TelemetryAiAdapter implements TelemetryAiPort {
-  forUser(_userId: string): TelemetryAiSession {
+  constructor(
+    private readonly ai: AiService,
+    private readonly aiConfig: AiConfigService,
+  ) {}
+
+  forUser(userId: string): TelemetryAiSession {
+    const client = this.ai.forUser(userId);
+
     return {
-      runTools: () => Promise.reject(new ForbiddenException({ code: 'AI_DISABLED', message: AI_DISABLED_MESSAGE })),
+      runTools: async (request, options) => {
+        const result = await client.runTools(
+          {
+            ...request,
+            input: request.input as AiInputItem[],
+            tools: request.tools as unknown as AiDefinedTool[],
+          },
+          options,
+        );
+
+        return result as TelemetryAiToolLoopResult;
+      },
     };
   }
 
   defineTool<P extends z.ZodType, R>(definition: TelemetryAiToolDefinition<P, R>): TelemetryAiTool {
-    // Opaque to the slice and never run: the loop that would hand it back is refused above.
-    return definition as unknown as TelemetryAiTool;
+    return defineTool(definition) as unknown as TelemetryAiTool;
   }
 
-  isAiError(_error: unknown): _error is TelemetryAiError {
-    return false;
+  isAiError(error: unknown): error is TelemetryAiError {
+    return error instanceof AiError;
   }
 
   assertEnabled(): Promise<void> {
-    return Promise.reject(new ForbiddenException({ code: 'AI_DISABLED', message: AI_DISABLED_MESSAGE }));
+    return this.aiConfig.assertEnabled();
   }
 }

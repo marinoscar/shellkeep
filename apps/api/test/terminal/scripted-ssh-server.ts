@@ -13,7 +13,7 @@
 //   connections    how many TCP connections were accepted.
 // =============================================================================
 
-import { Server, utils } from 'ssh2';
+import { Server, utils, type ParsedKey } from 'ssh2';
 import type { AddressInfo } from 'node:net';
 
 import { fingerprintOf } from '../../src/ssh/host-key';
@@ -38,6 +38,27 @@ export interface ScriptedSshServer {
   close(): Promise<void>;
 }
 
+/**
+ * A fresh ed25519 host key that ssh2 itself can parse back.
+ *
+ * `utils.generateKeyPairSync('ed25519')` drops a leading zero byte of the 32-byte public key
+ * about once in 256 keys (about 0.4%), writing a 31-byte key into the OpenSSH blob that its own
+ * `parseKey` then rejects as "Malformed OpenSSH public key". That is a defect of the generator,
+ * not of the code under test, so a key that does not round-trip is discarded and drawn again
+ * (each draw is independent; 16 consecutive failures have probability 1e-38).
+ */
+function generateHostKey(): { keys: { public: string; private: string }; parsed: ParsedKey } {
+  for (let attempt = 0; attempt < 16; attempt++) {
+    const keys = utils.generateKeyPairSync('ed25519');
+    const parsed = utils.parseKey(keys.public);
+    const privateParsed = utils.parseKey(keys.private);
+    if (!(parsed instanceof Error) && !(privateParsed instanceof Error)) {
+      return { keys, parsed };
+    }
+  }
+  throw new Error('ssh2 could not generate a parseable ed25519 host key in 16 attempts');
+}
+
 export async function startScriptedSshServer(
   options: {
     username?: string;
@@ -49,9 +70,7 @@ export async function startScriptedSshServer(
 ): Promise<ScriptedSshServer> {
   const username = options.username ?? 'probe';
   const password = options.password ?? 'probe-password-for-tests';
-  const keys = utils.generateKeyPairSync('ed25519');
-  const parsed = utils.parseKey(keys.public);
-  if (parsed instanceof Error) throw parsed;
+  const { keys, parsed } = generateHostKey();
   const fingerprint = fingerprintOf(parsed.getPublicSSH());
 
   const state: ScriptedSshServer = {

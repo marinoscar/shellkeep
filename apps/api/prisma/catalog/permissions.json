@@ -148,6 +148,31 @@
       "scope": "system"
     },
     {
+      "name": "ai_config:read",
+      "description": "View the deployment-wide AI platform policy",
+      "scope": "system"
+    },
+    {
+      "name": "ai_config:write",
+      "description": "Change whether AI is enabled, the key policy, per-provider configuration and the deployment-wide defaults",
+      "scope": "system"
+    },
+    {
+      "name": "ai:use",
+      "description": "Call AI models using a saved key",
+      "scope": "org"
+    },
+    {
+      "name": "org_ai_config:read",
+      "description": "View this organization's AI keys, usage and AI policy overrides",
+      "scope": "org"
+    },
+    {
+      "name": "org_ai_config:write",
+      "description": "Set or remove this organization's AI provider keys and tighten its AI policy",
+      "scope": "org"
+    },
+    {
       "name": "telemetry:read",
       "description": "View telemetry settings and status",
       "scope": "system"
@@ -293,11 +318,6 @@
       "scope": "org"
     },
     {
-      "name": "ai:use",
-      "description": "Call AI models using a saved key",
-      "scope": "org"
-    },
-    {
       "name": "runbooks:read",
       "description": "View runbooks, their versions, runs and logs",
       "scope": "org"
@@ -341,6 +361,8 @@
       "push:write",
       "storage_config:read",
       "storage_config:write",
+      "ai_config:read",
+      "ai_config:write",
       "telemetry:read",
       "telemetry:write",
       "telemetry:query",
@@ -358,6 +380,7 @@
       "user_settings:write",
       "storage:read",
       "storage:write",
+      "ai:use",
       "webhooks:read",
       "webhooks:write",
       "servers:read",
@@ -366,7 +389,6 @@
       "sessions:read",
       "sessions:write",
       "sessions:delete",
-      "ai:use",
       "runbooks:read",
       "runbooks:write",
       "runbooks:run"
@@ -386,6 +408,9 @@
       "user_settings:write",
       "storage:read",
       "storage:write",
+      "ai:use",
+      "org_ai_config:read",
+      "org_ai_config:write",
       "org_members:read",
       "org_members:write",
       "org_invites:read",
@@ -404,7 +429,6 @@
       "sessions:read",
       "sessions:write",
       "sessions:delete",
-      "ai:use",
       "runbooks:read",
       "runbooks:write",
       "runbooks:run",
