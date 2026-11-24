@@ -24,6 +24,7 @@ import { alertsModule } from './platform/alerts/alerts.config';
 import { webhooksModule } from './platform/webhooks/webhooks.config';
 import { sharingModule } from './platform/sharing/sharing.config';
 import { exportsModule } from './platform/exports/exports.config';
+import { userDataModule } from './platform/user-data/user-data.config';
 import { jobsModule, nodeCredentialModule, nodesModule } from './platform/jobs/jobs.config';
 import {
   ProfileImageModule,
@@ -139,6 +140,10 @@ import configuration from './config/configuration';
     // `terminal-sessions`, `runbook-runs`) and the platform's `user-data`. No credential ever leaves the server.
     // After storage, notifications, the jobs queue and sharing.
     exportsModule,
+    // User data deletion (#69): `/api/user-data/*` (the per-user Danger Zone, `user.data.purge`), the admin factory
+    // reset (`/api/admin/factory-reset/*`, `system:factory_reset`) and organization offboarding, over the decisions
+    // of `app-registrations/user-data.ts`. After storage, the jobs queue, sharing and exports (the offboarding precondition).
+    userDataModule,
     ServerProfilesModule,
     TerminalModule,
     // Runbooks (#61): versioned procedure definitions, target preview and secret parameters.

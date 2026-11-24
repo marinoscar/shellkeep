@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseAppRoutes } from '@marinoscar/platform-web/settings/testing';
+import { visibleSettingsSections } from '@marinoscar/platform-web/settings/ui';
+import { dangerZoneLastViolations } from '@marinoscar/platform-web/user-data/headless';
 import { MAINTENANCE_ADMIN_PATH } from '@marinoscar/platform-web/host/headless';
 import {
   ADMIN_HUB_PATH,
@@ -50,6 +52,8 @@ describe('ADMIN_SECTIONS (#46)', () => {
       ['AI Models', '/admin/settings/ai/models'],
       ['AI Usage', '/admin/settings/ai/usage'],
       ['Organization AI keys', '/admin/settings/ai/organization-keys'],
+      // #69: the user-data slice's Danger Zone group, pinned last.
+      ['Factory reset', '/admin/settings/factory-reset'],
     ]);
   });
 
@@ -114,6 +118,9 @@ describe('ADMIN_SECTIONS (#46)', () => {
       // GET /api/admin/ai/org-keys: an ORG permission (org_admin); writes need
       // org_ai_config:write, gated in the page.
       '/admin/settings/ai/organization-keys': 'org_ai_config:read',
+      // /api/admin/factory-reset/*: the SYSTEM permission `system:factory_reset` (Admin only), never
+      // system_settings:write; the confirmation phrase is collected in the page and re-checked by the API.
+      '/admin/settings/factory-reset': 'system:factory_reset',
     });
   });
 
@@ -142,6 +149,7 @@ describe('ADMIN_SECTIONS (#46)', () => {
       'org_webhooks:read',
       'push:read',
       'storage_config:read',
+      'system:factory_reset',
       'system_settings:read',
       'system_webhooks:read',
       'users:read',
@@ -165,7 +173,8 @@ describe('ADMIN_SECTIONS (#46)', () => {
 
   it('keeps the Operations cards in their own section, before the AI group (#55)', () => {
     const labels = ADMIN_SECTIONS.map((section) => section.label);
-    expect(labels[labels.length - 1]).toBe('AI');
+    // The Danger Zone (#69) is pinned after everything; the AI group is the last APPENDED one.
+    expect(labels.slice(-2)).toEqual(['AI', 'Danger Zone']);
     const last = ADMIN_SECTIONS[labels.indexOf('Operations')];
     expect(last.label).toBe('Operations');
     expect(last.cards.map((c) => c.path)).toEqual([
@@ -177,6 +186,21 @@ describe('ADMIN_SECTIONS (#46)', () => {
       '/admin/settings/webhooks',
       '/admin/settings/organization-webhooks',
     ]);
+  });
+
+  it('pins the Danger Zone last, with the factory reset card gated on system:factory_reset and no feature (#69)', () => {
+    expect(dangerZoneLastViolations(ADMIN_SECTIONS, '/admin/settings/factory-reset')).toEqual([]);
+    const card = ADMIN_SECTIONS[ADMIN_SECTIONS.length - 1]!.cards[0]!;
+    expect(card).toMatchObject({ title: 'Factory reset', path: '/admin/settings/factory-reset', permission: 'system:factory_reset' });
+    expect(card.feature).toBeUndefined();
+  });
+
+  it('hides the factory reset from a holder of system_settings:write who is not an Admin (#69)', () => {
+    const visible = visibleSettingsSections(
+      ADMIN_SECTIONS,
+      (permission: string) => permission === 'system_settings:write' || permission === 'system_settings:read',
+    );
+    expect(visible.flatMap((section) => section.cards.map((c) => c.title))).not.toContain('Factory reset');
   });
 
   it('appends Alerts (#54) to Observability, after Doctor', () => {

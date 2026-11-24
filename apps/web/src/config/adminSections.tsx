@@ -99,6 +99,8 @@ import { dbBackupAdminSections } from '@marinoscar/platform-web/db-backup/ui';
 import { jobsAdminSections } from '@marinoscar/platform-web/jobs/ui';
 import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
 import { alertsAdminCards } from '@marinoscar/platform-web/alerts/ui';
+import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
+import { factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 import {
   TERMINAL_SYSTEM_SETTINGS_DESCRIPTION,
   TERMINAL_SYSTEM_SETTINGS_TITLE,
@@ -294,6 +296,14 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         feature: 'ai',
       },
     ],
+  },
+  // #69, appended: the user-data slice's `Danger Zone`, PINNED LAST: the one documented exception to
+  // append-only (docs/specs/settings-ui.md); a group added later goes BEFORE it. The packaged factory reset
+  // page: `system:factory_reset`, the exact SYSTEM permission the slice's controller enforces (Admin only;
+  // never implied by `system_settings:write`). No `feature`. The group sits alone, never folded into Operations.
+  {
+    label: DANGER_ZONE_GROUP_LABEL,
+    cards: [{ ...factoryResetSettingsPage.card, Icon: factoryResetSettingsPage.Icon }],
   },
 ];
 

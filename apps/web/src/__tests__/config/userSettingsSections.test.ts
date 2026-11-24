@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseAppRoutes } from '@marinoscar/platform-web/settings/testing';
+import { dangerZoneLastViolations } from '@marinoscar/platform-web/user-data/headless';
 import { USER_SETTINGS_SECTIONS, USER_HUB_PATH } from '../../config/userSettingsSections';
 
 const cards = USER_SETTINGS_SECTIONS.flatMap((s) => s.cards);
@@ -29,7 +30,17 @@ describe('USER_SETTINGS_SECTIONS', () => {
       ['Groups', '/settings/groups'],
       // #68: the exports slice's card, appended in its own group.
       ['Download your data', '/settings/data-export'],
+      // #69: the user-data slice's Danger Zone group, pinned last.
+      ['Delete my data', '/settings/danger-zone'],
     ]);
+  });
+
+  it('pins the Danger Zone last, ungated: no permission and no feature, so it stays reachable while AI is off (#69)', () => {
+    expect(dangerZoneLastViolations(USER_SETTINGS_SECTIONS, '/settings/danger-zone')).toEqual([]);
+    const card = USER_SETTINGS_SECTIONS[USER_SETTINGS_SECTIONS.length - 1]!.cards[0]!;
+    expect(card).toMatchObject({ title: 'Delete my data', path: '/settings/danger-zone' });
+    expect(card.permission).toBeUndefined();
+    expect(card.feature).toBeUndefined();
   });
 
   it('puts Terminal and Keyboard shortcuts in Workspace, with no permission (#80)', () => {

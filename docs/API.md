@@ -1450,6 +1450,7 @@ Versioned, reusable multi-step procedures (#61). Definitions can hold sensitive 
 | `PUT /api/runbooks/:id/definition` | `runbooks:write` | `{ definition, changelog? }`; needs `If-Match: "v<n>"` (the ETag of a GET). Creates version n+1 and returns the new `ETag`; a definition identical to the latest (same sha256) is a 200 with `created: false` and no new version |
 | `PATCH /api/runbooks/:id` | `runbooks:write` | Metadata only: `name`, `description`, `tags` |
 | `DELETE /api/runbooks/:id` | `runbooks:write` | Archives (soft delete), idempotent; 204 |
+| `DELETE /api/runbooks/:id/permanent` | `runbooks:write` + `owner` on the runbook | Deletes the runbook with its versions, runs and grants in one transaction; 204. `404` below `owner`, `409 RUNBOOK_HAS_ACTIVE_RUNS` while a run is unfinished. A group that owns a runbook (archived or not) cannot be deleted until this runs |
 | `POST /api/runbooks/:id/restore` | `runbooks:write` | Un-archives; 409 `RUNBOOK_NAME_TAKEN` if a live runbook has the name now |
 | `GET /api/runbooks/:id/versions` | `runbooks:read` | History, newest first, without definitions |
 | `GET /api/runbooks/:id/versions/:version` | `runbooks:read` | One version with its definition and its `risk` (the embedded latest version of `GET /api/runbooks/:id` carries `risk` too) |
@@ -1532,9 +1533,9 @@ Server profiles and runbooks are private to their owner until shared (#71). The 
 | `GET /api/grants/shared-with-me` | `sharing:read` | Active grants to the caller or their groups |
 | `POST /api/grants/links` | `sharing:write` | **Always `422` with `details.reason: "ROLE_NOT_GRANTABLE"`** for both types: links are off |
 
-**Server profile roles** (`owner` is implicit): `viewer` reads the profile (never a credential); `operator` also tests the connection, opens sessions and runs runbooks on it; `editor` also changes the name, tags, color and host-key trust. A member of the owning group holds `admin` as `editor`, `editor` as `operator`, `viewer` as `viewer`. `share` and `delete` need `owner`. Each action also needs its RBAC permission, even for the owner: `connect` needs `sessions:write`, `run` needs `runbooks:run`, `write` needs `servers:write`, `delete` needs `servers:delete`.
+**Server profile roles** (`owner` is implicit): `viewer` reads the profile (never a credential); `operator` also tests the connection, opens sessions and runs runbooks on it; `editor` also changes the name, tags, color and host-key trust. A member of the owning group holds `admin` as `owner`, `editor` as `operator`, `viewer` as `viewer`, so a group admin can share and delete a group-owned profile (and then retire the group) while a group editor cannot. `share` and `delete` need `owner`; `owner` never reaches the credential (see `SERVER_PROFILE_CREDENTIAL_HOLDER_ONLY` below). Each action also needs its RBAC permission, even for the owner: `connect` needs `sessions:write`, `run` needs `runbooks:run`, `write` needs `servers:write`, `delete` needs `servers:delete`.
 
-**Runbook roles**: `viewer` reads (and previews targets), `runner` also runs, `editor` also saves versions, edits metadata and archives. The group mapping is `admin` as `editor`, `editor` as `runner`, `viewer` as `viewer`; `share` needs `owner`; `run` needs `runbooks:run`, `write` needs `runbooks:write`.
+**Runbook roles**: `viewer` reads (and previews targets), `runner` also runs, `editor` also saves versions, edits metadata and archives. The group mapping is `admin` as `owner`, `editor` as `runner`, `viewer` as `viewer`; `share` and the permanent delete need `owner` (the creator, or an admin of the owning group); `run` needs `runbooks:run`, `write` needs `runbooks:write`.
 
 **Server profiles.**
 - `GET /api/server-profiles` lists what the caller may see; `?filter=mine|shared|all`. `POST /api/server-profiles` and `POST /api/runbooks` accept `ownerGroupId` (the caller must be an `admin` or `editor` of that group, `403 GROUP_ROLE_INSUFFICIENT` for a viewer, `404` for a group they are not in).
@@ -1614,6 +1615,32 @@ Every signed-in user can download their own data (#68). The exports slice (`@mar
 | `runbook-runs` | `runbooks:read` | `{ from, to, runbookId? }` | Run, target and step status, timings, exit codes and artifact object ids (the run tables arrive with #62; until then the file has no dataset). Log contents are never exported |
 
 Formats: `json`, `csv` (a zip of one CSV per dataset) and `xlsx`. Audit: `export:create` after the job commits. Metrics: `app.exports`, `app.export.duration`, `app.export.size` (no user id label). Notifications: `export.ready` and `export.failed` (a fixed message).
+
+---
+
+### User data deletion and factory reset
+
+The user-data slice (`@marinoscar/platform-api/user-data`, #69) provides three destructive flows, each a server-only queue job behind a typed phrase that the API re-checks (`400 CONFIRMATION_MISMATCH` on a wrong one). No ShellKeep route of its own: the decisions are registry data in `apps/api/src/app-registrations/user-data.ts`.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /api/user-data/summary` | `user_settings:write` (every role) | The categories with the caller's counts, the scopes with their phrases, and the "always kept" lines |
+| `POST /api/user-data/deletions` | `user_settings:write` | `{ scope, confirmation }`; `202` with the `user.data.purge` job (one pending or running purge per user; a second request returns it) |
+| `GET /api/user-data/deletions/:jobId` | `user_settings:write` | The caller's own job and, once done, its counts; `404` for anyone else's |
+| `GET /api/admin/factory-reset/summary`, `POST /api/admin/factory-reset`, `GET /api/admin/factory-reset/:jobId` | `system:factory_reset` (Admin only; never implied by `system_settings:write`) | Phrase `FACTORY RESET`; `403 FACTORY_RESET_DISABLED_IN_SAAS` in SaaS mode |
+| `/api/admin/orgs/:orgId/offboarding/*` | `orgs:offboard` (Admin only) | Multi-organization mode only (`409` otherwise); ShellKeep runs one organization, so the routes exist but are unused |
+
+| Scope | Phrase | Deletes |
+|---|---|---|
+| `servers` | `SERVERS` | Categories `servers` and `sessions`: every server profile (a group-owned one the user created too, because its saved credentials are theirs), the grants on them, their saved `ssh` credentials (through `UserCredentialsService`) and every terminal session |
+| `runbooks` | `RUNBOOKS` | Category `runbooks`: every runbook only the user owns, with its versions, runs, targets, steps, buffered logs, command audit rows, approvals, grants and the saved step logs in object storage. A runbook a group owns stays with the group (its author link is nulled), and so do its runs |
+| `content`, `everything` | `DELETE MY CONTENT`, `DELETE MY DATA` | The platform's built-ins, now reaching the three ShellKeep categories as well |
+
+Runs the user started and approvals they decided on a runbook that stays are kept as organization history with the actor id nulled. The account, memberships (organization and group), roles, the session and the audit log are never deleted by a data purge.
+
+The factory reset keeps the administrator, configuration and database backups (their runs, archives and linked jobs), and runs two ShellKeep steps before the users go: `shellkeep.terminal.disconnect` marks every `active` terminal session `terminated` (it opens no SSH connection: tmux sessions already running on the servers keep running) and `shellkeep.servers.reset` deletes every server profile, the administrator's included. Step logs of runbook runs are object-storage keys with no `storage_objects` row, so the reset's storage step does not see them: run `npm run storage:purge` afterwards to sweep the `runbook-artifacts/` prefix.
+
+Job types (permanent): `user.data.purge`, `admin.factory_reset`, `org.offboard`, and ShellKeep's two delegated halves of the purge, `servers.user_data.purge` and `runbooks.user_data.purge`. Audit: `user_data.purge.requested|completed`, `admin.factory_reset.requested|completed`. The jobs log ids and counts only: never a hostname, user name, credential name, runbook name or log line.
 
 ---
 
@@ -1719,6 +1746,7 @@ Readiness check - includes database connectivity test.
 | `RUNBOOK_RUN_STATE` | 409 | The run is not in a state that allows this action |
 | `RUNBOOK_NAME_TAKEN` | 409 | Another live runbook in the organization has this name |
 | `RUNBOOK_ARCHIVED` | 409 | The runbook is archived; restore it before changing it |
+| `RUNBOOK_HAS_ACTIVE_RUNS` | 409 | The runbook has a run that has not finished, so it cannot be deleted yet |
 | `RUNBOOK_IF_MATCH_REQUIRED` | 428 | Replacing a definition needs an `If-Match` header |
 
 ---
