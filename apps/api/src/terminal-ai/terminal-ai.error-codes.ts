@@ -5,6 +5,8 @@ import { registerErrorCode } from '@marinoscar/platform-api/core';
 
 export const AI_CONSENT_REQUIRED = 'AI_CONSENT_REQUIRED';
 export const AI_OUTPUT_SHARING_DISABLED = 'AI_OUTPUT_SHARING_DISABLED';
+/** Command assist (#57): the model's answer had no usable `COMMAND:` line. Sent as an in-band SSE `error`. */
+export const AI_ASSIST_UNPARSEABLE = 'AI_ASSIST_UNPARSEABLE';
 
 let registered = false;
 
@@ -20,5 +22,10 @@ export function registerTerminalAiErrorCodes(): void {
     code: AI_OUTPUT_SHARING_DISABLED,
     status: 409,
     description: 'This server profile never shares terminal output with AI features.',
+  });
+  registerErrorCode({
+    code: AI_ASSIST_UNPARSEABLE,
+    status: 502,
+    description: 'The AI answer to a command-assist request could not be read as a single command.',
   });
 }
