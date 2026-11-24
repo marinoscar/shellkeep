@@ -1521,6 +1521,42 @@ A command row holds the sha256 of the exact command and its redacted 2 KiB previ
 **Reconcile.** A cron queues `runbook.logs.compact` every minute: it fails lost executors, advances stuck runs, expires approvals past `expires_at` (same effect as a rejection, code `APPROVAL_EXPIRED`) and moves log chunks older than an hour to storage.
 
 **Audit events:** `runbook_run.created`, `runbook_run.cancelled`, `runbook_run.target_cancelled`, `runbook_run.destructive_confirmed`, `runbook_approval.decided`. **Metrics:** `app.runbooks.runs_finished`, `app.runbooks.target_duration`, `app.runbooks.commands`, `app.runbooks.approvals`, `app.runbooks.destructive_runs`, `app.runbooks.dry_runs` (bounded labels only). **Nginx:** the stream paths need buffering off (`infra/nginx/app.d/locations/runbook-streams.conf`).
+### Runbook schedules and completion events
+
+Recurring runs, the in-app notifications and the webhook events of #66. Code: `apps/api/src/runbooks/schedules/` (the service, controller, the `RunbookSchedulesTask` cron and the `runbook.schedules.tick` handler) and `apps/api/src/runbooks/webhooks/`.
+
+A schedule is a 5-field cron expression evaluated in an IANA time zone, over one runbook, with the parameters, servers and strategy a run needs. It runs **as the person it runs as** (`runAsUserId`: its creator, or whoever last changed its targets, parameters, secrets, strategy or version pin), and that person's permissions are re-checked on every fire. A schedule or runbook the caller cannot see is `404`.
+
+| Route | Permission | Notes |
+|-------|------------|-------|
+| `GET /api/runbooks/:id/schedules` | `runbooks:read` | `?page&pageSize`. Each item: `id, name, cron, timezone, versionPin, resolvedVersion, params, secretRefs` (names only), `targets, strategy, overlap, enabled, nextRunAt, lastRunId, lastRunStatus, lastFiredAt, runAsUserId, disabledReason, destructive, approval: { state, approvedBy, approvedAt, approvedVersion }`. `approval.state`: `not_required`, `pending`, `approved` (this version), `stale` (an earlier version) |
+| `GET /api/runbooks/:id/schedules/:scheduleId` | `runbooks:read` | One schedule |
+| `POST /api/runbooks/:id/schedules` | `runbooks:write` + `runbooks:run` | `{ name, cron, timezone, versionPin?: 'latest' \| versionId, params?, secretRefs?, targets?, strategy?, overlap?: 'skip' \| 'queue' \| 'allow', enabled?, confirm? }`. `422 RUNBOOK_SCHEDULE_INVALID` (`details.field`: `cron`, `timezone`, `versionPin`), `422 RUNBOOK_PARAMS_INVALID` / `RUNBOOK_SECRET_REF_UNKNOWN`, `428 RUNBOOK_CONFIRMATION_REQUIRED` for a destructive runbook |
+| `PATCH /api/runbooks/:id/schedules/:scheduleId` | `runbooks:write` + `runbooks:run` | Any field above; `strategy: null` clears the override. `409 RUNBOOK_SCHEDULE_APPROVAL_REQUIRED` when enabling an unapproved destructive schedule |
+| `DELETE /api/runbooks/:id/schedules/:scheduleId` | `runbooks:write` + `runbooks:run` | `204`. Its past runs stay, with `scheduleId` cleared |
+| `POST /api/runbooks/:id/schedules/:scheduleId/approve` | `runbooks:approve` | The second person of a destructive schedule; approves the version it would run now and, if it was waiting for that, enables it. `403 RUNBOOK_SCHEDULE_SELF_APPROVAL` for the person it runs as unless `runbooks.approvals.allowSelfApproval` |
+| `POST /api/runbooks/:id/schedules/:scheduleId/run-now` | `runbooks:run` | `202` as for a run; runs as the caller, does not move `nextRunAt`. `409 RUNBOOK_SCHEDULE_OVERLAP` (overlap `skip`, previous run active) or `RUNBOOK_SCHEDULE_APPROVAL_REQUIRED` |
+| `GET /api/runbook-schedules/preview?cron=&timezone=` | `runbooks:read` | `{ cron, timezone, next: [5 ISO times] }`, for the editor; `422 RUNBOOK_SCHEDULE_INVALID` |
+
+**Firing.** A cron queues the system job `runbook.schedules.tick` every minute (`enqueueHousekeepingJob`; the cron does no work). The handler finds the schedules with `enabled` and `nextRunAt <= now`, and for each one, inside its organization: (1) claims the slot with a guarded update of `next_run_at` to the first slot strictly after now (two ticks racing create one run; a missed slot is **not** caught up); (2) checks that the person it runs as is active and holds `runbooks:run` and `servers:read` and may run the runbook, that the runbook is not archived, that the pinned version exists and, for a destructive version, that it is approved for **that** version; (3) applies `overlap` (`skip`: nothing is created while the previous run has not finished; `queue` and `allow` always create the run); (4) creates the run with `trigger: 'schedule'` and `scheduleId`, and its `runbook.run.start` job, exactly as a manual launch does. A claimed slot whose run cannot be created is lost, never repeated. A schedule fires within a minute of its time.
+
+**Switched off by the system** (`enabled: false`, `nextRunAt: null`, `disabledReason`, and an in-app notification `runbooks.schedule_disabled` to the person it runs as): `PERMISSION_REVOKED`, `APPROVAL_REQUIRED`, `RUNBOOK_ARCHIVED`, `VERSION_MISSING`, `RUN_REJECTED` (the run was refused: parameters, a secret or the servers no longer valid).
+
+**Destructive runbooks (#67).** A scheduled run carries no per-run confirmation and no per-run approval, so both happen once, to the schedule: creating (or materially changing: targets, parameters, secrets, strategy, version pin) a schedule of a destructive version needs `confirm: { runbookName, targetCount }` (`428` otherwise), and then a person other than the one it runs as, holding `runbooks:approve`, approves it. Until then it is `enabled: false` with `disabledReason: APPROVAL_REQUIRED`. The approval covers one version: a new destructive version under `versionPin: 'latest'` switches the schedule off at its next slot until it is approved again. With `runbooks.approvals.allowSelfApproval` the confirmation is the approval.
+
+**Notifications.** When a scheduled run finishes the person who ran it gets `runbooks.run_finished` (succeeded) or `runbooks.run_failed` (`failed`, `partially_failed`, `aborted`), after the commit; when a "run now" by someone else finished, the schedule's owner is told too. A cancelled run notifies nobody, and a dry run only in the app.
+
+**Webhooks** (`apps/api/src/runbooks/webhooks/runbooks.webhooks.ts`; event keys are permanent; audience `org`, permission `runbooks:read`, raised after the commit):
+
+| Event | Payload |
+|-------|---------|
+| `runbook.run.completed` | `{ runId, runbookId, runbookName, version, status: 'succeeded' \| 'partially_failed' \| 'failed' \| 'aborted' \| 'cancelled', trigger, scheduleId?, counts: { total, succeeded, failed, cancelled, skipped }, startedAt, finishedAt, url }`. Not raised for a dry run |
+| `runbook.approval.requested` | `{ approvalId, runId, kind, runbookName, expiresAt, url }`, no command text |
+
+Payloads carry metadata only: never a command, output, parameter, secret or host (the schemas are strict).
+
+**Audit events:** `runbook_schedule.created`, `.updated`, `.deleted`, `.approved`, `.run_now`. **Metric:** `app.runbooks.schedule_fires` (`outcome`: `fired`, `skipped_overlap`, `disabled`, `failed`). **Rollback:** disable the schedules first (`UPDATE runbook_schedules SET enabled = false`); webhook event keys stay registered once an endpoint subscribed.
+
 ### Sharing: groups, shared servers and shared runbooks
 
 Server profiles and runbooks are private to their owner until shared (#71). The sharing slice (`@marinoscar/platform-api/sharing`) provides the routes; ShellKeep registers two resource types, `server_profile` and `runbook`, and every decision is `AccessPolicy`'s. A record the caller may not see is **404, never 403**, so existence is never disclosed; a missing RBAC permission (for example `sessions:write` to connect) is a 403 naming it. A grant carries a **role, never a credential**.

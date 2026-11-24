@@ -37,6 +37,7 @@ export class RunbookSchedulesController {
   @Get('runbooks/:id/schedules/:scheduleId')
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_READ] })
   @ApiOperation({ summary: 'One schedule (requires runbooks:read)' })
+  @ApiResponse({ status: 200, description: 'The schedule' })
   @ApiResponse({ status: 404, description: 'Schedule not found' })
   get(@Param('id', ParseUUIDPipe) id: string, @Param('scheduleId', ParseUUIDPipe) scheduleId: string, @CurrentPrincipal() principal: Principal) {
     return this.schedules.get(principal, id, scheduleId);
@@ -59,6 +60,7 @@ export class RunbookSchedulesController {
     summary:
       'Change a schedule (requires runbooks:write and runbooks:run). Changing the targets, parameters, secrets, strategy or version makes it run as you and, for a destructive runbook, needs the confirmation and a new approval.',
   })
+  @ApiResponse({ status: 200, description: 'The changed schedule' })
   @ApiResponse({ status: 409, description: 'RUNBOOK_SCHEDULE_APPROVAL_REQUIRED: a destructive schedule cannot be enabled without an approval' })
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -73,6 +75,7 @@ export class RunbookSchedulesController {
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_WRITE, PERMISSIONS.RUNBOOKS_RUN] })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a schedule; its past runs stay (requires runbooks:write and runbooks:run)' })
+  @ApiResponse({ status: 204, description: 'Deleted' })
   async remove(@Param('id', ParseUUIDPipe) id: string, @Param('scheduleId', ParseUUIDPipe) scheduleId: string, @CurrentPrincipal() principal: Principal): Promise<void> {
     await this.schedules.remove(principal, id, scheduleId);
   }
@@ -81,6 +84,7 @@ export class RunbookSchedulesController {
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_APPROVE] })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Approve a schedule of a destructive runbook version, which enables it (requires runbooks:approve)' })
+  @ApiResponse({ status: 200, description: 'The approved schedule' })
   @ApiResponse({ status: 403, description: 'RUNBOOK_SCHEDULE_SELF_APPROVAL: the person it runs as may not approve it' })
   approve(
     @Param('id', ParseUUIDPipe) id: string,
