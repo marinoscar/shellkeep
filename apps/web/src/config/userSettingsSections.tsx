@@ -31,6 +31,8 @@ import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/
 import { webhooksUserSettingsSections } from '@marinoscar/platform-web/webhooks/ui';
 import { groupsSettingsPage } from '@marinoscar/platform-web/sharing/ui';
 import { dataExportSettingsPage } from '@marinoscar/platform-web/exports/ui';
+import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
+import { dangerZoneSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 import {
   TERMINAL_SETTINGS_DESCRIPTION,
   TERMINAL_SETTINGS_TITLE,
@@ -146,6 +148,14 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
     // runs ones each need their own permission there). No credential is ever in an export.
     label: 'Your data',
     cards: [{ ...dataExportSettingsPage.card, Icon: dataExportSettingsPage.Icon }],
+  },
+  {
+    // #69, appended: the user-data slice's Danger Zone, as data, PINNED LAST: the one documented exception to
+    // append-only (docs/specs/settings-ui.md). A group added later goes BEFORE it. No `permission` (the routes
+    // require `user_settings:write`, which every role holds) and no `feature`: it stays reachable while AI is
+    // off, since the deletion also removes AI keys and runs. Delete specific data: servers and sessions, runbooks.
+    label: DANGER_ZONE_GROUP_LABEL,
+    cards: [{ ...dangerZoneSettingsPage.card, Icon: dangerZoneSettingsPage.Icon }],
   },
 ];
 

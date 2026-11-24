@@ -341,6 +341,32 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
       },
     ],
   },
+  {
+    // The user-data slice (#69): the three destructive flows. Appended, after Operations.
+    name: 'Data lifecycle',
+    tags: [
+      {
+        name: 'User data',
+        description:
+          'Delete your own data, by scope (`everything`, `content`, or ShellKeep\'s `servers` and `runbooks`), behind the ' +
+          "scope's exact typed phrase. The account, sign-in, roles, memberships, session and audit log stay. One " +
+          'deletion per user at a time, run as a queue job. Gated on `user_settings:write` (every role).',
+      },
+      {
+        name: 'Factory reset',
+        description:
+          'Return the deployment to a fresh install: every other user and all application data go; the caller, ' +
+          'configuration and backups stay. Phrase `FACTORY RESET`; `system:factory_reset` (Admin only); disabled in ' +
+          'SaaS mode. Take a backup first.',
+      },
+      {
+        name: 'Organization offboarding',
+        description:
+          "Delete one organization with its data, invitations and memberships (multi-organization mode only). The phrase is " +
+          "the organization's slug; registered preconditions may block it. `orgs:offboard` (Admin only).",
+      },
+    ],
+  },
 ];
 
 let registered = false;
