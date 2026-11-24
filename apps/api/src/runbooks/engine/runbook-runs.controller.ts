@@ -44,6 +44,7 @@ export class RunbookRunsController {
 
   @Get('runbook-runs')
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_READ] })
+  @ApiResponse({ status: 200, description: 'Paginated runs' })
   @ApiOperation({ summary: 'List runs, newest first; filter by runbookId, status, trigger, initiatedBy (requires runbooks:read)' })
   list(@CurrentUser('id') userId: string, @CurrentOrg() orgId: string, @Query() query: RunsQueryDto) {
     return this.runs.list({ userId, orgId }, query);
@@ -82,6 +83,7 @@ export class RunbookRunsController {
       'Live run events (SSE): snapshot, then chunk/step/target/run/approval events; resume with Last-Event-ID `<stepRowId>:<seq>` (requires runbooks:read)',
   })
   @ApiHeader({ name: 'Last-Event-ID', required: false })
+  @ApiResponse({ status: 200, description: 'text/event-stream' })
   async runStream(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
@@ -96,6 +98,7 @@ export class RunbookRunsController {
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_READ] })
   @ApiOperation({ summary: 'Live events of one target (SSE); same framing as the run stream (requires runbooks:read)' })
   @ApiHeader({ name: 'Last-Event-ID', required: false })
+  @ApiResponse({ status: 200, description: 'text/event-stream' })
   async targetStream(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('targetId', ParseUUIDPipe) targetId: string,
@@ -110,6 +113,7 @@ export class RunbookRunsController {
   @Post('runbook-runs/:id/cancel')
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_RUN] })
   @HttpCode(HttpStatus.ACCEPTED)
+  @ApiResponse({ status: 202, description: 'Accepted: `{ id, status }`' })
   @ApiOperation({ summary: 'Cancel a run: pending targets are cancelled, running ones stop within seconds (requires runbooks:run)' })
   @ApiResponse({ status: 409, description: 'RUNBOOK_RUN_STATE: the run already finished' })
   cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser('id') userId: string, @CurrentOrg() orgId: string) {
@@ -119,6 +123,7 @@ export class RunbookRunsController {
   @Post('runbook-runs/:id/targets/:targetId/cancel')
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_RUN] })
   @HttpCode(HttpStatus.ACCEPTED)
+  @ApiResponse({ status: 202, description: 'Accepted: `{ id, status }`' })
   @ApiOperation({ summary: 'Cancel one target of a run (requires runbooks:run)' })
   cancelTarget(
     @Param('id', ParseUUIDPipe) id: string,
@@ -132,6 +137,7 @@ export class RunbookRunsController {
   @Post('runbook-runs/:id/retry')
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_RUN] })
   @HttpCode(HttpStatus.ACCEPTED)
+  @ApiResponse({ status: 202, description: 'Accepted' })
   @ApiOperation({ summary: 'Start a new run with the same version and parameters on the failed (or all) servers (requires runbooks:run)' })
   retry(@Param('id', ParseUUIDPipe) id: string, @CurrentUser('id') userId: string, @CurrentOrg() orgId: string, @Body() dto: RetryRunDto) {
     return this.runs.retry({ userId, orgId }, id, dto.only);
@@ -140,6 +146,7 @@ export class RunbookRunsController {
   @Post('runbook-runs/:id/resume')
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_RUN, PERMISSIONS.RUNBOOKS_APPROVE] })
   @HttpCode(HttpStatus.ACCEPTED)
+  @ApiResponse({ status: 202, description: 'Accepted' })
   @ApiOperation({ summary: 'Resume a run paused after its canary batch: an approval decision (requires runbooks:run and runbooks:approve)' })
   @ApiResponse({ status: 403, description: 'RUNBOOK_SELF_APPROVAL when the starter of the run may not approve it' })
   @ApiResponse({ status: 409, description: 'RUNBOOK_RUN_STATE: the run is not paused' })

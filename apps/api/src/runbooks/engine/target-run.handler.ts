@@ -214,7 +214,7 @@ export class TargetRunHandler implements JobHandler, OnModuleInit {
     }
 
     const watch = new CancelWatch(this.prisma, this.events, orgId, payload.runId, payload.targetId).start();
-    let final: { status: 'succeeded' | 'failed' | 'cancelled' | 'waiting'; code?: FailureCode } = { status: 'failed', code: FAILURE_CODES.INTERNAL };
+    let final: { status: 'succeeded' | 'failed' | 'cancelled' | 'waiting'; code?: FailureCode };
     try {
       const segment: Segment = {
         job,

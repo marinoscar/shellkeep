@@ -13,6 +13,7 @@ export class RunbookApprovalsController {
 
   @Get()
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_READ] })
+  @ApiResponse({ status: 200, description: 'Paginated approvals' })
   @ApiOperation({ summary: 'The approval inbox; `status=pending` by default. Deciding needs runbooks:approve (requires runbooks:read)' })
   list(@CurrentUser('id') userId: string, @CurrentOrg() orgId: string, @Query() query: ApprovalsQueryDto) {
     return this.approvals.list({ userId, orgId }, query);

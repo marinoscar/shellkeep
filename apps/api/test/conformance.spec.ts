@@ -133,6 +133,14 @@ runPlatformConformance({
           file: 'prisma/prisma.service.ts',
           why: 'Test-only cleanDatabase() truncates every table (refuses to run outside NODE_ENV=test)',
         },
+        {
+          file: 'runbooks/engine/run-coordinator.service.ts',
+          why: '`SELECT id FROM runbook_runs WHERE id = $1::uuid FOR UPDATE`: the run lock of advance(), a tagged template with one bound uuid, inside the caller\'s organization transaction (row-level security applies)',
+        },
+        {
+          file: 'runbooks/engine/runbook-runs.service.ts',
+          why: '`SELECT id FROM runbook_runs WHERE id = $1::uuid AND org_id = $2::uuid FOR UPDATE`: the run lock of cancel, with bound ids, inside the organization transaction',
+        },
       ],
       registerIn: 'src/app-registrations/user-owned-models.ts',
     },
