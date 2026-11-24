@@ -16,7 +16,7 @@ import type {
   RunbookView,
   RunDetail,
   RunStatus,
-  RunSummary,
+  RunListItem,
   RunTrigger,
   TargetPreview,
   TargetSelector,
@@ -119,7 +119,7 @@ export interface ListRunsParams {
   since?: string;
 }
 
-export const listRuns = (params: ListRunsParams = {}): Promise<Page<RunSummary>> =>
+export const listRuns = (params: ListRunsParams = {}): Promise<Page<RunListItem>> =>
   api.get(`/runbook-runs${query({ ...params })}`);
 
 export const getRun = (id: string): Promise<RunDetail> => api.get(`/runbook-runs/${id}`);

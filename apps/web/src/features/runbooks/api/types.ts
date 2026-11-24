@@ -189,7 +189,20 @@ export type StepStatus = (typeof STEP_STATUSES)[number];
 
 export type RunTrigger = 'manual' | 'api' | 'schedule';
 
+/** The succeeded / failed / total split a run row carries (`failed` includes cancelled). */
+export interface RunTargetCounts {
+  total: number;
+  succeeded: number;
+  failed: number;
+  running: number;
+}
+
 /** A row of `GET /api/runbook-runs`. */
+export interface RunListItem extends RunSummary {
+  targets: RunTargetCounts;
+}
+
+/** A run's own fields, shared by the list row and the detail. */
 export interface RunSummary {
   id: string;
   runbookId: string;
