@@ -283,10 +283,11 @@ export function ServerProfileList({
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Test Connection">
+                      <Tooltip title="Test Connection" describeChild>
                         <span>
                           <IconButton
                             size="small"
+                            aria-label="Test connection"
                             onClick={() => void handleTest(profile)}
                             disabled={testingId === profile.id}
                           >
