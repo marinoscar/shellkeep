@@ -43,6 +43,10 @@ jobs:
         run: npm run check:single-instance
       - name: No deep imports into platform packages
         run: npm run check:platform-imports
+      - name: "Infra is generated: platform-infra sync --check"
+        run: npm run platform:infra:sync -- --check
+      - name: "Infra conformance: compose config per mode and nginx -t"
+        run: npm run test:infra
 
   test:
     name: Tests
