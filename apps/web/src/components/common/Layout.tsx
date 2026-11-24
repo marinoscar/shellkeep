@@ -15,6 +15,7 @@ import { ANDROID_TWA_KEY_PREFIX } from '../../config/androidApp';
 import { APP_NAME, APP_VERSION } from '../../config/app';
 import { SHELLKEEP_NAVIGATION } from '../../config/shell';
 import { USER_HUB_PATH, USER_HUB_TITLE } from '../../config/userSettingsSections';
+import { BrandLockup } from './BrandMark';
 import { OnboardingBanner } from '../onboarding/OnboardingBanner';
 import { adminWelcomePane, userWelcomePane } from '../onboarding/welcomePanes';
 
@@ -61,11 +62,11 @@ export function Layout() {
     <OnboardingProvider appName={APP_NAME}>
       <ShellLayout
         navigation={SHELLKEEP_NAVIGATION}
-        brand={APP_NAME}
+        brand={<BrandLockup name={APP_NAME} />}
         appBar={
           <ShellAppBar
             navigation={SHELLKEEP_NAVIGATION}
-            brand={APP_NAME}
+            brand={<BrandLockup name={APP_NAME} />}
             actions={<NotificationBell />}
             userMenu={
               <ShellUserMenu

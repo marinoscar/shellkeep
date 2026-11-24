@@ -1,11 +1,23 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { BACKGROUND_COLOR, THEME_COLOR } from '@shellkeep/shared';
 import { sharedPackageResolution } from './vite.shared';
+
+/**
+ * #148: the browser bar colour follows `themeColor` of
+ * packages/shared/identity.json, like the PWA manifest below and the Android
+ * build. `index.html` carries the `%SHELLKEEP_THEME_COLOR%` placeholder.
+ */
+const brandThemeColorMeta: Plugin = {
+  name: 'shellkeep-theme-color',
+  transformIndexHtml: (html) => html.replaceAll('%SHELLKEEP_THEME_COLOR%', THEME_COLOR),
+};
 
 export default defineConfig({
   plugins: [
     react(),
+    brandThemeColorMeta,
     VitePWA({
       // #51: the app owns its worker (`src/sw.ts`) so the notifications
       // slice's push and notification-click handlers live in it; the plugin
@@ -24,8 +36,9 @@ export default defineConfig({
         name: 'ShellKeep',
         short_name: 'ShellKeep',
         description: 'Browser-based terminal workspace with persistent sessions',
-        theme_color: '#121212',
-        background_color: '#121212',
+        // packages/shared/identity.json (#148): the status bar and the splash.
+        theme_color: THEME_COLOR,
+        background_color: BACKGROUND_COLOR,
         display: 'standalone',
         orientation: 'any',
         start_url: '/',

@@ -1,4 +1,4 @@
-import type { TuiScreenProps } from '@marinoscar/platform-cli/tui';
+import { type TuiScreenProps, textColor, useTuiTheme } from '@marinoscar/platform-cli/tui';
 import { Box, Text, useApp, useInput } from 'ink';
 import { type ComponentType, type ReactNode, useEffect, useState } from 'react';
 
@@ -36,6 +36,7 @@ export function createSessionsScreen(
   return function SessionsScreen({ onDone }: TuiScreenProps): ReactNode {
     const { exit } = useApp();
     const [data] = useState<SessionsScreenSource>(() => source());
+    const theme = useTuiTheme();
     const [rows, setRows] = useState<SessionRow[] | undefined>(undefined);
     const [error, setError] = useState<string | undefined>(undefined);
     const [cursor, setCursor] = useState(0);
@@ -75,7 +76,7 @@ export function createSessionsScreen(
     if (error !== undefined) {
       return (
         <Box flexDirection="column">
-          <Text color="red">{error}</Text>
+          <Text {...textColor(theme.error)}>{error}</Text>
           <Text dimColor>esc back</Text>
         </Box>
       );
@@ -99,7 +100,7 @@ export function createSessionsScreen(
             {row.name}  {row.status}  {row.server?.name ?? row.serverProfileId}
           </Text>
         ))}
-        {notice !== undefined ? <Text color="yellow">{notice}</Text> : null}
+        {notice !== undefined ? <Text {...textColor(theme.warning)}>{notice}</Text> : null}
         <Text dimColor>up/down select  enter attach (Ctrl-] d detaches)  esc back</Text>
       </Box>
     );

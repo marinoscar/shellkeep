@@ -1,5 +1,4 @@
-import type { TuiScreenProps } from '@marinoscar/platform-cli/tui';
-import { useDashboard } from '@marinoscar/platform-cli/tui';
+import { type TuiScreenProps, textColor, useDashboard, useTuiTheme } from '@marinoscar/platform-cli/tui';
 import { Box, Text, useInput } from 'ink';
 import { type ComponentType, type ReactNode, useEffect, useState } from 'react';
 
@@ -27,6 +26,7 @@ function when(value: string | null): string {
 export function createRunsScreen(source: () => RunsScreenSource = defaultRunsSource): ComponentType<TuiScreenProps> {
   return function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
     const [data] = useState<RunsScreenSource>(() => source());
+    const theme = useTuiTheme();
     const state = useDashboard(data.dashboard);
     const [cursor, setCursor] = useState(0);
     const [openId, setOpenId] = useState<string | undefined>(undefined);
@@ -77,7 +77,7 @@ export function createRunsScreen(source: () => RunsScreenSource = defaultRunsSou
       return (
         <Box flexDirection="column">
           {detail === undefined && detailError === undefined ? <Text dimColor>Loading run...</Text> : null}
-          {detailError !== undefined ? <Text color="red">{detailError}</Text> : null}
+          {detailError !== undefined ? <Text {...textColor(theme.error)}>{detailError}</Text> : null}
           {detail !== undefined ? (
             <>
               <Text bold>{summarizeRun(detail)}</Text>
@@ -91,8 +91,8 @@ export function createRunsScreen(source: () => RunsScreenSource = defaultRunsSou
     if (state === undefined || state.runs === undefined) {
       return (
         <Box flexDirection="column">
-          {state?.forbidden !== undefined ? <Text color="red">{state.forbidden}</Text> : null}
-          {state?.error !== undefined ? <Text color="red">{state.error}</Text> : <Text dimColor>Loading runs...</Text>}
+          {state?.forbidden !== undefined ? <Text {...textColor(theme.error)}>{state.forbidden}</Text> : null}
+          {state?.error !== undefined ? <Text {...textColor(theme.error)}>{state.error}</Text> : <Text dimColor>Loading runs...</Text>}
           <Text dimColor>esc back</Text>
         </Box>
       );
@@ -114,7 +114,7 @@ export function createRunsScreen(source: () => RunsScreenSource = defaultRunsSou
             {run.runbook}  {run.status}  {when(run.createdAt)}
           </Text>
         ))}
-        {state.error !== undefined ? <Text color="yellow">Not reachable: {state.error}</Text> : null}
+        {state.error !== undefined ? <Text {...textColor(theme.warning)}>Not reachable: {state.error}</Text> : null}
         <Text dimColor>up/down select  enter open  r refresh  esc back</Text>
       </Box>
     );

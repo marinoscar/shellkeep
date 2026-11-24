@@ -6,11 +6,18 @@ import { createCli, cliIdentity, envPrefix, configDirName } from '@marinoscar/pl
 import { androidTuiScreen, deployAndroidEnvVar } from '@marinoscar/platform-cli/android';
 import { parseEnvExample } from '@marinoscar/platform-cli/deploy';
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { getTuiRootMenuSlots, resolveTuiMenuSlot, resolveTuiTheme, tuiMenuScreens } from '@marinoscar/platform-cli/tui';
+import { cleanup, renderTuiMenu, stripAnsi } from '@marinoscar/platform-cli/tui/testing';
+import { APP_NAME, BRAND, TAGLINE } from '@shellkeep/shared';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   APP_CLI_OPTIONS,
   APP_STREAM_PATHS,
+  APP_TUI_MENU_ROOT,
+  APP_TUI_THEME,
+  APP_WORDMARK,
+  APP_WORDMARK_MIN_COLUMNS,
   APP_UPDATE_NOTICE,
   APP_VERSIONED_MANIFESTS,
   readVersion,
@@ -162,5 +169,89 @@ describe('the Android companion (#74)', () => {
   it('opts a deploy in with SHELLKEEP_DEPLOY_ANDROID', () => {
     createCli(APP_CLI_OPTIONS);
     expect(deployAndroidEnvVar()).toBe('SHELLKEEP_DEPLOY_ANDROID');
+  });
+});
+
+describe('the TUI brand (#148)', () => {
+  afterEach(() => cleanup());
+
+  const at = (columns: number) => ({ loggedIn: false, columns, sectionId: 'root', state: {} });
+
+  it('takes the theme from the Option A tokens', () => {
+    expect(APP_CLI_OPTIONS.tuiTheme).toBe(APP_TUI_THEME);
+    expect(APP_TUI_THEME.primary).toBe(BRAND.dark.accent);
+    expect(APP_TUI_THEME.banner).toBe(BRAND.dark.accent);
+    expect(APP_TUI_THEME.brand).toEqual([BRAND.dark.accent, BRAND.dark.accentText]);
+    expect(APP_TUI_THEME).toMatchObject({
+      error: BRAND.dark.err,
+      warning: BRAND.dark.warn,
+      success: BRAND.dark.ok,
+      info: BRAND.dark.info,
+    });
+  });
+
+  it('is what resolveTuiTheme picks up once createCli records it', () => {
+    createCli(APP_CLI_OPTIONS);
+    const theme = resolveTuiTheme({ env: {}, noColor: false });
+    expect(theme.color).toBe(true);
+    expect(theme.primary).toBe(BRAND.dark.accent);
+    expect(theme.error).toBe(BRAND.dark.err);
+    expect(theme.brand).toEqual([BRAND.dark.accent, BRAND.dark.accentText]);
+  });
+
+  it.each([
+    ['NO_COLOR', { env: { NO_COLOR: '1' }, noColor: false }],
+    ['--no-color', { env: {}, noColor: true }],
+    ['TERM=dumb', { env: { TERM: 'dumb' }, noColor: false }],
+  ] as const)('drops every colour under %s', (_label, input) => {
+    createCli(APP_CLI_OPTIONS);
+    const theme = resolveTuiTheme(input);
+    expect(theme.color).toBe(false);
+    for (const token of ['primary', 'success', 'warning', 'error', 'info', 'dim', 'accent', 'banner'] as const) {
+      expect(theme[token], token).toBeUndefined();
+    }
+    expect(theme.brand).toEqual([]);
+  });
+
+  it('records the root banner and the tagline footnote', () => {
+    createCli(APP_CLI_OPTIONS);
+    expect(APP_CLI_OPTIONS.tuiMenuRoot).toBe(APP_TUI_MENU_ROOT);
+    const { banner, footnote } = getTuiRootMenuSlots();
+    expect(resolveTuiMenuSlot(banner, at(80))).toEqual([...APP_WORDMARK]);
+    expect(TAGLINE).toBeDefined();
+    expect(resolveTuiMenuSlot(footnote, at(80))).toEqual([TAGLINE]);
+  });
+
+  it.each([24, 39, 40, 80])('fits the banner in %i columns', (columns) => {
+    const lines = resolveTuiMenuSlot(APP_TUI_MENU_ROOT.banner, at(columns));
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(columns);
+  });
+
+  it('shows the wordmark from 40 columns and the product name below', () => {
+    expect(APP_WORDMARK_MIN_COLUMNS).toBe(40);
+    expect(resolveTuiMenuSlot(APP_TUI_MENU_ROOT.banner, at(40))).toEqual([...APP_WORDMARK]);
+    expect(resolveTuiMenuSlot(APP_TUI_MENU_ROOT.banner, at(39))).toEqual([APP_NAME]);
+    expect(resolveTuiMenuSlot(APP_TUI_MENU_ROOT.banner, at(24))).toEqual([APP_NAME]);
+  });
+
+  it.each([
+    [40, APP_WORDMARK[1] as string],
+    [24, APP_NAME],
+  ])('draws the banner on the root menu at %i columns', async (columns, expected) => {
+    createCli(APP_CLI_OPTIONS);
+    const menu = await renderTuiMenu({ screens: tuiMenuScreens(), loggedIn: false, columns });
+    const frame = await menu.waitForFrame((text) => text.includes(expected));
+    // Every wordmark line whole (no truncation mark) when it is drawn.
+    if (columns >= APP_WORDMARK_MIN_COLUMNS) for (const line of APP_WORDMARK) expect(frame).toContain(line);
+    else expect(frame).not.toContain(APP_WORDMARK[1] as string);
+    for (const line of stripAnsi(menu.lastFrame() ?? '').split('\n')) expect(line.length).toBeLessThanOrEqual(columns);
+  });
+
+  it('draws no colour in the menu with the monochrome theme', async () => {
+    createCli(APP_CLI_OPTIONS);
+    const menu = await renderTuiMenu({ screens: tuiMenuScreens(), loggedIn: false, columns: 80, theme: 'mono' });
+    await menu.waitForFrame((text) => text.includes(APP_WORDMARK[1] as string));
+    expect(menu.lastFrame()).not.toMatch(/\u001b\[(3|9)\d/);
   });
 });

@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { BRAND } from '@shellkeep/shared';
 import { installApi, type ApiOptions } from './api';
 
 /**
@@ -109,11 +110,17 @@ export async function waitForSettled(page: Page): Promise<void> {
   });
 }
 
+/** `#RRGGBB` to the `rgb(r, g, b)` string `getComputedStyle` reports. */
+function hexToRgb(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+}
+
 /** Assert the harness really applied the requested theme (a shot in the wrong one is a bad baseline). */
 export async function expectTheme(page: Page, theme: Theme): Promise<void> {
   await expect
     .poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor))
-    .toBe(theme === 'dark' ? 'rgb(18, 18, 18)' : 'rgb(245, 245, 245)');
+    .toBe(hexToRgb(BRAND[theme].bg));
 }
 
 /**

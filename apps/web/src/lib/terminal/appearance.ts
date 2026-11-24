@@ -10,6 +10,7 @@
 // =============================================================================
 
 import type { ITerminalOptions, ITheme, Terminal } from '@xterm/xterm';
+import { BRAND, type BrandTokens } from '@shellkeep/shared';
 import type { TerminalFontFamily, TerminalThemeName } from '../../types/terminal';
 import type { ResolvedTerminalSettings } from './settings';
 
@@ -97,6 +98,31 @@ export const TERMINAL_COLOR_THEMES: Record<Exclude<TerminalThemeName, 'follow-ap
   },
 };
 
+/** An xterm theme from the brand's terminal tokens; `ansi` keeps the 16 colours readable on `term`. */
+function brandTerminalTheme(t: BrandTokens, ansi: ITheme = {}): ITheme {
+  return {
+    ...ansi,
+    background: t.term,
+    foreground: t.termText,
+    cursor: t.accentText,
+    cursorAccent: t.term,
+    // The accent at 30% opacity (#RRGGBBAA).
+    selectionBackground: `${t.accent}4D`,
+  };
+}
+
+/**
+ * What `follow-app` resolves to: the Option A terminal tokens (#148, `BRAND`
+ * of `@shellkeep/shared`), so a terminal that follows the app matches it. The
+ * named `dark` and `light` presets above stay as they were for anyone who
+ * picked one. The light one borrows the light preset's ANSI colours, which are
+ * tuned for a near-white background.
+ */
+export const TERMINAL_APP_THEMES: Record<AppColorMode, ITheme> = {
+  dark: brandTerminalTheme(BRAND.dark),
+  light: brandTerminalTheme(BRAND.light, TERMINAL_COLOR_THEMES.light),
+};
+
 /** Labels for the settings page. */
 export const TERMINAL_THEME_LABELS: Record<TerminalThemeName, string> = {
   'follow-app': 'Follow the app theme',
@@ -108,7 +134,7 @@ export const TERMINAL_THEME_LABELS: Record<TerminalThemeName, string> = {
 
 /** The xterm theme of a preference, `follow-app` resolved against the app mode. */
 export function resolveTerminalTheme(name: TerminalThemeName, appMode: AppColorMode): ITheme {
-  if (name === 'follow-app') return TERMINAL_COLOR_THEMES[appMode];
+  if (name === 'follow-app') return TERMINAL_APP_THEMES[appMode];
   return TERMINAL_COLOR_THEMES[name];
 }
 

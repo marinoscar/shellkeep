@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { githubRawManifest, type CreateCliOptions } from '@marinoscar/platform-cli';
 import { androidCommand, androidDeployStep, androidTuiScreen } from '@marinoscar/platform-cli/android';
-import { ANDROID_IDENTITY_SOURCE, APP_NAME, CLI_NAME, REPO_SLUG } from '@shellkeep/shared';
+import type { TuiMenuSlots, TuiThemeOverrides } from '@marinoscar/platform-cli/tui';
+import { ANDROID_IDENTITY_SOURCE, APP_NAME, BRAND, CLI_NAME, REPO_SLUG, TAGLINE } from '@shellkeep/shared';
 
 import { runbookCommand } from './commands/runbook.js';
 import { serversCommand } from './commands/servers.js';
@@ -38,7 +39,9 @@ import { runsScreen, serversScreen, sessionsScreen } from './tui/screens.js';
 //   - the unbuffered, long-timeout locations the VPS host proxy needs for the
 //     terminal WebSocket and the streaming routes (`proxy.streamPaths`);
 //   - the manifests the deploy version step versions, never this package;
-//   - the start-up "newer CLI available" notice.
+//   - the start-up "newer CLI available" notice;
+//   - the brand (#148): the TUI colours from the Option A tokens and a
+//     wordmark banner over the root menu (`tuiTheme`, `tuiMenuRoot`).
 //
 // The binary name, the config directory (`~/.shellkeep`), the environment
 // prefix (`SHELLKEEP_`) and the systemd unit all derive from `CLI_NAME`
@@ -132,6 +135,50 @@ export const APP_UPDATE_NOTICE: NonNullable<CreateCliOptions['updateNotice']> = 
   upgradeHint: APP_UPGRADE_HINT,
 };
 
+/**
+ * The TUI colours (#148), from the DARK Option A tokens of `BRAND`: a terminal's
+ * background is not known, most are dark, and the mockup's default is dark (the
+ * light accent #0F766E is close to unreadable on a dark terminal, while the dark
+ * tones stay legible on most light ones). Hex values: ink draws them as
+ * truecolor, or the nearest colour the terminal has. The platform drops every
+ * colour under `NO_COLOR`, `--no-color` and `TERM=dumb`.
+ */
+export const APP_TUI_THEME: TuiThemeOverrides = {
+  primary: BRAND.dark.accent,
+  banner: BRAND.dark.accent,
+  accent: BRAND.dark.accentText,
+  brand: [BRAND.dark.accent, BRAND.dark.accentText],
+  success: BRAND.dark.ok,
+  warning: BRAND.dark.warn,
+  error: BRAND.dark.err,
+  info: BRAND.dark.info,
+  dim: BRAND.dark.muted,
+};
+
+/** The ShellKeep wordmark over the root menu: 36 columns wide. */
+export const APP_WORDMARK: readonly string[] = [
+  ' ___ _        _ _ _  __',
+  '/ __| |_  ___| | | |/ /___ ___ _ __',
+  "\\__ \\ ' \\/ -_) | | ' </ -_) -_) '_ \\",
+  '|___/_||_\\___|_|_|_|\\_\\___\\___| .__/',
+  '                              |_|',
+];
+
+/** The narrowest terminal that gets the wordmark; below it the banner is the product name. */
+export const APP_WORDMARK_MIN_COLUMNS = 40;
+
+/**
+ * The root menu's banner and footnote (#148): the wordmark from 40 columns, the
+ * product name below that (the platform truncates each line to the width, so
+ * art would smear), and the tagline of identity.json as a dim footnote.
+ */
+export const APP_TUI_MENU_ROOT: TuiMenuSlots = {
+  banner: {
+    content: ({ columns }) => (columns >= APP_WORDMARK_MIN_COLUMNS ? APP_WORDMARK : APP_NAME),
+  },
+  ...(TAGLINE !== undefined ? { footnote: { content: TAGLINE } } : {}),
+};
+
 export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: {
     name: CLI_NAME,
@@ -147,6 +194,8 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
     androidCommand({ identity: ANDROID_IDENTITY_SOURCE }),
   ],
   tuiScreens: [serversScreen, sessionsScreen, runsScreen, androidTuiScreen],
+  tuiTheme: APP_TUI_THEME,
+  tuiMenuRoot: APP_TUI_MENU_ROOT,
   deploySteps: [androidDeployStep({ pipeline: 'install' }), androidDeployStep({ pipeline: 'update' })],
   nodeExecutors: [],
   envSpecFragments: [SHELLKEEP_ENV_SPEC],
