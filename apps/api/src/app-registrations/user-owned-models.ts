@@ -48,6 +48,16 @@ export const APP_USER_OWNED_MODELS: readonly Def[] = [
       'The owner’s AI summary of a terminal session (#59): redacted summary text, the commands it lists and redaction counts, never terminal text; deleted with the user and exported to them.',
   },
   {
+    model: 'FileArchive',
+    ownerField: 'userId',
+    purge: 'delete',
+    export: 'include',
+    // The object key and the job id are internal; the path and status are the user's own record.
+    exportOmit: ['storageKey', 'jobId'],
+    rationale:
+      'The owner’s record of a folder archive (#158): the folder path, status, size and expiry. Deleted with the user (the stored tar.gz is deleted by servers.user_data.purge first) and exported to them without its storage key.',
+  },
+  {
     model: 'Runbook',
     ownerField: 'ownerUserId',
     ownerRelation: 'owner',

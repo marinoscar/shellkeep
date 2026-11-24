@@ -77,7 +77,7 @@ export function userDataServices(db: RlsDatabase): UserDataDb {
   return {
     runner,
     factory: new FactoryResetHandler(registry as never, port, storage as never, plans, runner, sink as never, resolved),
-    servers: new ServersUserDataPurgeHandler(registry as never, credentials, port),
+    servers: new ServersUserDataPurgeHandler(registry as never, credentials, port, storage as never),
     runbooks: new RunbooksUserDataPurgeHandler(registry as never, port, storage as never),
     credentials,
     jobs,

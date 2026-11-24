@@ -26,4 +26,11 @@ export const APP_STORAGE_KEY_PREFIXES: readonly StorageKeyPrefixDef[] = [
     scope: 'org',
     description: 'Runbook step logs, collected files and log bundles',
   },
+  {
+    id: 'file-archives',
+    prefix: 'file-archives/',
+    owner: 'files',
+    scope: 'org',
+    description: 'Folder archives (tar.gz) built from a server folder; expire after 24 hours',
+  },
 ];

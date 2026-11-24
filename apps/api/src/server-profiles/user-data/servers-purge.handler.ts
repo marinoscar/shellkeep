@@ -26,6 +26,7 @@ import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { UserCredentialsService } from '@marinoscar/platform-api/credentials';
 import { JobHandlerRegistry, type Job, type JobHandler } from '@marinoscar/platform-api/jobs';
 import { deleteGrantsForResources } from '@marinoscar/platform-api/sharing';
+import { STORAGE_PROVIDER, deleteStorageKeys, type StorageProvider } from '@marinoscar/platform-api/storage';
 import { USER_DATA_DB, type UserDataDbPort } from '@marinoscar/platform-api/user-data';
 
 import { SERVER_PROFILE_RESOURCE } from '../../app-registrations/sharing';
@@ -38,6 +39,8 @@ export interface ServersPurgeResult {
   grants: number;
   cancelledJobs: number;
   credentials: number;
+  /** Folder archive objects (#158) deleted from storage. */
+  archiveObjects: number;
 }
 
 @Injectable()
@@ -52,6 +55,7 @@ export class ServersUserDataPurgeHandler implements JobHandler, OnModuleInit {
     private readonly registry: JobHandlerRegistry,
     private readonly credentials: UserCredentialsService,
     @Inject(USER_DATA_DB) private readonly db: UserDataDbPort,
+    @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
   ) {}
 
   onModuleInit(): void {
@@ -63,12 +67,24 @@ export class ServersUserDataPurgeHandler implements JobHandler, OnModuleInit {
     if (!parsed.success) throw new Error(`${this.type} job ${job.id}: payload must carry { userId (uuid) }`);
     const result = await this.purge(parsed.data.userId);
     this.logger.log(
-      `${this.type} job ${job.id}: ${result.profiles} profile(s), ${result.grants} grant(s), ${result.credentials} credential(s) deleted, ${result.cancelledJobs} job(s) cancelled`,
+      `${this.type} job ${job.id}: ${result.profiles} profile(s), ${result.grants} grant(s), ${result.credentials} credential(s) and ${result.archiveObjects} archive object(s) deleted, ${result.cancelledJobs} job(s) cancelled`,
     );
   }
 
   /** Deletes one user's profiles, the grants on them and their saved credentials. */
   async purge(userId: string): Promise<ServersPurgeResult> {
+    // 0. The user's folder archives (#158): the stored objects first, then the rows. A failed object delete
+    //    throws, the retry starts over (the keys are re-read), so no row ever outlives its object's key.
+    const keys: string[] = await this.db.runAsSystem('purge', async (tx) => {
+      const archives: { storageKey: string | null }[] = await tx.fileArchive.findMany({ where: { userId, storageKey: { not: null } }, select: { storageKey: true } });
+      return archives.flatMap((archive) => (archive.storageKey ? [archive.storageKey] : []));
+    });
+    for (let at = 0; at < keys.length; at += 200) {
+      const { failed } = await deleteStorageKeys(this.storage, keys.slice(at, at + 200));
+      if (failed.length > 0) throw new Error(`${this.type}: ${failed.length} archive object(s) could not be deleted from storage`);
+    }
+    await this.db.runAsSystem('purge', (tx) => tx.fileArchive.deleteMany({ where: { userId } }));
+
     const rows = await this.db.runAsSystem('purge', async (tx) => {
       const profiles: { id: string }[] = await tx.serverProfile.findMany({ where: { userId }, select: { id: true } });
       const ids = profiles.map((profile) => profile.id);
@@ -85,6 +101,6 @@ export class ServersUserDataPurgeHandler implements JobHandler, OnModuleInit {
       await this.credentials.deleteSecret(userId, SSH_CREDENTIAL_PURPOSE, info.name);
       credentials += 1;
     }
-    return { ...rows, credentials };
+    return { ...rows, credentials, archiveObjects: keys.length };
   }
 }

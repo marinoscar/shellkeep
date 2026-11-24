@@ -98,4 +98,10 @@ export const APP_MODEL_OWNERSHIP: readonly Def[] = [
     orgField: 'orgId',
     rationale: 'A log archive or the zip bundle of a run: isolated by forced row-level security on org_id.',
   },
+  {
+    model: 'FileArchive',
+    kind: 'org',
+    orgField: 'orgId',
+    rationale: 'The record of a folder archive job and its stored tar.gz (user_id is the requester): isolated by forced row-level security on org_id.',
+  },
 ];
