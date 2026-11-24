@@ -25,6 +25,8 @@ import {
   RUNBOOK_DRY_RUN_FINISHED_EVENT,
   RUNBOOK_NOTIFICATIONS,
   RUNBOOK_RUN_FAILED_EVENT,
+  RUNBOOK_SCHEDULE_DISABLED_EVENT,
+  runbookScheduleDisabledBrowserTemplate,
   RUNBOOK_RUN_FINISHED_EVENT,
   registerRunbookNotifications,
   runbookApprovalRequestedBrowserTemplate,
@@ -63,7 +65,7 @@ describe('runbook notifications', () => {
   });
 
   it('declare the three permanent keys with in-app, email and push', () => {
-    expect(RUNBOOK_NOTIFICATIONS.map((entry) => entry.event.key)).toEqual([...KEYS, RUNBOOK_DRY_RUN_FINISHED_EVENT]);
+    expect(RUNBOOK_NOTIFICATIONS.map((entry) => entry.event.key)).toEqual([...KEYS, RUNBOOK_DRY_RUN_FINISHED_EVENT, RUNBOOK_SCHEDULE_DISABLED_EVENT]);
     for (const entry of RUNBOOK_NOTIFICATIONS.filter((e) => KEYS.includes(e.event.key))) {
       expect(entry.event.channels).toEqual(['browser', 'email', 'push']);
       expect(entry.event.defaultEnabled).toBe(true);
@@ -77,6 +79,24 @@ describe('runbook notifications', () => {
     expect(entry.event.channels).toEqual(['browser']);
     expect(entry.emailTemplate).toBeUndefined();
     expect(entry.browserTemplate).toBeDefined();
+  });
+
+  it('a schedule switched off notifies in the app only and names the reason, never a parameter (#66)', () => {
+    const entry = RUNBOOK_NOTIFICATIONS.find((e) => e.event.key === RUNBOOK_SCHEDULE_DISABLED_EVENT)!;
+    expect(RUNBOOK_SCHEDULE_DISABLED_EVENT).toBe('runbooks.schedule_disabled'); // permanent
+    expect(entry.event.channels).toEqual(['browser']);
+    expect(entry.emailTemplate).toBeUndefined();
+    const rendered = runbookScheduleDisabledBrowserTemplate({
+      scheduleName: 'Nightly logs',
+      runbookName: 'Collect logs',
+      reason: 'PERMISSION_REVOKED',
+      link: '/runbooks/abc/schedules',
+    });
+    expect(rendered).toEqual({
+      title: 'Schedule "Nightly logs" was turned off',
+      body: 'Runbook "Collect logs": you no longer have the permissions it needs to run.',
+      link: '/runbooks/abc/schedules',
+    });
   });
 
   it('register once, with their templates, and a second call is a no-op', () => {

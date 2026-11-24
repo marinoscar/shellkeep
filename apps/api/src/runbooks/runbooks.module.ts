@@ -44,6 +44,11 @@ import { RunbookArtifactsService } from './artifacts/runbook-artifacts.service';
 import { RunbookAuditController } from './safety/runbook-audit.controller';
 import { RunbookAuditService } from './safety/runbook-audit.service';
 import { RunbookRiskService } from './safety/runbook-risk.service';
+import { RunbookSchedulesController } from './schedules/runbook-schedules.controller';
+import { RunbookSchedulesService } from './schedules/runbook-schedules.service';
+import { RunbookSchedulesTask } from './schedules/runbook-schedules.task';
+import { RunbookSchedulesTickHandler } from './schedules/runbook-schedules-tick.handler';
+import { RunbookWebhooksModule } from './webhooks/runbook-webhooks.module';
 import { RunbookSecretsController } from './runbook-secrets.controller';
 import { RunbooksController } from './runbooks.controller';
 import { RunbooksService } from './runbooks.service';
@@ -60,8 +65,8 @@ import { UserDataHostModule } from '../platform/user-data/user-data-host.module'
  * `POST /api/ai/runbooks/draft`.
  */
 @Module({
-  imports: [PrismaModule, AiModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule, UserDataHostModule],
-  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController, RunbookAiController, RunbookDraftController, RunbookArtifactsController, PublicRunbookBundleController],
+  imports: [PrismaModule, AiModule, OrgCredentialsModule, ServerProfilesModule, SshModule, StorageModule, StorageProvidersModule, sharingModule, UserDataHostModule, RunbookWebhooksModule],
+  controllers: [RunbooksController, RunbookSecretsController, RunbookRunsController, RunbookApprovalsController, RunbookAuditController, RunbookAiController, RunbookDraftController, RunbookArtifactsController, PublicRunbookBundleController, RunbookSchedulesController],
   providers: [
     RunbooksService,
     TargetResolverService,
@@ -89,6 +94,10 @@ import { UserDataHostModule } from '../platform/user-data/user-data-host.module'
     LogsCompactHandler,
     RunbookJobSettledListener,
     RunbookReconcileTask,
+    // Schedules (#66): the service, the minute cron that only enqueues and the tick job it queues.
+    RunbookSchedulesService,
+    RunbookSchedulesTask,
+    RunbookSchedulesTickHandler,
     // Collected logs and the run bundle (#63)
     RunbookArtifactsService,
     PublicRunbookBundleService,

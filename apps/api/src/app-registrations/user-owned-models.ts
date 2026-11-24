@@ -85,4 +85,14 @@ export const APP_USER_OWNED_MODELS: readonly Def[] = [
     rationale:
       'An approval request records who decided it; that person leaving detaches the decision (it stays as audit history) and it is not part of a personal export.',
   },
+  {
+    model: 'RunbookSchedule',
+    actorFields: ['runAsUserId', 'approvedBy'],
+    // Both are ON DELETE SET NULL: a schedule belongs to the runbook. Without a person to run as, the next tick
+    // switches it off (`PERMISSION_REVOKED`).
+    purge: 'detach',
+    export: 'exclude',
+    rationale:
+      'A runbook schedule records who it runs as and who approved it; that person leaving detaches both (the schedule stays with its runbook and is switched off by the tick) and it is not part of a personal export.',
+  },
 ];

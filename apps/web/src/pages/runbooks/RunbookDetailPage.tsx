@@ -36,6 +36,7 @@ import { useAsync } from '../../features/runbooks/hooks/useAsync';
 import { stepKindMeta } from '../../features/runbooks/lib/stepKinds';
 import { OwnerChip } from '../../features/runbooks/components/OwnerChip';
 import { StatusChip } from '../../features/runbooks/components/StatusChip';
+import { SchedulesCard } from '../../features/runbooks/components/SchedulesCard';
 import { RunLauncherDialog } from '../../features/runbooks/components/RunLauncherDialog';
 import { VersionHistoryDrawer } from '../../features/runbooks/components/VersionHistoryDrawer';
 import { DestructiveBanner, RiskChip, findingFor } from '../../features/runbooks/components/RiskChip';
@@ -202,6 +203,16 @@ export default function RunbookDetailPage({ launch = false, launchServerIds }: R
               </Typography>
             </CardContent>
           </Card>
+          {hasPermission('runbooks:read') && (
+            <SchedulesCard
+              runbookId={rb.id}
+              runbookName={rb.name}
+              definition={definition}
+              canWrite={canRun && hasPermission('runbooks:write')}
+              canRun={canRun}
+              canApprove={hasPermission('runbooks:approve')}
+            />
+          )}
           <Card variant="outlined" component="section" aria-labelledby="rb-runs">
             <CardContent>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>

@@ -20,6 +20,7 @@ function serveDetail(detail = makeDetail()) {
   server.use(
     http.get(`*/api/runbooks/${RUNBOOK_ID}`, () => HttpResponse.json({ data: detail })),
     http.get('*/api/runbook-runs', () => HttpResponse.json({ data: { items: [], total: 0, page: 1, pageSize: 5 } })),
+    http.get(`*/api/runbooks/${RUNBOOK_ID}/schedules`, () => HttpResponse.json({ data: { items: [], total: 0, page: 1, pageSize: 50 } })),
   );
 }
 
