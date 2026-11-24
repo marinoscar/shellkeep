@@ -16,12 +16,16 @@ import {
   Typography,
 } from '@mui/material';
 import type { ServerProfile, ServerProfileFormData, ServerProfileColor } from '../../types';
+import { HostKeySection } from './HostKeySection';
+import { HostKeyStatusChip } from './HostKeyStatus';
 
 interface ServerProfileFormProps {
   open: boolean;
   onClose: () => void;
   onSave: (data: ServerProfileFormData) => Promise<void>;
   profile?: ServerProfile | null;
+  /** Called after the host key or facts changed from the form's Host key section (#60). */
+  onProfileChanged?: (profile: ServerProfile) => void;
 }
 
 const AUTH_METHOD_OPTIONS = [
@@ -45,6 +49,7 @@ export function ServerProfileForm({
   onClose,
   onSave,
   profile,
+  onProfileChanged,
 }: ServerProfileFormProps) {
   const [name, setName] = useState('');
   const [hostname, setHostname] = useState('');
@@ -67,6 +72,9 @@ export function ServerProfileForm({
   const [passphraseChanged, setPassphraseChanged] = useState(false);
 
   const isEditing = Boolean(profile);
+  // A PATCH of the hostname or port clears the trusted host key (#60).
+  const endpointChanged =
+    !!profile?.fingerprint && (hostname.trim() !== profile.hostname || port !== profile.port);
 
   useEffect(() => {
     if (open) {
@@ -204,6 +212,11 @@ export function ServerProfileForm({
               onChange={(e) => setPort(parseInt(e.target.value, 10) || 22)}
               disabled={isSubmitting}
               sx={{ mb: 2 }}
+              helperText={
+                endpointChanged
+                  ? 'Changing the hostname or port forgets the trusted host key; the next connection asks you to verify it.'
+                  : undefined
+              }
               slotProps={{
                 htmlInput: { min: 1, max: 65535 }
               }}
@@ -342,6 +355,21 @@ export function ServerProfileForm({
                 ))}
               </Box>
             </Box>
+            {profile ? (
+              <HostKeySection profile={profile} onProfileChanged={onProfileChanged} />
+            ) : (
+              <Box sx={{ mt: 3 }} data-testid="host-key-section-new">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Typography variant="subtitle1" component="h3">
+                    Host key
+                  </Typography>
+                  <HostKeyStatusChip profile={null} />
+                </Box>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Verified on the first connection or test: you compare the fingerprint and trust it.
+                </Typography>
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

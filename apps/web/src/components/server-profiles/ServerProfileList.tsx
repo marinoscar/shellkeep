@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Paper,
   Table,
@@ -24,12 +24,22 @@ import {
   Edit as EditIcon,
   NetworkCheck as TestIcon,
 } from '@mui/icons-material';
-import type { ServerProfile, ServerProfileFormData } from '../../types';
+import type { HostKeyRefusal, ServerProfile, ServerProfileFormData, TestConnectionResult } from '../../types';
 import { useServerProfiles } from '../../hooks/useServerProfiles';
+import { factsSummary, hostKeyRefusalFromTest } from '../../lib/terminal/host-key';
 import { ServerProfileForm } from './ServerProfileForm';
+import { HostKeyDialog } from './HostKeyDialog';
+import { HostKeyStatus } from './HostKeyStatus';
+
+/** The host-key prompt a test connection opened (#60). */
+interface TestPrompt {
+  refusal: HostKeyRefusal;
+  hostname: string;
+  result: TestConnectionResult;
+}
 
 interface ServerProfileListProps {
-  onTestResult?: (result: { success: boolean; error?: string }) => void;
+  onTestResult?: (result: TestConnectionResult) => void;
   onDeleteSuccess?: () => void;
   onError?: (message: string) => void;
 }
@@ -65,14 +75,21 @@ export function ServerProfileList({
     null,
   );
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [testPrompt, setTestPrompt] = useState<TestPrompt | null>(null);
+
+  const reload = useCallback(
+    () =>
+      fetchProfiles({
+        page: currentPage + 1,
+        pageSize: rowsPerPage,
+        search: search || undefined,
+      }),
+    [currentPage, rowsPerPage, search, fetchProfiles],
+  );
 
   useEffect(() => {
-    fetchProfiles({
-      page: currentPage + 1,
-      pageSize: rowsPerPage,
-      search: search || undefined,
-    });
-  }, [currentPage, rowsPerPage, search, fetchProfiles]);
+    void reload();
+  }, [reload]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -125,14 +142,34 @@ export function ServerProfileList({
     }
   };
 
-  const handleTest = async (id: string) => {
-    setTestingId(id);
+  const runTest = async (profile: Pick<ServerProfile, 'id' | 'hostname'>) => {
+    setTestingId(profile.id);
     try {
-      const result = await testConnection(id);
+      const result = await testConnection(profile.id);
+      // An unknown or changed host key (#60): ask the user, then test again.
+      const refusal = hostKeyRefusalFromTest(result, profile.id);
+      if (refusal) {
+        setTestPrompt({ refusal, hostname: profile.hostname, result });
+        return;
+      }
       onTestResult?.(result);
+      // A successful test probes the server's facts: show them.
+      if (result.success) void reload();
     } finally {
       setTestingId(null);
     }
+  };
+
+  const handleTest = (profile: ServerProfile) => runTest(profile);
+
+  const handleTestTrusted = (trusted: ServerProfile) => {
+    setTestPrompt(null);
+    void runTest(trusted);
+  };
+
+  const handleTestCancelled = () => {
+    if (testPrompt) onTestResult?.(testPrompt.result);
+    setTestPrompt(null);
   };
 
   return (
@@ -185,6 +222,7 @@ export function ServerProfileList({
                   <TableCell>Host</TableCell>
                   <TableCell>Username</TableCell>
                   <TableCell>Auth Method</TableCell>
+                  <TableCell>Host key</TableCell>
                   <TableCell>Tags</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
@@ -202,11 +240,24 @@ export function ServerProfileList({
                     </TableCell>
                     <TableCell>
                       {profile.hostname}:{profile.port}
+                      {factsSummary(profile.facts).length > 0 && (
+                        <Typography
+                          variant="caption"
+                          component="div"
+                          data-testid="server-facts-summary"
+                          sx={{ color: 'text.secondary' }}
+                        >
+                          {factsSummary(profile.facts).join(' · ')}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>{profile.username}</TableCell>
                     <TableCell>
                       {AUTH_METHOD_LABELS[profile.authMethod] ||
                         profile.authMethod}
+                    </TableCell>
+                    <TableCell>
+                      <HostKeyStatus profile={profile} />
                     </TableCell>
                     <TableCell>
                       {profile.tags.length > 0 ? (
@@ -236,7 +287,7 @@ export function ServerProfileList({
                         <span>
                           <IconButton
                             size="small"
-                            onClick={() => handleTest(profile.id)}
+                            onClick={() => void handleTest(profile)}
                             disabled={testingId === profile.id}
                           >
                             {testingId === profile.id ? (
@@ -279,6 +330,15 @@ export function ServerProfileList({
         onClose={() => setFormOpen(false)}
         onSave={handleSave}
         profile={editingProfile}
+        onProfileChanged={() => void reload()}
+      />
+
+      <HostKeyDialog
+        refusal={testPrompt?.refusal ?? null}
+        hostname={testPrompt?.hostname}
+        trustLabel="Trust and test"
+        onTrusted={handleTestTrusted}
+        onCancel={handleTestCancelled}
       />
     </Paper>
   );
