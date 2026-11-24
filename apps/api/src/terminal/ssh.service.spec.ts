@@ -1,224 +1,118 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { SshService, DecryptedServerProfile } from './ssh.service';
-import { Client, ClientChannel } from 'ssh2';
 import { EventEmitter } from 'events';
 
-jest.mock('ssh2');
+import { SshService } from './ssh.service';
+import type { DecryptedServerProfile } from '../ssh/ssh-profile';
+import { HostKeyError } from '../ssh/host-key.error';
+import type { SshConnectionFactory } from '../ssh/ssh-connection.factory';
 
 describe('SshService', () => {
-  let service: SshService;
-  let MockClient: jest.MockedClass<typeof Client>;
-
-  const mockProfile: DecryptedServerProfile = {
-    hostname: 'example.com',
+  const profile: DecryptedServerProfile = {
+    id: '11111111-1111-4111-8111-111111111111',
+    userId: '22222222-2222-4222-8222-222222222222',
+    orgId: '33333333-3333-4333-8333-333333333333',
+    hostname: 'server-a.example.test',
     port: 22,
     username: 'admin',
     authMethod: 'password',
     password: 'my-password',
   };
+  const tmuxSessionId = 'sk-abcd1234';
 
-  const mockTmuxSessionId = 'sk-abcd1234';
+  function setup(options: { shellError?: Error; openError?: Error } = {}) {
+    const stream = new EventEmitter() as any;
+    stream.close = jest.fn();
+    stream.write = jest.fn();
+    stream.setWindow = jest.fn();
 
-  beforeEach(async () => {
-    MockClient = Client as jest.MockedClass<typeof Client>;
-    MockClient.mockClear();
+    const client = new EventEmitter() as any;
+    client.end = jest.fn();
+    client.shell = jest.fn((_opts: unknown, cb: (err: Error | null, stream: unknown) => void) =>
+      options.shellError ? cb(options.shellError, null) : cb(null, stream),
+    );
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [SshService],
-    }).compile();
+    const factory = {
+      open: jest.fn(async () => {
+        if (options.openError) throw options.openError;
+        return client;
+      }),
+      exec: jest.fn(),
+    } as unknown as jest.Mocked<SshConnectionFactory>;
 
-    service = module.get<SshService>(SshService);
-  });
-
-  function setupMockClient(options: {
-    emitReady?: boolean;
-    emitError?: Error;
-    shellError?: Error;
-  } = {}) {
-    const clientInstance = new EventEmitter() as any;
-    clientInstance.connect = jest.fn();
-    clientInstance.end = jest.fn();
-
-    const mockStream = new EventEmitter() as any;
-    mockStream.close = jest.fn();
-    mockStream.write = jest.fn();
-    mockStream.setWindow = jest.fn();
-
-    // The service uses client.shell() to open an interactive shell with PTY
-    clientInstance.shell = jest.fn((_opts: any, cb: (err: Error | null, stream: any) => void) => {
-      if (options.shellError) {
-        cb(options.shellError, null);
-      } else {
-        cb(null, mockStream);
-      }
-    });
-
-    MockClient.mockImplementation(() => clientInstance);
-
-    // Schedule events after connect is called
-    if (options.emitReady) {
-      const origConnect = clientInstance.connect;
-      clientInstance.connect = jest.fn((...args: any[]) => {
-        origConnect?.apply(clientInstance, args);
-        process.nextTick(() => clientInstance.emit('ready'));
-      });
-    }
-
-    if (options.emitError) {
-      const origConnect = clientInstance.connect;
-      clientInstance.connect = jest.fn((...args: any[]) => {
-        origConnect?.apply(clientInstance, args);
-        process.nextTick(() => clientInstance.emit('error', options.emitError));
-      });
-    }
-
-    return { clientInstance, mockStream };
+    return { service: new SshService(factory), factory, client, stream };
   }
 
-  describe('connect with password auth', () => {
-    it('should connect with password credentials', async () => {
-      const { clientInstance, mockStream } = setupMockClient({ emitReady: true });
+  describe('connect', () => {
+    it('opens an interactive connection through the factory and starts tmux in a PTY shell', async () => {
+      const { service, factory, client, stream } = setup();
 
-      const connection = await service.connect(
-        mockProfile,
-        mockTmuxSessionId,
-        80,
-        24,
+      const connection = await service.connect(profile, tmuxSessionId, 80, 24);
+
+      expect(factory.open).toHaveBeenCalledWith(profile, { purpose: 'interactive' });
+      expect(client.shell).toHaveBeenCalledWith({ cols: 80, rows: 24, term: 'xterm-256color' }, expect.any(Function));
+      expect(stream.write).toHaveBeenCalledWith(expect.stringContaining('set-option history-limit 50000'));
+      // The `\\;` reaches the remote shell as `\;`, tmux's own command separator.
+      expect(stream.write).toHaveBeenCalledWith(
+        `tmux new-session -As ${tmuxSessionId} \\; set-option history-limit 50000 \\; set-option mouse on\n`,
       );
-
-      expect(clientInstance.connect).toHaveBeenCalledWith(
-        expect.objectContaining({
-          host: 'example.com',
-          port: 22,
-          username: 'admin',
-          password: 'my-password',
-        }),
-      );
-      expect(connection).toHaveProperty('client');
-      expect(connection).toHaveProperty('stream');
-      expect(connection).toHaveProperty('close');
-      expect(connection).toHaveProperty('resize');
-      expect(mockStream.write).toHaveBeenCalledWith(
-        expect.stringContaining('set-option history-limit 50000')
-      );
-    });
-  });
-
-  describe('connect with key auth', () => {
-    it('should connect with private key', async () => {
-      const { clientInstance } = setupMockClient({ emitReady: true });
-
-      const keyProfile: DecryptedServerProfile = {
-        hostname: 'example.com',
-        port: 22,
-        username: 'admin',
-        authMethod: 'key',
-        privateKey: '-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----',
-      };
-
-      await service.connect(keyProfile, mockTmuxSessionId, 80, 24);
-
-      expect(clientInstance.connect).toHaveBeenCalledWith(
-        expect.objectContaining({
-          privateKey: keyProfile.privateKey,
-        }),
-      );
+      expect(connection).toMatchObject({ client, stream });
     });
 
-    it('should include passphrase when provided with key', async () => {
-      const { clientInstance } = setupMockClient({ emitReady: true });
+    it('propagates a host-key refusal untouched, before any shell is opened', async () => {
+      const refusal = new HostKeyError('HOST_KEY_UNKNOWN', { fingerprint: 'SHA256:x', algorithm: 'ssh-ed25519' });
+      const { service, client } = setup({ openError: refusal });
 
-      const keyProfile: DecryptedServerProfile = {
-        hostname: 'example.com',
-        port: 22,
-        username: 'admin',
-        authMethod: 'key',
-        privateKey: '-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----',
-        passphrase: 'my-passphrase',
-      };
-
-      await service.connect(keyProfile, mockTmuxSessionId, 80, 24);
-
-      expect(clientInstance.connect).toHaveBeenCalledWith(
-        expect.objectContaining({
-          privateKey: keyProfile.privateKey,
-          passphrase: 'my-passphrase',
-        }),
-      );
-    });
-  });
-
-  describe('connect with agent auth', () => {
-    it('should not include password or privateKey for agent auth', async () => {
-      const { clientInstance } = setupMockClient({ emitReady: true });
-
-      const agentProfile: DecryptedServerProfile = {
-        hostname: 'example.com',
-        port: 22,
-        username: 'admin',
-        authMethod: 'agent',
-      };
-
-      await service.connect(agentProfile, mockTmuxSessionId, 80, 24);
-
-      const connectCall = clientInstance.connect.mock.calls[0][0];
-      expect(connectCall).not.toHaveProperty('password');
-      expect(connectCall).not.toHaveProperty('privateKey');
-    });
-  });
-
-  describe('connection error handling', () => {
-    it('should reject on connection error', async () => {
-      const connError = new Error('Connection refused');
-      setupMockClient({ emitError: connError });
-
-      await expect(
-        service.connect(mockProfile, mockTmuxSessionId, 80, 24),
-      ).rejects.toThrow('Connection refused');
+      await expect(service.connect(profile, tmuxSessionId, 80, 24)).rejects.toBe(refusal);
+      expect(client.shell).not.toHaveBeenCalled();
     });
 
-    it('should reject on shell error', async () => {
-      const shellError = new Error('Command failed');
-      setupMockClient({ emitReady: true, shellError });
+    it('rejects and ends the client when the shell cannot be opened', async () => {
+      const { service, client } = setup({ shellError: new Error('Command failed') });
 
-      await expect(
-        service.connect(mockProfile, mockTmuxSessionId, 80, 24),
-      ).rejects.toThrow('Command failed');
-    });
-  });
-
-  describe('SshConnection methods', () => {
-    it('should have close method that ends client and stream', async () => {
-      const { clientInstance, mockStream } = setupMockClient({
-        emitReady: true,
-      });
-
-      const connection = await service.connect(
-        mockProfile,
-        mockTmuxSessionId,
-        80,
-        24,
-      );
-
-      connection.close();
-
-      expect(mockStream.close).toHaveBeenCalled();
-      expect(clientInstance.end).toHaveBeenCalled();
+      await expect(service.connect(profile, tmuxSessionId, 80, 24)).rejects.toThrow('Command failed');
+      expect(client.end).toHaveBeenCalled();
     });
 
-    it('should have resize method that calls setWindow', async () => {
-      const { mockStream } = setupMockClient({ emitReady: true });
-
-      const connection = await service.connect(
-        mockProfile,
-        mockTmuxSessionId,
-        80,
-        24,
-      );
+    it('closes the stream and the client, and resizes the window', async () => {
+      const { service, client, stream } = setup();
+      const connection = await service.connect(profile, tmuxSessionId, 80, 24);
 
       connection.resize(120, 40);
+      connection.close();
 
-      expect(mockStream.setWindow).toHaveBeenCalledWith(40, 120, 0, 0);
+      expect(stream.setWindow).toHaveBeenCalledWith(40, 120, 0, 0);
+      expect(stream.close).toHaveBeenCalled();
+      expect(client.end).toHaveBeenCalled();
+    });
+  });
+
+  describe('execCommand', () => {
+    it('returns stdout, stderr, exit code and signal from the factory', async () => {
+      const { service, factory } = setup();
+      const result = { stdout: 'out', stderr: 'err', exitCode: 3, signal: null };
+      factory.exec.mockResolvedValue(result);
+
+      await expect(service.execCommand(profile, 'false')).resolves.toBe(result);
+      expect(factory.exec).toHaveBeenCalledWith(profile, 'false', { timeoutMs: undefined });
+    });
+  });
+
+  describe('execForOutput (the history download)', () => {
+    it('returns stdout on success', async () => {
+      const { service, factory } = setup();
+      factory.exec.mockResolvedValue({ stdout: 'scrollback', stderr: '', exitCode: 0, signal: null });
+      await expect(service.execForOutput(profile, 'tmux capture-pane')).resolves.toBe('scrollback');
+    });
+
+    it('rejects with the trimmed stderr when the command failed and wrote to stderr', async () => {
+      const { service, factory } = setup();
+      factory.exec.mockResolvedValue({ stdout: '', stderr: "can't find session\n", exitCode: 1, signal: null });
+      await expect(service.execForOutput(profile, 'x')).rejects.toThrow("can't find session");
+    });
+
+    it('returns stdout when the command failed silently (the old rule: stderr decides)', async () => {
+      const { service, factory } = setup();
+      factory.exec.mockResolvedValue({ stdout: 'partial', stderr: '', exitCode: 1, signal: null });
+      await expect(service.execForOutput(profile, 'x')).resolves.toBe('partial');
     });
   });
 });

@@ -12,6 +12,9 @@ describe('SessionManagerService', () => {
   const mockSessionId = 'session-123';
   const mockTmuxSessionId = 'sk-abcd1234';
   const mockProfile = {
+    id: '11111111-1111-4111-8111-111111111111',
+    userId: '22222222-2222-4222-8222-222222222222',
+    orgId: '33333333-3333-4333-8333-333333333333',
     hostname: 'example.com',
     port: 22,
     username: 'admin',
