@@ -1374,6 +1374,22 @@ The storage system provides file upload and management capabilities with support
 
 ---
 
+### Server Profiles: the list, tags and health
+
+The Servers page (#79) reads one list route and two tag routes. No list response ever carries a credential field (the `has*` flags go to the credential holder only, see Sharing).
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET /api/server-profiles` | `servers:read` | Paginated (`page`, `pageSize` up to 100). Filters, all ANDed: `q` (name, hostname or username; `search` is the older spelling), `tag` (repeatable or comma-separated, every tag must match), `owner` (`me`, `shared`, `group:<uuid>`; `filter=all|mine|shared` still works), `health` (`reachable`, `unreachable`, `unknown`), `hostKey` (`trusted`, `untrusted`, `mismatch`). `sort` is `name`, `hostname`, `health`, `lastSession` or `updatedAt` (default, newest first), `order` `asc`/`desc`. An unknown value is a 400 |
+| `GET /api/server-profiles/tags` | `servers:read` | `{ tags: string[] }`: the distinct tags on the profiles the caller may see, sorted |
+| `PATCH /api/server-profiles/bulk-tags` | `servers:write` | `{ ids: uuid[] (1..200), add?: string[], remove?: string[] }` (at least one tag; never the same tag in both). Each id needs `write` access; returns `{ updated, unchanged, denied }`, where `denied` holds the ids that do not exist, are not visible or may not be changed (reported, never a failure). Each changed profile is audited as `server_profile.update` with `bulk: true` |
+
+Each item also carries `health`, `hostKeyState`, `lastTestAt`, `lastTestOk` and `lastSessionAt`:
+
+- **Health** is the outcome of the last `POST /server-profiles/:id/test`, stored on the profile (`last_test_at`, `last_test_ok`, `last_test_code`): `reachable` (the test logged in), `unreachable` (it failed), `unknown` (never tested, or stopped by a host-key refusal, which proves neither way). Trusting or forgetting the key after a refusal, or changing the hostname or port, clears it. The health definition is `apps/api/src/server-profiles/server-health.ts`, shared with the dashboard.
+- **Host key state**: `untrusted` without a trusted fingerprint, `mismatch` while the last test was refused with `HOST_KEY_MISMATCH`, else `trusted`.
+- **Last session** is when the CALLER last used the server (their own sessions only); `sort=lastSession` orders a server never used last. `GET /api/sessions?serverProfileId=<uuid>` lists those sessions.
+
 ### Server Profiles: host keys and facts
 
 SSH host keys are verified before any credential is sent (#60). A profile trusts at most one key (`fingerprint`, OpenSSH `SHA256:` format, with its `hostKeyAlgorithm`); the system setting `ssh.hostKeyPolicy` decides what happens to a server whose key is not trusted yet.
@@ -1415,7 +1431,7 @@ Replacing a different trusted key also needs `confirmHostname` equal to the prof
 Permission `servers:write`. Forgets the trusted key (`fingerprint`, `hostKeyAlgorithm`, `hostKeyTrustedAt` null; the next connection asks again; the probed `facts` stay). Returns the updated profile. Audited as `server_profile.host_key_forgotten`.
 
 #### POST /server-profiles/:id/test
-Permission `servers:read`. `{ "success": true }`, or `{ "success": false, "error": "..." }`. A refused host key adds `"code": "HOST_KEY_UNKNOWN" | "HOST_KEY_MISMATCH"`, `"presented": { "fingerprint", "algorithm" }` and `"expected": "<fingerprint>" | null`. A successful test also refreshes the server facts.
+Permission `servers:read`. `{ "success": true }`, or `{ "success": false, "error": "..." }`. A refused host key adds `"code": "HOST_KEY_UNKNOWN" | "HOST_KEY_MISMATCH"`, `"presented": { "fingerprint", "algorithm" }` and `"expected": "<fingerprint>" | null`. A successful test also refreshes the server facts. The outcome is stored (`lastTestAt`, `lastTestOk`, and the refusal code) and feeds the health column and the dashboard (#79); the log line carries only the profile id and the outcome.
 
 #### POST /server-profiles/:id/facts/refresh
 Permission `servers:write`. Probes the server now (one fixed read-only command) and returns `{ "facts": { "kernel", "os", "distroId?", "distroVersion?", "prettyName?", "shell?", "has": [], "packageManager?" }, "factsProbedAt" }`. `409 HOST_KEY_UNKNOWN | HOST_KEY_MISMATCH` (with `details.presented`, `details.expected`, `details.serverProfileId`) when the key is not trusted. `GET /sessions/:id/history` answers the same 409 for a refused key.
@@ -1537,7 +1553,7 @@ The Home page's one read (#78). `GET /api/dashboard/summary` requires `sessions:
 ```json
 {
   "data": {
-    "servers": { "total": 14, "reachable": 0, "unreachable": 0, "unknown": 14, "hostKeyUntrusted": 3 },
+    "servers": { "total": 14, "reachable": 9, "unreachable": 2, "unknown": 3, "hostKeyUntrusted": 3 },
     "sessions": {
       "active": 5, "attached": 2, "detached": 3,
       "recent": [{ "id": "…", "name": "deploy-hotfix", "status": "active", "serverProfileId": "…", "serverName": "server-a", "lastActivityAt": "…", "createdAt": "…" }]
@@ -1548,7 +1564,7 @@ The Home page's one read (#78). `GET /api/dashboard/summary` requires `sessions:
 ```
 
 - **Scope.** `servers` counts the profiles the caller may see (own, owned by a group of theirs, shared with them; the sharing slice's `accessibleWhere`) and is `null` without `servers:read`. `sessions` covers the caller's own non-terminated sessions in the request's organization; `recent` is newest activity first, at most five, and carries the server's name, never its hostname.
-- **Reachability.** Counted from stored connection-test results only, and the dashboard never opens SSH. No result is stored yet, so every visible server is `unknown`; `hostKeyUntrusted` counts servers with no trusted fingerprint (#60).
+- **Reachability.** Counted from the stored outcome of each server's last connection test (#79), with the same definition as the Servers page's `health` filter, so `/servers?health=unreachable` lists exactly the servers the tile counts; a server never tested is `unknown`. The dashboard never opens SSH. `hostKeyUntrusted` counts servers with no trusted fingerprint (#60), the same set as `/servers?hostKey=untrusted`.
 - **Runs.** `null` without `runbooks:read`, and `null` until the runbook engine (#62) binds `DASHBOARD_RUNS_SOURCE` (`apps/api/src/dashboard/dashboard-runs.source.ts`), after which it is `{ running, failedLast24h, recent: [{ id, runbookId, runbookName, status, targets: { total, succeeded, failed, running }, startedAt }] }`.
 - The response is validated against `dashboardSummarySchema` (`apps/api/src/dashboard/dashboard.schema.ts`). One span per request, `dashboard.summary`; no hostname in a log or span.
 

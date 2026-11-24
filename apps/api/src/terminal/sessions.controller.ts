@@ -46,6 +46,7 @@ export class SessionsController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'serverProfileId', required: false, type: String, format: 'uuid', description: 'Only the sessions on this server profile' })
   @ApiResponse({ status: 200, description: 'Paginated terminal sessions' })
   async findAll(
     @CurrentUser('id') userId: string,

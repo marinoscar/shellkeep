@@ -66,6 +66,9 @@ export class SessionsService {
     if (status !== 'all') {
       where.status = status;
     }
+    if (query.serverProfileId) {
+      where.serverProfileId = query.serverProfileId;
+    }
 
     const [items, total] = await Promise.all([
       this.prisma.terminalSession.findMany({

@@ -8,7 +8,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { AUDIT_SINK, runInOrg, type AuditSink, type Principal } from '@marinoscar/platform-api/core';
+import {
+  AUDIT_SINK,
+  runInOrg,
+  type AuditSink,
+  type Principal,
+  type RlsTransactionClient,
+} from '@marinoscar/platform-api/core';
 import { UserCredentialsService } from '@marinoscar/platform-api/credentials';
 import {
   AccessPolicy,
@@ -20,11 +26,23 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { OwnerScope } from '../common/types/owner-scope';
 import { SERVER_PROFILE_RESOURCE } from '../app-registrations/sharing';
-import { accessibleListWhere, actingPrincipal, capabilitiesOf, requireGroupOwnership } from '../platform/sharing/sharing-access';
+import {
+  accessibleListWhere,
+  actingPrincipal,
+  capabilitiesOf,
+  requireGroupOwnership,
+  type AccessFilter,
+} from '../platform/sharing/sharing-access';
 import { recordAudit } from '../common/audit/record-audit';
 import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
-import { ServerProfilesQueryDto } from './dto/server-profiles-query.dto';
+import {
+  ServerProfilesQueryDto,
+  type ServerProfileSort,
+  type ServerProfilesQuery,
+} from './dto/server-profiles-query.dto';
+import type { BulkTagsInput, BulkTagsResult } from './dto/bulk-tags.dto';
+import { HEALTH_WHERE, healthOf, hostKeyStateOf } from './server-health';
 import {
   SSH_CREDENTIAL_PURPOSE,
   SSH_SECRET_FIELDS,
@@ -102,6 +120,77 @@ function trustedKey(profile: { fingerprint: string | null; hostKeyAlgorithm: str
   return profile.fingerprint
     ? { fingerprint: profile.fingerprint, algorithm: profile.hostKeyAlgorithm, trustedAt: profile.hostKeyTrustedAt }
     : null;
+}
+
+/** What a forgotten key, a trusted key or a changed endpoint leaves of the last test: nothing. */
+const LAST_TEST_RESET = { lastTestAt: null, lastTestOk: null, lastTestCode: null } as const;
+
+/** `sort=lastSession` orders in memory; past this many matching profiles the rest are not ranked. */
+const LAST_SESSION_SORT_CAP = 5000;
+
+/** The org-scoped transaction of `runInOrg`. */
+type Tx = RlsTransactionClient<PrismaService>;
+
+/** `owner` narrows `filter`: `me` is `mine`, `shared` is `shared`, `group:<id>` is that group's. */
+function listScope(query: ServerProfilesQuery): { filter: AccessFilter; ownerGroupId: string | null } {
+  if (query.owner === 'me') return { filter: 'mine', ownerGroupId: null };
+  if (query.owner === 'shared') return { filter: 'shared', ownerGroupId: null };
+  if (query.owner?.startsWith('group:')) return { filter: query.filter, ownerGroupId: query.owner.slice('group:'.length) };
+  return { filter: query.filter, ownerGroupId: null };
+}
+
+/** The list's `where`: the visible profiles, then every filter of the query (AND). */
+export function listWhere(
+  visible: Prisma.ServerProfileWhereInput,
+  query: Pick<ServerProfilesQuery, 'q' | 'search' | 'tag' | 'health' | 'hostKey'>,
+  ownerGroupId: string | null,
+): Prisma.ServerProfileWhereInput {
+  const and: Prisma.ServerProfileWhereInput[] = [visible];
+  const text = query.q || query.search;
+  if (text) {
+    and.push({
+      OR: [
+        { name: { contains: text, mode: 'insensitive' } },
+        { hostname: { contains: text, mode: 'insensitive' } },
+        { username: { contains: text, mode: 'insensitive' } },
+      ],
+    });
+  }
+  if (query.tag && query.tag.length > 0) and.push({ tags: { hasEvery: query.tag } });
+  if (ownerGroupId) and.push({ ownerGroupId });
+  if (query.health) and.push(HEALTH_WHERE[query.health]);
+  if (query.hostKey === 'untrusted') and.push({ fingerprint: null });
+  if (query.hostKey === 'mismatch') and.push({ fingerprint: { not: null }, lastTestCode: 'HOST_KEY_MISMATCH' });
+  if (query.hostKey === 'trusted') {
+    and.push({
+      fingerprint: { not: null },
+      OR: [{ lastTestCode: null }, { lastTestCode: { not: 'HOST_KEY_MISMATCH' } }],
+    });
+  }
+  return { AND: and };
+}
+
+/** The `orderBy` of every sort but `lastSession` (which is ordered in memory), always ending on the id. */
+export function listOrderBy(
+  sort: ServerProfileSort,
+  order: 'asc' | 'desc' | undefined,
+): Prisma.ServerProfileOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'name':
+      return [{ name: order ?? 'asc' }, { id: 'asc' }];
+    case 'hostname':
+      return [{ hostname: order ?? 'asc' }, { port: 'asc' }, { id: 'asc' }];
+    case 'health':
+      // asc: unreachable, then reachable, then never tested; desc: reachable first.
+      return [
+        { lastTestOk: { sort: order ?? 'asc', nulls: 'last' } },
+        { lastTestAt: { sort: 'desc', nulls: 'last' } },
+        { name: 'asc' },
+        { id: 'asc' },
+      ];
+    default:
+      return [{ updatedAt: order ?? 'desc' }, { id: 'asc' }];
+  }
 }
 
 /** Which secret fields of a profile are stored, for the `has*` flags of a response. */
@@ -190,16 +279,19 @@ export class ServerProfilesService {
 
   /**
    * The profiles the caller may see: their own, those owned by a group they belong to and those
-   * shared with them or with one of their groups (`filter`: `all`, `mine` or `shared`), with the
-   * owner and what the caller may do. A profile the caller cannot see is not in the list.
+   * shared with them or with one of their groups (`filter`/`owner`), narrowed by the text search,
+   * the tags (every one), the health and the host-key state, sorted by `sort`/`order`, with the
+   * owner, what the caller may do, the last test and the caller's own last session on each. A
+   * profile the caller cannot see is not in the list.
    */
   async findAll(principal: Principal, query: ServerProfilesQueryDto) {
-    const { page, pageSize, search, filter } = query;
+    const { page, pageSize } = query;
     const me = await this.principalGroups.enrich(principal);
     const scope = this.scopeOf(me);
     const skip = (page - 1) * pageSize;
+    const { filter, ownerGroupId } = listScope(query);
 
-    const { rows, total, decisions } = await runInOrg(this.prisma, scope, async (tx) => {
+    const { rows, total, decisions, lastSessions } = await runInOrg(this.prisma, scope, async (tx) => {
       const visible = await accessibleListWhere({
         tx,
         principal: me,
@@ -209,36 +301,51 @@ export class ServerProfilesService {
         ownerGroupField: 'ownerGroupId',
         filter,
       });
-      const where: Prisma.ServerProfileWhereInput = {
-        AND: [
-          visible as Prisma.ServerProfileWhereInput,
-          ...(search
-            ? [
-                {
-                  OR: [
-                    { name: { contains: search, mode: 'insensitive' as const } },
-                    { hostname: { contains: search, mode: 'insensitive' as const } },
-                  ],
-                },
-              ]
-            : []),
-        ],
-      };
-      const found = await tx.serverProfile.findMany({
-        where,
-        skip,
-        take: pageSize,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
-        include: OWNER_INCLUDE,
-      });
+      const where = listWhere(visible as Prisma.ServerProfileWhereInput, query, ownerGroupId);
       const count = await tx.serverProfile.count({ where });
+
+      let found: ProfileRow[];
+      if (query.sort === 'lastSession') {
+        // The last session is an aggregate of another table: order the matching ids in memory (a
+        // caller sees hundreds of profiles, not millions), then read the one page.
+        const ids = (
+          await tx.serverProfile.findMany({ where, select: { id: true, name: true }, take: LAST_SESSION_SORT_CAP })
+        );
+        const latest = await this.lastSessionsOf(tx, scope, ids.map((row) => row.id));
+        const direction = query.order === 'asc' ? 1 : -1;
+        const ordered = [...ids].sort((a, b) => {
+          const at = latest.get(a.id)?.getTime();
+          const bt = latest.get(b.id)?.getTime();
+          if (at === undefined && bt === undefined) return a.name.localeCompare(b.name);
+          if (at === undefined) return 1; // never used: always last
+          if (bt === undefined) return -1;
+          return at === bt ? a.name.localeCompare(b.name) : (at - bt) * direction;
+        });
+        const pageIds = ordered.slice(skip, skip + pageSize).map((row) => row.id);
+        const byId = new Map(
+          (await tx.serverProfile.findMany({ where: { id: { in: pageIds } }, include: OWNER_INCLUDE })).map((row) => [
+            row.id,
+            row,
+          ]),
+        );
+        found = pageIds.map((id) => byId.get(id)).filter((row): row is ProfileRow => !!row);
+      } else {
+        found = await tx.serverProfile.findMany({
+          where,
+          skip,
+          take: pageSize,
+          orderBy: listOrderBy(query.sort ?? 'updatedAt', query.order),
+          include: OWNER_INCLUDE,
+        });
+      }
       const map = await this.access.decideManyIn(
         tx,
         me,
         'read',
         found.map((row) => ({ type: SERVER_PROFILE_RESOURCE, id: row.id })),
       );
-      return { rows: found, total: count, decisions: map };
+      const sessions = await this.lastSessionsOf(tx, scope, found.map((row) => row.id));
+      return { rows: found, total: count, decisions: map, lastSessions: sessions };
     });
 
     // The credential flags are the holder's own business: read them only for rows the caller holds.
@@ -246,7 +353,13 @@ export class ServerProfilesService {
 
     return {
       items: rows.map((row) =>
-        this.toResponse(row, me, decisions.get(`${SERVER_PROFILE_RESOURCE}:${row.id}`) ?? null, stored.get(row.id)),
+        this.toResponse(
+          row,
+          me,
+          decisions.get(`${SERVER_PROFILE_RESOURCE}:${row.id}`) ?? null,
+          stored.get(row.id),
+          lastSessions.get(row.id) ?? null,
+        ),
       ),
       total,
       page,
@@ -255,18 +368,117 @@ export class ServerProfilesService {
     };
   }
 
+  /**
+   * When the CALLER last used each profile (their own sessions only: another user's activity on a
+   * shared server is not theirs to see). One grouped read.
+   */
+  private async lastSessionsOf(tx: Tx, scope: OwnerScope, ids: string[]): Promise<Map<string, Date>> {
+    if (ids.length === 0) return new Map();
+    const grouped = await tx.terminalSession.groupBy({
+      by: ['serverProfileId'],
+      where: { userId: scope.userId, orgId: scope.orgId, serverProfileId: { in: ids } },
+      _max: { lastActivityAt: true },
+    });
+    const latest = new Map<string, Date>();
+    for (const group of grouped) {
+      if (group._max.lastActivityAt) latest.set(group.serverProfileId, group._max.lastActivityAt);
+    }
+    return latest;
+  }
+
+  /** The distinct tags on the profiles the caller may see, sorted (the tag filter and autocomplete). */
+  async listTags(principal: Principal): Promise<{ tags: string[] }> {
+    const me = await this.principalGroups.enrich(principal);
+    const scope = this.scopeOf(me);
+    const rows = await runInOrg(this.prisma, scope, async (tx) => {
+      const visible = await accessibleListWhere({
+        tx,
+        principal: me,
+        type: SERVER_PROFILE_RESOURCE,
+        table: 'server_profiles',
+        ownerUserField: 'userId',
+        ownerGroupField: 'ownerGroupId',
+        filter: 'all',
+      });
+      return tx.serverProfile.findMany({
+        where: { AND: [visible as Prisma.ServerProfileWhereInput, { NOT: { tags: { isEmpty: true } } }] },
+        select: { tags: true },
+      });
+    });
+    const tags = new Set<string>();
+    for (const row of rows) for (const tag of row.tags) tags.add(tag);
+    return { tags: [...tags].sort((a, b) => a.localeCompare(b)) };
+  }
+
+  /**
+   * Adds and removes tags on many profiles. Each id needs `write` (AccessPolicy, decided per id in
+   * one transaction); an id the caller may not change, or that does not exist, is reported in
+   * `denied` and the rest still change. Every changed profile is audited (`server_profile.update`,
+   * `bulk: true`) after the transaction commits.
+   */
+  async bulkTags(principal: Principal, input: BulkTagsInput): Promise<BulkTagsResult> {
+    const me = await this.principalGroups.enrich(principal);
+    const scope = this.scopeOf(me);
+    const ids = [...new Set(input.ids)];
+    const add = [...new Set(input.add)];
+    const remove = new Set(input.remove);
+
+    const { result, changed } = await runInOrg(this.prisma, scope, async (tx) => {
+      const decisions = await this.access.decideManyIn(
+        tx,
+        me,
+        'write',
+        ids.map((id) => ({ type: SERVER_PROFILE_RESOURCE, id })),
+      );
+      const writable = ids.filter((id) => decisions.get(`${SERVER_PROFILE_RESOURCE}:${id}`)?.allowed);
+      const rows = await tx.serverProfile.findMany({
+        where: { id: { in: writable }, orgId: scope.orgId },
+        select: { id: true, hostname: true, tags: true },
+      });
+      const out: BulkTagsResult = { updated: [], unchanged: [], denied: [] };
+      const touched: { id: string; hostname: string }[] = [];
+      const found = new Set(rows.map((row) => row.id));
+      for (const id of ids) if (!found.has(id)) out.denied.push(id);
+      for (const row of rows) {
+        const next = [...row.tags.filter((tag) => !remove.has(tag))];
+        for (const tag of add) if (!next.includes(tag)) next.push(tag);
+        if (next.length === row.tags.length && next.every((tag, i) => tag === row.tags[i])) {
+          out.unchanged.push(row.id);
+          continue;
+        }
+        await tx.serverProfile.update({ where: { id: row.id }, data: { tags: next } });
+        out.updated.push(row.id);
+        touched.push(row);
+      }
+      return { result: out, changed: touched };
+    });
+
+    for (const profile of changed) {
+      await this.audit('server_profile.update', scope, profile, {
+        bulk: true,
+        tagsAdded: add.join(',') || null,
+        tagsRemoved: [...remove].join(',') || null,
+      });
+    }
+    this.logger.log(
+      `Bulk tags by user ${scope.userId}: ${result.updated.length} updated, ${result.unchanged.length} unchanged, ${result.denied.length} denied`,
+    );
+    return result;
+  }
+
   /** One profile the caller may read; 404 for anyone else, whether or not it exists. */
   async findOne(id: string, principal: Principal) {
     const me = await this.principalGroups.enrich(principal);
     const scope = this.scopeOf(me);
-    const { row, decision } = await runInOrg(this.prisma, scope, async (tx) => {
+    const { row, decision, lastSessionAt } = await runInOrg(this.prisma, scope, async (tx) => {
       const allowed = await this.access.requireIn(tx, me, 'read', { type: SERVER_PROFILE_RESOURCE, id });
       const found = await tx.serverProfile.findFirst({ where: { id, orgId: scope.orgId }, include: OWNER_INCLUDE });
       if (!found) throw new NotFoundException(`Server profile with ID ${id} not found`);
-      return { row: found, decision: allowed };
+      const sessions = await this.lastSessionsOf(tx, scope, [id]);
+      return { row: found, decision: allowed, lastSessionAt: sessions.get(id) ?? null };
     });
     const stored = row.userId === me.userId ? await this.storedSecrets(row.userId, row.id) : undefined;
-    return this.toResponse(row, me, decision, stored);
+    return this.toResponse(row, me, decision, stored, lastSessionAt);
   }
 
   // ---------------------------------------------------------------------------
@@ -361,7 +573,7 @@ export class ServerProfilesService {
       (dto.hostname !== undefined && dto.hostname !== existing.hostname) ||
       (dto.port !== undefined && dto.port !== existing.port);
     if (endpointChanged) {
-      Object.assign(data, HOST_KEY_RESET, { facts: Prisma.DbNull, factsProbedAt: null });
+      Object.assign(data, HOST_KEY_RESET, LAST_TEST_RESET, { facts: Prisma.DbNull, factsProbedAt: null });
     }
 
     // An omitted secret keeps the stored one; a blank value removes it.
@@ -456,6 +668,20 @@ export class ServerProfilesService {
       }
     }
 
+    // The outcome feeds the health column and the Home dashboard (#79). A host-key refusal stopped
+    // the test before the login, so it proves neither way: `lastTestOk` stays null ("unknown") and
+    // the code drives the host-key column. A trust or an edit of the endpoint clears it.
+    await this.prisma.serverProfile.updateMany({
+      where: { id, orgId: scope.orgId },
+      data: {
+        lastTestAt: new Date(),
+        lastTestOk: result.code ? null : result.success,
+        lastTestCode: result.code ?? null,
+      },
+    });
+    // The profile id and the outcome only: no hostname, user or error text in the log.
+    this.logger.log(`Connection test for profile ${id}: ${result.success ? 'ok' : (result.code ?? 'failed')}`);
+
     await this.audit('server_profile.test', scope, profile, {
       success: result.success,
       ...(result.code ? { code: result.code } : {}),
@@ -511,6 +737,8 @@ export class ServerProfilesService {
         hostKeyAlgorithm: presented.algorithm,
         hostKeyTrustedAt: new Date(),
         hostKeyTrustedBy: scope.userId,
+        // The refusal the last test recorded is answered: the next test tells the health again.
+        ...(profile.lastTestCode ? LAST_TEST_RESET : {}),
       },
     });
 
@@ -554,7 +782,7 @@ export class ServerProfilesService {
     const profile = await this.loadFor(id, principal, 'write');
     await this.prisma.serverProfile.updateMany({
       where: { id, orgId: scope.orgId },
-      data: HOST_KEY_RESET,
+      data: { ...HOST_KEY_RESET, ...(profile.lastTestCode ? LAST_TEST_RESET : {}) },
     });
     await this.audit('server_profile.host_key_forgotten', scope, profile, {
       fingerprint: profile.fingerprint ?? null,
@@ -704,6 +932,7 @@ export class ServerProfilesService {
     principal: Principal,
     decision: AccessDecision | null,
     stored: StoredSecrets | undefined,
+    lastSessionAt: Date | null,
   ) {
     const holder = profile.userId === principal.userId;
     const role = decision?.role ?? null;
@@ -737,6 +966,11 @@ export class ServerProfilesService {
       hostKeyTrustedAt: profile.hostKeyTrustedAt ?? null,
       facts: readStoredFacts(profile.facts),
       factsProbedAt: profile.factsProbedAt ?? null,
+      hostKeyState: hostKeyStateOf(profile),
+      health: healthOf(profile),
+      lastTestAt: profile.lastTestAt ?? null,
+      lastTestOk: profile.lastTestOk ?? null,
+      lastSessionAt,
       owner,
       access: {
         role,

@@ -20,6 +20,7 @@ import {
 import type { ServerProfile, ServerProfileFormData, ServerProfileColor } from '../../types';
 import { HostKeySection } from './HostKeySection';
 import { HostKeyStatusChip } from './HostKeyStatus';
+import { TagsInput, mergeTags } from './TagsInput';
 
 interface ServerProfileFormProps {
   open: boolean;
@@ -28,6 +29,8 @@ interface ServerProfileFormProps {
   profile?: ServerProfile | null;
   /** Called after the host key or facts changed from the form's Host key section (#60). */
   onProfileChanged?: (profile: ServerProfile) => void;
+  /** The tags already in use, offered by the tags autocomplete (#79). */
+  tagOptions?: readonly string[];
 }
 
 /**
@@ -60,6 +63,7 @@ export function ServerProfileForm({
   onSave,
   profile,
   onProfileChanged,
+  tagOptions = [],
 }: ServerProfileFormProps) {
   const [name, setName] = useState('');
   const [hostname, setHostname] = useState('');
@@ -71,7 +75,9 @@ export function ServerProfileForm({
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [passphrase, setPassphrase] = useState('');
-  const [tags, setTags] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  // Text typed in the tags field and not committed yet: saved with the rest.
+  const [pendingTag, setPendingTag] = useState('');
   const [color, setColor] = useState<ServerProfileColor>('default');
   const [aiOutputSharing, setAiOutputSharing] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +105,7 @@ export function ServerProfileForm({
         setPassword('');
         setPrivateKey('');
         setPassphrase('');
-        setTags(profile.tags.join(', '));
+        setTags(profile.tags);
         setColor(profile.color || 'default');
         setAiOutputSharing(profile.aiOutputSharing !== false);
         setPasswordChanged(false);
@@ -114,7 +120,8 @@ export function ServerProfileForm({
         setPassword('');
         setPrivateKey('');
         setPassphrase('');
-        setTags('');
+        setTags([]);
+        setPendingTag('');
         setColor('default');
         setAiOutputSharing(true);
         setPasswordChanged(false);
@@ -148,10 +155,7 @@ export function ServerProfileForm({
       port,
       username: username.trim(),
       authMethod,
-      tags: tags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean),
+      tags: mergeTags(tags, pendingTag),
       color,
       aiOutputSharing,
     };
@@ -344,14 +348,14 @@ export function ServerProfileForm({
               </>
             )}
 
-            <TextField
-              label="Tags"
-              fullWidth
+            <TagsInput
               value={tags}
-              onChange={(e) => setTags(e.target.value)}
+              onChange={setTags}
+              onPendingChange={setPendingTag}
+              options={tagOptions}
               disabled={isSubmitting}
               placeholder="e.g. production, web, database"
-              helperText="Comma-separated list of tags"
+              helperText="Pick an existing tag or type a new one (comma or Enter adds it)"
             />
             <Box sx={{ mt: 2 }}>
               <Typography

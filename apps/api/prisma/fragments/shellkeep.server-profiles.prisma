@@ -44,6 +44,12 @@ model ServerProfile {
   tags                String[]
   color               String     @default("default")
   ownerGroupId        String?    @map("owner_group_id") @db.Uuid
+  // #79: the outcome of the last connection test (`POST /server-profiles/:id/test`), the Servers page's
+  //   health column and the Home dashboard's reachability. NULL `last_test_at`: never tested ("unknown").
+  //   `last_test_code` is the host-key refusal of that test (HOST_KEY_UNKNOWN / HOST_KEY_MISMATCH), else NULL.
+  lastTestAt          DateTime?  @map("last_test_at") @db.Timestamptz
+  lastTestOk          Boolean?   @map("last_test_ok")
+  lastTestCode        String?    @map("last_test_code")
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz
 

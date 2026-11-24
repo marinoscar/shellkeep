@@ -8,6 +8,7 @@ import { SERVER_PROFILE_RESOURCE } from '../app-registrations/sharing';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { accessibleListWhere } from '../platform/sharing/sharing-access';
 import { PrismaService } from '../prisma/prisma.service';
+import { HEALTH_WHERE } from '../server-profiles/server-health';
 import { DASHBOARD_RUNS_SOURCE, type DashboardRunsSource } from './dashboard-runs.source';
 import {
   DASHBOARD_FAILED_WINDOW_MS,
@@ -35,9 +36,9 @@ const LIVE_STATUSES = ['active', 'detached'] as const;
  * - `sessions` counts only the caller's own sessions in the request's organization.
  * - `runs` is `null` without `runbooks:read`, and `null` while no runs source is bound (#62).
  *
- * Reachability: ShellKeep stores no connection-test result yet (the test route answers and keeps
- * nothing; #79 adds the stored result), so every visible server is `unknown`. The dashboard never
- * opens SSH itself.
+ * Reachability: the stored outcome of each server's last connection test (#79, `HEALTH_WHERE` of
+ * `server-profiles/server-health.ts`, the same definition the Servers page filters by, so a tile and
+ * the list it links to agree). A server never tested is `unknown`. The dashboard never opens SSH.
  *
  * Cost: a fixed number of COUNTs plus one `LIMIT 5` read, whatever the fleet size (no N+1). No
  * hostname reaches a log or the span.
@@ -79,7 +80,7 @@ export class DashboardService {
     });
   }
 
-  /** Two COUNTs over the visible profiles. */
+  /** Four COUNTs over the visible profiles. */
   private async servers(tx: Tx, me: Principal): Promise<DashboardServers> {
     const visible = (await accessibleListWhere({
       tx,
@@ -92,8 +93,9 @@ export class DashboardService {
     })) as Prisma.ServerProfileWhereInput;
     const total = await tx.serverProfile.count({ where: visible });
     const hostKeyUntrusted = await tx.serverProfile.count({ where: { AND: [visible, { fingerprint: null }] } });
-    // No connection-test result is stored yet, so nothing is known to be reachable or not.
-    return { total, reachable: 0, unreachable: 0, unknown: total, hostKeyUntrusted };
+    const reachable = await tx.serverProfile.count({ where: { AND: [visible, HEALTH_WHERE.reachable] } });
+    const unreachable = await tx.serverProfile.count({ where: { AND: [visible, HEALTH_WHERE.unreachable] } });
+    return { total, reachable, unreachable, unknown: total - reachable - unreachable, hostKeyUntrusted };
   }
 
   /** A grouped COUNT by status plus one `LIMIT 5` read with the server's name joined in. */
