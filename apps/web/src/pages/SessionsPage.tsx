@@ -22,6 +22,8 @@ import { useNavigate } from 'react-router-dom';
 import { useSessions } from '../hooks/useSessions';
 import { SessionCard } from '../components/terminal/SessionCard';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
+import { SessionSummaryDrawer } from '../components/terminal/ai/SessionSummaryDrawer';
+import { useTerminalAiAvailable } from '../components/terminal/ai/useTerminalAiAvailable';
 import type { TerminalSession, CreateSessionData } from '../types';
 
 interface SnackbarState {
@@ -45,6 +47,8 @@ export default function SessionsPage() {
     batchTerminate,
   } = useSessions();
 
+  const aiAvailable = useTerminalAiAvailable();
+  const [summarySession, setSummarySession] = useState<TerminalSession | null>(null);
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -246,6 +250,7 @@ export default function SessionsPage() {
                   onOpen={handleOpenSession}
                   onRename={handleRenameClick}
                   onTerminate={handleTerminate}
+                  onSummarize={aiAvailable ? setSummarySession : undefined}
                   selected={selectedIds.has(session.id)}
                   onSelectToggle={handleSelectToggle}
                 />
@@ -256,6 +261,15 @@ export default function SessionsPage() {
       </Box>
 
       {/* New Session Dialog */}
+      {aiAvailable && (
+        <SessionSummaryDrawer
+          open={summarySession !== null}
+          onClose={() => setSummarySession(null)}
+          sessionId={summarySession?.id ?? null}
+          sessionName={summarySession?.name}
+        />
+      )}
+
       <NewSessionDialog
         open={newDialogOpen}
         onClose={() => setNewDialogOpen(false)}

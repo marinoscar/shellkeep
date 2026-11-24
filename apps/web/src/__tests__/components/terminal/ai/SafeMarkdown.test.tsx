@@ -27,4 +27,14 @@ describe('SafeMarkdown (#58)', () => {
   it('keeps an unterminated fence as code', () => {
     expect(parseMarkdownBlocks('```\nabc')).toEqual([{ kind: 'code', text: 'abc' }]);
   });
+
+  it('does not turn a Markdown link into a link (#59)', () => {
+    const { container } = render(<SafeMarkdown markdown={'[click](javascript:alert(1))'} />);
+    expect(container.querySelector('a')).toBeNull();
+  });
+
+  it('terminates on odd input (#59)', () => {
+    render(<SafeMarkdown markdown={['#', '-', '1.5 apples', '```', 'unclosed'].join('\n')} />);
+    expect(screen.getByText(/apples/)).toBeInTheDocument();
+  });
 });

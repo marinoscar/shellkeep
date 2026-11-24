@@ -10,6 +10,9 @@ export const AI_ASSIST_UNPARSEABLE = 'AI_ASSIST_UNPARSEABLE';
 /** Explain (#58): the model's answer was empty. Sent as an in-band SSE `error`. */
 export const AI_EXPLAIN_EMPTY = 'AI_EXPLAIN_EMPTY';
 
+/** Session summaries (#59): the session has ended, so there is nothing left to summarize. */
+export const SESSION_TERMINATED = 'SESSION_TERMINATED';
+
 let registered = false;
 
 export function registerTerminalAiErrorCodes(): void {
@@ -34,5 +37,10 @@ export function registerTerminalAiErrorCodes(): void {
     code: AI_EXPLAIN_EMPTY,
     status: 502,
     description: 'The AI answer to an explain request was empty.',
+  });
+  registerErrorCode({
+    code: SESSION_TERMINATED,
+    status: 400,
+    description: 'The terminal session has been terminated, so it cannot be summarized.',
   });
 }
