@@ -241,10 +241,11 @@ do_uninstall() {
     warn "Shim not found: $BIN_SHIM"
   fi
 
-    # $SHELLKEEP_HOME itself is NEVER removed: it is now the same directory the CLI
-  # keeps config.json in (`.shellkeep`), so `rm -rf "$SHELLKEEP_HOME"`
-  # here would destroy the user's stored token. Only $SHELLKEEP_HOME/cli goes.
-  info "Config and credentials at $SHELLKEEP_HOME/config.json (if any) are left in place."
+  # $SHELLKEEP_HOME itself is NEVER removed: for a user install it is the
+  # directory the CLI keeps config.json in (`~/.shellkeep`), so `rm -rf
+  # "$SHELLKEEP_HOME"` would destroy the user's stored token. Only
+  # $SHELLKEEP_HOME/cli goes.
+  info "Config and credentials in ~/.shellkeep/config.json (if any) are left in place."
   ok "shellkeep CLI uninstalled."
 }
 
