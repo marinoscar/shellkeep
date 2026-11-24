@@ -113,12 +113,15 @@ cp infra/compose/.env.example infra/compose/.env
 #    - JWT_SECRET (min 32 chars)
 #    - SECRETS_ENCRYPTION_KEY (openssl rand -base64 32)
 #    - INITIAL_ADMIN_EMAIL
+#    - APP_URL=http://localhost:8323 and GOOGLE_CALLBACK_URL=http://localhost:8323/api/auth/google/callback
+#      (the generated template says 3535; ShellKeep publishes NGINX_PORT=8323)
 
 # 4. Create the shared Docker network (one-time)
 docker network create devnet
 
-# 5. Start the development stack
-cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up
+# 5. Start the development stack. devdb.compose.yml adds a local PostgreSQL
+#    (POSTGRES_HOST=db); leave it out to use an external PostgreSQL on devnet.
+cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml up
 ```
 
 ShellKeep is now running:
@@ -129,8 +132,8 @@ ShellKeep is now running:
 To start with the full observability stack (collector plus GreptimeDB; the explorer is in the admin UI):
 
 ```bash
-cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f telemetry.compose.yml up
-# GreptimeDB dashboard: http://localhost:14000/dashboard
+cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f devdb.compose.yml -f telemetry.compose.yml up
+# Telemetry explorer: /admin/settings/telemetry; GreptimeDB dashboard: http://localhost:14000/dashboard
 ```
 
 For production:

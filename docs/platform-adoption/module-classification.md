@@ -189,8 +189,8 @@ Drift comes from the apps view.
 
 | Module | Drift | Files | Category | Target | Issue | Workaround |
 |---|---|---|---|---|---|---|
-| `infra/compose` | 6.7% / +45 −100 | 6 | noise | platform-infra generated compose, plus app-owned `app.*.compose.yml` overlays | #73 | Overlays: `otel.compose.yml` replaced by the telemetry fragment (#53); `test.compose.yml` regenerated |
-| `infra/nginx` | 0% / +12 −70 | 2 | noise | platform-infra generated `nginx.conf`, plus app-owned `app.d/` (WebSocket location for `/api/terminal/ws`) | #73 | `nginx.dev.conf` becomes part of the generated set; the WebSocket upgrade location moves to `nginx/app.d/` |
+| `infra/compose` | 6.7% / +45 −100 | 6 | noise | platform-infra generated compose, plus app-owned `app.*.compose.yml` overlays | #73 | Done in #73: generated files committed; `otel.compose.yml` was replaced by the telemetry fragment (#53); no app overlay (see local-exceptions) |
+| `infra/nginx` | 0% / +12 −70 | 2 | noise | platform-infra generated `nginx.conf`, plus app-owned `app.d/` (WebSocket location for `/api/terminal/ws`) | #73 | Done in #73: `nginx.dev.conf` deleted (the dev CSP is `csp.dev.conf`); WebSocket, SSE and upload locations live in `nginx/app.d/locations/` |
 | `infra/otel` | 0% / +16 −182 | 2 | noise | telemetry slice (replaces the former trace UI stack) | #53 | none |
 | `infra/deploy` | n/a / +0 −0 | 3 | shellkeep-divergence | CLI `deploy` command on `createCli` (`install-shellkeep.sh`, `update.sh`, `DEPLOY.md`) | #72 | none |
 
