@@ -56,7 +56,7 @@ import { getServerProfile, getSession, updateSession } from '../services/termina
 import type { ServerProfile, TerminalSession } from '../types';
 import { createModifierInputInterceptor } from '../lib/terminal/keys/modifiedInput';
 import { encodeChord, type ActiveModifiers } from '../lib/terminal/keys/encodeKey';
-import type { Chord } from '../lib/terminal/keys/keyModel';
+import { DEFAULT_KEY_OPTIONS, type Chord } from '../lib/terminal/keys/keyModel';
 import { createHeldKeySender, type KeyHold } from '../lib/terminal/keys/arrowRepeat';
 import {
   encodeResolvedKey,
@@ -68,6 +68,7 @@ import { useModifierState } from '../hooks/useModifierState';
 import { useTerminalSettings } from '../hooks/useTerminalSettings';
 import { DEFAULT_TERMINAL_SETTINGS, isKeyBarVisible } from '../lib/terminal/settings';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
+import { useHardwareKeyboard } from '../hooks/useHardwareKeyboard';
 
 /**
  * How far the frame's bottom must rise so the key shortcuts bar sits directly
@@ -199,6 +200,15 @@ export default function TerminalWorkspacePage() {
     preferences?.showKeyBar ?? DEFAULT_TERMINAL_SETTINGS.showKeyBar,
     isPhone || isTouch,
   );
+  // A hardware keyboard on a touch device (#170): with `autoHideWithHardwareKeyboard`
+  // on, the row collapses to a "Keys" pill beside the panel toggle; a tap on the
+  // pill brings the row back for the rest of this visit. Off: nothing changes.
+  const hardwareKeyboard = useHardwareKeyboard();
+  const [keyRowExpanded, setKeyRowExpanded] = useState(false);
+  const autoHideKeyRow =
+    keyOptions?.autoHideWithHardwareKeyboard ?? DEFAULT_KEY_OPTIONS.autoHideWithHardwareKeyboard;
+  const keyRowCollapsed = hardwareKeyboard.present && autoHideKeyRow && !keyRowExpanded;
+  const expandKeyRow = useCallback(() => setKeyRowExpanded(true), []);
 
   // ---- the panes' handles --------------------------------------------------
   const views = useRef(new Map<string, TerminalViewHandle>());
@@ -812,6 +822,8 @@ export default function TerminalWorkspacePage() {
             panelOpen={keyPanelShown}
             onTogglePanel={toggleKeyPanel}
             panelId={keyPanelId}
+            collapsed={keyRowCollapsed}
+            onExpand={expandKeyRow}
           />
           {keyPanelDocked && keyGroups && (
             <TerminalKeyPanel
