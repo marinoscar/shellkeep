@@ -68,12 +68,28 @@ export const MAX_KEY_SHORTCUTS = 50;
 /** A shortcut list: what `shortcuts.keyShortcuts` (and the legacy `terminal.keyShortcuts`) holds. */
 export const keyShortcutListSchema = z.array(keyShortcutSchema).max(MAX_KEY_SHORTCUTS);
 
+/**
+ * The keyboard shortcuts of app actions (issue #57), by action id. Only ids listed here exist;
+ * an absent id means the built-in binding (`terminal.aiAssist`: Mod+Shift+A, Ctrl on Linux and
+ * Windows, Cmd on macOS).
+ */
+export const ACTION_SHORTCUT_IDS = ['terminal.aiAssist'] as const;
+
+export const actionShortcutsSchema = z
+  .object({ 'terminal.aiAssist': keystrokeSchema.optional() })
+  .strict();
+
+export type ActionShortcuts = z.infer<typeof actionShortcutsSchema>;
+
 export interface ShortcutsUserSettings {
   keyShortcuts: KeyShortcut[];
+  /** Appended by #57; absent until the user rebinds an action. */
+  actions?: ActionShortcuts;
 }
 
 export interface ShortcutsUserSettingsPatch {
   keyShortcuts?: KeyShortcut[];
+  actions?: ActionShortcuts;
 }
 
 declare module '@marinoscar/platform-api/settings' {
@@ -82,10 +98,12 @@ declare module '@marinoscar/platform-api/settings' {
   }
 }
 
-export const shortcutsSettingsSchema = z.object({ keyShortcuts: keyShortcutListSchema }).strict();
+export const shortcutsSettingsSchema = z
+  .object({ keyShortcuts: keyShortcutListSchema, actions: actionShortcutsSchema.optional() })
+  .strict();
 
 export const shortcutsSettingsPatchSchema = z
-  .object({ keyShortcuts: keyShortcutListSchema.optional() })
+  .object({ keyShortcuts: keyShortcutListSchema.optional(), actions: actionShortcutsSchema.optional() })
   .strict();
 
 /**
@@ -158,8 +176,10 @@ export const SHORTCUTS_USER_SETTINGS: UserSettingsNamespace<
     // JSON Merge Patch: `null` removes the namespace (the client falls back to defaults).
     if (patch === null) return undefined;
     const base = current ?? DEFAULT_SHORTCUTS_SETTINGS;
+    const actions = patch.actions !== undefined ? patch.actions : base.actions;
     return {
       keyShortcuts: patch.keyShortcuts !== undefined ? patch.keyShortcuts : base.keyShortcuts,
+      ...(actions !== undefined ? { actions } : {}),
     };
   },
 };
