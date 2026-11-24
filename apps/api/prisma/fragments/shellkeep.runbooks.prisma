@@ -87,9 +87,10 @@ extend model Organization {
 //   runbook_runs.trigger         manual api schedule
 //   runbook_run_targets.status   pending queued running waiting succeeded failed skipped cancelled
 //   runbook_run_steps.status     pending running waiting_approval succeeded failed skipped timed_out cancelled
-//   runbook_command_executions.origin   step ai_agent
+//   runbook_command_executions.origin   step ai_agent dry_run   (`dry_run`: a read-only probe of a dry run, #67)
 //   runbook_approvals.status     pending approved rejected expired
-//   runbook_approvals.kind       step gate        (`gate`: the canary pause after the first wave)
+//   runbook_approvals.kind       step gate destructive_run   (`gate`: the canary pause after the first wave;
+//                                `destructive_run`: the two-person approval of a destructive run, #67)
 //   runbook_approvals.scope      run target
 //
 // A run snapshots the servers it targets (name, host, port, user, trusted fingerprint) on its target rows,
@@ -115,6 +116,12 @@ model RunbookRun {
   targetSelector    Json      @map("target_selector") @db.JsonB
   strategy          Json      @db.JsonB
   cancelRequestedAt DateTime? @map("cancel_requested_at") @db.Timestamptz
+  /// A dry run (#67): connects and checks every step, executes nothing that changes a server.
+  dryRun            Boolean   @default(false) @map("dry_run")
+  /// The definition had a destructive step when the run was launched (#67): it carried a confirmation.
+  destructive       Boolean   @default(false)
+  /// Why a run that never started ended (`APPROVAL_REJECTED`, `APPROVAL_EXPIRED`, `CANCELLED`); NULL otherwise.
+  errorCode         String?   @map("error_code") @db.VarChar(64)
   startedAt         DateTime? @map("started_at") @db.Timestamptz
   finishedAt        DateTime? @map("finished_at") @db.Timestamptz
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -269,7 +276,7 @@ model RunbookApproval {
   /// `run` or the target id: with `runId` and `stepIndex` it makes the approval unique (a canary gate is step -1).
   scopeKey    String    @map("scope_key") @db.VarChar(36)
   scope       String    @db.VarChar(8)
-  kind        String    @db.VarChar(8)
+  kind        String    @db.VarChar(16)
   stepIndex   Int       @map("step_index")
   stepName    String    @map("step_name") @db.VarChar(120)
   message     String    @default("") @db.VarChar(2000)
