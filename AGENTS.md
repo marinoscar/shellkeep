@@ -145,7 +145,7 @@ Each is or will be enforced by tests.
 
 ## Security guidelines
 
-- Deployment secrets come from environment variables (`infra/compose/.env.example`), never from code. Runtime-configured features (storage, AI, Web Push, SMTP) get no environment variable once their slice is adopted (#48, #50, #51, #55); do not add one.
+- Deployment secrets come from environment variables (`infra/compose/.env.example`), never from code. Runtime-configured features (storage, AI, Web Push, SMTP) get no environment variable once their slice is adopted (#48, #50, #51, #55); do not add one. Email and Web Push are runtime-configured since #51.
 - The access JWT (15 minutes) is read only from `Authorization: Bearer`; the only cookie is the HttpOnly `refresh_token`, rotated on use.
 - Validate input on every endpoint (Zod from #41; class-validator until then) and every WebSocket message. Uploads: images only, size and type limits.
 - The email allowlist restricts access; `INITIAL_ADMIN_EMAIL` bypasses it.

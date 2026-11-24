@@ -36,15 +36,13 @@
     "db:promote": "platform db promote",
     "db:test": "node scripts/test-db-connection.js",
     "ssh:migrate-secrets": "node scripts/ssh-secrets-migrate.js",
+    "storage:import-env": "node scripts/storage-import-env.js",
     "openapi:dump": "ts-node -P scripts/tsconfig.json --transpile-only scripts/dump-openapi.ts",
     "openapi:typecheck": "tsc -p scripts/tsconfig.json",
     "catalog:permissions": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-permission-catalog.ts",
     "catalog:settings": "ts-node -P scripts/tsconfig.json --transpile-only scripts/generate-settings-catalog.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.975.0",
-    "@aws-sdk/lib-storage": "^3.975.0",
-    "@aws-sdk/s3-request-presigner": "^3.975.0",
     "@fastify/cookie": "~11.0.2",
     "@fastify/cors": "^11.2.0",
     "@fastify/helmet": "^13.0.2",

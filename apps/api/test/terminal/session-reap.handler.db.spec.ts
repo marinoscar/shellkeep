@@ -14,6 +14,7 @@ import { randomBytes } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { JobHandlerRegistry } from '@marinoscar/platform-api/jobs';
+import { NotificationsService } from '@marinoscar/platform-api/notifications';
 
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { SessionReapHandler, TERMINAL_SESSION_REAP_TYPE } from '../../src/terminal/jobs/session-reap.handler';
@@ -28,6 +29,7 @@ describe('SessionReapHandler (real database)', () => {
   let handler: SessionReapHandler;
   let thresholds = { detachAfterMinutes: 60, terminateDetachedAfterHours: 12, purgeTerminatedAfterDays: 3 };
   const registered: unknown[] = [];
+  const notify = jest.fn(async () => undefined);
 
   let orgId: string;
   let userId: string;
@@ -61,6 +63,7 @@ describe('SessionReapHandler (real database)', () => {
         PrismaService,
         { provide: JobHandlerRegistry, useValue: { register: (h: unknown) => registered.push(h) } },
         { provide: SystemSettingsService, useValue: { getNamespace: async () => thresholds } },
+        { provide: NotificationsService, useValue: { notify } },
       ],
     }).compile();
     prisma = module.get(PrismaService);
@@ -129,7 +132,16 @@ describe('SessionReapHandler (real database)', () => {
     expect(terminated.terminatedAt?.getTime()).toBe(now.getTime());
 
     // The ids a notification needs, for the session this pass terminated.
-    expect(result.terminatedSessions).toContainEqual({ id: staleDetached.id, userId, orgId });
+    expect(result.terminatedSessions).toContainEqual(
+      expect.objectContaining({
+        id: staleDetached.id,
+        userId,
+        orgId,
+        name: `${RUN}-stale-detached`,
+        serverProfileId: profileId,
+        lastActivityAt: staleDetached.lastActivityAt,
+      }),
+    );
     expect(result.terminatedSessions.map((row) => row.id)).not.toContain(freshDetached.id);
     expect(result.detached).toBeGreaterThanOrEqual(1);
     expect(result.terminated).toBe(result.terminatedSessions.length);
@@ -179,5 +191,25 @@ describe('SessionReapHandler (real database)', () => {
 
   it('process() runs a pass and returns nothing', async () => {
     await expect(handler.process({ id: 'job-1' } as never)).resolves.toBeUndefined();
+  });
+
+  it('process() sends one terminal.session_reaped per owner, naming the session and its profile', async () => {
+    thresholds = { detachAfterMinutes: 60, terminateDetachedAfterHours: 12, purgeTerminatedAfterDays: 3 };
+    notify.mockClear();
+    const first = await seed('notify-a', 'detached', 40 * HOUR);
+    const second = await seed('notify-b', 'detached', 60 * HOUR);
+    // process() measures from the real clock: a session idle 40 and 60 hours before `now`
+    // is idle even longer by then, so both are past the 12 hour limit.
+    await handler.process({ id: 'job-2' } as never);
+
+    const calls = notify.mock.calls as unknown as Array<[string, string, { sessions: Array<{ name: string; serverName: string }>; moreCount: number }]>;
+    const mine = calls.filter(([, owner]) => owner === userId);
+    expect(mine).toHaveLength(1);
+    const [event, , data] = mine[0];
+    expect(event).toBe('terminal.session_reaped');
+    expect(data.sessions.map((line) => line.name).sort()).toEqual([`${RUN}-notify-a`, `${RUN}-notify-b`].sort());
+    expect(data.sessions.every((line) => line.serverName === `${RUN}-profile`)).toBe(true);
+    expect(await statusOf(first.id)).toBe('terminated');
+    expect(await statusOf(second.id)).toBe('terminated');
   });
 });

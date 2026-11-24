@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { IdentityProfileImages, UserDefaults } from '@marinoscar/platform-api/identity';
 import { DEFAULT_USER_SETTINGS } from '@marinoscar/platform-api/settings';
+import { normalizeProfileSettings, resolveProfileImageUrl } from '@marinoscar/platform-api/storage';
 
 import { APP_USER_SETTINGS_INITIAL_VALUES } from '../../app-registrations/settings';
 
@@ -20,29 +21,16 @@ export class ShellkeepUserDefaults implements UserDefaults {
   }
 }
 
-interface StoredProfile {
-  imageSource?: unknown;
-  useProviderImage?: unknown;
-  customImageUrl?: unknown;
-}
-
-function storedProfile(value: unknown): StoredProfile {
-  return value !== null && typeof value === 'object' ? (value as StoredProfile) : {};
-}
-
 /**
  * Identity's `IDENTITY_PROFILE_IMAGES`: which picture `/api/auth/me` and
- * `/api/users` report, read from the stored `profile` user setting. A profile
- * written by the platform settings slice (#48) carries `imageSource`: `none`
- * hides the picture, anything else shows the provider's. A legacy profile
- * (`useProviderImage`, `customImageUrl`) reads as ShellKeep always has: the
- * custom image when the user opted out of the provider's picture and set one,
- * otherwise the provider's.
+ * `/api/users` report, by the storage slice's single rule
+ * (`resolveProfileImageUrl`): `none` hides it, `provider` shows the provider's,
+ * `upload` shows the same-origin avatar URL of the user's uploaded object.
  *
- * PLATFORM-ADOPTION-SHIM(#50): the platform's picture rule also serves an
- * uploaded avatar object, which ShellKeep's storage module does not write.
- * #50 binds the storage slice's `resolveProfileImageUrl`. See
- * docs/platform-adoption/local-exceptions.md.
+ * Since #50 a stored `profile` that still carries ShellKeep's legacy
+ * `customImageUrl` reads by the platform's rule, which ignores that key: a row
+ * with `useProviderImage: false` shows no picture, as the platform reads it
+ * (`imageSource: 'none'`).
  */
 @Injectable()
 export class ShellkeepProfileImages implements IdentityProfileImages {
@@ -50,21 +38,10 @@ export class ShellkeepProfileImages implements IdentityProfileImages {
     user: { id: string; providerProfileImageUrl: string | null },
     profileSetting: unknown,
   ): string | null {
-    const profile = storedProfile(profileSetting);
-    if (profile.imageSource === 'none') return null;
-    if (
-      profile.imageSource === undefined &&
-      profile.useProviderImage === false &&
-      typeof profile.customImageUrl === 'string' &&
-      profile.customImageUrl
-    ) {
-      return profile.customImageUrl;
-    }
-    return user.providerProfileImageUrl;
+    return resolveProfileImageUrl(user, profileSetting);
   }
 
   hasUploadedImage(profileSetting: unknown): boolean {
-    const url = storedProfile(profileSetting).customImageUrl;
-    return typeof url === 'string' && url.length > 0;
+    return normalizeProfileSettings(profileSetting).imageObjectId !== null;
   }
 }

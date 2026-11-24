@@ -7,7 +7,7 @@ import fastifyCookie from '@fastify/cookie';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import { DefaultOrgResolver } from '../../src/prisma/default-org.resolver';
+import { PrismaSystemService } from '../../src/prisma/prisma-system.service';
 import { prismaMock } from '../mocks/prisma.mock';
 
 export interface TestContext {
@@ -55,8 +55,14 @@ export async function createTestApp(
     })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
-      .overrideProvider(DefaultOrgResolver)
-      .useValue({ resolve: async () => 'org-default' });
+      // The bypass client of the storage slice (`STORAGE_SYSTEM_DATA`): the same mock, so no
+      // second connection pool is opened and a spec can assert what the bypass paths read.
+      .overrideProvider(PrismaSystemService)
+      .useValue({
+        forSystem: () => prismaMock,
+        $connect: async () => undefined,
+        $disconnect: async () => undefined,
+      });
     for (const override of options.overrideProviders ?? []) {
       builder = builder.overrideProvider(override.provide).useValue(override.useValue);
     }

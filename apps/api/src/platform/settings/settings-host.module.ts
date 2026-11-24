@@ -3,8 +3,7 @@
 // =============================================================================
 //
 //   SETTINGS_DATA            -> core's runInOrg over PrismaService
-//   SETTINGS_PROFILE_IMAGES  -> the platform's profile normalisation; no avatar upload yet
-//                               (PLATFORM-ADOPTION-SHIM(#50))
+//   SETTINGS_PROFILE_IMAGES  -> the platform's profile normalisation and avatar check (#50)
 //
 // `@Global()` so the slice's services resolve both ports from whichever module
 // instantiates them. `PLATFORM_PRISMA` is bound by `platformHostModule`.

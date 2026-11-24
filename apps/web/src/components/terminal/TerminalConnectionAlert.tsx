@@ -2,7 +2,13 @@ import { useCallback } from 'react';
 import { Alert, Box, Button } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@marinoscar/platform-web/identity/headless';
-import { EXPIRED_MESSAGE, FORBIDDEN_MESSAGE, MAINTENANCE_MESSAGE } from '../../services/terminal-ws';
+import {
+  EXPIRED_MESSAGE,
+  FORBIDDEN_MESSAGE,
+  HOST_KEY_MISMATCH_MESSAGE,
+  HOST_KEY_UNTRUSTED_MESSAGE,
+  MAINTENANCE_MESSAGE,
+} from '../../services/terminal-ws';
 
 interface TerminalConnectionAlertProps {
   /** The terminal's error (`TerminalView`'s `onError`), or `null` for none. */
@@ -23,6 +29,8 @@ interface TerminalConnectionAlertProps {
  * - Forbidden: the role cannot open a terminal; "Back to sessions".
  * - Maintenance (#46): a window is open and the gateway refuses new sessions;
  *   the socket does not reconnect by itself, and "Retry" tries once more.
+ * - Host key not trusted (#60): the user cancelled the host-key prompt; "Retry"
+ *   connects again, which prompts again.
  * - Anything else: a dismissible error; a later successful connect clears it.
  */
 export function TerminalConnectionAlert({ error, onDismiss, onRetry }: TerminalConnectionAlertProps) {
@@ -43,6 +51,7 @@ export function TerminalConnectionAlert({ error, onDismiss, onRetry }: TerminalC
   const expired = error === EXPIRED_MESSAGE;
   const forbidden = error === FORBIDDEN_MESSAGE;
   const maintenance = error === MAINTENANCE_MESSAGE;
+  const hostKey = error === HOST_KEY_UNTRUSTED_MESSAGE || error === HOST_KEY_MISMATCH_MESSAGE;
 
   let action;
   if (expired) {
@@ -51,7 +60,7 @@ export function TerminalConnectionAlert({ error, onDismiss, onRetry }: TerminalC
         Sign in again
       </Button>
     );
-  } else if (maintenance) {
+  } else if (maintenance || hostKey) {
     action = onRetry ? (
       <Button color="inherit" size="small" onClick={onRetry}>
         Retry
@@ -80,7 +89,9 @@ export function TerminalConnectionAlert({ error, onDismiss, onRetry }: TerminalC
     >
       <Alert
         data-testid="terminal-connection-alert"
-        data-variant={maintenance ? 'maintenance' : expired ? 'expired' : forbidden ? 'forbidden' : 'error'}
+        data-variant={
+          maintenance ? 'maintenance' : expired ? 'expired' : forbidden ? 'forbidden' : hostKey ? 'host-key' : 'error'
+        }
         severity={maintenance ? 'info' : forbidden ? 'warning' : 'error'}
         variant="filled"
         action={action}

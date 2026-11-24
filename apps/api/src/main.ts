@@ -9,6 +9,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { WsAdapter } from '@nestjs/platform-ws';
@@ -21,6 +22,12 @@ import {
   verifyDeploymentModeAtStartup,
   verifyDeploymentNetworkAtStartup,
 } from '@marinoscar/platform-api/host';
+import {
+  STORAGE_OPTIONS,
+  registerStoragePartBodyParser,
+  simpleUploadFileSizeLimit,
+  type ResolvedStorageModuleOptions,
+} from '@marinoscar/platform-api/storage';
 import { APP_OPENAPI } from './openapi/document';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
@@ -70,13 +77,23 @@ async function bootstrap() {
     secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET,
   });
 
-  // Register multipart plugin for file uploads
+  // Register multipart plugin for the simple upload route (`POST /api/storage/objects`). The
+  // ceiling is the slice's (`StorageModule.forRoot({ maxSimpleUploadBytes })`, 100 MiB by default)
+  // capped at the deployment's `MAX_FILE_SIZE`, so the plugin refuses an oversized body before the
+  // service sees it.
+  const storageOptions = app.get<ResolvedStorageModuleOptions>(STORAGE_OPTIONS, { strict: false });
+  const maxFileSize = app.get(ConfigService).get<number>('storage.maxFileSize');
   await app.register(multipart, {
     limits: {
-      fileSize: 100 * 1024 * 1024, // 100MB for simple upload
+      fileSize: simpleUploadFileSizeLimit(maxFileSize, storageOptions.maxSimpleUploadBytes),
       files: 1,
     },
   });
+
+  // The API-proxied multipart part route (`PUT /api/storage/objects/:id/upload/parts/:n`, served
+  // only for a storage driver with no presigned URLs) receives its body as the unread request
+  // stream. A no-op for every other route. Before `listen()`.
+  registerStoragePartBodyParser(app.getHttpAdapter().getInstance());
 
   // Global prefix for all routes
   app.setGlobalPrefix('api');

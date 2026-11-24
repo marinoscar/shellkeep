@@ -67,11 +67,65 @@ export interface ServerProfile {
   hasPassword: boolean;
   hasPrivateKey: boolean;
   hasPassphrase: boolean;
+  /** The trusted host key's `SHA256:` fingerprint, or `null` while no key is trusted (#60). */
   fingerprint: string | null;
+  /** The trusted key's algorithm (`ssh-ed25519`, ...), or `null`. */
+  hostKeyAlgorithm?: string | null;
+  /** When the key was trusted (ISO), or `null`. */
+  hostKeyTrustedAt?: string | null;
+  /** What the server runs, probed after a successful connect, or `null`. */
+  facts?: ServerFacts | null;
+  /** When the facts were probed (ISO), or `null`. */
+  factsProbedAt?: string | null;
   tags: string[];
   color: ServerProfileColor;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The facts the API probes on a server (`apps/api/src/ssh/server-facts.ts`). */
+export interface ServerFacts {
+  kernel: string;
+  os: 'linux' | 'darwin' | 'freebsd' | 'other';
+  distroId?: string;
+  distroVersion?: string;
+  prettyName?: string;
+  shell?: string;
+  has: string[];
+  packageManager?: 'apt' | 'dnf' | 'yum' | 'apk' | 'zypper' | 'brew';
+}
+
+/** The two host-key refusals of the SSH layer (#60). */
+export type HostKeyErrorCode = 'HOST_KEY_UNKNOWN' | 'HOST_KEY_MISMATCH';
+
+/** A host key as the server presented it. */
+export interface PresentedHostKey {
+  fingerprint: string;
+  algorithm: string;
+}
+
+/**
+ * A host-key refusal, from a test connection, the terminal socket or a 409:
+ * what the server presented, what the profile trusts (`null` when nothing).
+ */
+export interface HostKeyRefusal {
+  code: HostKeyErrorCode;
+  presented: PresentedHostKey;
+  expected: string | null;
+  serverProfileId: string;
+}
+
+/** `POST /server-profiles/:id/host-key/scan`. */
+export interface HostKeyScanResult {
+  presented: PresentedHostKey;
+  trusted: { fingerprint: string; algorithm: string | null; trustedAt: string | null } | null;
+  matches: boolean;
+}
+
+/** `POST /server-profiles/:id/facts/refresh`. */
+export interface ServerFactsRefreshResult {
+  facts: ServerFacts | null;
+  factsProbedAt: string | null;
 }
 
 export interface ServerProfileFormData {
@@ -97,6 +151,10 @@ export interface ServerProfilesResponse {
 export interface TestConnectionResult {
   success: boolean;
   error?: string;
+  /** Set when the host key was refused; no credential was sent (#60). */
+  code?: HostKeyErrorCode;
+  presented?: PresentedHostKey;
+  expected?: string | null;
 }
 
 // Terminal Sessions

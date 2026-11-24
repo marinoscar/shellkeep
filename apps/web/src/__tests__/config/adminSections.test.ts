@@ -7,24 +7,35 @@ import {
   ADMIN_HUB_PATH,
   ADMIN_HUB_PERMISSIONS,
   ADMIN_SECTIONS,
+  BROADCASTS_PATH,
+  EMAIL_PATH,
   MAINTENANCE_PATH,
+  PUSH_PATH,
+  STORAGE_PATH,
 } from '../../config/adminSections';
 
 const cards = ADMIN_SECTIONS.flatMap((s) => s.cards);
 const routes = parseAppRoutes(readFileSync(join(__dirname, '..', '..', 'App.tsx'), 'utf8'));
 
 describe('ADMIN_SECTIONS (#46)', () => {
-  it('declares About, Maintenance, Terminal, Users & Allowlist, Doctor, then the Operations cards', () => {
+  it('declares About, Maintenance, Terminal, Storage, Email, Web Push, Users & Allowlist, Doctor, then the Operations cards', () => {
     expect(cards.map((c) => [c.title, c.path])).toEqual([
       ['About', '/admin/settings/about'],
       ['Maintenance', '/admin/settings/maintenance'],
       ['Terminal', '/admin/settings/terminal'],
+      // #50: appended to General.
+      ['Storage', '/admin/settings/storage'],
+      // #51: appended to General.
+      ['Email', '/admin/settings/email'],
+      ['Web Push', '/admin/settings/push'],
       ['Users & Allowlist', '/admin/settings/users'],
       ['Doctor', '/admin/settings/doctor'],
       // #49: appended, in the jobs slice's order.
       ['Jobs', '/admin/settings/jobs'],
       ['Job Insights', '/admin/settings/jobs/insights'],
       ['Worker Nodes', '/admin/settings/workers'],
+      // #51: appended to Operations.
+      ['Broadcasts', '/admin/settings/broadcasts'],
     ]);
   });
 
@@ -36,6 +47,16 @@ describe('ADMIN_SECTIONS (#46)', () => {
       '/admin/settings/maintenance': 'system_settings:read',
       // GET /api/system-settings; saving needs system_settings:write, gated in the page.
       '/admin/settings/terminal': 'system_settings:read',
+      // GET /api/admin/storage-config (also the storage migrations routes), not
+      // storage:read; saving, testing and migrating need storage_config:write,
+      // gated in the page.
+      '/admin/settings/storage': 'storage_config:read',
+      // GET /api/email-settings; saving and the test send need
+      // system_settings:write, gated in the page.
+      '/admin/settings/email': 'system_settings:read',
+      // GET /api/admin/push-config, a pair of its own; key generation,
+      // rotation and the test push need push:write, gated in the page.
+      '/admin/settings/push': 'push:read',
       // GET /api/users.
       '/admin/settings/users': 'users:read',
       // GET /api/admin/doctor.
@@ -46,6 +67,9 @@ describe('ADMIN_SECTIONS (#46)', () => {
       '/admin/settings/jobs/insights': 'jobs:read',
       // GET /api/admin/nodes, deliberately not jobs:read; writes need nodes:write, gated in the page.
       '/admin/settings/workers': 'nodes:read',
+      // /api/admin/broadcasts: @Auth({ anyPermissions: [system, org] }); writes
+      // need the matching :write, gated in the page.
+      '/admin/settings/broadcasts': ['broadcasts:read', 'org_broadcasts:read'],
     });
   });
 
@@ -63,13 +87,29 @@ describe('ADMIN_SECTIONS (#46)', () => {
 
   it('gates the hub on any card permission', () => {
     expect(ADMIN_HUB_PERMISSIONS.sort()).toEqual([
+      'broadcasts:read',
       'jobs:read',
       'nodes:read',
+      'org_broadcasts:read',
+      'push:read',
+      'storage_config:read',
       'system_settings:read',
       'users:read',
     ]);
     const hub = routes.find((r) => r.path === ADMIN_HUB_PATH);
     expect([...((hub?.permission as readonly string[]) ?? [])].sort()).toEqual(ADMIN_HUB_PERMISSIONS);
+  });
+
+  it('appends Storage (#50), then Email and Web Push (#51) to General', () => {
+    const general = ADMIN_SECTIONS.find((section) => section.label === 'General');
+    expect(general?.cards.map((c) => c.path)).toEqual([
+      '/admin/settings/about',
+      '/admin/settings/maintenance',
+      '/admin/settings/terminal',
+      STORAGE_PATH,
+      EMAIL_PATH,
+      PUSH_PATH,
+    ]);
   });
 
   it('puts the Operations cards in their own section, last', () => {
@@ -79,6 +119,7 @@ describe('ADMIN_SECTIONS (#46)', () => {
       '/admin/settings/jobs',
       '/admin/settings/jobs/insights',
       '/admin/settings/workers',
+      BROADCASTS_PATH,
     ]);
   });
 

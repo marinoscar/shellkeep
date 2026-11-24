@@ -19,6 +19,11 @@ import {
 } from '@marinoscar/platform-api/jobs';
 import { NODES_SYSTEM_SETTINGS } from '@marinoscar/platform-api/nodes';
 import {
+  NOTIFICATIONS_SYSTEM_SETTINGS,
+  NOTIFICATIONS_USER_SETTINGS,
+} from '@marinoscar/platform-api/notifications';
+import { STORAGE_SYSTEM_SETTINGS } from '@marinoscar/platform-api/storage';
+import {
   assembleSystemSettingsNamespaces,
   assembleUserSettingsNamespaces,
   registerSystemSettingsNamespaces,
@@ -48,7 +53,7 @@ export const PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespa
 /**
  * The platform's system namespaces appended AFTER the app's own, so the stored key order
  * of the `global` row stays the app's own namespaces first, then the platform's additions:
- * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49), `ssh` (#60) and `telemetry` (#53). Registered here, before `SettingsModule.forRoot()`
+ * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49), `storage` (#50), `notifications` (#51), `ssh` (#60) and `telemetry` (#53). Registered here, before `SettingsModule.forRoot()`
  * composes the request bodies, so the host core does not have to (its `forRoot()` registers
  * the namespace only when nothing did).
  */
@@ -60,15 +65,20 @@ export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettin
   JOBS_SYSTEM_SETTINGS as SystemSettingsNamespace,
   NODES_SYSTEM_SETTINGS as SystemSettingsNamespace,
   RETENTION_SYSTEM_SETTINGS as SystemSettingsNamespace,
-  // The SSH host-key policy (#60), appended last so no stored key moves.
+  STORAGE_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The notifications slice's deployment policy (#51): browser toggle, per-event and per-channel switches.
+  NOTIFICATIONS_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The SSH host-key policy (#60), appended before telemetry so no stored key moves.
   SSH_SYSTEM_SETTINGS as SystemSettingsNamespace,
   // The telemetry slice's policy (#53): collection, retention, query bounds and the assistant.
   // The package ships the schema, defaults and merge; the declaration is the app's.
   TELEMETRY_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
-/** The platform's optional user namespaces this app registers. None yet. */
-export const PLATFORM_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [];
+/** The platform's optional user namespaces this app registers: the notification preferences (#51). */
+export const PLATFORM_USER_SETTINGS_NAMESPACES: readonly UserSettingsNamespace[] = [
+  NOTIFICATIONS_USER_SETTINGS as UserSettingsNamespace,
+];
 
 /** The final, ordered system list. */
 export function assembleShellkeepSystemSettingsNamespaces(): SystemSettingsNamespace[] {

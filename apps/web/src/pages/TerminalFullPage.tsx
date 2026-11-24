@@ -17,7 +17,7 @@ import type { TerminalViewHandle } from '../components/terminal/TerminalView';
 import { TerminalKeyShortcutsBar } from '../components/terminal/TerminalKeyShortcutsBar';
 import { TerminalConnectionAlert } from '../components/terminal/TerminalConnectionAlert';
 import { NewSessionDialog } from '../components/terminal/NewSessionDialog';
-import { uploadFile, getDownloadUrl } from '../services/api';
+import { storageErrorMessage, uploadPastedImage } from '../services/storage';
 import { getSession, createSession, downloadSessionHistory } from '../services/terminal-api';
 import type { KeyShortcut, TerminalSession, CreateSessionData } from '../types';
 import { encodeShortcut } from '../lib/terminal/encodeKeystroke';
@@ -155,8 +155,7 @@ export default function TerminalFullPage() {
           setSnackbar({ open: true, message: 'Uploading image...', severity: 'info' });
           const blob = await item.getType(imageType);
           const ext = imageType.split('/')[1] || 'png';
-          const { id: objId } = await uploadFile(blob, `clipboard-${Date.now()}.${ext}`);
-          const url = await getDownloadUrl(objId, 3600);
+          const url = await uploadPastedImage(blob, `clipboard-${Date.now()}.${ext}`);
           terminalViewRef.current?.sendInput(url);
           terminalViewRef.current?.focus();
           setSnackbar({ open: true, message: 'Image uploaded and URL pasted', severity: 'success' });
@@ -165,7 +164,7 @@ export default function TerminalFullPage() {
       }
       setSnackbar({ open: true, message: 'Only text and images can be pasted', severity: 'warning' });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to paste from clipboard';
+      const message = storageErrorMessage(err, 'Failed to paste from clipboard');
       setSnackbar({ open: true, message, severity: 'error' });
     }
   }, []);
