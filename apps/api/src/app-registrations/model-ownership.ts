@@ -33,6 +33,12 @@ export const APP_MODEL_OWNERSHIP: readonly Def[] = [
     rationale: 'A terminal session belongs to the user who opened it; org_id records the organization, it is not an isolation key.',
   },
   {
+    model: 'TerminalSessionSummary',
+    kind: 'user',
+    orgReference: 'orgId',
+    rationale: 'A session summary belongs to the user who asked for it; org_id records the organization, it is not an isolation key.',
+  },
+  {
     model: 'Runbook',
     kind: 'org',
     orgField: 'orgId',

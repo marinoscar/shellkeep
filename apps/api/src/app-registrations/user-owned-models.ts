@@ -37,6 +37,14 @@ export const APP_USER_OWNED_MODELS: readonly Def[] = [
     rationale: 'The owner’s terminal session record (tmux session name, size, status); deleted with the user and exported to them.',
   },
   {
+    model: 'TerminalSessionSummary',
+    ownerField: 'userId',
+    purge: 'delete',
+    export: 'include',
+    rationale:
+      'The owner’s AI summary of a terminal session (#59): redacted summary text, the commands it lists and redaction counts, never terminal text; deleted with the user and exported to them.',
+  },
+  {
     model: 'Runbook',
     ownerField: 'ownerUserId',
     ownerRelation: 'owner',
