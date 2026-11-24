@@ -38,6 +38,7 @@ import {
   APP_SYSTEM_SETTINGS_DEFAULTS,
   APP_SYSTEM_SETTINGS_EXTENSIONS,
   APP_SYSTEM_SETTINGS_NAMESPACES,
+  APP_TRAILING_SYSTEM_SETTINGS_NAMESPACES,
   APP_USER_SETTINGS_EXTENSIONS,
   APP_USER_SETTINGS_NAMESPACES,
 } from '../../app-registrations/settings';
@@ -119,6 +120,8 @@ export function registerShellkeepSettings(): void {
   registered = true;
   registerSystemSettingsNamespaces(assembleShellkeepSystemSettingsNamespaces());
   registerSystemSettingsNamespaces([...APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES]);
+  // The app's own namespaces added after the platform's appended ones, so no stored key moves.
+  registerSystemSettingsNamespaces([...APP_TRAILING_SYSTEM_SETTINGS_NAMESPACES]);
   registerUserSettingsNamespaces(assembleShellkeepUserSettingsNamespaces());
 }
 

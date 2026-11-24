@@ -702,6 +702,46 @@ describe('ServerProfileForm', () => {
       expect(screen.getByLabelText(/^name/i)).toHaveValue('');
     });
   });
+
+  describe('Send terminal output to AI (#56)', () => {
+    it('is on by default for a new profile, with help text', () => {
+      render(<ServerProfileForm open={true} onClose={mockOnClose} onSave={mockOnSave} />);
+      const toggle = screen.getByRole('switch', { name: /send terminal output to ai/i });
+      expect(toggle).toBeChecked();
+      expect(screen.getByText(/redacted first/i)).toBeInTheDocument();
+    });
+
+    it('saves aiOutputSharing: false when switched off', async () => {
+      const user = userEvent.setup();
+      render(<ServerProfileForm open={true} onClose={mockOnClose} onSave={mockOnSave} />);
+      await user.type(screen.getByLabelText(/^name/i), 'Vault');
+      await user.type(screen.getByLabelText(/^hostname/i), 'vault.example.com');
+      await user.type(screen.getByLabelText(/^username/i), 'admin');
+      await user.type(screen.getByLabelText(/^password/i), 'secret123');
+      await user.click(screen.getByRole('switch', { name: /send terminal output to ai/i }));
+      await user.click(screen.getByRole('button', { name: /^create$/i }));
+      await waitFor(() => {
+        expect(mockOnSave).toHaveBeenCalledWith(expect.objectContaining({ aiOutputSharing: false }));
+      });
+    });
+
+    it('shows the stored value when editing', () => {
+      render(
+        <ServerProfileForm
+          open={true}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          profile={{ ...mockProfile, aiOutputSharing: false }}
+        />,
+      );
+      expect(screen.getByRole('switch', { name: /send terminal output to ai/i })).not.toBeChecked();
+    });
+
+    it('treats a profile without the field as sharing on', () => {
+      render(<ServerProfileForm open={true} onClose={mockOnClose} onSave={mockOnSave} profile={mockProfile} />);
+      expect(screen.getByRole('switch', { name: /send terminal output to ai/i })).toBeChecked();
+    });
+  });
 });
 
 // A server shared with the viewer (issue #71): the connection and the secrets belong to the user who saved them.

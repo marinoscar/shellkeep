@@ -163,5 +163,9 @@
     },
     "limits": {},
     "deploymentKeyServesOrgs": true
+  },
+  "terminalAi": {
+    "redactionMode": "standard",
+    "requireConsent": true
   }
 }

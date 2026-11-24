@@ -14,6 +14,8 @@ import {
   InputLabel,
   Chip,
   Typography,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import type { ServerProfile, ServerProfileFormData, ServerProfileColor } from '../../types';
 import { HostKeySection } from './HostKeySection';
@@ -71,6 +73,7 @@ export function ServerProfileForm({
   const [passphrase, setPassphrase] = useState('');
   const [tags, setTags] = useState('');
   const [color, setColor] = useState<ServerProfileColor>('default');
+  const [aiOutputSharing, setAiOutputSharing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -98,6 +101,7 @@ export function ServerProfileForm({
         setPassphrase('');
         setTags(profile.tags.join(', '));
         setColor(profile.color || 'default');
+        setAiOutputSharing(profile.aiOutputSharing !== false);
         setPasswordChanged(false);
         setPrivateKeyChanged(false);
         setPassphraseChanged(false);
@@ -112,6 +116,7 @@ export function ServerProfileForm({
         setPassphrase('');
         setTags('');
         setColor('default');
+        setAiOutputSharing(true);
         setPasswordChanged(false);
         setPrivateKeyChanged(false);
         setPassphraseChanged(false);
@@ -148,6 +153,7 @@ export function ServerProfileForm({
         .map((t) => t.trim())
         .filter(Boolean),
       color,
+      aiOutputSharing,
     };
 
     // Only include credential fields if they were changed (or if creating new)
@@ -369,6 +375,28 @@ export function ServerProfileForm({
                   />
                 ))}
               </Box>
+            </Box>
+            <Box sx={{ mt: 2 }} data-testid="ai-output-sharing">
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={aiOutputSharing}
+                    onChange={(e) => setAiOutputSharing(e.target.checked)}
+                    disabled={isSubmitting}
+                    slotProps={{ input: { 'aria-describedby': 'ai-output-sharing-help' } }}
+                  />
+                }
+                label="Send terminal output to AI"
+              />
+              <Typography
+                id="ai-output-sharing-help"
+                variant="body2"
+                sx={{ color: 'text.secondary', mt: 0.5 }}
+              >
+                When on, AI features can read recent output from this server's terminals, with passwords, keys and tokens
+                redacted first (best effort). Turn it off for servers that hold regulated or sensitive data: AI then sees
+                only the operating system, shell and current directory, and cannot explain or summarize this server's output.
+              </Typography>
             </Box>
             {profile ? (
               <HostKeySection profile={profile} onProfileChanged={onProfileChanged} />

@@ -981,6 +981,20 @@ describe('ServerProfilesService', () => {
       expect((prisma.serverProfile.create as jest.Mock).mock.calls[0][0].data).toMatchObject({ ownerGroupId: 'g-1', userId: mockUserId });
     });
 
+    it('reads a credential for a session holder through the same connect check', async () => {
+      (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(shared);
+      access.require.mockRejectedValueOnce(new NotFoundException('not found'));
+      await expect(service.getDecryptedProfileForSession(mockProfileId, mockScope, 'history')).rejects.toThrow(NotFoundException);
+      expect(credentials.getSecret).not.toHaveBeenCalled();
+
+      access.require.mockResolvedValue(OPERATOR);
+      await service.getDecryptedProfileForSession(mockProfileId, mockScope, 'history');
+      expect(access.require).toHaveBeenLastCalledWith(expect.objectContaining({ userId: mockUserId, activeOrgId: mockOrgId }), 'connect', {
+        type: 'server_profile',
+        id: mockProfileId,
+      });
+    });
+
     it('asks to connect without reading a credential (assertCanConnect)', async () => {
       await service.assertCanConnect(mockProfileId, principal);
       expect(access.require).toHaveBeenCalledWith(principal, 'connect', { type: 'server_profile', id: mockProfileId });

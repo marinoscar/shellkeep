@@ -38,6 +38,7 @@ import './notifications';
 import './webhooks';
 import './alerts';
 import { registerSshErrorCodes } from '../ssh/ssh.error-codes';
+import { registerTerminalAiErrorCodes } from '../terminal-ai/terminal-ai.error-codes';
 import { registerRunbookRegistrations } from '../runbooks/runbooks.registrations';
 import { registerShellkeepSharing } from './sharing';
 
@@ -49,6 +50,8 @@ registerPlatformUserOwnedModels(APP_USER_OWNED_MODELS);
 registerPlatformModelOwnership(APP_MODEL_OWNERSHIP);
 registerShellkeepCredentialPurposes();
 registerSshErrorCodes();
+// The terminal AI safety codes: AI_CONSENT_REQUIRED, AI_OUTPUT_SHARING_DISABLED (#56).
+registerTerminalAiErrorCodes();
 // The runbook error codes and notification events (#61).
 registerRunbookRegistrations();
 // The shareable resource types `server_profile` and `runbook` (#71).

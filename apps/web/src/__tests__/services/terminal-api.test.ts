@@ -13,6 +13,8 @@ import {
   trustHostKey,
   forgetHostKey,
   refreshServerFacts,
+  getTerminalAiConsent,
+  acceptTerminalAiConsent,
 } from '../../services/terminal-api';
 
 describe('terminal-api', () => {
@@ -182,5 +184,25 @@ describe('terminal-api', () => {
         { fingerprint: 'SHA256:abc', confirmHostname: 'server-a.example.test' },
       ]);
     });
+  });
+
+  it('reads and records the terminal AI consent', async () => {
+    let posted = false;
+    server.use(
+      http.get('*/api/ai/terminal/consent', () =>
+        HttpResponse.json({ data: { required: true, consentAcceptedAt: null, redactionMode: 'standard' } }),
+      ),
+      http.post('*/api/ai/terminal/consent', () => {
+        posted = true;
+        return HttpResponse.json({ data: { consentAcceptedAt: '2026-11-24T10:00:00.000Z' } });
+      }),
+    );
+    await expect(getTerminalAiConsent()).resolves.toEqual({
+      required: true,
+      consentAcceptedAt: null,
+      redactionMode: 'standard',
+    });
+    await expect(acceptTerminalAiConsent()).resolves.toEqual({ consentAcceptedAt: '2026-11-24T10:00:00.000Z' });
+    expect(posted).toBe(true);
   });
 });

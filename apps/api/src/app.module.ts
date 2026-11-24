@@ -32,6 +32,7 @@ import {
 import { ServerProfilesModule } from './server-profiles/server-profiles.module';
 import { TerminalModule } from './terminal/terminal.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
+import { TerminalAiModule } from './terminal-ai/terminal-ai.module';
 
 import configuration from './config/configuration';
 
@@ -132,6 +133,7 @@ import configuration from './config/configuration';
     TerminalModule,
     // Runbooks (#61): versioned procedure definitions, target preview and secret parameters.
     RunbooksModule,
+    TerminalAiModule,
   ],
   providers: [
     // Global validation pipe (Zod)

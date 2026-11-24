@@ -20,7 +20,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { OwnerScope } from '../common/types/owner-scope';
 import { SERVER_PROFILE_RESOURCE } from '../app-registrations/sharing';
-import { accessibleListWhere, capabilitiesOf, requireGroupOwnership } from '../platform/sharing/sharing-access';
+import { accessibleListWhere, actingPrincipal, capabilitiesOf, requireGroupOwnership } from '../platform/sharing/sharing-access';
 import { recordAudit } from '../common/audit/record-audit';
 import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
@@ -295,6 +295,7 @@ export class ServerProfilesService {
       authMethod: dto.authMethod,
       tags: dto.tags || [],
       color: dto.color || 'default',
+      aiOutputSharing: dto.aiOutputSharing ?? true,
     };
 
     const profile = await this.prisma.serverProfile.create({ data });
@@ -352,6 +353,7 @@ export class ServerProfilesService {
     if (dto.authMethod !== undefined) data.authMethod = dto.authMethod;
     if (dto.tags !== undefined) data.tags = dto.tags;
     if (dto.color !== undefined) data.color = dto.color;
+    if (dto.aiOutputSharing !== undefined) data.aiOutputSharing = dto.aiOutputSharing;
 
     // A different endpoint is a different server: what was trusted and probed for the old
     // one proves nothing about the new one, so it prompts again on the next connect.
@@ -378,7 +380,13 @@ export class ServerProfilesService {
       data,
     });
 
-    await this.audit('server_profile.update', scope, profile, endpointChanged ? { hostKeyReset: true } : {});
+    await this.audit('server_profile.update', scope, profile, {
+      ...(endpointChanged ? { hostKeyReset: true } : {}),
+      // The hard AI switch is a security setting: its change is on the record.
+      ...(dto.aiOutputSharing !== undefined && dto.aiOutputSharing !== existing.aiOutputSharing
+        ? { aiOutputSharing: dto.aiOutputSharing }
+        : {}),
+    });
     this.logger.log(`Server profile "${profile.name}" updated by user ${scope.userId}`);
 
     return this.findOne(id, principal);
@@ -673,6 +681,20 @@ export class ServerProfilesService {
   }
 
   /**
+   * {@link getDecryptedProfile} for a caller that holds only the user and organization of an
+   * existing session (the history reader and the AI context): the session's own existence proves
+   * its owner passed the route's RBAC check, and `connect` is still decided by AccessPolicy NOW,
+   * so a revoked share stops them.
+   */
+  getDecryptedProfileForSession(id: string, scope: OwnerScope, use: ProfileCredentialUse): Promise<DecryptedProfile> {
+    return this.getDecryptedProfile(
+      id,
+      actingPrincipal({ userId: scope.userId, orgId: scope.orgId, permissions: ['sessions:write'], roles: [] }),
+      use,
+    );
+  }
+
+  /**
    * Transform a profile for API response. No secret, hint or ciphertext is ever returned. The `has*`
    * flags (which secrets the credential store holds) are the holder's only: a grantee never sees
    * them, so nothing about the credentials is observable through a share.
@@ -702,6 +724,7 @@ export class ServerProfilesService {
       authMethod: profile.authMethod,
       tags: profile.tags,
       color: profile.color,
+      aiOutputSharing: profile.aiOutputSharing ?? true,
       ...(holder
         ? {
             hasPassword: stored?.has('password') ?? false,
