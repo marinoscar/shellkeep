@@ -302,7 +302,17 @@ export default function RunbookBuilderPage() {
       <Card variant="outlined" sx={{ mb: 2 }}>
         <CardContent>
           <Stack spacing={2}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            {/* Name takes the remaining width; Tags gets a fixed column beside it
+                from md up and stacks below it on narrower windows (#135). */}
+            <Box
+              data-testid="builder-header-row"
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 320px' },
+                gap: 2,
+                alignItems: 'start',
+              }}
+            >
               <TextField
                 label="Name"
                 required
@@ -321,10 +331,11 @@ export default function RunbookBuilderPage() {
                 value={meta.tags}
                 onChange={(_e, tags) => setMeta({ ...meta, tags: tags as string[] })}
                 renderInput={(params) => <TextField {...params} size="small" label="Tags" helperText="Type and press Enter" />}
-                sx={{ flex: 1, minWidth: 0 }}
+                data-testid="builder-tags-field"
+                sx={{ minWidth: 220 }}
                 fullWidth
               />
-            </Stack>
+            </Box>
             <TextField label="Description" size="small" multiline minRows={2} value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} />
             <TextField label="What changed (optional)" size="small" value={changelog} onChange={(e) => setChangelog(e.target.value)} slotProps={{ htmlInput: { maxLength: 500 } }} helperText="Saved with the new version" />
           </Stack>
