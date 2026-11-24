@@ -39,22 +39,48 @@ The scroll chain in ShellKeep spans multiple React components. The following con
 
 `components/common/Layout.tsx` binds the platform's `ShellLayout` (`@marinoscar/platform-web/shell/ui`), which owns the viewport height: its root is a column with `min-height: 100dvh` (`100vh` fallback), the AppBar on top, then the rail (at `sm` and up) and `<main>`, and the bottom bar below `sm`. Ordinary pages scroll with the document. `<main>` keeps `pb: { xs: 10, sm: 3 }` in both variants, so a page always clears the phone bottom bar (gate 3 of the five breakpoint gates; never change it from the app).
 
+#### The component tree (since #77)
+
+The terminal workspace at `/sessions/:id` is one chain from the shell's `<main>` to the xterm host. Every element on it keeps `minHeight: 0` where it is a flex container or a flex item, and none has `overflow: hidden`:
+
+```
+ShellLayout <main>                     full-bleed: flex column (useShellMainVariant('full-bleed'))
+└─ TerminalWorkspacePage root          flex: 1, minHeight: 0, position: relative
+   └─ frame                            position: absolute, top/left/right 0, bottom = key dock offset;
+      │                                flex column, minHeight: 0
+      ├─ WorkspaceTabs, toolbar        flexShrink: 0
+      ├─ body                          display: flex (row), flex: 1, minHeight: 0, minWidth: 0
+      │  ├─ SplitLayout area           flex: 1, minHeight: 0, minWidth: 0, position: relative
+      │  │  └─ pane (one per open tab) position: absolute; flex column, minHeight: 0
+      │  │     ├─ pane header          only while split; outside the FitAddon host
+      │  │     └─ pane host            flex: 1, minHeight: 0, position: relative
+      │  │        └─ TerminalView      width/height 100%, position: relative
+      │  │           └─ xterm host     width/height 100%, touch-action: none (FitAddon measures this)
+      │  └─ TerminalAiPanel            md and up, when AI is available; a sibling of the panes
+      ├─ TerminalStatusBar             flexShrink: 0: the bottom gutter, outside the FitAddon host
+      └─ key dock                      flexShrink: 0, LAST in the frame: TerminalKeyShortcutsBar
+```
+
+`__tests__/pages/TerminalWorkspace.workspace.test.tsx` walks this chain from every xterm host up to `<main>` and fails on a missing `minHeight: 0` or an `overflow: hidden`.
+
+#### TerminalWorkspacePage.tsx (`/sessions/:id`)
+
+- `useShellMainVariant('full-bleed')`: `<main>` drops its side and top padding and the banners, and becomes a flex column. Gate 3's bottom padding stays: the page sits above the phone bottom bar.
+- Root: `flex: 1, minHeight: 0, position: relative`. Takes exactly the space `<main>` leaves under the AppBar. Nothing inside it is in flow, so the terminal can never size the page from its own rows and the document never scrolls. No negative margins, and no height computed from the AppBar.
+- Frame: absolutely positioned, a flex column. Its `bottom` is the key dock offset: `useKeyboardInset()` minus the space the page already ends above the layout viewport's bottom (`keyDockOffset`), so the key shortcuts bar, the frame's last child, sits directly on top of the on-screen keyboard and nothing above it moves when the keyboard opens.
+
+#### SplitLayout.tsx (the panes)
+
+- Every open tab keeps its pane mounted (its xterm and its WebSocket). A pane on screen is positioned in its slot (the whole area, or one side of the divider); a pane off screen keeps the whole area's size, `visibility: hidden` and a far negative `left`. Never `display: none`: its `offsetParent` stays non-null (see Common Pitfalls), and when it comes back the debounced `ResizeObserver` of `useTerminal` fits it to its slot and sends `resize`.
+- Pane host: `flex: 1, minHeight: 0, position: relative`. Must not include `overflow: hidden`.
+- On a phone (below `sm`) only the active pane is on screen; a split in the URL waits for a wider screen.
+
 #### TerminalView.tsx (xterm container)
 
-- Container: `width: 100%, height: 100%`
+- Container: `width: 100%, height: 100%`, `touch-action: none`
   Must not include `overflow: hidden`. Adding it blocks xterm.js from handling scroll events internally.
 - `.xterm`: `height: 100%, padding: 4px, boxSizing: border-box`
   The `border-box` sizing prevents the padding from pushing the element beyond the parent's height boundary.
-
-#### TerminalPage.tsx (terminal page wrapper, `/sessions/:id`)
-
-- `useShellMainVariant('full-bleed')`: `<main>` drops its side and top padding and the banners, and becomes a flex column.
-- Outer: `flex: 1, minHeight: 0, position: relative`
-  Takes exactly the space `<main>` leaves under the AppBar (and above the phone bottom bar). Nothing inside it is in flow, so the terminal can never size the page from its own rows and the document never scrolls.
-- Inner: `position: absolute, inset: 0`, a flex column with `overflow: hidden` and `paddingBottom` set to the keyboard inset (`useKeyboardInset`)
-  Fills the outer box; the toolbar and the key-shortcut bar sit on top, the terminal below.
-- Terminal wrapper: `flexGrow: 1, minHeight: 0`
-  Must not include `overflow: hidden`. This lets xterm.js manage its own internal scroll.
 
 ### Touch Scrolling on Tablets
 
@@ -90,9 +116,11 @@ The ResizeObserver callback in `useTerminal.ts` now debounces `fitAddon.fit()` c
 
 ### Bottom gutter moved outside the FitAddon host
 
-`TerminalPage.tsx` and `TerminalFullPage.tsx` previously applied `pb: '30px'` to the terminal wrapper Box. Because FitAddon measures `clientHeight` of its host element, that padding was included in the height used to compute row count, leaving 30 px of space that xterm.js allocated rows into but the visible glyph area never reached. The result was sub-pixel row drift visible as a cursor-glyph mismatch.
+The former `TerminalPage.tsx` and `TerminalFullPage.tsx` (replaced by the workspace in #77) previously applied `pb: '30px'` to the terminal wrapper Box. Because FitAddon measures `clientHeight` of its host element, that padding was included in the height used to compute row count, leaving 30 px of space that xterm.js allocated rows into but the visible glyph area never reached. The result was sub-pixel row drift visible as a cursor-glyph mismatch.
 
 The gutter is now a sibling `<Box sx={{ height: '30px', flexShrink: 0 }} />` rendered below the terminal container, so the FitAddon-measured host height equals the actual glyph area.
+
+In the workspace (#77) the terminal status bar takes the gutter's place: it is a sibling below the panes, outside every FitAddon host, so the same rule holds.
 
 ## Common Pitfalls
 
@@ -112,7 +140,7 @@ xterm.js manages this element's scroll behavior entirely through JavaScript. Ove
 Without it, the browser intercepts touch gestures for native scrolling/panning before JavaScript handlers can process them. This CSS property must be on the container element, not on `.xterm-viewport`.
 
 **`offsetParent` must not be null during scroll.**
-If the terminal element is hidden (via `display: none`, `visibility: hidden`, or being detached from the DOM), `offsetParent` returns `null` and xterm.js silently skips scroll events. This can cause scroll to appear broken when a terminal tab is rendered but not visible.
+If the terminal element or an ancestor is `display: none`, or the element is detached from the DOM, `offsetParent` returns `null` and xterm.js silently skips scroll events. This can cause scroll to appear broken when a terminal tab is rendered but not visible. `visibility: hidden` does NOT null `offsetParent`, which is why the workspace hides an inactive tab with `visibility: hidden` and an off-screen position, never `display: none`.
 
 ## Scrollback Chain
 
@@ -133,9 +161,9 @@ The tmux history buffer is authoritative. When mouse mode is active, scrolling i
 |---|---|
 | `apps/api/src/terminal/ssh.service.ts` | Launches tmux with `mouse on` and `history-limit 50000` |
 | `apps/web/src/components/terminal/TerminalView.tsx` | xterm.js container and styling |
-| `apps/web/src/components/common/Layout.tsx` | Page layout with scroll chain constraints |
-| `apps/web/src/pages/TerminalPage.tsx` | Terminal page layout |
-| `apps/web/src/pages/TerminalFullPage.tsx` | Full-screen terminal layout |
+| `apps/web/src/components/common/Layout.tsx` | Binds the platform shell (`<main>`, the start of the chain) |
+| `apps/web/src/pages/TerminalWorkspacePage.tsx` | The workspace frame, the key dock offset |
+| `apps/web/src/components/terminal/workspace/SplitLayout.tsx` | The panes: slots, hidden tabs, the divider |
 | `apps/web/src/hooks/useTerminal.ts` | xterm.js initialization including `scrollback: 5000` |
 | `apps/web/src/hooks/useTouchScroll.ts` | Touch-to-wheel conversion for tablet scrolling |
 

@@ -17,7 +17,12 @@ export type TerminalWsEventType =
    * `HostKeyRefusal`. The socket stays open; `retryConnect()` asks again once
    * the user trusted the key.
    */
-  | 'host_key';
+  | 'host_key'
+  /**
+   * A heartbeat round trip completed: the payload is the time from `ping` to
+   * `pong` in ms (browser to gateway, the status bar's latency, #77).
+   */
+  | 'latency';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- listeners receive differently shaped payloads per event
 type Listener = (...args: any[]) => void;
@@ -152,6 +157,8 @@ export class TerminalWebSocket {
   private maxReconnectAttempts = 10;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
+  /** When the unanswered `ping` was sent (`performance.now()`), or `null`. */
+  private pingSentAt: number | null = null;
   private refreshTimeout: ReturnType<typeof setTimeout> | null = null;
   private listeners: Map<TerminalWsEventType, Set<Listener>> = new Map();
   private _connected = false;
@@ -305,7 +312,12 @@ export class TerminalWebSocket {
         this.emit('disconnect', message.reason);
         break;
       case 'pong':
-        // Heartbeat response, no action needed
+        // Heartbeat response: its round trip is the connection's latency.
+        if (this.pingSentAt !== null) {
+          const rtt = Math.max(0, Math.round(performance.now() - this.pingSentAt));
+          this.pingSentAt = null;
+          this.emit('latency', rtt);
+        }
         break;
     }
   }
@@ -471,16 +483,25 @@ export class TerminalWebSocket {
     this.disconnect();
   }
 
+  /** How often the heartbeat runs, and so how often the latency is measured. */
+  static readonly PING_INTERVAL_MS = 15000;
+
+  private sendPing(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.pingSentAt = performance.now();
+      this.ws.send(JSON.stringify({ type: 'ping' }));
+    }
+  }
+
   private startPing(): void {
     this.stopPing();
-    this.pingInterval = setInterval(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'ping' }));
-      }
-    }, 30000);
+    // One right away, so the status bar shows a latency as soon as the session is ready.
+    this.sendPing();
+    this.pingInterval = setInterval(() => this.sendPing(), TerminalWebSocket.PING_INTERVAL_MS);
   }
 
   private stopPing(): void {
+    this.pingSentAt = null;
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
