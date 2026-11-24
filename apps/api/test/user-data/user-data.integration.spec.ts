@@ -65,6 +65,7 @@ describe('ShellKeep user-data routes', () => {
     it('lists the three ShellKeep categories with the caller’s counts, and both narrow scopes', async () => {
       const viewer = await createMockViewerUser(context);
       (prismaMock.serverProfile.count as jest.Mock).mockResolvedValue(3);
+      (prismaMock.fileArchive.count as jest.Mock).mockResolvedValue(0);
       (prismaMock.terminalSession.count as jest.Mock).mockResolvedValue(5);
       (prismaMock.terminalSessionSummary.count as jest.Mock).mockResolvedValue(0);
       (prismaMock.runbook.count as jest.Mock).mockResolvedValue(2);
