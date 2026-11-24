@@ -1,0 +1,20 @@
+# =============================================================================
+# App overlay (scope vps) - this app does not run the stack agent
+# =============================================================================
+# vps.compose.yml adds `stack-agent`, the one container that holds the Docker
+# socket, so the admin UI can redeploy the telemetry containers. It is built
+# from apps/stack-agent/Dockerfile, which this repository does not have, so
+# `docker compose build` fails on every vps install and update (#149). The
+# telemetry containers are deployed from the CLI instead. A service in the
+# `disabled` profile is never built or started by `docker compose up` (nothing
+# selects that profile) and is left out of `docker compose config`.
+#
+# The API still refuses to start without STACK_AGENT_TOKEN
+# (`${STACK_AGENT_TOKEN:?...}` in vps.compose.yml); the deploy CLI generates it
+# on install and on update, so the value is set but nothing listens for it, and
+# the admin UI's "redeploy telemetry" action cannot reach an agent.
+# =============================================================================
+
+services:
+  stack-agent:
+    profiles: ["disabled"]
