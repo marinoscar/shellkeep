@@ -2,16 +2,25 @@ import {
   BadGatewayException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { AUDIT_SINK, type AuditSink } from '@marinoscar/platform-api/core';
+import { AUDIT_SINK, runInOrg, type AuditSink, type Principal } from '@marinoscar/platform-api/core';
 import { UserCredentialsService } from '@marinoscar/platform-api/credentials';
+import {
+  AccessPolicy,
+  GrantsService,
+  PrincipalGroupsProvider,
+  type AccessDecision,
+} from '@marinoscar/platform-api/sharing';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { OwnerScope } from '../common/types/owner-scope';
+import { SERVER_PROFILE_RESOURCE } from '../app-registrations/sharing';
+import { accessibleListWhere, actingPrincipal, capabilitiesOf, requireGroupOwnership } from '../platform/sharing/sharing-access';
 import { recordAudit } from '../common/audit/record-audit';
 import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
@@ -39,6 +48,25 @@ const HOST_KEY_RESET = {
   hostKeyTrustedAt: null,
   hostKeyTrustedBy: null,
 } as const;
+
+/** The connection-defining columns: only the user who holds the credentials may CHANGE them. */
+const CONNECTION_FIELDS = ['hostname', 'port', 'username', 'authMethod'] as const;
+/** The secrets: only the user who holds the credentials may set or clear them. */
+const SECRET_FIELDS = ['password', 'privateKey', 'passphrase'] as const;
+
+/** The owner shown on a row, and the relations that name it. */
+const OWNER_INCLUDE = {
+  user: { select: { id: true, displayName: true, email: true } },
+  ownerGroup: { select: { id: true, name: true } },
+} satisfies Prisma.ServerProfileInclude;
+
+type ProfileRow = Prisma.ServerProfileGetPayload<{ include: typeof OWNER_INCLUDE }>;
+
+/** The actions a response says the caller may take (the UI hides the rest; the API still decides). */
+const RESPONSE_ACTIONS = ['connect', 'test', 'write', 'share', 'delete'] as const;
+
+/** What a `getDecryptedProfile` call is for: it decides the action checked and is recorded in the audit event. */
+export type ProfileCredentialUse = 'connect' | 'test' | 'history' | 'run';
 
 /** Cached facts older than this are probed again when a consumer asks (`getFacts`). */
 export const FACTS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -90,7 +118,20 @@ export class ServerProfilesService {
     private readonly ssh: SshConnectionFactory,
     private readonly factsService: ServerFactsService,
     private readonly webhooks: TerminalWebhooksService,
+    private readonly access: AccessPolicy,
+    private readonly principalGroups: PrincipalGroupsProvider,
+    private readonly grants: GrantsService,
   ) {}
+
+  /** The organization the request acts in. A principal with none cannot reach an org-stamped table. */
+  private orgOf(principal: Principal): string {
+    if (!principal.activeOrgId) throw new ForbiddenException('No active organization');
+    return principal.activeOrgId;
+  }
+
+  private scopeOf(principal: Principal): OwnerScope {
+    return { userId: principal.userId, orgId: this.orgOf(principal) };
+  }
 
   /**
    * The secret fields stored for each of the owner's profiles, from ONE presentation
@@ -143,36 +184,70 @@ export class ServerProfilesService {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Reads
+  // ---------------------------------------------------------------------------
+
   /**
-   * List server profiles for a user with pagination and search
+   * The profiles the caller may see: their own, those owned by a group they belong to and those
+   * shared with them or with one of their groups (`filter`: `all`, `mine` or `shared`), with the
+   * owner and what the caller may do. A profile the caller cannot see is not in the list.
    */
-  async findAll(scope: OwnerScope, query: ServerProfilesQueryDto) {
-    const { page, pageSize, search } = query;
+  async findAll(principal: Principal, query: ServerProfilesQueryDto) {
+    const { page, pageSize, search, filter } = query;
+    const me = await this.principalGroups.enrich(principal);
+    const scope = this.scopeOf(me);
     const skip = (page - 1) * pageSize;
 
-    const where: any = { userId: scope.userId, orgId: scope.orgId };
-
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { hostname: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    const [items, total] = await Promise.all([
-      this.prisma.serverProfile.findMany({
+    const { rows, total, decisions } = await runInOrg(this.prisma, scope, async (tx) => {
+      const visible = await accessibleListWhere({
+        tx,
+        principal: me,
+        type: SERVER_PROFILE_RESOURCE,
+        table: 'server_profiles',
+        ownerUserField: 'userId',
+        ownerGroupField: 'ownerGroupId',
+        filter,
+      });
+      const where: Prisma.ServerProfileWhereInput = {
+        AND: [
+          visible as Prisma.ServerProfileWhereInput,
+          ...(search
+            ? [
+                {
+                  OR: [
+                    { name: { contains: search, mode: 'insensitive' as const } },
+                    { hostname: { contains: search, mode: 'insensitive' as const } },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      };
+      const found = await tx.serverProfile.findMany({
         where,
         skip,
         take: pageSize,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.serverProfile.count({ where }),
-    ]);
+        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+        include: OWNER_INCLUDE,
+      });
+      const count = await tx.serverProfile.count({ where });
+      const map = await this.access.decideManyIn(
+        tx,
+        me,
+        'read',
+        found.map((row) => ({ type: SERVER_PROFILE_RESOURCE, id: row.id })),
+      );
+      return { rows: found, total: count, decisions: map };
+    });
 
-    const stored = await this.storedSecretsByProfile(scope.userId);
+    // The credential flags are the holder's own business: read them only for rows the caller holds.
+    const stored = await this.storedSecretsByProfile(me.userId);
 
     return {
-      items: items.map((item) => this.toResponse(item, stored.get(item.id) ?? new Set())),
+      items: rows.map((row) =>
+        this.toResponse(row, me, decisions.get(`${SERVER_PROFILE_RESOURCE}:${row.id}`) ?? null, stored.get(row.id)),
+      ),
       total,
       page,
       pageSize,
@@ -180,28 +255,39 @@ export class ServerProfilesService {
     };
   }
 
-  /**
-   * Get a single server profile by ID with owner check
-   */
-  async findOne(id: string, scope: OwnerScope) {
-    const profile = await this.prisma.serverProfile.findFirst({
-      where: { id, userId: scope.userId, orgId: scope.orgId },
+  /** One profile the caller may read; 404 for anyone else, whether or not it exists. */
+  async findOne(id: string, principal: Principal) {
+    const me = await this.principalGroups.enrich(principal);
+    const scope = this.scopeOf(me);
+    const { row, decision } = await runInOrg(this.prisma, scope, async (tx) => {
+      const allowed = await this.access.requireIn(tx, me, 'read', { type: SERVER_PROFILE_RESOURCE, id });
+      const found = await tx.serverProfile.findFirst({ where: { id, orgId: scope.orgId }, include: OWNER_INCLUDE });
+      if (!found) throw new NotFoundException(`Server profile with ID ${id} not found`);
+      return { row: found, decision: allowed };
     });
-
-    if (!profile) {
-      throw new NotFoundException(`Server profile with ID ${id} not found`);
-    }
-
-    return this.toResponse(profile, await this.storedSecrets(scope.userId, profile.id));
+    const stored = row.userId === me.userId ? await this.storedSecrets(row.userId, row.id) : undefined;
+    return this.toResponse(row, me, decision, stored);
   }
 
+  // ---------------------------------------------------------------------------
+  // Writes
+  // ---------------------------------------------------------------------------
+
   /**
-   * Create a new server profile
+   * Create a new server profile. `ownerGroupId` makes a group the owner (the creator must be an
+   * admin or editor of that group); the creator still holds the SSH secrets in their own credential
+   * store, which is where a connection reads them.
    */
-  async create(scope: OwnerScope, dto: CreateServerProfileDto) {
-    const data: any = {
+  async create(principal: Principal, dto: CreateServerProfileDto) {
+    const scope = this.scopeOf(principal);
+    if (dto.ownerGroupId) {
+      await requireGroupOwnership(this.principalGroups, principal, dto.ownerGroupId, 'a server profile');
+    }
+
+    const data: Prisma.ServerProfileUncheckedCreateInput = {
       userId: scope.userId,
       orgId: scope.orgId,
+      ownerGroupId: dto.ownerGroupId ?? null,
       name: dto.name,
       hostname: dto.hostname,
       port: dto.port,
@@ -226,26 +312,39 @@ export class ServerProfilesService {
       throw error;
     }
 
-    await this.audit('server_profile.create', scope, profile);
+    await this.audit('server_profile.create', scope, profile, dto.ownerGroupId ? { ownerGroupId: dto.ownerGroupId } : {});
     this.logger.log(`Server profile "${dto.name}" created by user ${scope.userId}`);
 
-    return this.toResponse(profile, await this.storedSecrets(scope.userId, profile.id));
+    return this.findOne(profile.id, principal);
   }
 
   /**
-   * Update an existing server profile
+   * Update an existing server profile. A grantee with the `editor` role may change the name, tags,
+   * color and the host-key trust; the connection (hostname, port, username, auth method) and the
+   * secrets can be changed only by the user who holds the credentials, so a share can never
+   * redirect a stored credential to another host.
    */
-  async update(id: string, scope: OwnerScope, dto: UpdateServerProfileDto) {
-    // Verify ownership
-    const existing = await this.prisma.serverProfile.findFirst({
-      where: { id, userId: scope.userId, orgId: scope.orgId },
-    });
+  async update(id: string, principal: Principal, dto: UpdateServerProfileDto) {
+    const scope = this.scopeOf(principal);
+    const existing = await this.loadFor(id, principal, 'write');
 
-    if (!existing) {
-      throw new NotFoundException(`Server profile with ID ${id} not found`);
+    if (existing.userId !== principal.userId) {
+      // A form sends the whole connection back with every save: naming a field with its CURRENT value
+      // is not a change.
+      const touched: string[] = [
+        ...CONNECTION_FIELDS.filter((field) => dto[field] !== undefined && dto[field] !== existing[field]),
+        ...SECRET_FIELDS.filter((field) => dto[field] !== undefined),
+      ];
+      if (touched.length > 0) {
+        throw new ForbiddenException({
+          code: 'SERVER_PROFILE_CREDENTIAL_HOLDER_ONLY',
+          message: 'Only the user who saved the credentials can change the connection or the secrets of this profile',
+          details: { fields: touched },
+        });
+      }
     }
 
-    const data: any = {};
+    const data: Prisma.ServerProfileUncheckedUpdateInput = {};
 
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.hostname !== undefined) data.hostname = dto.hostname;
@@ -267,13 +366,13 @@ export class ServerProfilesService {
 
     // An omitted secret keeps the stored one; a blank value removes it.
     if (dto.password !== undefined) {
-      await this.writeSecret(scope.userId, id, 'password', dto.password);
+      await this.writeSecret(existing.userId, id, 'password', dto.password);
     }
     if (dto.privateKey !== undefined) {
-      await this.writeSecret(scope.userId, id, 'private_key', dto.privateKey);
+      await this.writeSecret(existing.userId, id, 'private_key', dto.privateKey);
     }
     if (dto.passphrase !== undefined) {
-      await this.writeSecret(scope.userId, id, 'passphrase', dto.passphrase);
+      await this.writeSecret(existing.userId, id, 'passphrase', dto.passphrase);
     }
 
     const profile = await this.prisma.serverProfile.update({
@@ -290,23 +389,25 @@ export class ServerProfilesService {
     });
     this.logger.log(`Server profile "${profile.name}" updated by user ${scope.userId}`);
 
-    return this.toResponse(profile, await this.storedSecrets(scope.userId, profile.id));
+    return this.findOne(id, principal);
   }
 
   /**
-   * Delete a server profile with owner check
+   * Delete a server profile (only its owner: `delete` needs the `owner` role). The grants on it go in
+   * the same transaction, so no share outlives it; the stored secrets go afterwards.
    */
-  async remove(id: string, scope: OwnerScope) {
-    const existing = await this.prisma.serverProfile.findFirst({
-      where: { id, userId: scope.userId, orgId: scope.orgId },
+  async remove(id: string, principal: Principal) {
+    const scope = this.scopeOf(principal);
+    const me = await this.principalGroups.enrich(principal);
+    const existing = await runInOrg(this.prisma, scope, async (tx) => {
+      await this.access.requireIn(tx, me, 'delete', { type: SERVER_PROFILE_RESOURCE, id });
+      const found = await tx.serverProfile.findFirst({ where: { id, orgId: scope.orgId } });
+      if (!found) throw new NotFoundException(`Server profile with ID ${id} not found`);
+      await this.grants.deleteForResources(tx, SERVER_PROFILE_RESOURCE, [id]);
+      await tx.serverProfile.delete({ where: { id } });
+      return found;
     });
-
-    if (!existing) {
-      throw new NotFoundException(`Server profile with ID ${id} not found`);
-    }
-
-    await this.prisma.serverProfile.delete({ where: { id } });
-    await this.removeSecrets(scope.userId, id);
+    await this.removeSecrets(existing.userId, id);
 
     await this.audit('server_profile.delete', scope, existing);
     this.logger.log(`Server profile "${existing.name}" deleted by user ${scope.userId}`);
@@ -328,8 +429,9 @@ export class ServerProfilesService {
    * unknown or changed key answers `success: false` with its code and both fingerprints,
    * and no credential was sent. A successful test also probes the server's facts.
    */
-  async testConnection(id: string, scope: OwnerScope): Promise<TestConnectionResult> {
-    const profile = await this.getDecryptedProfile(id, scope);
+  async testConnection(id: string, principal: Principal): Promise<TestConnectionResult> {
+    const scope = this.scopeOf(principal);
+    const profile = await this.getDecryptedProfile(id, principal, 'test');
 
     let result: TestConnectionResult;
     try {
@@ -365,8 +467,8 @@ export class ServerProfilesService {
    * Reads the key the server presents, sending no credential, and compares it with the
    * trusted one. Nothing is stored.
    */
-  async scanHostKey(id: string, scope: OwnerScope): Promise<HostKeyScanResponse> {
-    const profile = await this.findOwned(id, scope);
+  async scanHostKey(id: string, principal: Principal): Promise<HostKeyScanResponse> {
+    const profile = await this.loadFor(id, principal, 'test');
     const presented = await this.scan(profile);
     return {
       presented,
@@ -380,8 +482,9 @@ export class ServerProfilesService {
    * confirmed (409 `HOST_KEY_CHANGED_DURING_TRUST` otherwise). Replacing a different
    * trusted key additionally needs `confirmHostname` equal to the profile hostname.
    */
-  async trustHostKey(id: string, scope: OwnerScope, dto: TrustHostKeyDto) {
-    const profile = await this.findOwned(id, scope);
+  async trustHostKey(id: string, principal: Principal, dto: TrustHostKeyDto) {
+    const scope = this.scopeOf(principal);
+    const profile = await this.loadFor(id, principal, 'write');
 
     const replacing = !!profile.fingerprint && !sameFingerprint(profile.fingerprint, dto.fingerprint);
     if (replacing && dto.confirmHostname !== profile.hostname) {
@@ -402,7 +505,7 @@ export class ServerProfilesService {
     }
 
     await this.prisma.serverProfile.updateMany({
-      where: { id, userId: scope.userId, orgId: scope.orgId },
+      where: { id, orgId: scope.orgId },
       data: {
         fingerprint: presented.fingerprint,
         hostKeyAlgorithm: presented.algorithm,
@@ -417,13 +520,16 @@ export class ServerProfilesService {
         newFingerprint: presented.fingerprint,
         algorithm: presented.algorithm,
       });
-      // A different trusted key was replaced: tell the owner's webhook endpoints, after the
-      // update committed and outside any transaction (#54). Fingerprints only; never throws.
-      await this.webhooks.hostKeyChanged(scope, {
-        serverProfileId: profile.id,
-        previousFingerprint: profile.fingerprint as string,
-        presentedFingerprint: presented.fingerprint,
-      });
+      // A different trusted key was replaced: tell the credential holder's webhook endpoints, after
+      // the update committed and outside any transaction (#54). Fingerprints only; never throws.
+      await this.webhooks.hostKeyChanged(
+        { userId: profile.userId, orgId: scope.orgId },
+        {
+          serverProfileId: profile.id,
+          previousFingerprint: profile.fingerprint as string,
+          presentedFingerprint: presented.fingerprint,
+        },
+      );
     } else {
       await this.audit('server_profile.host_key_trusted', scope, profile, {
         fingerprint: presented.fingerprint,
@@ -434,30 +540,31 @@ export class ServerProfilesService {
 
     // The key is trusted now, so the probe can connect; best effort, never fails the trust.
     try {
-      await this.factsService.probe(await this.getDecryptedProfile(id, scope));
+      await this.factsService.probe(await this.getDecryptedProfile(id, principal, 'test'));
     } catch (error) {
       this.logger.warn(`Facts probe after trust failed for profile ${id}: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    return this.findOne(id, scope);
+    return this.findOne(id, principal);
   }
 
   /** Forgets the trusted key; the next connect prompts again. The facts describe the server, not the key, so they stay. */
-  async forgetHostKey(id: string, scope: OwnerScope) {
-    const profile = await this.findOwned(id, scope);
+  async forgetHostKey(id: string, principal: Principal) {
+    const scope = this.scopeOf(principal);
+    const profile = await this.loadFor(id, principal, 'write');
     await this.prisma.serverProfile.updateMany({
-      where: { id, userId: scope.userId, orgId: scope.orgId },
+      where: { id, orgId: scope.orgId },
       data: HOST_KEY_RESET,
     });
     await this.audit('server_profile.host_key_forgotten', scope, profile, {
       fingerprint: profile.fingerprint ?? null,
     });
-    return this.findOne(id, scope);
+    return this.findOne(id, principal);
   }
 
   /** Forces a facts probe. Rejects with the host-key refusal when the key is not trusted. */
-  async refreshFacts(id: string, scope: OwnerScope): Promise<FactsResponse> {
-    const profile = await this.getDecryptedProfile(id, scope);
+  async refreshFacts(id: string, principal: Principal): Promise<FactsResponse> {
+    const profile = await this.getDecryptedProfile(id, principal, 'test');
     const facts = await this.factsService.probe(profile);
     return { facts, factsProbedAt: new Date() };
   }
@@ -466,27 +573,38 @@ export class ServerProfilesService {
    * The server's facts: the cached ones while they are younger than `maxAgeMs`, else a fresh
    * probe. A failing probe falls back to the cached facts (or null); it never throws.
    */
-  async getFacts(id: string, scope: OwnerScope, options: { maxAgeMs?: number } = {}): Promise<ServerFacts | null> {
+  async getFacts(id: string, principal: Principal, options: { maxAgeMs?: number } = {}): Promise<ServerFacts | null> {
     const maxAgeMs = options.maxAgeMs ?? FACTS_MAX_AGE_MS;
-    const row = await this.findOwned(id, scope);
+    const row = await this.loadFor(id, principal, 'test');
     const cached = readStoredFacts(row.facts);
     if (cached && row.factsProbedAt && Date.now() - row.factsProbedAt.getTime() < maxAgeMs) return cached;
     try {
-      return await this.factsService.probe(await this.getDecryptedProfile(id, scope));
+      return await this.factsService.probe(await this.getDecryptedProfile(id, principal, 'test'));
     } catch (error) {
       this.logger.warn(`Facts probe failed for profile ${id}: ${error instanceof Error ? error.message : String(error)}`);
       return cached;
     }
   }
 
-  private async findOwned(id: string, scope: OwnerScope) {
-    const profile = await this.prisma.serverProfile.findFirst({
-      where: { id, userId: scope.userId, orgId: scope.orgId },
-    });
+  /**
+   * The profile row, once the caller may take `action` on it. The decision is `AccessPolicy`'s: a
+   * profile the caller may not even read is a 404 (the same as a missing one), one they may read but
+   * not act on is a 404 too, and a missing RBAC permission is a 403 naming it.
+   */
+  private async loadFor(id: string, principal: Principal, action: 'connect' | 'test' | 'write') {
+    const scope = this.scopeOf(principal);
+    // The caller's groups are read fresh: the principal the guard built may be a few seconds old.
+    await this.access.require(await this.principalGroups.enrich(principal), action, { type: SERVER_PROFILE_RESOURCE, id });
+    const profile = await this.prisma.serverProfile.findFirst({ where: { id, orgId: scope.orgId } });
     if (!profile) {
       throw new NotFoundException(`Server profile with ID ${id} not found`);
     }
     return profile;
+  }
+
+  /** Throws unless the caller may open a connection to the profile (404 otherwise). No credential is read. */
+  async assertCanConnect(id: string, principal: Principal): Promise<void> {
+    await this.access.require(await this.principalGroups.enrich(principal), 'connect', { type: SERVER_PROFILE_RESOURCE, id });
   }
 
   /** Scans the server; an unreachable one is a 502, never a credential-bearing error. */
@@ -502,16 +620,19 @@ export class ServerProfilesService {
   }
 
   /**
-   * Get a profile with decrypted credentials (for internal use by terminal module)
+   * Get a profile with decrypted credentials (for internal use by the terminal module and the run
+   * engine). The caller must be allowed `connect` (or `test` for a connection test): the secrets are
+   * read from the credential store of the user who SAVED them (`profile.userId`), which is not the
+   * caller's when the profile is shared. Using a credential the caller does not own is audited
+   * (`server_profile.connect_as_grantee`: actor, profile, holder, purpose; never a secret).
    */
-  async getDecryptedProfile(id: string, scope: OwnerScope): Promise<DecryptedProfile> {
-    const profile = await this.prisma.serverProfile.findFirst({
-      where: { id, userId: scope.userId, orgId: scope.orgId },
-    });
-
-    if (!profile) {
-      throw new NotFoundException(`Server profile with ID ${id} not found`);
-    }
+  async getDecryptedProfile(
+    id: string,
+    principal: Principal,
+    use: ProfileCredentialUse = 'connect',
+  ): Promise<DecryptedProfile> {
+    const scope = this.scopeOf(principal);
+    const profile = await this.loadFor(id, principal, use === 'test' ? 'test' : 'connect');
 
     // Server-side only, at the moment of connect: the plaintext reaches the SSH
     // client and nothing else (no log, response, span or job payload).
@@ -522,7 +643,7 @@ export class ServerProfilesService {
         sshCredentialName(profile.id, field),
       );
 
-    return {
+    const decrypted: DecryptedProfile = {
       id: profile.id,
       userId: profile.userId,
       orgId: profile.orgId,
@@ -540,13 +661,59 @@ export class ServerProfilesService {
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     };
+
+    if (profile.userId !== principal.userId) {
+      await recordAudit(this.auditSink, this.logger, {
+        action: 'server_profile.connect_as_grantee',
+        actorUserId: principal.userId,
+        targetType: 'server_profile',
+        targetId: profile.id,
+        meta: {
+          ownerUserId: profile.userId,
+          ownerGroupId: profile.ownerGroupId,
+          purpose: use,
+          hostname: profile.hostname,
+          orgId: scope.orgId,
+        },
+      });
+    }
+    return decrypted;
   }
 
   /**
-   * Transform a profile for API response: the `has*` flags say which secrets the
-   * credential store holds; no secret, hint or ciphertext is ever returned.
+   * {@link getDecryptedProfile} for a caller that holds only the user and organization of an
+   * existing session (the history reader and the AI context): the session's own existence proves
+   * its owner passed the route's RBAC check, and `connect` is still decided by AccessPolicy NOW,
+   * so a revoked share stops them.
    */
-  private toResponse(profile: any, stored: StoredSecrets) {
+  getDecryptedProfileForSession(id: string, scope: OwnerScope, use: ProfileCredentialUse): Promise<DecryptedProfile> {
+    return this.getDecryptedProfile(
+      id,
+      actingPrincipal({ userId: scope.userId, orgId: scope.orgId, permissions: ['sessions:write'], roles: [] }),
+      use,
+    );
+  }
+
+  /**
+   * Transform a profile for API response. No secret, hint or ciphertext is ever returned. The `has*`
+   * flags (which secrets the credential store holds) are the holder's only: a grantee never sees
+   * them, so nothing about the credentials is observable through a share.
+   */
+  private toResponse(
+    profile: ProfileRow,
+    principal: Principal,
+    decision: AccessDecision | null,
+    stored: StoredSecrets | undefined,
+  ) {
+    const holder = profile.userId === principal.userId;
+    const role = decision?.role ?? null;
+    const owner = profile.ownerGroup
+      ? { kind: 'group' as const, id: profile.ownerGroup.id, name: profile.ownerGroup.name }
+      : {
+          kind: 'user' as const,
+          id: profile.user.id,
+          name: profile.user.displayName ?? profile.user.email,
+        };
     return {
       id: profile.id,
       userId: profile.userId,
@@ -558,14 +725,27 @@ export class ServerProfilesService {
       tags: profile.tags,
       color: profile.color,
       aiOutputSharing: profile.aiOutputSharing ?? true,
-      hasPassword: stored.has('password'),
-      hasPrivateKey: stored.has('private_key'),
-      hasPassphrase: stored.has('passphrase'),
+      ...(holder
+        ? {
+            hasPassword: stored?.has('password') ?? false,
+            hasPrivateKey: stored?.has('private_key') ?? false,
+            hasPassphrase: stored?.has('passphrase') ?? false,
+          }
+        : {}),
       fingerprint: profile.fingerprint ?? null,
       hostKeyAlgorithm: profile.hostKeyAlgorithm ?? null,
       hostKeyTrustedAt: profile.hostKeyTrustedAt ?? null,
       facts: readStoredFacts(profile.facts),
       factsProbedAt: profile.factsProbedAt ?? null,
+      owner,
+      access: {
+        role,
+        via: decision?.via ?? null,
+        shared: !(role === 'owner' && !profile.ownerGroupId),
+        // Whether the caller saved the credentials: only they may change the connection or the secrets.
+        credentialHolder: holder,
+        can: capabilitiesOf(SERVER_PROFILE_RESOURCE, role, RESPONSE_ACTIONS, principal.permissions),
+      },
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     };

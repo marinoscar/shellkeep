@@ -161,18 +161,20 @@ describe('ShellKeep webhook events: raised after the write commits', () => {
       }),
     };
     const audit = { record: jest.fn(async () => { log.push('audit'); }) };
-    const sessions = new SessionsService(prisma as never, audit as never, terminalWebhooks);
+    const sessions = new SessionsService(prisma as never, audit as never, terminalWebhooks, { require: jest.fn(async () => ({ allowed: true })) } as never, { enrich: async (p: unknown) => p } as never);
     return { log, emitted, prisma, sessions, terminalWebhooks, webhooks };
   }
 
   const scope = { userId: KIT_USER_A, orgId: KIT_ORG_ID };
+  /** The caller as the guard hands it over (#71: a session is created on a server the caller may connect to). */
+  const principal = { kind: 'user', userId: KIT_USER_A, email: 'person-a@example.test', credential: 'session', roles: [], permissions: ['sessions:write'], activeOrgId: KIT_ORG_ID } as never;
   function reaped(id: string): ReapedSession {
     return { id, userId: KIT_USER_A, orgId: KIT_ORG_ID, name: 'Session', serverProfileId: PROFILE_ID, lastActivityAt: NOW };
   }
 
   it('create: terminal.session.created follows the insert, with ids and the profile name only', async () => {
     const h = harness();
-    await h.sessions.create(scope, { serverProfileId: PROFILE_ID } as never);
+    await h.sessions.create(principal, { serverProfileId: PROFILE_ID } as never);
 
     expect(h.log.indexOf('emit:terminal.session.created')).toBeGreaterThan(h.log.indexOf('write:create'));
     expect(h.log).not.toContain('$transaction');
@@ -230,7 +232,7 @@ describe('ShellKeep webhook events: raised after the write commits', () => {
 
   it('a failing webhook never fails the action', async () => {
     const h = harness({ emitThrows: true });
-    await expect(h.sessions.create(scope, { serverProfileId: PROFILE_ID } as never)).resolves.toBeDefined();
+    await expect(h.sessions.create(principal, { serverProfileId: PROFILE_ID } as never)).resolves.toBeDefined();
     await expect(h.sessions.terminate(SESSION_ID, scope)).resolves.toBeDefined();
     await expect(h.terminalWebhooks.hostKeyChanged(scope, { serverProfileId: PROFILE_ID, previousFingerprint: 'SHA256:a', presentedFingerprint: 'SHA256:b' })).resolves.toBeUndefined();
   });

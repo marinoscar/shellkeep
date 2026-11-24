@@ -11,15 +11,31 @@ jest.mock('@marinoscar/platform-api/core', () => ({
   runInOrg: (_client: unknown, _scope: unknown, fn: (tx: unknown) => unknown) => fn((global as any).__tx),
 }));
 
-const scope = { userId: 'user-1', orgId: 'org-1' };
+// The list helper is the sharing slice's (proven against a real database in test/sharing); here it only returns a where.
+jest.mock('../platform/sharing/sharing-access', () => ({
+  ...jest.requireActual('../platform/sharing/sharing-access'),
+  accessibleListWhere: jest.fn().mockResolvedValue({ ownerUserId: 'user-1' }),
+}));
+
+// The caller: an authenticated user of organization `org-1` who holds every runbook permission.
+const scope = {
+  kind: 'user',
+  userId: 'user-1',
+  email: 'person-a@example.test',
+  credential: 'session',
+  roles: [],
+  permissions: ['runbooks:read', 'runbooks:write', 'runbooks:run'],
+  activeOrgId: 'org-1',
+} as never;
+const OWNER_DECISION = { allowed: true, role: 'owner', via: 'owner' };
 const DEF = { schemaVersion: 1, steps: [{ id: 'c1', name: 'Disk', kind: 'command', command: 'df -h' }] };
 const DEF2 = { schemaVersion: 1, steps: [{ id: 'c1', name: 'Disk', kind: 'command', command: 'df -i' }] };
 const norm = (d: unknown) => runbookDefinitionSchema.parse(d);
 
 function row(over: Record<string, unknown> = {}) {
   return {
-    id: 'rb-1', orgId: 'org-1', ownerUserId: 'user-1', name: 'Patch', description: null, tags: [],
-    latestVersionId: 'v-1', archivedAt: null, createdAt: new Date(0), updatedAt: new Date(0), ...over,
+    id: 'rb-1', orgId: 'org-1', ownerUserId: 'user-1', ownerGroupId: null, owner: { id: 'user-1', displayName: 'Person A', email: 'person-a@example.test' }, ownerGroup: null,
+    name: 'Patch', description: null, tags: [], latestVersionId: 'v-1', archivedAt: null, createdAt: new Date(0), updatedAt: new Date(0), ...over,
   };
 }
 function ver(version: number, def: unknown, over: Record<string, unknown> = {}) {
@@ -34,6 +50,8 @@ describe('RunbooksService', () => {
   let audit: { record: jest.Mock };
   let metrics: { add: jest.Mock };
   let service: RunbooksService;
+  let access: { require: jest.Mock; requireIn: jest.Mock; decideManyIn: jest.Mock };
+  let principalGroups: { enrich: jest.Mock; groupRoleFor: jest.Mock };
 
   beforeEach(() => {
     tx = {
@@ -43,7 +61,15 @@ describe('RunbooksService', () => {
     (global as any).__tx = tx;
     audit = { record: jest.fn().mockResolvedValue(undefined) };
     metrics = { add: jest.fn() };
-    service = new RunbooksService({} as never, audit as never, metrics as never);
+    access = {
+      require: jest.fn().mockResolvedValue(OWNER_DECISION),
+      requireIn: jest.fn().mockResolvedValue(OWNER_DECISION),
+      decideManyIn: jest.fn().mockImplementation(async (_tx: unknown, _p: unknown, _a: string, refs: Array<{ type: string; id: string }>) =>
+        new Map(refs.map((ref) => [`${ref.type}:${ref.id}`, OWNER_DECISION])),
+      ),
+    };
+    principalGroups = { enrich: jest.fn().mockImplementation(async (p: unknown) => p), groupRoleFor: jest.fn() };
+    service = new RunbooksService({} as never, audit as never, access as never, principalGroups as never, metrics as never);
   });
 
   describe('etag helpers', () => {
@@ -87,10 +113,13 @@ describe('RunbooksService', () => {
       tx.runbook.create.mockResolvedValue(row({ latestVersionId: null }));
       tx.runbookVersion.create.mockResolvedValue(ver(1, DEF, { changelog: 'first' }));
       tx.runbook.update.mockResolvedValue(row());
+      // The response is the caller's own view of what was written.
+      tx.runbook.findFirst.mockResolvedValue(row());
+      tx.runbookVersion.findFirst.mockResolvedValue(ver(1, DEF, { changelog: 'first' }));
 
       const result = await service.create(scope, { name: 'Patch', tags: ['a', 'a'], definition: DEF, changelog: 'first' } as never);
 
-      expect(tx.runbook.create.mock.calls[0][0].data).toMatchObject({ orgId: 'org-1', ownerUserId: 'user-1', name: 'Patch', tags: ['a'] });
+      expect(tx.runbook.create.mock.calls[0][0].data).toMatchObject({ orgId: 'org-1', ownerUserId: 'user-1', ownerGroupId: null, name: 'Patch', tags: ['a'] });
       expect(tx.runbookVersion.create.mock.calls[0][0].data).toMatchObject({
         orgId: 'org-1', runbookId: 'rb-1', version: 1, createdBy: 'user-1', changelog: 'first',
         definitionSha256: definitionSha256(norm(DEF)),
@@ -128,6 +157,7 @@ describe('RunbooksService', () => {
       tx.runbookVersion.create.mockResolvedValue(ver(2, DEF2));
       tx.runbook.updateMany.mockResolvedValue({ count: 1 });
       tx.runbook.findFirstOrThrow.mockResolvedValue(row({ latestVersionId: 'v-2' }));
+      tx.runbook.findFirst.mockResolvedValue(row());
 
       const out = await service.replaceDefinition(scope, 'rb-1', 1, { definition: DEF2, changelog: 'inodes' } as never);
 
@@ -189,6 +219,7 @@ describe('RunbooksService', () => {
     it('restores, audits, and maps a name clash to 409', async () => {
       tx.runbook.findFirst.mockResolvedValue(row({ archivedAt: new Date() }));
       tx.runbook.update.mockResolvedValue(row());
+      tx.runbook.findFirstOrThrow.mockResolvedValue(row());
       tx.runbookVersion.findFirst.mockResolvedValue(ver(1, DEF));
       const view = await service.restore(scope, 'rb-1');
       expect(view.archivedAt).toBeNull();
@@ -205,10 +236,33 @@ describe('RunbooksService', () => {
       tx.runbook.count.mockResolvedValue(2);
       tx.runbookVersion.findMany.mockResolvedValue([ver(1, DEF)]);
       const page = await service.list(scope, { page: 1, pageSize: 20, includeArchived: false, q: 'pat', tag: 'ops' } as never);
-      expect(tx.runbook.findMany.mock.calls[0][0].where).toMatchObject({ orgId: 'org-1', archivedAt: null, tags: { has: 'ops' } });
+      expect(tx.runbook.findMany.mock.calls[0][0].where.AND).toEqual(expect.arrayContaining([
+        { ownerUserId: 'user-1' },
+        { orgId: 'org-1' },
+        { archivedAt: null },
+        { tags: { has: 'ops' } },
+      ]));
+      expect(page.items[0].access).toMatchObject({ role: 'owner', shared: false, can: { run: true, write: true, share: true } });
+      expect(page.items[0].owner).toEqual({ kind: 'user', id: 'user-1', name: 'Person A' });
       expect(page.items[0].latestVersion?.version).toBe(1);
       expect(page.items[1].latestVersion).toBeNull();
       expect(page.items[0].latestVersion).not.toHaveProperty('definition');
+    });
+
+    it('asks AccessPolicy before every read and write, and stops at its refusal', async () => {
+      access.requireIn.mockRejectedValue(new NotFoundException('Runbook not found'));
+      await expect(service.findOne(scope, 'rb-1')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getVersion(scope, 'rb-1', 1)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.replaceDefinition(scope, 'rb-1', 1, { definition: DEF2 } as never)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.archive(scope, 'rb-1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(access.requireIn.mock.calls.map((call) => call[2])).toEqual(['read', 'read', 'write', 'write']);
+      expect(tx.runbook.findFirst).not.toHaveBeenCalled();
+      expect(tx.runbookVersion.create).not.toHaveBeenCalled();
+    });
+
+    it('requires `run` on the runbook before a run', async () => {
+      await service.requireRun(scope, 'rb-1');
+      expect(access.require).toHaveBeenCalledWith(scope, 'run', { type: 'runbook', id: 'rb-1' });
     });
 
     it('404s a missing version and returns one with its definition', async () => {
@@ -216,6 +270,19 @@ describe('RunbooksService', () => {
       await expect(service.getVersion(scope, 'rb-1', 9)).rejects.toBeInstanceOf(NotFoundException);
       tx.runbookVersion.findFirst.mockResolvedValue(ver(2, DEF2));
       expect((await service.getVersion(scope, 'rb-1', 2)).definition.steps[0]).toMatchObject({ command: 'df -i' });
+    });
+  });
+});
+
+describe('RunbooksService group ownership', () => {
+  it('lets only an admin or editor of a group make it the owner of a new runbook', async () => {
+    const groups = { enrich: jest.fn(), groupRoleFor: jest.fn() };
+    const svc = new RunbooksService({} as never, { record: jest.fn() } as never, {} as never, groups as never);
+    groups.groupRoleFor.mockResolvedValueOnce(null);
+    await expect(svc.create(scope, { name: 'x', definition: DEF, ownerGroupId: 'g-1' } as never)).rejects.toBeInstanceOf(NotFoundException);
+    groups.groupRoleFor.mockResolvedValueOnce('viewer');
+    await expect(svc.create(scope, { name: 'x', definition: DEF, ownerGroupId: 'g-1' } as never)).rejects.toMatchObject({
+      response: { code: 'GROUP_ROLE_INSUFFICIENT' },
     });
   });
 });

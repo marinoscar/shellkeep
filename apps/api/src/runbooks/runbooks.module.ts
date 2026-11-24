@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { OrgCredentialsModule } from '@marinoscar/platform-api/credentials';
 
+import { sharingModule } from '../platform/sharing/sharing.config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RunbookSecretsController } from './runbook-secrets.controller';
 import { RunbooksController } from './runbooks.controller';
@@ -13,7 +14,7 @@ import { TargetResolverService } from './target-resolver.service';
  * import time by `runbooks.registrations.ts` (before the registries freeze).
  */
 @Module({
-  imports: [PrismaModule, OrgCredentialsModule],
+  imports: [PrismaModule, OrgCredentialsModule, sharingModule],
   controllers: [RunbooksController, RunbookSecretsController],
   providers: [RunbooksService, TargetResolverService],
   exports: [RunbooksService, TargetResolverService],

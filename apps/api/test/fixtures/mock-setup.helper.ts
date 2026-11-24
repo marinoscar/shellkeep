@@ -351,6 +351,9 @@ export function setupBaseMocks(): void {
   // (the identity slice resolves a legacy token's organization through it).
   (prismaMock.organization.findFirst as jest.Mock).mockResolvedValue({ id: MOCK_DEFAULT_ORG_ID });
 
+  // `accessibleWhere` asks for the ids shared with the caller; nothing is shared in a mocked database.
+  (prismaMock.grant.groupBy as jest.Mock).mockResolvedValue([]);
+
   // Mock $connect and $disconnect
   (prismaMock.$connect as jest.Mock).mockResolvedValue(undefined);
   (prismaMock.$disconnect as jest.Mock).mockResolvedValue(undefined);

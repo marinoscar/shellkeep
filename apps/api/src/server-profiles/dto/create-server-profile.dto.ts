@@ -11,6 +11,7 @@ export const createServerProfileSchema = z.object({
   privateKey: z.string().optional(),
   passphrase: z.string().optional(),
   tags: z.array(z.string()).optional().default([]),
+  ownerGroupId: z.string().uuid().optional(),
   /** `false` keeps this server's terminal output away from every AI feature (#56). */
   aiOutputSharing: z.boolean().optional(),
   color: z.enum(['default', 'primary', 'secondary', 'error', 'warning', 'info', 'success']).optional().default('default'),

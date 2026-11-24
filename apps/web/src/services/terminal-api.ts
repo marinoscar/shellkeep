@@ -14,16 +14,22 @@ import type {
 // Terminal domain API: server profiles and terminal sessions. Built on the base
 // `api` client; the base `services/api.ts` names none of these routes.
 
+/** Which server profiles the list shows (#71). */
+export type ServerProfilesFilter = 'all' | 'mine' | 'shared';
+
 // Server Profiles API
 export async function getServerProfiles(params?: {
   page?: number;
   pageSize?: number;
   search?: string;
+  /** `mine`: owned by me; `shared`: shared with me or owned by a group of mine; default `all` (#71). */
+  filter?: ServerProfilesFilter;
 }): Promise<ServerProfilesResponse> {
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.set('page', String(params.page));
   if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
   if (params?.search) searchParams.set('search', params.search);
+  if (params?.filter && params.filter !== 'all') searchParams.set('filter', params.filter);
   const query = searchParams.toString();
   return api.get<ServerProfilesResponse>(`/server-profiles${query ? `?${query}` : ''}`);
 }

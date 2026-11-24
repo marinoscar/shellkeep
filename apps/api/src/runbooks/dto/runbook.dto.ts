@@ -22,6 +22,8 @@ export const createRunbookSchema = z.object({
   tags: tagsField.optional(),
   definition: definitionBody,
   changelog: z.string().max(500).optional(),
+  /** Make a group the owner of the runbook; the author must be an admin or editor of it. */
+  ownerGroupId: z.string().uuid().optional(),
 });
 
 export const replaceDefinitionSchema = z.object({
@@ -44,6 +46,8 @@ export const runbooksQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   q: z.string().trim().min(1).max(120).optional(),
   tag: z.string().trim().min(1).max(50).optional(),
+  /** `mine`: authored by me; `shared`: shared with me or owned by a group of mine; `all` (default): both. */
+  filter: z.enum(['all', 'mine', 'shared']).default('all'),
   includeArchived: z
     .enum(['true', 'false'])
     .default('false')
