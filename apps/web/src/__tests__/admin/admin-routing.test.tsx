@@ -41,6 +41,10 @@ const ADMIN = [
   'push:write',
   'broadcasts:read',
   'broadcasts:write',
+  // #52.
+  'db_backup:read',
+  'db_backup:write',
+  'db_backup:restore',
 ];
 
 /** `GET /api/admin/storage-config` before anything is configured: S3 only, nothing stored. */
@@ -145,6 +149,8 @@ describe('admin settings routing (#46)', () => {
     expect(screen.getByText('Email')).toBeInTheDocument();
     expect(screen.getByText('Web Push')).toBeInTheDocument();
     expect(screen.getByText('Broadcasts')).toBeInTheDocument();
+    // #52: the Database Backup card.
+    expect(screen.getByText('Database Backup')).toBeInTheDocument();
   });
 
   it('opens the packaged Email page for an administrator (#51)', async () => {
@@ -189,6 +195,20 @@ describe('admin settings routing (#46)', () => {
     renderAt('/admin/settings/broadcasts');
     expect(await screen.findByRole('heading', { name: 'Broadcasts' }, { timeout: 5000 })).toBeInTheDocument();
     await vi.waitFor(() => expect(listed).toContain('/api/admin/broadcasts'), { timeout: 5000 });
+  });
+
+  it('opens the packaged Database Backup page for an administrator (#52)', async () => {
+    signIn(ADMIN, ['admin']);
+    const read: string[] = [];
+    server.use(
+      http.get('*/api/admin/db-backup*', ({ request }) => {
+        read.push(new URL(request.url).pathname);
+        return HttpResponse.json({ data: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 } });
+      }),
+    );
+    renderAt('/admin/settings/db-backup');
+    expect(await screen.findByRole('heading', { name: 'Database Backup' }, { timeout: 5000 })).toBeInTheDocument();
+    await vi.waitFor(() => expect(read.some((p) => p.startsWith('/api/admin/db-backup'))).toBe(true), { timeout: 5000 });
   });
 
   it('opens Broadcasts for an organization administrator holding only org_broadcasts:read (#51)', async () => {
@@ -270,6 +290,7 @@ describe('admin settings routing (#46)', () => {
       '/admin/settings/email',
       '/admin/settings/push',
       '/admin/settings/broadcasts',
+      '/admin/settings/db-backup',
     ]) {
       const { unmount } = renderAt(path);
       expect(await screen.findByText(/ShellKeep Control Center/i, {}, { timeout: 5000 })).toBeInTheDocument();

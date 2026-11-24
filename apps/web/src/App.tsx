@@ -91,6 +91,8 @@ const PushConfigPage = lazy(() =>
 const BroadcastsPage = lazy(() =>
   import('@marinoscar/platform-web/notifications/ui').then((m) => ({ default: m.BroadcastsPage })),
 );
+// Database backup and restore (issue #52): the packaged admin page.
+const DbBackupPage = lazy(() => import('@marinoscar/platform-web/db-backup/ui'));
 const UserNotificationsPage = lazy(() =>
   import('@marinoscar/platform-web/notifications/ui').then((m) => ({
     default: m.UserNotificationsPage,
@@ -190,7 +192,7 @@ function AppRoutes() {
                   <Route
                     path="/admin/settings"
                     element={
-                      <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read']} fallback={HOME}>
+                      <RequirePermission permissions={['system_settings:read', 'users:read', 'jobs:read', 'nodes:read', 'storage_config:read', 'push:read', 'broadcasts:read', 'org_broadcasts:read', 'db_backup:read']} fallback={HOME}>
                         <AdminSettingsHubPage />
                       </RequirePermission>
                     }
@@ -262,6 +264,16 @@ function AppRoutes() {
                     element={
                       <RequirePermission permissions={['broadcasts:read', 'org_broadcasts:read']} fallback={HOME}>
                         <BroadcastsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Database backup (#52): reads need `db_backup:read`; writes and
+                      restore are gated inside the packaged page. */}
+                  <Route
+                    path="/admin/settings/db-backup"
+                    element={
+                      <RequirePermission permission="db_backup:read" fallback={HOME}>
+                        <DbBackupPage />
                       </RequirePermission>
                     }
                   />

@@ -36,6 +36,8 @@ describe('ADMIN_SECTIONS (#46)', () => {
       ['Worker Nodes', '/admin/settings/workers'],
       // #51: appended to Operations.
       ['Broadcasts', '/admin/settings/broadcasts'],
+      // #52: appended to Operations.
+      ['Database Backup', '/admin/settings/db-backup'],
     ]);
   });
 
@@ -70,6 +72,9 @@ describe('ADMIN_SECTIONS (#46)', () => {
       // /api/admin/broadcasts: @Auth({ anyPermissions: [system, org] }); writes
       // need the matching :write, gated in the page.
       '/admin/settings/broadcasts': ['broadcasts:read', 'org_broadcasts:read'],
+      // GET /api/admin/db-backup (DatabaseBackupController); writes need
+      // db_backup:write and restore db_backup:restore, gated in the page.
+      '/admin/settings/db-backup': 'db_backup:read',
     });
   });
 
@@ -88,6 +93,7 @@ describe('ADMIN_SECTIONS (#46)', () => {
   it('gates the hub on any card permission', () => {
     expect(ADMIN_HUB_PERMISSIONS.sort()).toEqual([
       'broadcasts:read',
+      'db_backup:read',
       'jobs:read',
       'nodes:read',
       'org_broadcasts:read',
@@ -120,6 +126,7 @@ describe('ADMIN_SECTIONS (#46)', () => {
       '/admin/settings/jobs/insights',
       '/admin/settings/workers',
       BROADCASTS_PATH,
+      '/admin/settings/db-backup',
     ]);
   });
 

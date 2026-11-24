@@ -50,6 +50,11 @@
  *     `@Auth({ anyPermissions: [...] })`, and the hub admits a holder of
  *     either. Composing, scheduling and cancelling need the matching
  *     `:write`, gated inside the packaged page.
+ *   - Database Backup (#52): `/api/admin/db-backup`, `db_backup:read` (system
+ *     scope, `admin` only; the slice's `DatabaseBackupController`). Taking,
+ *     verifying and deleting a backup and saving the schedule need
+ *     `db_backup:write`, restoring needs `db_backup:restore`; the packaged
+ *     page disables each control, the card gate is about reachability.
  *
  * The composition root: the `Terminal` card is the terminal domain's
  * (`components/terminal/settings/TerminalSystemSettingsPage.tsx`), declared
@@ -66,6 +71,7 @@ import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
+import { dbBackupAdminSections } from '@marinoscar/platform-web/db-backup/ui';
 import { jobsAdminSections } from '@marinoscar/platform-web/jobs/ui';
 import {
   TERMINAL_SYSTEM_SETTINGS_DESCRIPTION,
@@ -183,6 +189,9 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
         path: BROADCASTS_PATH,
         permission: ['broadcasts:read', 'org_broadcasts:read'],
       },
+      // #52: appended. The packaged card (`Database Backup`,
+      // `/admin/settings/db-backup`, `db_backup:read`), as data.
+      ...dbBackupAdminSections.operations,
     ],
   },
 ];
