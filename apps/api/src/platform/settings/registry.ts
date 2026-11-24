@@ -11,6 +11,7 @@
 // Registration is once per process (a second import is a no-op).
 // =============================================================================
 
+import { DATABASE_BACKUP_SYSTEM_SETTINGS } from '@marinoscar/platform-api/db-backup';
 import { MAINTENANCE_SYSTEM_SETTINGS } from '@marinoscar/platform-api/host';
 import {
   JOBS_SYSTEM_SETTINGS,
@@ -51,7 +52,7 @@ export const PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettingsNamespa
 /**
  * The platform's system namespaces appended AFTER the app's own, so the stored key order
  * of the `global` row stays the app's own namespaces first, then the platform's additions:
- * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49), `storage` (#50) and `notifications` (#51). Registered here, before `SettingsModule.forRoot()`
+ * `maintenance` (the host slice, #46), `jobs`, `nodes` and `retention` (#49), `storage` (#50) `notifications` (#51) and `databaseBackup` (#52). Registered here, before `SettingsModule.forRoot()`
  * composes the request bodies, so the host core does not have to (its `forRoot()` registers
  * the namespace only when nothing did).
  */
@@ -66,6 +67,8 @@ export const APPENDED_PLATFORM_SYSTEM_SETTINGS_NAMESPACES: readonly SystemSettin
   STORAGE_SYSTEM_SETTINGS as SystemSettingsNamespace,
   // The notifications slice's deployment policy (#51): browser toggle, per-event and per-channel switches.
   NOTIFICATIONS_SYSTEM_SETTINGS as SystemSettingsNamespace,
+  // The db-backup slice's schedule, retention and restore policy (#52): `databaseBackup`.
+  DATABASE_BACKUP_SYSTEM_SETTINGS as SystemSettingsNamespace,
 ];
 
 /** The platform's optional user namespaces this app registers: the notification preferences (#51). */

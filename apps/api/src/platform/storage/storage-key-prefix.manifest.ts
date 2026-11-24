@@ -13,10 +13,15 @@
 // so nothing moves.
 // =============================================================================
 
+import { DB_BACKUP_KEY_PREFIX } from '@marinoscar/platform-api/db-backup';
 import { STORAGE_SLICE_KEY_PREFIXES, registerStorageKeyPrefixes } from '@marinoscar/platform-api/storage';
 
 import { APP_STORAGE_KEY_PREFIXES } from '../../app-registrations/storage-prefixes';
 
 registerStorageKeyPrefixes(STORAGE_SLICE_KEY_PREFIXES);
+
+// The db-backup slice's own `database-backups/` declaration (#52, scope `deployment`, kept by a
+// factory reset). `DbBackupModule.forRoot()` registers the same object, idempotently.
+registerStorageKeyPrefixes([DB_BACKUP_KEY_PREFIX]);
 
 registerStorageKeyPrefixes(APP_STORAGE_KEY_PREFIXES);

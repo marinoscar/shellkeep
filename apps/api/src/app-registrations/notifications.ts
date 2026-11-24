@@ -31,6 +31,7 @@ import {
 } from '@marinoscar/platform-api/notifications';
 
 import { SHELLKEEP_EMAIL_TEMPLATES } from '../email-templates';
+import { DB_BACKUP_NOTIFICATIONS } from '../platform/db-backup/db-backup.notifications';
 import { IDENTITY_NOTIFICATIONS } from '../notifications-registry/identity.notifications';
 import { TERMINAL_NOTIFICATIONS } from '../notifications-registry/terminal.notifications';
 import { EMAIL_MODULE_OPTIONS } from '../platform/email/email.options';
@@ -58,6 +59,8 @@ export function registerShellkeepNotifications(): void {
     ...OPS_NOTIFICATIONS,
     ...NODES_NOTIFICATIONS,
     ...TERMINAL_NOTIFICATIONS,
+    // Database backup (#52): `db_backup.backup_failed` and the mandatory `db_backup.restore_completed`.
+    ...DB_BACKUP_NOTIFICATIONS,
   ]);
   // The runbook events are NOT here: `registerRunbookNotifications()` (#61).
 }

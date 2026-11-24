@@ -1,7 +1,12 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { forSystem, type SystemAccessReason } from '@marinoscar/platform-api/core';
+import {
+  forSystem,
+  runAsSystem,
+  type RlsTransactionOptions,
+  type SystemAccessReason,
+} from '@marinoscar/platform-api/core';
 
 import { buildDatabaseUrl } from '../common/database-url';
 
@@ -36,6 +41,21 @@ export class PrismaSystemService extends PrismaClient implements OnModuleDestroy
    */
   forSystem(reason: SystemAccessReason) {
     return forSystem(this, reason);
+  }
+
+  /**
+   * One interactive transaction with the bypass flag set (`set_config(..., true)` as its first
+   * statement), handing `fn` the plain transaction client. The db-backup slice's Doctor check
+   * counts every organization's rows with it (`DB_BACKUP_SYSTEM_DATA`, #52).
+   *
+   * @throws ScopedAccessError for a reason that is not registered.
+   */
+  runAsSystem<R>(
+    reason: SystemAccessReason,
+    fn: (tx: Prisma.TransactionClient) => Promise<R>,
+    options: RlsTransactionOptions = {},
+  ): Promise<R> {
+    return runAsSystem(this, reason, fn as (tx: unknown) => Promise<R>, options);
   }
 
   async onModuleDestroy(): Promise<void> {
