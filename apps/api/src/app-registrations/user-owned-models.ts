@@ -23,16 +23,19 @@ export const APP_USER_OWNED_MODELS: readonly Def[] = [
     ownerField: 'userId',
     purge: 'delete',
     export: 'include',
-    // The three encrypted columns are removed by #48 (the credential store);
-    // until then the ciphertext must never leave the server.
+    // Every credential column, explicitly (#68): the default redaction rule does not match these names.
+    // The credential store (`profile.<id>.<field>`, purpose `ssh`) is never read by an export; the three
+    // legacy ciphertext columns remain until their data is migrated, so they stay omitted.
+    // `fingerprint` stays: it is public host-key material.
     exportOmit: ['encryptedPassword', 'encryptedPrivateKey', 'encryptedPassphrase'],
     rationale:
-      'The owner’s SSH connection profile; deleted with the user and exported to them without any credential ciphertext.',
+      'The owner’s SSH connection profile; deleted with the user and exported to them without any credential or ciphertext.',
   },
   {
     model: 'TerminalSession',
     ownerField: 'userId',
     purge: 'delete',
+    // `tmuxSessionId` (the tmux session name) is included; the tmux scrollback is never stored here or read.
     export: 'include',
     rationale: 'The owner’s terminal session record (tmux session name, size, status); deleted with the user and exported to them.',
   },
@@ -42,18 +45,19 @@ export const APP_USER_OWNED_MODELS: readonly Def[] = [
     ownerRelation: 'owner',
     // `owner_user_id` is ON DELETE SET NULL: the organization keeps the runbook when its author goes.
     purge: 'detach',
-    export: 'exclude',
+    // The runbook definition is the author's own work (#68). Run step output is never exported as rows.
+    export: 'include',
     rationale:
-      'An organization-owned runbook records its author; the author leaving detaches the runbook (the organization keeps it), and the definition is not part of a personal export.',
+      'An organization-owned runbook records its author; the author leaving detaches the runbook (the organization keeps it), and the runbooks they authored are exported to them.',
   },
   {
     model: 'RunbookVersion',
     actorFields: ['createdBy'],
     // `created_by` is ON DELETE SET NULL: a version is immutable history and outlives its author.
     purge: 'detach',
-    export: 'exclude',
+    export: 'include',
     rationale:
-      'An immutable runbook version records who saved it; the author leaving detaches the version (it is never rewritten or deleted) and it is not part of a personal export.',
+      'An immutable runbook version records who saved it; the author leaving detaches the version (it is never rewritten or deleted) and the versions they saved, with their definitions, are exported to them.',
   },
   {
     model: 'RunbookRun',

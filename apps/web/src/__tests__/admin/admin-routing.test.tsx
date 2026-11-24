@@ -300,7 +300,7 @@ describe('admin settings routing (#46)', () => {
       '/admin/settings/db-backup',
     ]) {
       const { unmount } = renderAt(path);
-      expect(await screen.findByText(/ShellKeep Control Center/i, {}, { timeout: 5000 })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { level: 1, name: 'Home' }, { timeout: 5000 })).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'Console' })).not.toBeInTheDocument();
       unmount();
     }

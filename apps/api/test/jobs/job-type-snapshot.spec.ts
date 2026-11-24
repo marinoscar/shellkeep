@@ -82,6 +82,10 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'ai.keys.recheck': 'AI key recheck',
   'ai.runs.purge': 'AI run purge',
   'ai.usage.purge': 'AI usage purge',
+  // The exports slice (#68): the export run (a user's own data, through the bypass client) and the expiry purge of
+  // its files. Both are server-only (no nodeResultSchema), and both type strings are permanent.
+  'export.run': 'Data export',
+  'export.purge': 'Export expiry',
 };
 
 /**
@@ -125,6 +129,16 @@ describe('job type strings are permanent (#49)', () => {
     const unlisted = [...registered].filter((type) => !known.has(type)).sort();
 
     expect(unlisted).toEqual([]);
+  });
+
+  it('keeps both export job types server-only: no node result schema, no node persistence (#68)', () => {
+    const registry = context.app.get(JobHandlerRegistry);
+    for (const type of ['export.run', 'export.purge']) {
+      const handler = registry.get(type);
+      expect(handler).toBeDefined();
+      expect(handler).not.toHaveProperty('nodeResultSchema');
+      expect(handler).not.toHaveProperty('persistNodeResult');
+    }
   });
 
   it('keeps every label, read from the handlers themselves', () => {

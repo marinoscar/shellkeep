@@ -272,4 +272,8 @@ export const handlers = [
   http.get(`${API_BASE}/notifications`, () =>
     HttpResponse.json({ data: { items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 } }),
   ),
+
+  // The exports slice (#68): the caller may use no source and has no exports, unless a test says otherwise.
+  http.get(`${API_BASE}/exports/sources`, () => HttpResponse.json({ data: { items: [] } })),
+  http.get(`${API_BASE}/exports`, () => HttpResponse.json({ data: { items: [] } })),
 ];
