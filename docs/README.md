@@ -17,7 +17,7 @@ ShellKeep is a browser-based terminal workspace with persistent tmux-backed sess
 | Understand auth, RBAC, SSH credential handling, host-key trust | [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md) |
 | Authorize a CLI or device | the platform's [device authorization guide](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/DEVICE-AUTH.md), [personal access tokens](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/personal-access-tokens.md) |
 | Write or run tests | [TESTING.md](TESTING.md), [../apps/api/TESTING.md](../apps/api/TESTING.md) |
-| Deploy to a VPS with the `shellkeep` CLI (install, update, adopting an old install) | [../apps/cli/README.md](../apps/cli/README.md#deploying-to-a-server), [ssl-nginx-setup.md](ssl-nginx-setup.md) |
+| Deploy to a VPS with the `shellkeep` CLI (install, update, adopting an old install) | [deployment/vps.md](deployment/vps.md), [../apps/cli/README.md](../apps/cli/README.md#deploying-to-a-server), [ssl-nginx-setup.md](ssl-nginx-setup.md) |
 | Know where ShellKeep deviates from the platform | [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md) |
 | Use a platform capability (jobs, AI, sharing, ...) | the slice READMEs and specs in [EnterpriseAppBase](https://github.com/marinoscar/EnterpriseAppBase/tree/main/docs), mapped in [ARCHITECTURE.md §2](ARCHITECTURE.md#2-subsystem-map) |
 | Work with Claude Code or OpenCode on this repo | [AI-ASSISTANTS.md](AI-ASSISTANTS.md), [../AGENTS.md](../AGENTS.md) |
