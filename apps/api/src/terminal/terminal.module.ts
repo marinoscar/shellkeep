@@ -13,6 +13,7 @@ import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
 import { TerminalMaintenancePolicy } from './ws/terminal-maintenance.policy';
 import { SessionReapHandler } from './jobs/session-reap.handler';
 import { TerminalWebhooksModule } from './webhooks/terminal-webhooks.module';
+import { TerminalAlertRulesSeed } from './alerts/terminal-alert-rules.seed';
 import { TerminalMetricsService } from './telemetry/terminal-metrics.service';
 import { SessionCleanupTask } from './tasks/session-cleanup.task';
 import { TerminalAboutSource } from './about/terminal.about-contributor';
@@ -50,6 +51,8 @@ import { LegacySecretsDoctorCheck } from './doctor/legacy-secrets.doctor-check';
     // The reaper: an enqueue-only cron and the `terminal.session.reap` job it queues (#49).
     SessionCleanupTask,
     SessionReapHandler,
+    // ShellKeep's four starter alert rules, seeded disabled at start (#54).
+    TerminalAlertRulesSeed,
     // The terminal's About section and Doctor checks (#46). Each check registers
     // itself with the platform's `DoctorCheckRegistry` in `onModuleInit`.
     TerminalAboutSource,

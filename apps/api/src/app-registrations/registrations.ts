@@ -34,8 +34,9 @@ import { APP_USER_OWNED_MODELS } from './user-owned-models';
 import { registerShellkeepCredentialPurposes } from './credentials';
 // Channels, email templates and notification events (#51); registers itself at import.
 import './notifications';
-// ShellKeep's webhook events (#54); registers itself at import.
+// ShellKeep's webhook events (#54) and alert rule kinds (#54); each registers itself at import.
 import './webhooks';
+import './alerts';
 import { registerSshErrorCodes } from '../ssh/ssh.error-codes';
 
 registerPlatformPermissions({
