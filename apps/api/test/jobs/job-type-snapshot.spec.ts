@@ -68,8 +68,11 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'alerts.incidents_purge': 'Alert incident purge',
 };
 
-/** Types registered without a label of their own, shown as the type string. */
-const UNLABELLED_JOB_TYPES: readonly string[] = [];
+/**
+ * Types registered without a label of their own, shown as the type string. The sharing slice's
+ * grants prune job (#71) is one: server-only, housekeeping.
+ */
+const UNLABELLED_JOB_TYPES: readonly string[] = ['sharing.grants.prune'];
 
 describe('job type strings are permanent (#49)', () => {
   let context: TestContext;

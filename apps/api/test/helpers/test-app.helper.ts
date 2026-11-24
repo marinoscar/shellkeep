@@ -5,10 +5,12 @@ import {
 } from '@nestjs/platform-fastify';
 import fastifyCookie from '@fastify/cookie';
 import { WsAdapter } from '@nestjs/platform-ws';
+import { AccessPolicy, PrincipalGroupsProvider } from '@marinoscar/platform-api/sharing';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { PrismaSystemService } from '../../src/prisma/prisma-system.service';
 import { prismaMock } from '../mocks/prisma.mock';
+import { allowAllAccessPolicy, noGroups } from './sharing-doubles';
 
 export interface TestContext {
   app: NestFastifyApplication;
@@ -63,7 +65,13 @@ export async function createTestApp(
         runAsSystem: (_reason: string, fn: (tx: unknown) => unknown) => fn(prismaMock),
         $connect: async () => undefined,
         $disconnect: async () => undefined,
-      });
+      })
+      // The sharing slice's decision point and group lookup cannot be answered by a mocked client:
+      // every decision is "owner" here, and the real ones are proven in `test/sharing` (#71).
+      .overrideProvider(AccessPolicy)
+      .useValue(allowAllAccessPolicy)
+      .overrideProvider(PrincipalGroupsProvider)
+      .useValue(noGroups);
     for (const override of options.overrideProviders ?? []) {
       builder = builder.overrideProvider(override.provide).useValue(override.useValue);
     }

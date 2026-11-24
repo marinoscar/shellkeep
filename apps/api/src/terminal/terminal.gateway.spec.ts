@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter } from 'events';
+import { NotFoundException } from '@nestjs/common';
 import { HostKeyError } from '../ssh/host-key.error';
 import { TerminalGateway } from './terminal.gateway';
 import { TerminalPrincipalResolver } from './ws/terminal-principal.resolver';
@@ -43,7 +44,7 @@ function emitBinaryMessage(ws: any, data: Buffer): void {
 describe('TerminalGateway', () => {
   let gateway: TerminalGateway;
   let principals: { resolve: jest.Mock };
-  let serverProfilesService: jest.Mocked<Pick<ServerProfilesService, 'getDecryptedProfile'>>;
+  let serverProfilesService: jest.Mocked<Pick<ServerProfilesService, 'getDecryptedProfile' | 'assertCanConnect'>>;
   let sessionsService: jest.Mocked<Pick<SessionsService, 'findOne' | 'updateStatus'>>;
   let sessionManager: jest.Mocked<
     Pick<SessionManagerService, 'isSessionRunning' | 'startSession' | 'attachWebSocket' | 'sendInput' | 'resizeSession'>
@@ -94,6 +95,8 @@ describe('TerminalGateway', () => {
 
     serverProfilesService = {
       getDecryptedProfile: jest.fn(),
+      // The caller may connect (a refusal is a NotFoundException).
+      assertCanConnect: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     sessionsService = {
@@ -365,6 +368,7 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
       ws.send.mockClear();
     }
 
@@ -375,6 +379,7 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'auth_fail', reason: 'Not authenticated' }),
@@ -394,6 +399,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       const sentCalls: string[] = ws.send.mock.calls.map((c: any[]) => c[0]);
       const sessionErrorCall = sentCalls.find((c) => c.includes('session_error'));
@@ -414,6 +420,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'session_error', error: 'Session is terminated', code: 'TERMINATED' }),
@@ -433,11 +440,41 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.startSession).not.toHaveBeenCalled();
       expect(sessionManager.attachWebSocket).toHaveBeenCalledWith(SESSION_ID, ws);
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'session_ready', sessionId: SESSION_ID }),
+      );
+    });
+
+    it('answers NOT_FOUND, starts nothing and attaches nothing when the share behind the session was revoked', async () => {
+      const ws = createMockWebSocket();
+      gateway.handleConnection(ws);
+      await authenticateWs(ws);
+
+      sessionsService.findOne.mockResolvedValue(mockSession as any);
+      // The session is already running (an earlier attach), but its server is no longer shared with this user.
+      sessionManager.isSessionRunning.mockReturnValue(true);
+      serverProfilesService.assertCanConnect.mockRejectedValue(new NotFoundException('not found'));
+
+      emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(serverProfilesService.assertCanConnect).toHaveBeenCalledWith(
+        mockSession.serverProfileId,
+        expect.objectContaining({ userId: SCOPE.userId, activeOrgId: SCOPE.orgId }),
+      );
+      expect(sessionManager.startSession).not.toHaveBeenCalled();
+      expect(sessionManager.attachWebSocket).not.toHaveBeenCalled();
+      expect(serverProfilesService.getDecryptedProfile).not.toHaveBeenCalled();
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({ type: 'session_error', error: 'Session not found', code: 'NOT_FOUND' }),
       );
     });
 
@@ -459,10 +496,12 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(serverProfilesService.getDecryptedProfile).toHaveBeenCalledWith(
         mockSession.serverProfileId,
-        SCOPE,
+        expect.objectContaining({ userId: SCOPE.userId, activeOrgId: SCOPE.orgId, permissions: expect.arrayContaining(['sessions:write']) }),
+        'connect',
       );
       expect(sessionManager.startSession).toHaveBeenCalledWith(
         SESSION_ID,
@@ -490,6 +529,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'session_error', error: 'Failed to attach', code: 'ATTACH_FAILED' }),
@@ -511,6 +551,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(ws.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'session_error', error: 'SSH refused', code: 'CONNECTION_FAILED' }),
@@ -564,6 +605,7 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       ws.send.mockClear();
 
@@ -571,6 +613,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       ws.send.mockClear();
     }
@@ -583,6 +626,7 @@ describe('TerminalGateway', () => {
       const inputData = Buffer.from('ls -la\n');
       emitBinaryMessage(ws, inputData);
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.sendInput).toHaveBeenCalledWith(SESSION_ID, inputData);
     });
@@ -593,6 +637,7 @@ describe('TerminalGateway', () => {
 
       emitBinaryMessage(ws, Buffer.from('ls\n'));
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.sendInput).not.toHaveBeenCalled();
     });
@@ -605,9 +650,11 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       emitBinaryMessage(ws, Buffer.from('ls\n'));
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.sendInput).not.toHaveBeenCalled();
     });
@@ -627,11 +674,13 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       emitMessage(ws, { type: 'connect', sessionId: SESSION_ID });
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
     }
 
     it('should call resizeSession with new dimensions', async () => {
@@ -641,6 +690,7 @@ describe('TerminalGateway', () => {
 
       emitMessage(ws, { type: 'resize', cols: 120, rows: 40 });
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.resizeSession).toHaveBeenCalledWith(SESSION_ID, 120, 40);
     });
@@ -651,6 +701,7 @@ describe('TerminalGateway', () => {
 
       emitMessage(ws, { type: 'resize', cols: 120, rows: 40 });
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.resizeSession).not.toHaveBeenCalled();
     });
@@ -663,9 +714,11 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       emitMessage(ws, { type: 'resize', cols: 120, rows: 40 });
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       expect(sessionManager.resizeSession).not.toHaveBeenCalled();
     });
@@ -683,6 +736,7 @@ describe('TerminalGateway', () => {
       // Emit a non-JSON buffer that looks like JSON (starts with '{') but is malformed
       ws.emit('message', Buffer.from('{not valid json'), false);
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       // Gateway should swallow the parse error gracefully
       expect(ws.close).not.toHaveBeenCalled();
@@ -701,6 +755,7 @@ describe('TerminalGateway', () => {
       emitMessage(ws, { type: 'auth', token: VALID_TOKEN });
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       // Make findOne throw to simulate an unexpected error inside handleConnect
       sessionsService.findOne.mockRejectedValue(new Error('DB timeout'));
@@ -709,6 +764,7 @@ describe('TerminalGateway', () => {
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
+      await Promise.resolve(); // + assertCanConnect
 
       // The gateway catches and sends session_error, does not re-throw
       const calls: string[] = ws.send.mock.calls.map((c: any[]) => c[0]);
