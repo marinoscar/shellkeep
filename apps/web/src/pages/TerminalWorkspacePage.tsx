@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, IconButton, Snackbar, Tooltip, Typography } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Close as CloseIcon } from '@mui/icons-material';
+import { Alert, Box, Button, IconButton, Snackbar, Tooltip, Typography } from '@mui/material';
+import {
+  ArrowBack as ArrowBackIcon,
+  AutoAwesomeOutlined as AssistantIcon,
+  Close as CloseIcon,
+} from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useShellContextPaneVisible, useShellMainVariant } from '@marinoscar/platform-web/shell/headless';
 import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
@@ -20,6 +24,9 @@ import type { PaneStatus } from '../components/terminal/workspace/WorkspacePane'
 import { SessionSwitcherMenu } from '../components/terminal/workspace/SessionSwitcherMenu';
 import { TerminalStatusBar } from '../components/terminal/workspace/TerminalStatusBar';
 import type { HostKeyStatus } from '../components/terminal/workspace/TerminalStatusBar';
+import { TerminalAiPanel } from '../components/terminal/ai/TerminalAiPanel';
+import { useTerminalAiAvailable } from '../components/terminal/ai/useTerminalAiAvailable';
+import { insertSuggestedCommand } from '../components/terminal/ai/insertCommand';
 import { RenameSessionDialog } from '../components/terminal/workspace/RenameSessionDialog';
 import { useWorkspaceLayout } from '../components/terminal/workspace/useWorkspaceLayout';
 import {
@@ -69,13 +76,18 @@ export default function TerminalWorkspacePage() {
   const { id: routeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   useShellMainVariant('full-bleed');
-  const { isPhone } = useTerminalLayout();
+  const { isPhone, isWide } = useTerminalLayout();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(TERMINAL_WRITE_PERMISSION);
   // The Sessions context pane lists the sessions beside the expanded rail;
   // wherever the platform does not draw it, the toolbar offers a menu.
   const switcherPaneVisible = useShellContextPaneVisible('sessions');
+  // The AI panel: only with the `ai` feature on and `ai:use` (fail closed).
+  const aiAvailable = useTerminalAiAvailable();
+  const [aiOpen, setAiOpen] = useState(false);
+  // The last "Suggest command" answer; #57 sets it from its API.
+  const [aiSuggestion] = useState<string | null>(null);
 
   const { layout, commit, current } = useWorkspaceLayout(routeId, user?.id ?? null);
   const [sessions, setSessions] = useState<Record<string, TerminalSession>>({});
@@ -323,6 +335,18 @@ export default function TerminalWorkspacePage() {
               {!switcherPaneVisible && (
                 <SessionSwitcherMenu activeId={activeId} onSelect={(sessionId) => update((l) => openTab(l, sessionId))} />
               )}
+              {aiAvailable && (
+                <Button
+                  size="small"
+                  variant={aiOpen ? 'contained' : 'outlined'}
+                  startIcon={<AssistantIcon fontSize="small" />}
+                  aria-pressed={aiOpen}
+                  onClick={() => setAiOpen((o) => !o)}
+                  sx={{ minHeight: 32, ml: 0.5 }}
+                >
+                  AI
+                </Button>
+              )}
               {!isPhone && (
                 <SplitControls
                   current={splitOnScreen}
@@ -365,19 +389,33 @@ export default function TerminalWorkspacePage() {
         </Box>
 
         {/* Never `overflow: hidden` between here and the xterm (docs/SCROLLING.md). */}
-        <SplitLayout
-          paneIds={layout.tabs}
-          visible={visible}
-          direction={layout.split?.dir ?? 'v'}
-          ratio={ratio}
-          onRatioChange={setRatio}
-          focusedId={activeId}
-          onFocusPane={(sessionId) => {
-            if (sessionId !== activeId) update((l) => activateTab(l, sessionId));
-          }}
-          renderHeader={renderHeader}
-          renderPane={renderPane}
-        />
+        <Box data-testid="terminal-body" sx={{ display: 'flex', flex: 1, minHeight: 0, minWidth: 0 }}>
+          <SplitLayout
+            paneIds={layout.tabs}
+            visible={visible}
+            direction={layout.split?.dir ?? 'v'}
+            ratio={ratio}
+            onRatioChange={setRatio}
+            focusedId={activeId}
+            onFocusPane={(sessionId) => {
+              if (sessionId !== activeId) update((l) => activateTab(l, sessionId));
+            }}
+            renderHeader={renderHeader}
+            renderPane={renderPane}
+          />
+          {aiAvailable && (
+            <TerminalAiPanel
+              open={aiOpen}
+              onClose={() => setAiOpen(false)}
+              variant={isWide ? 'side' : 'sheet'}
+              suggestion={aiSuggestion}
+              onInsert={(command) => {
+                insertSuggestedCommand(getView(), command);
+                if (!isWide) setAiOpen(false);
+              }}
+            />
+          )}
+        </Box>
         {/* The status bar is the bottom gutter: outside the FitAddon host (docs/SCROLLING.md). */}
         <TerminalStatusBar
           session={activeSession}
