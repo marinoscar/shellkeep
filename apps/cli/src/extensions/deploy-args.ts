@@ -15,6 +15,9 @@ import { DeploymentResolutionError, resolveDeployment, type ResolvedDeployment }
 //   refuse   print `message` and exit with the usage code;
 //   update-check  answer `deploy update --check` itself (extensions/update-check.ts).
 //
+// PLATFORM-ADOPTION-SHIM(#150): goes with the two shims it routes to (the
+// uninstall guard and `update --check`).
+//
 // Help and version are never inspected: they must describe the real surface.
 // =============================================================================
 
