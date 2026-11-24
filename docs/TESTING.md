@@ -924,7 +924,7 @@ Baselines change only on purpose. A diff on a screen your change did not touch i
 
 ### The `visual` CI job
 
-`ci.yml`'s `visual` job runs the suite in the pinned image with no database, API or SSH server. It fails on any diff or missing baseline. On failure only, it uploads `visual-report` (expected, actual and diff images), then regenerates every baseline in the same image and uploads them as `visual-baselines` (the contents of `tests/visual/__screenshots__/`). The job stays failed and CI commits nothing; a reviewer takes the baselines from the failed run, reviews them and commits them.
+`ci.yml`'s `visual` job runs the suite in the pinned image with no database, API or SSH server. It fails on any diff or missing baseline. On failure only, it uploads `visual-report` (expected, actual and diff images), then regenerates every baseline in the same image and uploads them as `visual-baselines` (the contents of `tests/visual/__screenshots__/`). The job stays failed. For a pull request from this repository it also pushes only `tests/visual/__screenshots__/` to a throwaway branch `ci/visual-baselines/<pr-number>-<run_id>`, cut from the PR head (never the PR branch, never `main`; a fork's PR gets no write). A reviewer who cannot download artifacts runs `git fetch origin ci/visual-baselines/<pr-number>-<run_id>`, checks the images out of that branch (`git checkout FETCH_HEAD -- tests/visual/__screenshots__`), reviews the PNGs and commits them to the PR branch. Delete the throwaway branch afterwards.
 
 ## E2E Testing with Playwright
 

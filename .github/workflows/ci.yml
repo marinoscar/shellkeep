@@ -268,6 +268,10 @@ jobs:
     # `@playwright/test` pin in tests/visual/package.json.
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
+    # The one job that may write: only the failure path below pushes a throwaway
+    # branch (never the PR branch, never main).
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -320,6 +324,40 @@ jobs:
           path: tests/visual/__screenshots__/
           if-no-files-found: ignore
           retention-days: 14
+      # The same images as a branch a reviewer can `git fetch` where artifact
+      # downloads are blocked. ONLY for a pull request from this repository (a
+      # fork never gets a write), ONLY tests/visual/__screenshots__/, and ONLY to
+      # a new throwaway branch cut from the PR head: never the PR branch, never
+      # main. The job stays failed; a person reviews the images and commits them
+      # to the PR branch.
+      - name: "Push the regenerated baselines to ci/visual-baselines/<pr>-<run>"
+        if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          BRANCH: ci/visual-baselines/${{ github.event.pull_request.number }}-${{ github.run_id }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          if [ -z "$(ls -A tests/visual/__screenshots__ 2>/dev/null)" ]; then
+            echo 'No regenerated baselines to push.'
+            exit 0
+          fi
+          # The checkout is the PR's merge commit; the branch starts at the PR
+          # head, and the working tree (with the new images) is kept as it is.
+          git fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout -q -b "$BRANCH"
+          git reset -q "$HEAD_SHA"
+          git add -A -- tests/visual/__screenshots__
+          if git diff --cached --quiet; then
+            echo 'The PR head already has these baselines; nothing to push.'
+            exit 0
+          fi
+          git commit -q -m 'chore(tests): regenerated visual baselines (for review, not for merging as is)'
+          git push origin "HEAD:refs/heads/${BRANCH}"
+          echo "Pushed ${BRANCH}"
 
   build:
     name: Build
