@@ -29,12 +29,15 @@ import { SshClientDoctorCheck } from '../../src/terminal/doctor/ssh-client.docto
 import { TerminalSshEgressContributor } from '../../src/terminal/doctor/ssh-egress.contributor';
 import { TmuxProbeDoctorCheck } from '../../src/terminal/doctor/tmux-probe.doctor-check';
 import { TMUX_PROBE_COMMAND, probeTmux } from '../../src/terminal/doctor/tmux-probe';
+import { SshConnectionFactory } from '../../src/ssh/ssh-connection.factory';
+import { SshHostKeyPolicyDoctorCheck } from '../../src/ssh/ssh-host-key-policy.doctor-check';
 import { DEFAULT_TERMINAL_SYSTEM_SETTINGS } from '../../src/terminal/settings/terminal.system-settings';
 import { startScriptedSshServer, type ScriptedSshServer } from './scripted-ssh-server';
 
 const PROFILE_ID = '5e55a0b1-7c1d-4f3e-9a2b-0c4d5e6f7a8b';
 const OWNER_ID = '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
 const SSH_PASSWORD = 'probe-password-for-tests';
+const ORG_ID = '99999999-8888-4777-8666-555555555555';
 
 /** The `terminal` system namespace as the Doctor reads it. */
 const settingsWith = (overrides: Partial<typeof DEFAULT_TERMINAL_SYSTEM_SETTINGS>): SystemSettingsService =>
@@ -47,6 +50,21 @@ const credentialsWith = (secrets: Record<string, string>): UserCredentialsServic
   ({
     getSecret: async (_userId: string, _purpose: string, name: string) => secrets[name] ?? null,
   }) as unknown as UserCredentialsService;
+
+/**
+ * The REAL connection factory over doubles: a profile table that must never be written (the
+ * Doctor forces `strict`), an audit sink that must stay silent, and the default policy.
+ */
+const factoryDoubles = () => {
+  const updateMany = jest.fn();
+  const audit = jest.fn();
+  const factory = new SshConnectionFactory(
+    { serverProfile: { updateMany, findFirst: jest.fn() } } as never,
+    { record: audit } as never,
+    { getNamespace: async () => ({ hostKeyPolicy: 'tofu_auto' }) } as never,
+  );
+  return { factory, updateMany, audit };
+};
 
 // -----------------------------------------------------------------------------
 // terminal.ssh.client
@@ -111,6 +129,7 @@ describe('terminal.tmux.probe', () => {
   const profileRow = (overrides: Record<string, unknown> = {}) => ({
     id: PROFILE_ID,
     userId: OWNER_ID,
+    orgId: ORG_ID,
     hostname: '127.0.0.1',
     port: server.port,
     username: server.username,
@@ -128,7 +147,7 @@ describe('terminal.tmux.probe', () => {
       settings: SystemSettingsService = settingsWith({ doctorProbeProfileId: PROFILE_ID }),
     ): DoctorCheckFactory =>
     ({ prisma }) =>
-      new TmuxProbeDoctorCheck(new DoctorCheckRegistry(), prisma.client, settings, credentials());
+      new TmuxProbeDoctorCheck(new DoctorCheckRegistry(), prisma.client, settings, credentials(), factoryDoubles().factory);
 
   const rowResult = (row: () => Record<string, unknown> | null) => ({ 'serverProfile.findUnique': () => row() });
 
@@ -220,6 +239,27 @@ describe('terminal.tmux.probe', () => {
     expect(server.connections.count).toBe(0);
   });
 
+  it('never auto-trusts a key, even when the system policy is tofu_auto (a Doctor check writes nothing)', async () => {
+    const doubles = factoryDoubles();
+    const result = await probeTmux(doubles.factory, {
+      id: PROFILE_ID,
+      userId: OWNER_ID,
+      orgId: ORG_ID,
+      hostname: '127.0.0.1',
+      port: server.port,
+      username: server.username,
+      authMethod: 'password',
+      password: SSH_PASSWORD,
+      // Pinned, but not to the key the server presents: strict means no store, no connect.
+      fingerprint: 'SHA256:' + 'Z'.repeat(43),
+    });
+
+    expect(result).toMatchObject({ kind: 'host-key-mismatch', presented: server.fingerprint });
+    expect(doubles.updateMany).not.toHaveBeenCalled();
+    expect(doubles.audit).not.toHaveBeenCalled();
+    expect(server.authAttempts.count).toBe(0);
+  });
+
   it('skips, touching neither the database nor the server, when no probe profile is set', async () => {
     const { outcome, prisma } = await run(profileRow(), settingsWith({ doctorProbeProfileId: null }));
 
@@ -245,6 +285,7 @@ describe('terminal.tmux.probe', () => {
       prisma.client,
       settingsWith({ doctorProbeProfileId: PROFILE_ID }),
       credentialsWith({ [`profile.${PROFILE_ID}.password`]: 'not-the-password' }),
+      factoryDoubles().factory,
     );
     const { outcome } = await runDoctorCheck(check, {}).then((r) => ({ outcome: r.outcome! }));
 
@@ -275,7 +316,11 @@ describe('terminal.tmux.probe', () => {
 
     const started = Date.now();
     const result = await probeTmux(
+      factoryDoubles().factory,
       {
+        id: PROFILE_ID,
+        userId: OWNER_ID,
+        orgId: ORG_ID,
         hostname: '127.0.0.1',
         port,
         username: 'probe',
@@ -291,6 +336,50 @@ describe('terminal.tmux.probe', () => {
     // ssh2's own handshake timeout or the probe's deadline, whichever fires first.
     expect(result).toMatchObject({ kind: 'error', message: expect.stringMatching(/timed out/i) });
     expect(Date.now() - started).toBeLessThan(3_000);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// ssh.host_key_policy (#60)
+// -----------------------------------------------------------------------------
+
+describe('ssh.host_key_policy', () => {
+  const checkWith =
+    (policy: string, untrusted: number): DoctorCheckFactory =>
+    ({ prisma }) =>
+      new SshHostKeyPolicyDoctorCheck(
+        new DoctorCheckRegistry(),
+        prisma.client,
+        { getNamespace: async () => ({ hostKeyPolicy: policy }) } as unknown as SystemSettingsService,
+      );
+
+  describeDoctorCheckConformance('ssh.host_key_policy', checkWith('tofu_prompt', 2), {
+    scenarios: [
+      { name: 'tofu_prompt', prisma: { results: { 'serverProfile.count': () => 2 } }, expectStatus: 'pass' },
+      { name: 'strict', build: checkWith('strict', 0), prisma: { results: { 'serverProfile.count': () => 0 } }, expectStatus: 'pass' },
+      { name: 'tofu_auto', build: checkWith('tofu_auto', 1), prisma: { results: { 'serverProfile.count': () => 1 } }, expectStatus: 'warn' },
+    ],
+  });
+
+  const run = async (policy: string, untrusted: number) => {
+    const prisma = createRecordingPrisma({ results: { 'serverProfile.count': () => untrusted } });
+    const check = await checkWith(policy, untrusted)({ prisma, storage: undefined as never });
+    const result = await runDoctorCheck(check, {});
+    return { outcome: result.outcome!, prisma };
+  };
+
+  it('reports the policy and the number of profiles that trust no key, reading one count', async () => {
+    const { outcome, prisma } = await run('tofu_prompt', 3);
+    expect(outcome.status).toBe('pass');
+    expect(outcome.data).toEqual({ policy: 'tofu_prompt', untrusted_profiles: 3 });
+    expect(prisma.violations()).toEqual([]);
+    expect(prisma.operations().map((op) => op.path)).toEqual(['serverProfile.count']);
+  });
+
+  it('warns, with a remedy, for tofu_auto', async () => {
+    const { outcome } = await run('tofu_auto', 0);
+    expect(outcome.status).toBe('warn');
+    expect(outcome.remedy).toContain('tofu_prompt');
   });
 });
 

@@ -10,7 +10,7 @@
 // Three overrides carry the doubles:
 //   - `PrismaService`       what every service and `PLATFORM_PRISMA` read through;
 //   - `PrismaSystemService` the bypass client the storage slice's checks use
-//                           (`forSystem` answers the same recording double);
+//                           (`forSystem` and `runAsSystem` answer the same recording double);
 //   - `STORAGE_PROVIDER`    the object store the two storage checks read (#50).
 // Everything else is the real `AppModule` over `createTestApp`'s mocked database.
 // =============================================================================
@@ -32,6 +32,7 @@ export const doctorConformanceFixture: DoctorConformanceFixture = {
           provide: PrismaSystemService,
           useValue: {
             forSystem: () => prisma.client,
+            runAsSystem: (_reason: string, fn: (tx: unknown) => unknown) => fn(prisma.client),
             $connect: async () => undefined,
             $disconnect: async () => undefined,
           },

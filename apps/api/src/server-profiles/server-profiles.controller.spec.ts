@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { withoutAuthGuards } from '../../test/helpers/allow-guards';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { HostKeyError } from '../ssh/host-key.error';
 import { ServerProfilesController } from './server-profiles.controller';
 import { ServerProfilesService } from './server-profiles.service';
 
@@ -20,6 +21,10 @@ describe('ServerProfilesController', () => {
       update: jest.fn(),
       remove: jest.fn(),
       testConnection: jest.fn(),
+      scanHostKey: jest.fn(),
+      trustHostKey: jest.fn(),
+      forgetHostKey: jest.fn(),
+      refreshFacts: jest.fn(),
     } as any;
 
     const module: TestingModule = await withoutAuthGuards(Test.createTestingModule({
@@ -174,6 +179,53 @@ describe('ServerProfilesController', () => {
       await expect(controller.testConnection('missing-uuid', userId, orgId)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('host key routes', () => {
+    const FP = 'SHA256:' + 'E'.repeat(43);
+
+    it('scan delegates with the caller scope', async () => {
+      const scan = { presented: { fingerprint: FP, algorithm: 'ssh-ed25519' }, trusted: null, matches: false };
+      mockServerProfilesService.scanHostKey.mockResolvedValue(scan as any);
+
+      await expect(controller.scanHostKey(profileId, userId, orgId)).resolves.toBe(scan);
+      expect(mockServerProfilesService.scanHostKey).toHaveBeenCalledWith(profileId, { userId, orgId });
+    });
+
+    it('trust passes the body through', async () => {
+      mockServerProfilesService.trustHostKey.mockResolvedValue({ id: profileId } as any);
+
+      await controller.trustHostKey(profileId, userId, orgId, { fingerprint: FP, confirmHostname: 'a.example.test' });
+
+      expect(mockServerProfilesService.trustHostKey).toHaveBeenCalledWith(
+        profileId,
+        { userId, orgId },
+        { fingerprint: FP, confirmHostname: 'a.example.test' },
+      );
+    });
+
+    it('forget delegates', async () => {
+      mockServerProfilesService.forgetHostKey.mockResolvedValue({ id: profileId } as any);
+      await controller.forgetHostKey(profileId, userId, orgId);
+      expect(mockServerProfilesService.forgetHostKey).toHaveBeenCalledWith(profileId, { userId, orgId });
+    });
+
+    it('facts refresh answers a host-key refusal as 409 with the code and both fingerprints', async () => {
+      const presented = { fingerprint: FP, algorithm: 'ssh-ed25519' };
+      mockServerProfilesService.refreshFacts.mockRejectedValue(
+        new HostKeyError('HOST_KEY_UNKNOWN', presented, undefined, profileId),
+      );
+
+      const failure = controller.refreshFacts(profileId, userId, orgId);
+
+      await expect(failure).rejects.toBeInstanceOf(ConflictException);
+      await expect(failure).rejects.toMatchObject({
+        response: {
+          code: 'HOST_KEY_UNKNOWN',
+          details: { presented, expected: null, serverProfileId: profileId },
+        },
+      });
     });
   });
 });

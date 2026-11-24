@@ -34,6 +34,7 @@ import { APP_USER_OWNED_MODELS } from './user-owned-models';
 import { registerShellkeepCredentialPurposes } from './credentials';
 // Channels, email templates and notification events (#51); registers itself at import.
 import './notifications';
+import { registerSshErrorCodes } from '../ssh/ssh.error-codes';
 
 registerPlatformPermissions({
   slices: [...ADOPTED_PLATFORM_SLICES],
@@ -42,3 +43,4 @@ registerPlatformPermissions({
 registerPlatformUserOwnedModels(APP_USER_OWNED_MODELS);
 registerPlatformModelOwnership(APP_MODEL_OWNERSHIP);
 registerShellkeepCredentialPurposes();
+registerSshErrorCodes();

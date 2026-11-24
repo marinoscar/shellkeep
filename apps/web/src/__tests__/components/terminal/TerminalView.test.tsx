@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
-import { render } from '../../utils/test-utils';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { render, mockUser } from '../../utils/test-utils';
 import { createRef } from 'react';
 
 // Hoist shared mocks so vi.mock factory closures can reference them
@@ -22,11 +23,20 @@ vi.mock('../../../hooks/useTerminal', () => ({
   })),
 }));
 
+// The host-key dialog's API calls (#60)
+vi.mock('../../../services/terminal-api', () => ({
+  trustHostKey: vi.fn(),
+  getServerProfile: vi.fn(),
+}));
+
 // Mock xterm CSS import
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
 
 import { TerminalView, type TerminalViewHandle } from '../../../components/terminal/TerminalView';
 import { useTerminal } from '../../../hooks/useTerminal';
+import { trustHostKey, getServerProfile } from '../../../services/terminal-api';
+import { HOST_KEY_MISMATCH_MESSAGE, HOST_KEY_UNTRUSTED_MESSAGE } from '../../../services/terminal-ws';
+import type { HostKeyRefusal, ServerProfile } from '../../../types';
 
 describe('TerminalView', () => {
   beforeEach(() => {
@@ -219,6 +229,82 @@ describe('TerminalView', () => {
       ref.current!.focus();
 
       expect((fakeTerminal as { focus: ReturnType<typeof vi.fn> }).focus).toHaveBeenCalled();
+    });
+  });
+
+  describe('Host-key prompt (#60)', () => {
+    const refusal: HostKeyRefusal = {
+      code: 'HOST_KEY_UNKNOWN',
+      presented: { fingerprint: 'SHA256:presentedKeyFingerprintAAAAAAAAAAAAAAAAAAAA', algorithm: 'ssh-ed25519' },
+      expected: null,
+      serverProfileId: 'profile-a',
+    };
+    const writer = { ...mockUser, permissions: [...mockUser.permissions, 'servers:read', 'servers:write'] };
+    const retryConnect = vi.fn();
+    const dismissHostKey = vi.fn();
+
+    function withRefusal(r: HostKeyRefusal | null) {
+      vi.mocked(useTerminal).mockReturnValue({
+        isConnected: false,
+        error: null,
+        reconnect: mockReconnect,
+        search: mockSearch,
+        sendInput: mockSendInput,
+        terminal: mockTerminalRef as ReturnType<typeof useTerminal>['terminal'],
+        hostKeyRefusal: r,
+        retryConnect,
+        dismissHostKey,
+      });
+    }
+
+    beforeEach(() => {
+      retryConnect.mockReset();
+      dismissHostKey.mockReset();
+      vi.mocked(trustHostKey).mockReset().mockResolvedValue({ id: 'profile-a' } as ServerProfile);
+      vi.mocked(getServerProfile)
+        .mockReset()
+        .mockResolvedValue({ hostname: 'server-a.example.test' } as ServerProfile);
+    });
+
+    it('shows no dialog without a refusal', () => {
+      withRefusal(null);
+      render(<TerminalView sessionId="session-1" />, { wrapperOptions: { user: writer } });
+      expect(screen.queryByTestId('host-key-dialog')).not.toBeInTheDocument();
+    });
+
+    it('opens the dialog on a refusal and retries the connection after trust', async () => {
+      const user = userEvent.setup();
+      withRefusal(refusal);
+      render(<TerminalView sessionId="session-1" />, { wrapperOptions: { user: writer } });
+
+      expect(screen.getByTestId('host-key-dialog')).toHaveAttribute('data-state', 'unknown');
+      await user.click(screen.getByRole('button', { name: 'Trust and connect' }));
+
+      expect(trustHostKey).toHaveBeenCalledWith('profile-a', refusal.presented.fingerprint, undefined);
+      await waitFor(() => expect(retryConnect).toHaveBeenCalledTimes(1));
+      expect(dismissHostKey).not.toHaveBeenCalled();
+    });
+
+    it('reports an untrusted key when the prompt is cancelled', async () => {
+      const user = userEvent.setup();
+      withRefusal(refusal);
+      render(<TerminalView sessionId="session-1" />, { wrapperOptions: { user: writer } });
+
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(dismissHostKey).toHaveBeenCalledWith(HOST_KEY_UNTRUSTED_MESSAGE);
+      expect(retryConnect).not.toHaveBeenCalled();
+    });
+
+    it('reports a refused changed key when the mismatch prompt is cancelled', async () => {
+      const user = userEvent.setup();
+      withRefusal({ ...refusal, code: 'HOST_KEY_MISMATCH', expected: 'SHA256:trustedB' });
+      render(<TerminalView sessionId="session-1" />, { wrapperOptions: { user: writer } });
+
+      expect(screen.getByTestId('host-key-dialog')).toHaveAttribute('data-state', 'mismatch');
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(dismissHostKey).toHaveBeenCalledWith(HOST_KEY_MISMATCH_MESSAGE);
     });
   });
 });

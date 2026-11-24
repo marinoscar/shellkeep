@@ -30,6 +30,11 @@ model ServerProfile {
   encryptedPrivateKey String?    @map("encrypted_private_key")
   encryptedPassphrase String?    @map("encrypted_passphrase")
   fingerprint         String?
+  hostKeyAlgorithm    String?    @map("host_key_algorithm")
+  hostKeyTrustedAt    DateTime?  @map("host_key_trusted_at") @db.Timestamptz
+  hostKeyTrustedBy    String?    @map("host_key_trusted_by") @db.Uuid
+  facts               Json?      @map("facts")
+  factsProbedAt       DateTime?  @map("facts_probed_at") @db.Timestamptz
   tags                String[]
   color               String     @default("default")
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz

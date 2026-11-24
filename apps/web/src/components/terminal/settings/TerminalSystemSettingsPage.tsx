@@ -6,6 +6,9 @@
  * thresholds and the server profile the Doctor's tmux probe uses. Read and
  * saved through the packaged `useSystemSettings` (PATCH with the row version).
  *
+ * Since #60 it also holds the `ssh` namespace's host-key policy (an "SSH host
+ * keys" section); a save patches only the namespaces that changed.
+ *
  * The card and the route gate on `system_settings:read` (what
  * `GET /api/system-settings` enforces); saving needs `system_settings:write`,
  * gated here by disabling the form.
@@ -40,16 +43,22 @@ import type {
   TerminalSystemSettingsDocument,
   TerminalSystemThreshold,
 } from '../../../lib/terminal/system-settings';
+import {
+  HOST_KEY_POLICY_OPTIONS,
+  readSshSystemSettings,
+  type HostKeyPolicy,
+} from '../../../lib/terminal/ssh-system-settings';
 
 /** The page title and description; mirror the admin `Terminal` card. */
 export const TERMINAL_SYSTEM_SETTINGS_TITLE = 'Terminal';
 export const TERMINAL_SYSTEM_SETTINGS_DESCRIPTION =
-  'When idle terminal sessions are detached, terminated and purged, and which server the Doctor probes.';
+  'When idle terminal sessions are detached, terminated and purged, which server the Doctor probes, and how SSH host keys are trusted.';
 
 /** The value of the probe select that means "no profile". */
 const NO_PROFILE = '';
 
-type Draft = Record<TerminalSystemThreshold, string> & { doctorProbeProfileId: string };
+type TerminalDraft = Record<TerminalSystemThreshold, string> & { doctorProbeProfileId: string };
+type Draft = TerminalDraft & { hostKeyPolicy: HostKeyPolicy };
 
 const FIELDS: { key: TerminalSystemThreshold; label: string; unit: string; help: string }[] = [
   {
@@ -72,8 +81,9 @@ const FIELDS: { key: TerminalSystemThreshold; label: string; unit: string; help:
   },
 ];
 
-function toDraft(settings: TerminalSystemSettings): Draft {
+function toDraft(settings: TerminalSystemSettings, hostKeyPolicy: HostKeyPolicy): Draft {
   return {
+    hostKeyPolicy,
     detachAfterMinutes: String(settings.detachAfterMinutes),
     terminateDetachedAfterHours: String(settings.terminateDetachedAfterHours),
     purgeTerminatedAfterDays: String(settings.purgeTerminatedAfterDays),
@@ -89,13 +99,15 @@ export function TerminalSystemSettingsPage() {
   const { profiles, fetchProfiles } = useServerProfiles();
 
   const current = useMemo(() => readTerminalSystemSettings(settings), [settings]);
-  const [draft, setDraft] = useState<Draft>(() => toDraft(current));
+  const currentSsh = useMemo(() => readSshSystemSettings(settings), [settings]);
+  const initial = useMemo(() => toDraft(current, currentSsh.hostKeyPolicy), [current, currentSsh]);
+  const [draft, setDraft] = useState<Draft>(initial);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    setDraft(toDraft(current));
-  }, [current]);
+    setDraft(initial);
+  }, [initial]);
 
   useEffect(() => {
     void fetchProfiles({ pageSize: 100 });
@@ -109,7 +121,11 @@ export function TerminalSystemSettingsPage() {
     FIELDS.map(({ key }) => [key, thresholdError(key, draft[key])]),
   ) as Record<TerminalSystemThreshold, string | null>;
   const invalid = FIELDS.some(({ key }) => errors[key] !== null);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(toDraft(current));
+  const { hostKeyPolicy, ...terminalDraft } = draft;
+  const { hostKeyPolicy: initialPolicy, ...terminalInitial } = initial;
+  const terminalDirty = JSON.stringify(terminalDraft) !== JSON.stringify(terminalInitial);
+  const sshDirty = hostKeyPolicy !== initialPolicy;
+  const dirty = terminalDirty || sshDirty;
   // A stored profile id that is not among the viewer's profiles stays selectable.
   const probeIsUnknown =
     draft.doctorProbeProfileId !== NO_PROFILE &&
@@ -120,14 +136,20 @@ export function TerminalSystemSettingsPage() {
     if (invalid || !canWrite) return;
     setSaveError(null);
     try {
+      // Only the namespaces that changed are sent.
       await updateSettings({
-        terminal: {
-          detachAfterMinutes: Number(draft.detachAfterMinutes),
-          terminateDetachedAfterHours: Number(draft.terminateDetachedAfterHours),
-          purgeTerminatedAfterDays: Number(draft.purgeTerminatedAfterDays),
-          doctorProbeProfileId:
-            draft.doctorProbeProfileId === NO_PROFILE ? null : draft.doctorProbeProfileId,
-        },
+        ...(terminalDirty
+          ? {
+              terminal: {
+                detachAfterMinutes: Number(draft.detachAfterMinutes),
+                terminateDetachedAfterHours: Number(draft.terminateDetachedAfterHours),
+                purgeTerminatedAfterDays: Number(draft.purgeTerminatedAfterDays),
+                doctorProbeProfileId:
+                  draft.doctorProbeProfileId === NO_PROFILE ? null : draft.doctorProbeProfileId,
+              },
+            }
+          : {}),
+        ...(sshDirty ? { ssh: { hostKeyPolicy } } : {}),
       });
       setSuccessMessage('Terminal settings saved');
     } catch (err) {
@@ -216,6 +238,36 @@ export function TerminalSystemSettingsPage() {
                       A profile you do not own ({draft.doctorProbeProfileId})
                     </MenuItem>
                   )}
+                </TextField>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  SSH host keys
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  What happens on the first connection to a server whose host key nobody has trusted
+                  yet. A changed key is always refused, whatever this says.
+                </Typography>
+                <TextField
+                  id="ssh-hostKeyPolicy"
+                  select
+                  label="Host-key policy"
+                  value={hostKeyPolicy}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, hostKeyPolicy: e.target.value as HostKeyPolicy }))
+                  }
+                  helperText={HOST_KEY_POLICY_OPTIONS.find((o) => o.value === hostKeyPolicy)?.help}
+                  disabled={!canWrite || isSaving}
+                  fullWidth
+                >
+                  {HOST_KEY_POLICY_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
                 </TextField>
               </CardContent>
             </Card>

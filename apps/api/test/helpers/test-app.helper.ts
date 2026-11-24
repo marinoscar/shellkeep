@@ -60,6 +60,7 @@ export async function createTestApp(
       .overrideProvider(PrismaSystemService)
       .useValue({
         forSystem: () => prismaMock,
+        runAsSystem: (_reason: string, fn: (tx: unknown) => unknown) => fn(prismaMock),
         $connect: async () => undefined,
         $disconnect: async () => undefined,
       });

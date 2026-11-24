@@ -16,7 +16,7 @@
 import { Server, utils } from 'ssh2';
 import type { AddressInfo } from 'node:net';
 
-import { fingerprintOf } from '../../src/terminal/doctor/host-key-fingerprint';
+import { fingerprintOf } from '../../src/ssh/host-key';
 
 export interface ExecReply {
   stdout?: string;
@@ -39,7 +39,13 @@ export interface ScriptedSshServer {
 }
 
 export async function startScriptedSshServer(
-  options: { username?: string; password?: string; reply?: ExecReply } = {},
+  options: {
+    username?: string;
+    password?: string;
+    reply?: ExecReply;
+    /** Listen on this port (to replace a server at the same address with another key). */
+    port?: number;
+  } = {},
 ): Promise<ScriptedSshServer> {
   const username = options.username ?? 'probe';
   const password = options.password ?? 'probe-password-for-tests';
@@ -94,14 +100,18 @@ export async function startScriptedSshServer(
     socket.on('error', () => undefined);
   });
 
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(options.port ?? 0, '127.0.0.1', resolve));
   const port = (server.address() as AddressInfo).port;
 
   return Object.assign(state, {
     port,
     close: () =>
       new Promise<void>((resolve) => {
-        for (const socket of sockets) socket.destroy();
+        // ssh2 emits its own `Connection` (it has `end`, not `destroy`); a raw socket has `destroy`.
+        for (const socket of sockets) {
+          const closable = socket as unknown as { destroy?: () => void; end?: () => void };
+          (closable.destroy ?? closable.end)?.call(socket);
+        }
         server.close(() => resolve());
       }),
   });

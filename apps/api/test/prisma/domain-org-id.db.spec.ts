@@ -3,8 +3,10 @@
 // domain tables carry a NOT NULL org_id (issue #45)
 // =============================================================================
 //
-// Self-contained: it connects with POSTGRES_* (a role that may CREATE DATABASE),
-// creates a scratch database per case, replays every prisma/migrations/*/migration.sql
+// Self-contained: it connects as the cluster ADMINISTRATOR (TEST_DB_ADMIN_USER /
+// TEST_DB_ADMIN_PASSWORD, else POSTGRES_*; see helpers/db-test-support.ts), never as
+// the application role the second tier of `test:db` runs as (#52): replaying the whole
+// history creates extensions and database objects an ordinary role may not. It creates a scratch database per case, replays every prisma/migrations/*/migration.sql
 // in directory order (what `prisma migrate deploy` does on an empty database)
 // and drops the scratch database afterwards. Run with `npm run test:db`.
 // =============================================================================
@@ -15,17 +17,13 @@ import { join } from 'node:path';
 
 import { Client } from 'pg';
 
+import { adminLogin } from '../helpers/db-test-support';
+
 const MIGRATIONS = join(__dirname, '..', '..', 'prisma', 'migrations');
 const ORG_ID_MIGRATION = 'shellkeep_domain_org_id';
 
 function connection(database: string): Client {
-  return new Client({
-    host: process.env.POSTGRES_HOST || 'localhost',
-    port: Number(process.env.POSTGRES_PORT || '5432'),
-    user: process.env.POSTGRES_USER || 'postgres',
-    password: process.env.POSTGRES_PASSWORD || 'postgres',
-    database,
-  });
+  return new Client({ ...adminLogin(), database });
 }
 
 function migrationDirs(): string[] {

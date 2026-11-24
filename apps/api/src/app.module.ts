@@ -17,6 +17,7 @@ import { identityModule } from './platform/identity/identity.config';
 import { credentialsModules } from './platform/credentials/credentials.config';
 import { emailModule } from './platform/email/email.config';
 import { BroadcastsModule, notificationsModule } from './platform/notifications/notifications.config';
+import { dbBackupModule } from './platform/db-backup/db-backup.config';
 import { jobsModule, nodeCredentialModule, nodesModule } from './platform/jobs/jobs.config';
 import {
   ProfileImageModule,
@@ -100,6 +101,10 @@ import configuration from './config/configuration';
     notificationsModule,
     // Admin broadcasts (`/api/admin/broadcasts`, `broadcasts:read|write`).
     BroadcastsModule,
+    // The platform database backup slice (#52): `/api/admin/db-backup` (backups to the
+    // storage provider, schedule and retention, in-app restore), its four job types and
+    // Doctor checks. After storage, notifications and the jobs queue it depends on.
+    dbBackupModule,
     ServerProfilesModule,
     TerminalModule,
   ],
