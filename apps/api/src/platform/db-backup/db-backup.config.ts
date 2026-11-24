@@ -21,7 +21,7 @@
 // (`database_backup_runs`) and the restore's own job row across the swap; the
 // SSH secrets are ciphertext in `credentials`-store rows inside the archive and
 // open again with the same `SECRETS_ENCRYPTION_KEY`, which is held outside the
-// database. See docs/runbooks/database-restore.md.
+// database. See docs/runbooks/database-backup-restore.md.
 // =============================================================================
 
 import { DbBackupModule as PlatformDbBackupModule } from '@marinoscar/platform-api/db-backup';
