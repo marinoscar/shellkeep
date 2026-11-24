@@ -165,7 +165,9 @@ export default function FileEditor({
   const extensions = useMemo(
     () => [
       EditorState.readOnly.of(true),
-      EditorView.contentAttributes.of({ 'aria-label': ariaLabel, 'aria-readonly': 'true' }),
+      // Focusable for selection, the keyboard and search, but a tap on a phone
+      // must not raise the on-screen keyboard over a read-only document.
+      EditorView.contentAttributes.of({ 'aria-label': ariaLabel, 'aria-readonly': 'true', inputmode: 'none' }),
       ...(wrap ? [EditorView.lineWrapping] : []),
       ...(language === 'log' ? [logLevelHighlighter] : []),
       languageExtension,

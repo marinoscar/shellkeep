@@ -113,6 +113,9 @@ describe('FileViewer guardrail states (#154)', () => {
 
     await waitFor(async () => expect(await editorText()).toBe('[main]\nname = demo\n'));
     expect(screen.getByText('INI / config')).toBeInTheDocument();
+    const content = screen.getByRole('textbox', { name: 'Contents of settings.ini' });
+    expect(content).toHaveAttribute('aria-readonly', 'true');
+    expect(content).toHaveAttribute('inputmode', 'none');
     expect(screen.queryByRole('navigation', { name: 'File windows' })).not.toBeInTheDocument();
     expect(contentRequests).toHaveLength(1);
     expect(contentRequests[0]!.get('offset')).toBe('0');
