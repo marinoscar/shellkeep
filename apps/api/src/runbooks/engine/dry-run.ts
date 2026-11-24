@@ -170,7 +170,8 @@ function syntaxCheck(interpreter: 'bash' | 'sh', body: string, seed: string): st
 export function globQuote(path: string): string | null {
   let out = '';
   for (const ch of path) {
-    if (/[\u0000-\u001f\u007f]/.test(ch)) return null;
+    const code = ch.codePointAt(0)!;
+    if (code < 0x20 || code === 0x7f) return null; // a control character
     out += /[A-Za-z0-9/._+,@:=%~*?[\]-]/.test(ch) ? ch : `\\${ch}`;
   }
   return out;

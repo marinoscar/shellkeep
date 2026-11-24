@@ -63,6 +63,7 @@ export class RunbookRunsController {
   @Auth({ permissions: [PERMISSIONS.RUNBOOKS_READ] })
   @ApiOperation({ summary: 'A run with its targets, the step matrix and counts (requires runbooks:read)' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'The run with its targets, step matrix, approvals and counts' })
   @ApiResponse({ status: 404, description: 'Run not found' })
   get(@Param('id', ParseUUIDPipe) id: string, @CurrentPrincipal() principal: Principal) {
     return this.runs.get(principal, id);

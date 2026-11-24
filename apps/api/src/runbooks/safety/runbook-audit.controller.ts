@@ -13,6 +13,9 @@ const pageShape = {
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(1000).default(200),
 };
+/** An ISO 8601 date or date-time. */
+const instant = z.string().max(40).refine((v) => !Number.isNaN(Date.parse(v)), { message: 'Not a valid date or date-time' });
+
 export class AuditQueryDto extends createZodDto(z.object(pageShape)) {}
 export class AuditExportQueryDto extends createZodDto(z.object({ format: z.enum(['csv', 'json']).default('csv') })) {}
 export class CommandsQueryDto extends createZodDto(
@@ -20,8 +23,8 @@ export class CommandsQueryDto extends createZodDto(
     serverId: z.string().uuid().optional(),
     userId: z.string().uuid().optional(),
     runId: z.string().uuid().optional(),
-    from: z.coerce.date().optional(),
-    to: z.coerce.date().optional(),
+    from: instant.optional(),
+    to: instant.optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(50),
   }),
@@ -80,6 +83,7 @@ export class RunbookAuditController {
   })
   @ApiResponse({ status: 200, description: 'Paginated command rows: `{ items, total, page, pageSize }`' })
   commands(@CurrentPrincipal() principal: Principal, @Query() query: CommandsQueryDto) {
-    return this.audit.commands(principal, query);
+    const { from, to, ...rest } = query;
+    return this.audit.commands(principal, { ...rest, ...(from ? { from: new Date(from) } : {}), ...(to ? { to: new Date(to) } : {}) });
   }
 }

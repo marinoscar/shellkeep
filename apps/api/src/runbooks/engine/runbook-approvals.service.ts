@@ -236,9 +236,10 @@ export class RunbookApprovalsService {
   ): Promise<AdvanceOutcome> {
     const { runId, orgId } = approval;
     const local: AdvanceOutcome = { runId, events, cancelRequests: [], finished: null, approvals: [], dispatched: 0 };
-    const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM runbook_runs WHERE id = ${runId}::uuid FOR UPDATE`;
-    const run = locked.length > 0 ? await tx.runbookRun.findUnique({ where: { id: runId } }) : null;
-    if (!run || run.status !== 'queued') {
+    // A guarded write takes the row lock, so a decision and a cancel of the same run take turns.
+    const touched = await tx.runbookRun.updateMany({ where: { id: runId, status: 'queued' }, data: { updatedAt: now } });
+    const run = touched.count === 1 ? await tx.runbookRun.findUnique({ where: { id: runId } }) : null;
+    if (!run) {
       throw new HttpException({ code: RUNBOOK_RUN_ERROR_CODES.RUN_STATE, message: 'The run is no longer waiting for this approval' }, 409);
     }
 
