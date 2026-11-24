@@ -189,4 +189,20 @@ describe('RunbookBuilderPage', () => {
     expect(screen.queryByRole('button', { name: 'Draft with AI' })).not.toBeInTheDocument();
     aiOn.value = true;
   });
+
+  it('gives the Tags field a real column beside Name, not a shrinkable flex sliver (#135)', async () => {
+    server.use(http.get(`*/api/runbooks/${RUNBOOK_ID}`, () => HttpResponse.json({ data: makeDetail() })));
+    renderEdit();
+    await screen.findByRole('textbox', { name: 'Command' });
+    const row = screen.getByTestId('builder-header-row');
+    const tags = screen.getByTestId('builder-tags-field');
+    // The header row is a grid (the column width is the grid's, not a flex basis
+    // the Name field can squeeze to zero), Name and Tags are its two cells, and
+    // Tags keeps a usable minimum width.
+    expect(getComputedStyle(row).display).toBe('grid');
+    expect(within(row).getByRole('textbox', { name: /^Name/ })).toHaveValue('Patch web tier');
+    expect(tags.parentElement).toBe(row);
+    expect(getComputedStyle(tags).flexBasis).not.toBe('0%');
+    expect(parseFloat(getComputedStyle(tags).minWidth)).toBeGreaterThanOrEqual(200);
+  });
 });
