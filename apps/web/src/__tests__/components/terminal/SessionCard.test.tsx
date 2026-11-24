@@ -261,3 +261,18 @@ describe('SessionCard', () => {
     });
   });
 });
+
+describe('SessionCard summarize action (#59)', () => {
+  it('shows Summarize session only when the page passes a handler, and not for a terminated session', async () => {
+    const onSummarize = vi.fn();
+    const { rerender } = render(<SessionCard {...defaultProps} />);
+    expect(screen.queryByRole('button', { name: 'Summarize session' })).not.toBeInTheDocument();
+
+    rerender(<SessionCard {...defaultProps} onSummarize={onSummarize} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Summarize session' }));
+    expect(onSummarize).toHaveBeenCalledWith(baseSession);
+
+    rerender(<SessionCard {...defaultProps} onSummarize={onSummarize} session={{ ...baseSession, status: 'terminated' }} />);
+    expect(screen.queryByRole('button', { name: 'Summarize session' })).not.toBeInTheDocument();
+  });
+});

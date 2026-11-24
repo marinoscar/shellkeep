@@ -78,6 +78,8 @@ export interface ShortcutsUserSettings {
 /** App actions whose keyboard shortcut a user may rebind, by action id. */
 export interface ActionShortcuts {
   'terminal.aiAssist'?: Keystroke;
+  /** #58; absent means Mod+Shift+E. */
+  'terminal.aiExplain'?: Keystroke;
 }
 
 /**

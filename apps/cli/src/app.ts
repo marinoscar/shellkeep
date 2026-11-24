@@ -5,13 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { githubRawManifest, type CreateCliOptions } from '@marinoscar/platform-cli';
 import { APP_NAME, CLI_NAME, REPO_SLUG } from '@shellkeep/shared';
 
+import { runbookCommand } from './commands/runbook.js';
 import { serversCommand } from './commands/servers.js';
 import { sessionsCommand } from './commands/sessions.js';
 import { dockerNetworkCheck } from './extensions/docker-network.check.js';
 import { SHELLKEEP_ENV_SPEC } from './extensions/env-spec.js';
 import { sshEgressCheck } from './extensions/ssh-egress.check.js';
 import { tmuxCheck } from './extensions/tmux.check.js';
-import { serversScreen, sessionsScreen } from './tui/screens.js';
+import { runsScreen, serversScreen, sessionsScreen } from './tui/screens.js';
 
 // =============================================================================
 // ShellKeep's CLI, composed on the platform engine  (issue #72)
@@ -22,8 +23,9 @@ import { serversScreen, sessionsScreen } from './tui/screens.js';
 // the worker-node engine are `@marinoscar/platform-cli`'s; this app adds only
 // what the platform does not have:
 //
-//   - `servers` and `sessions`: commands over the API (`extraCommands`, one
-//     file each under src/commands/), plus their TUI screens (`tuiScreens`);
+//   - `servers`, `sessions` and `runbook`: commands over the API
+//     (`extraCommands`, one file each under src/commands/), plus their TUI
+//     screens (`tuiScreens`: Servers, Sessions, Runs);
 //   - the metadata of the `.env.example` keys that are ShellKeep's own
 //     (`envSpecFragments`) and help for the platform's `APP_BIND_PORT`;
 //   - deploy checks: `docker-network-devnet`, `tmux-on-api-image`, `ssh-egress`;
@@ -39,11 +41,12 @@ import { serversScreen, sessionsScreen } from './tui/screens.js';
 // literals on purpose: a server deployed by any version of this CLI keeps being
 // read.
 //
-// `nodeExecutors` is empty: no ShellKeep job type is node-eligible yet (it
-// would carry `nodeResultSchema` and `persistNodeResult`; the session reaper,
-// `terminal.session.reap`, writes as it goes and needs the database). The
-// runbook engine's job types may add executors when they declare themselves
-// eligible.
+// `nodeExecutors` is empty: no ShellKeep job type is node-eligible (it would
+// carry `nodeResultSchema` and `persistNodeResult`). The session reaper,
+// `terminal.session.reap`, writes as it goes and needs the database; the four
+// runbook job types (#62: run start, run advance, target run, logs compact) are
+// server-only, because a target run holds the SSH credential of the server and
+// the engine never brokers it to a worker node.
 // =============================================================================
 
 /**
@@ -131,8 +134,8 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
     repoSlug: REPO_SLUG,
   },
   version: readVersion(),
-  extraCommands: [serversCommand(), sessionsCommand()],
-  tuiScreens: [serversScreen, sessionsScreen],
+  extraCommands: [serversCommand(), sessionsCommand(), runbookCommand()],
+  tuiScreens: [serversScreen, sessionsScreen, runsScreen],
   nodeExecutors: [],
   envSpecFragments: [SHELLKEEP_ENV_SPEC],
   envAnnotations: {

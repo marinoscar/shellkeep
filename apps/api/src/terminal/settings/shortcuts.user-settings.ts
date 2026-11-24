@@ -71,12 +71,12 @@ export const keyShortcutListSchema = z.array(keyShortcutSchema).max(MAX_KEY_SHOR
 /**
  * The keyboard shortcuts of app actions (issue #57), by action id. Only ids listed here exist;
  * an absent id means the built-in binding (`terminal.aiAssist`: Mod+Shift+A, Ctrl on Linux and
- * Windows, Cmd on macOS).
+ * Windows, Cmd on macOS; `terminal.aiExplain` (#58): Mod+Shift+E).
  */
-export const ACTION_SHORTCUT_IDS = ['terminal.aiAssist'] as const;
+export const ACTION_SHORTCUT_IDS = ['terminal.aiAssist', 'terminal.aiExplain'] as const;
 
 export const actionShortcutsSchema = z
-  .object({ 'terminal.aiAssist': keystrokeSchema.optional() })
+  .object({ 'terminal.aiAssist': keystrokeSchema.optional(), 'terminal.aiExplain': keystrokeSchema.optional() })
   .strict();
 
 export type ActionShortcuts = z.infer<typeof actionShortcutsSchema>;
