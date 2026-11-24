@@ -43,7 +43,6 @@ import { RUNBOOK_SECRET_PURPOSE } from '../runbooks.credentials';
 import { RunbooksService } from '../runbooks.service';
 import { RunbookRiskService, type DefinitionRisk } from '../safety/runbook-risk.service';
 import { targetSelectorSchema, type RunbookDefinition } from '../schema/runbook-definition.schema';
-import { TargetResolverService } from '../target-resolver.service';
 import type { ApproveScheduleDto, CreateScheduleDto, SchedulesQueryDto, UpdateScheduleDto } from './dto/schedule.dto';
 import { PREVIEW_COUNT, ScheduleCronError, assertValidSchedule, nextFireAfter, nextFireTimes } from './schedule-cron';
 import { SCHEDULE_DISABLED_REASONS, type OverlapPolicy } from './schedules.constants';
@@ -111,7 +110,6 @@ export class RunbookSchedulesService {
     private readonly runs: RunbookRunsService,
     private readonly settings: RunbookSettingsService,
     private readonly credentials: OrgCredentialsService,
-    private readonly resolver: TargetResolverService,
     private readonly risk: RunbookRiskService,
     private readonly metrics: EngineMetricsService,
     @Inject(AUDIT_SINK) private readonly auditSink: AuditSink,
