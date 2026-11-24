@@ -17,10 +17,11 @@
 // (`decided_by`): the same detach the foreign keys perform when a user ROW goes, done here because a data
 // purge keeps the user row.
 //
-// STEP LOGS. A step's output is concatenated into object storage when the step ends and only its KEY is
+// STEP LOGS AND ARTIFACTS (#63). A step's output is concatenated into object storage when the step ends and only its KEY is
 // recorded (`runbook_run_steps.log_storage_key`): there is no `storage_objects` row, so the platform's
 // `storageObjectColumns` (which names object IDS) cannot reach it. This job collects the keys first and
-// deletes the bytes BEFORE the rows: a provider failure throws, the rows are still there, and the queue's
+// deletes the bytes BEFORE the rows (the collected archives and the bundles of a run are keyed on their
+// `runbook_artifacts` rows and go the same way; a link to a run's bundle is deleted with its run): a provider failure throws, the rows are still there, and the queue's
 // retry finds the keys again; a key that is already gone is not an error.
 //
 // `runbooks` and its run tables are `org` tables under forced row-level security: the work runs on the
@@ -41,7 +42,8 @@ import { STORAGE_PROVIDER, deleteStorageKeys, type StorageProvider } from '@mari
 import { USER_DATA_DB, type UserDataDbPort } from '@marinoscar/platform-api/user-data';
 
 import { RUNBOOK_RESOURCE } from '../../app-registrations/sharing';
-import { RUNBOOK_RUN_SUBJECT, RUNBOOK_RUN_TARGET_SUBJECT } from '../engine/engine.constants';
+import { RUNBOOK_ARTIFACTS_SUBJECT, RUNBOOK_RUN_SUBJECT, RUNBOOK_RUN_TARGET_SUBJECT } from '../engine/engine.constants';
+import { RUNBOOK_RUN_RESOURCE } from '../sharing/runbook-run.resource';
 import { RUNBOOKS_USER_DATA_PURGE_JOB_TYPE, runbooksUserDataPurgePayloadSchema } from './runbooks-purge.job-type';
 
 /** What one run did (counts only). */
@@ -100,6 +102,12 @@ export class RunbooksUserDataPurgeHandler implements JobHandler, OnModuleInit {
           select: { logStorageKey: true },
         });
         for (const step of steps) if (step.logStorageKey) keys.push(step.logStorageKey);
+        // The collected log archives and the run bundles (#63): objects too, keyed on their own rows.
+        const artifacts: { storageKey: string }[] = await tx.runbookArtifact.findMany({
+          where: { run: { runbookId: { in: part } } },
+          select: { storageKey: true },
+        });
+        for (const artifact of artifacts) keys.push(artifact.storageKey);
       }
       return { ids: runbookIds, logKeys: keys };
     });
@@ -127,12 +135,15 @@ export class RunbooksUserDataPurgeHandler implements JobHandler, OnModuleInit {
               OR: [
                 { subjectType: RUNBOOK_RUN_SUBJECT, subjectId: { in: runs.map((run) => run.id) } },
                 { subjectType: RUNBOOK_RUN_TARGET_SUBJECT, subjectId: { in: targets.map((target) => target.id) } },
+                { subjectType: RUNBOOK_ARTIFACTS_SUBJECT, subjectId: { in: runs.map((run) => run.id) } },
                 { subjectId: { in: part } },
               ],
             },
           })
         ).count;
         grants += await deleteGrantsForResources(tx, RUNBOOK_RESOURCE, part);
+        // The share links of those runs' bundles (#63): a link must not outlive its run.
+        grants += await deleteGrantsForResources(tx, RUNBOOK_RUN_RESOURCE, runs.map((run) => run.id));
         deleted += (await tx.runbook.deleteMany({ where: { id: { in: part } } })).count;
       }
       const kept = await tx.runbook.updateMany({ where: { ownerUserId: userId, ownerGroupId: { not: null } }, data: { ownerUserId: null } });

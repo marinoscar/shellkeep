@@ -137,6 +137,7 @@ model RunbookRun {
   steps          RunbookRunStep[]
   chunks         RunbookRunLogChunk[]
   approvals      RunbookApproval[]
+  artifacts      RunbookArtifact[]
 
   @@unique([id, orgId])
   @@index([orgId, createdAt(sort: Desc)])
@@ -174,6 +175,7 @@ model RunbookRunTarget {
   run           RunbookRun        @relation(fields: [runId, orgId], references: [id, orgId], onDelete: Cascade)
   steps         RunbookRunStep[]
   approvals     RunbookApproval[]
+  artifacts     RunbookArtifact[]
 
   @@unique([id, orgId])
   @@unique([runId, position])
@@ -217,6 +219,7 @@ model RunbookRunStep {
   target       RunbookRunTarget          @relation(fields: [runTargetId, orgId], references: [id, orgId], onDelete: Cascade)
   chunks       RunbookRunLogChunk[]
   executions   RunbookCommandExecution[]
+  artifacts    RunbookArtifact[]
 
   @@unique([id, orgId])
   @@unique([runTargetId, stepIndex])
@@ -329,4 +332,51 @@ extend model Organization {
 
 extend model Group {
   ownedRunbooks Runbook[] @relation("RunbookOwnerGroup")
+}
+
+// =============================================================================
+// Runbook artifacts (issue #63): collected logs and the zip bundle of a run.
+// =============================================================================
+//
+// An `org` table: NOT NULL `org_id`, forced row-level security (`runbook_artifacts_org_isolation`, listed under
+// `rlsPolicies` in prisma/platform.lock) and COMPOSITE foreign keys that include `org_id` to the run, its target
+// and its step (a foreign-key check bypasses RLS).
+//   kind   target_archive   one tar.gz one `collect_logs` step collected on one server (run_target_id, run_step_id set)
+//          bundle           the zip of a whole run (both NULL)
+// `storage_key` is the object key under the `runbook-artifacts/<orgId>/<runId>/` prefix (like `log_storage_key`
+// of a step), not a `storage_objects` row: the retention purge deletes by key and the rows with it.
+// Raw-SQL index (intentional schema drift, never an `@@unique`): `runbook_artifacts_bundle_uniq_idx`, a unique
+// `(run_id) WHERE kind = 'bundle'`: one bundle per run. Listed in `rawSqlIndexes` in prisma/platform.lock.
+
+model RunbookArtifact {
+  id          String    @id @default(uuid()) @db.Uuid
+  orgId       String    @map("org_id") @db.Uuid
+  runId       String    @map("run_id") @db.Uuid
+  /// NULL for a bundle.
+  runTargetId String?   @map("run_target_id") @db.Uuid
+  /// NULL for a bundle.
+  runStepId   String?   @map("run_step_id") @db.Uuid
+  kind        String
+  storageKey  String    @map("storage_key") @db.VarChar(512)
+  fileCount   Int       @default(0) @map("file_count")
+  sizeBytes   BigInt    @default(0) @map("size_bytes")
+  sha256      String    @db.Char(64)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+
+  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run          RunbookRun        @relation(fields: [runId, orgId], references: [id, orgId], onDelete: Cascade)
+  target       RunbookRunTarget? @relation(fields: [runTargetId, orgId], references: [id, orgId], onDelete: Cascade)
+  step         RunbookRunStep?   @relation(fields: [runStepId, orgId], references: [id, orgId], onDelete: Cascade)
+
+  @@index([runId, kind])
+  @@index([orgId])
+  @@index([runTargetId])
+  @@index([runStepId])
+  @@index([expiresAt])
+  @@map("runbook_artifacts")
+}
+
+extend model Organization {
+  runbookArtifacts RunbookArtifact[]
 }

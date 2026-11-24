@@ -121,7 +121,11 @@ export const runbookStepSchema = z.discriminatedUnion('kind', [
   z.object({
     ...base,
     kind: z.literal('collect_logs'),
-    paths: z.array(absPath).max(50).default([]),
+    // A path or glob travels as ONE line of an environment variable: no line break or other control character.
+    paths: z
+      .array(absPath.refine((p) => ![...p].some((c) => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f), { message: 'Path must not contain control characters' }))
+      .max(50)
+      .default([]),
     journalUnits: z
       .array(z.string().regex(/^[A-Za-z0-9@._-]{1,128}$/, 'Not a valid systemd unit name'))
       .max(20)
@@ -129,6 +133,8 @@ export const runbookStepSchema = z.discriminatedUnion('kind', [
     since: z.string().regex(/^\d{1,4}[mhd]$/, 'Use a number and m, h or d (for example 24h)').optional(),
     maxBytesPerFile: z.number().int().min(1024).max(50 * 2 ** 20).default(10 * 2 ** 20),
     maxTotalBytes: z.number().int().min(1024).max(500 * 2 ** 20).default(100 * 2 ** 20),
+    /** A step that matched no file fails (default: it succeeds with `file_count` 0). Additive: `schemaVersion` stays 1. */
+    failIfEmpty: z.boolean().default(false),
     runAs,
   }),
   z.object({

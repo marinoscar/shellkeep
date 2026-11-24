@@ -37,6 +37,7 @@ import { TerminalModule } from './terminal/terminal.module';
 import { RunbooksModule } from './runbooks/runbooks.module';
 import { TerminalAiModule } from './terminal-ai/terminal-ai.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { onboardingModule } from './platform/onboarding/onboarding.config';
 
 import configuration from './config/configuration';
 
@@ -154,6 +155,11 @@ import configuration from './config/configuration';
     // The Android companion (#74): trusted apps, `/.well-known/assetlinks.json`, hosted APK releases, signed
     // download links and the `android_app` push channel's sender. After storage and notifications.
     androidAppModule,
+    // Onboarding (#70): `GET /api/onboarding` (the Getting started checklist and the admin Setup guide,
+    // derived per request from the facts and steps of `onboarding/onboarding.manifest.ts`) and
+    // `GET /api/admin/onboarding/metrics` (`system_settings:read`, the activation metrics). After the
+    // Doctor (the admin steps reuse its checks) and AI (the `ai` feature gate).
+    onboardingModule,
   ],
   providers: [
     // Global validation pipe (Zod)

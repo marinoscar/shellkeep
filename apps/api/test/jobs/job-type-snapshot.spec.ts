@@ -32,6 +32,9 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'runbook.target.run': 'Run a runbook on one server',
   'runbook.run.advance': 'Advance a runbook run',
   'runbook.logs.compact': 'Reconcile runbook runs and compact their logs',
+  // Collected logs (#63): the zip bundle of a run (node-eligible by declaration) and the artifacts retention purge.
+  'runbook.artifacts.bundle': 'Bundle the logs of a runbook run',
+  'runbook.artifacts.purge': 'Purge runbook logs and artifacts',
   // The jobs slice: its own housekeeping.
   'job.history.purge': 'Job history purge',
   'audit.events.purge': 'Audit log purge',

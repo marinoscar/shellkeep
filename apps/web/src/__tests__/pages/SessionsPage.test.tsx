@@ -86,6 +86,25 @@ describe('SessionsPage', () => {
     vi.mocked(useSessions).mockReturnValue({ ...defaultUseSessions });
   });
 
+  describe('?new=1 (onboarding #70)', () => {
+    it('opens the new-session dialog when the URL carries new=1', async () => {
+      render(<SessionsPage />, { wrapperOptions: { route: '/sessions?new=1' } });
+      expect(await screen.findByTestId('new-session-dialog')).toBeInTheDocument();
+    });
+
+    it('does not open the dialog without the flag', () => {
+      render(<SessionsPage />, { wrapperOptions: { route: '/sessions' } });
+      expect(screen.queryByTestId('new-session-dialog')).not.toBeInTheDocument();
+    });
+
+    it('drops the flag once handled, so closing the dialog keeps it closed', async () => {
+      const user = userEvent.setup();
+      render(<SessionsPage />, { wrapperOptions: { route: '/sessions?new=1' } });
+      await user.click(await screen.findByText('Close dialog'));
+      expect(screen.queryByTestId('new-session-dialog')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Rendering', () => {
     it('should render the page heading', () => {
       render(<SessionsPage />);

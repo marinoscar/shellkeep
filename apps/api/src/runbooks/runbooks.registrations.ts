@@ -12,7 +12,7 @@
 import { registerSystemAccessReason } from '@marinoscar/platform-api/core';
 
 import { registerRunbookNotifications } from '../notifications-registry/runbooks.notifications';
-import { RUNBOOKS_RECONCILE_REASON } from './engine/engine.constants';
+import { RUNBOOKS_ARTIFACTS_PURGE_REASON, RUNBOOKS_RECONCILE_REASON } from './engine/engine.constants';
 import { registerRunbookRunErrorCodes } from './engine/engine.error-codes';
 import { registerRunbookErrorCodes } from './runbooks.error-codes';
 
@@ -28,6 +28,11 @@ export function registerRunbookRegistrations(): void {
     id: RUNBOOKS_RECONCILE_REASON,
     description:
       'The runbook reconcile job (runbook.logs.compact) finds stuck runs, lost executors, expired approvals and orphan log chunks across every organization.',
+  });
+  registerSystemAccessReason({
+    id: RUNBOOKS_ARTIFACTS_PURGE_REASON,
+    description:
+      'The runbook artifacts purge (runbook.artifacts.purge) finds runs past the retention window across every organization and deletes their stored logs, archives and bundle.',
   });
   registerRunbookNotifications();
 }

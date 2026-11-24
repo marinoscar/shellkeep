@@ -73,8 +73,12 @@ describe('the ShellKeep Android companion (#74)', () => {
     expect(card?.permission).toBe('system_settings:read');
     expect(card?.path).toBe('/admin/settings/android');
     expect(card && 'feature' in card ? card.feature : undefined).toBeUndefined();
-    // Appended: it is the last card of the group.
-    expect(general?.cards.at(-1)?.path).toBe(androidAppSettingsPage.card.path);
+    // Appended, not inserted: cards appended later (such as the Setup guide) follow it,
+    // so it is never required to be last; it must come after the cards that preceded it.
+    const paths = general?.cards.map((c) => c.path) ?? [];
+    const index = paths.indexOf('/admin/settings/android');
+    expect(index).toBeGreaterThan(0);
+    expect(paths.indexOf('/admin/settings/setup')).toBeGreaterThan(index);
   });
 
   it('routes the card behind the same permission, and captures the TWA launch before render', () => {

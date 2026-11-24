@@ -11,7 +11,8 @@
 // cache shares the identity principal cache's TTL (`AUTH_PRINCIPAL_CACHE_TTL_SECONDS`), so the two
 // caches expire together. Link URLs are built on the deployment's `APP_URL`; the slice has no switch
 // that turns links off, so ShellKeep disables them per resource type (`grantable.link: []` in
-// `app-registrations/sharing.ts`): `POST /api/grants/links` answers 422 ROLE_NOT_GRANTABLE.
+// `app-registrations/sharing.ts`): `POST /api/grants/links` answers 422 ROLE_NOT_GRANTABLE. The one linkable
+// type is `runbook_run` (#63), whose links default to 7 days and are capped at 30 (`links` below).
 //
 // The resource types (`server_profile`, `runbook`) are registered at import time by
 // `app-registrations/sharing.ts`, before this module composes.
@@ -34,5 +35,8 @@ export const sharingModule = SharingModule.forRoot({
   },
   links: {
     appUrl: () => process.env.APP_URL || DEFAULT_APP_URL,
+    // A link to a run's log bundle (#63) lives 7 days unless the sharer picks another, and never past 30.
+    defaultTtlDays: 7,
+    maxTtlDays: 30,
   },
 });

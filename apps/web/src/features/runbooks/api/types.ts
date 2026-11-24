@@ -416,3 +416,41 @@ export interface RunbookApproval {
 export interface ApprovalsPage extends Page<RunbookApproval> {
   allowSelfApproval: boolean;
 }
+
+/** One log archive a `collect_logs` step stored (#63). */
+export interface RunArtifact {
+  id: string;
+  kind: 'target_archive';
+  runTargetId: string | null;
+  runStepId: string | null;
+  serverName: string | null;
+  stepId: string | null;
+  stepIndex: number | null;
+  fileCount: number;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+}
+
+export type BundleStatus = 'ready' | 'building' | 'none';
+
+/** `GET /api/runbook-runs/:id/artifacts`. */
+export interface RunArtifacts {
+  items: RunArtifact[];
+  bundle: { status: BundleStatus; artifactId: string | null; sizeBytes: number | null; createdAt: string | null };
+}
+
+/** A presigned download: valid 15 minutes. Never log it. */
+export interface SignedDownload {
+  url: string;
+  expiresAt: string;
+}
+
+/** `GET /api/public/runbook-runs/bundle`. */
+export interface PublicBundle {
+  runbook: string;
+  finishedAt: string | null;
+  sizeBytes: number;
+  url: string;
+  urlExpiresAt: string;
+}

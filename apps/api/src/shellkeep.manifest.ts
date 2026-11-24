@@ -15,6 +15,7 @@
 //   settings namespaces: platform/settings/registry.ts (app-registrations/settings.ts)
 //   platform roles, permissions and ownership: app-registrations/registrations.ts
 //   host registrations (About contributor): app-registrations/host.ts
+//   onboarding facts, steps and milestone: onboarding/onboarding.manifest.ts (app-registrations/onboarding.ts)
 //
 // Registration is once per module registry (once per process, once per Jest
 // test file): registering a namespace twice is a `DUPLICATE_ID` error.
@@ -28,3 +29,7 @@ import './app-registrations/registrations';
 import './app-registrations/host';
 // The OpenAPI tags of the app's controllers.
 import './app-registrations/openapi-tags';
+// The onboarding slice's facts, steps and activation milestone (#70): the platform's,
+// then ShellKeep's. Before anything composes the `onboarding` user-settings namespace's
+// merge, which refuses a `skipped` id that is not a registered, skippable step.
+import './onboarding/onboarding.manifest';

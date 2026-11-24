@@ -137,6 +137,22 @@ describe('RunDetailPage', () => {
     expect(written).toBe('history line\r\nfive\r\nsix\r\nseven\r\n');
   });
 
+  it('has an Artifacts tab, with "Share link…" only for the person who started the run', async () => {
+    serveRun(makeRun([makeTarget(0)], { status: 'succeeded', finishedAt: '2026-01-01T00:05:00.000Z' }));
+    server.use(
+      http.get(`*/api/runbook-runs/${RUN_ID}/artifacts`, () =>
+        HttpResponse.json({ data: { items: [], bundle: { status: 'ready', artifactId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', sizeBytes: 10, createdAt: null } } }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('table', { name: /Run matrix/ });
+    await user.click(screen.getByRole('tab', { name: 'Artifacts' }));
+    expect(await screen.findByRole('button', { name: 'Download bundle' })).toBeInTheDocument();
+    // the viewer of the fixture is not granted `sharing:write`: no share button
+    expect(screen.queryByRole('button', { name: /Share link/ })).not.toBeInTheDocument();
+  });
+
   it('has no axe violations', async () => {
     serveRun();
     const { container } = renderPage();
