@@ -27,7 +27,7 @@ import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { useAuth, usePermissions } from '@marinoscar/platform-web/identity/headless';
-import { cancelRun, resumeRun, retryRun } from '../../features/runbooks/api/runbooksApi';
+import { cancelRun, resumeRun, retryRun, stopRunAi } from '../../features/runbooks/api/runbooksApi';
 import type { RunDetail, RunTargetRow, TargetStatus } from '../../features/runbooks/api/types';
 import { TARGET_STATUSES } from '../../features/runbooks/api/types';
 import { useRunLive } from '../../features/runbooks/hooks/useRunLive';
@@ -134,6 +134,10 @@ export default function RunDetailPage() {
   const [tab, setTab] = useState<'servers' | 'audit'>('servers');
 
   const finished = run ? isRunFinished(run.status) : false;
+  // An AI step (#64) that is working or parked behind an approval on some server.
+  const aiRunning = Boolean(
+    run?.targets.some((t) => t.steps?.some((s) => s.kind === 'ai_task' && (s.status === 'running' || s.status === 'waiting_approval'))),
+  );
   useEffect(() => {
     if (finished) return undefined;
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -270,8 +274,18 @@ export default function RunDetailPage() {
               Retry failed
             </Button>
           )}
-          {/* TODO(#64): "Stop AI" while an ai_task step runs. TODO(#63): the artifacts panel
-              (download and share). */}
+          {canRun && !finished && aiRunning && (
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<StopCircleOutlinedIcon />}
+              disabled={busy || Boolean(run.aiStopRequestedAt)}
+              onClick={() => void act(() => stopRunAi(run.id))}
+            >
+              {run.aiStopRequestedAt ? 'AI stopping' : 'Stop AI'}
+            </Button>
+          )}
+          {/* TODO(#63): the artifacts panel (download and share). */}
         </Stack>
       </Stack>
 

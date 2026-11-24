@@ -36,6 +36,28 @@ describe('ApprovalsPage', () => {
     expect(within(card).getByText(/Expires in 2h 59m|Expires in 3h 00m/)).toBeInTheDocument();
   });
 
+  it('shows the command of an AI approval, and the plan with the refused command marked', async () => {
+    serve([
+      makeApproval({ id: 'a1', kind: 'ai_command', scope: 'target', message: 'show the banner', payload: { command: 'cat /etc/motd', reason: 'show the banner' } }),
+      makeApproval({
+        id: 'a2',
+        kind: 'ai_plan',
+        scope: 'target',
+        stepName: 'Fix nginx',
+        message: 'Fix it',
+        payload: { summary: 'Fix the config', commands: [{ command: 'nginx -t', reason: 'check', refused: null }, { command: 'rm -rf /', reason: 'oops', refused: 'DESTRUCTIVE' }] },
+      }),
+    ]);
+    render(<ApprovalsPage />, { wrapperOptions: { user: runbookUser(['runbooks:read', 'runbooks:approve']) } });
+    const command = await screen.findByTestId('ai-command-payload');
+    expect(within(command).getByText('cat /etc/motd').tagName).toBe('PRE');
+    expect(within(command).getByText(/Why: show the banner/)).toBeInTheDocument();
+    const plan = screen.getByTestId('ai-plan-payload');
+    expect(within(plan).getByText('Fix the config')).toBeInTheDocument();
+    expect(within(plan).getByText(/nginx -t/)).toBeInTheDocument();
+    expect(within(plan).getByText(/rm -rf \/.*refused by the policy: DESTRUCTIVE/)).toBeInTheDocument();
+  });
+
   it('hides Approve and Reject without runbooks:approve', async () => {
     serve();
     render(<ApprovalsPage />, { wrapperOptions: { user: runbookUser(['runbooks:read']) } });

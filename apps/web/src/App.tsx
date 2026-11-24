@@ -147,6 +147,10 @@ const WebhooksPage = lazy(() =>
 const AlertsPage = lazy(() =>
   import('@marinoscar/platform-web/alerts/ui').then((m) => ({ default: m.AlertsPage })),
 );
+// Android app (#74): the packaged admin page.
+const AndroidAppPage = lazy(() =>
+  import('@marinoscar/platform-web/android-app/ui').then((m) => ({ default: m.AndroidAppPage })),
+);
 // User data deletion (issue #69): the packaged user Danger Zone and the admin factory reset. They re-read the
 // signed-in user themselves through the host's `viewer.refresh` (`platform/platformHost.tsx`).
 const DangerZonePage = lazy(() =>
@@ -599,6 +603,19 @@ export function AppRoutes() {
                   element={
                     <RequirePermission permission="system_settings:read" fallback={HOME}>
                       <DoctorPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Android app (#74): `system_settings:read`, the string
+                    `GET /api/admin/android-app` enforces (the packaged
+                    descriptor `androidAppSettingsPage.card`, written as a
+                    literal because the registry tests read this file).
+                    Writes are gated inside the page. */}
+                <Route
+                  path="/admin/settings/android"
+                  element={
+                    <RequirePermission permission="system_settings:read" fallback={HOME}>
+                      <AndroidAppPage />
                     </RequirePermission>
                   }
                 />

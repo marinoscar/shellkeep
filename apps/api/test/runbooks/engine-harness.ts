@@ -15,12 +15,18 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { AiError } from '@marinoscar/platform-api/ai';
+import { createAiRuntimeHarness, type AiRuntimeHarness, type FakeAiScriptedResponse } from '@marinoscar/platform-api/ai/testing';
 import { runInOrg, type AuditSink } from '@marinoscar/platform-api/core';
 import { JobHandlerRegistry, JobScope, JobsService, isJobReason, registerJobReason, type Job, type JobHandler } from '@marinoscar/platform-api/jobs';
 import type { EventBus, EventBusHandler } from '@marinoscar/platform-api/host';
 
+// Registers the AI features (`runbook_agent`, `runbook_draft`) the agent spends under.
+import '../../src/app-registrations/ai';
 import { registerStorageSliceKeyPrefixes, registerStorageKeyPrefixes, storageKeyPrefixRegistry } from '@marinoscar/platform-api/storage';
 import { APP_STORAGE_KEY_PREFIXES } from '../../src/app-registrations/storage-prefixes';
+import { RunbookAgentHandler } from '../../src/runbooks/ai/runbook-agent.handler';
+import { RunbookAiStopService } from '../../src/runbooks/ai/runbook-ai-stop.service';
 import { EngineAccessService, type Initiator } from '../../src/runbooks/engine/engine-access.service';
 import { EngineMetricsService } from '../../src/runbooks/engine/engine-metrics.service';
 import { LogArchiveService } from '../../src/runbooks/engine/log-archive.service';
@@ -91,6 +97,12 @@ export interface Harness {
   userA: string;
   userB: string;
   handlers: Map<string, JobHandler>;
+  /** The platform's AI runtime over a scripted `FakeAiProvider` (#64); every provider call is in `ai.fake.calls`. */
+  ai: AiRuntimeHarness;
+  /** The scripted answers the fake provider gives, in order; a function sees the request. */
+  script: Array<FakeAiScriptedResponse | ((request: unknown) => FakeAiScriptedResponse | Promise<FakeAiScriptedResponse>)>;
+  /** "Stop AI" (#64). */
+  aiStop: RunbookAiStopService;
   /** A server profile on the fixture; returns its id. */
   addServer(name: string, over?: { fingerprint?: string | null }): Promise<string>;
   /** A runbook with one version; returns its ids. */
@@ -145,6 +157,20 @@ export async function createHarness(label: string): Promise<Harness> {
   const emitter = new EventEmitter2();
   emitter.on('runbooks.run.finished', (event) => finishedEvents.push(event));
 
+  const aiScript: Harness['script'] = [];
+  const ai = createAiRuntimeHarness({
+    userKey: false,
+    fake: {
+      responses: async (request) => {
+        const next = aiScript.shift();
+        if (!next) throw new AiError('AI_PROVIDER_UNAVAILABLE', 'The scripted AI answers are used up');
+        return typeof next === 'function' ? next(request) : next;
+      },
+    },
+  });
+  ai.addUserKey(userA, ['sk', 'harness', Math.random().toString(36).slice(2, 12)].join('-'), ['fake-model']);
+  ai.setDefaultModel(userA, { provider: 'openai', modelId: 'fake-model' });
+
   const jobs = new JobsService(prisma as never);
   const registry = new JobHandlerRegistry();
   const jobScope = new JobScope(prisma);
@@ -179,7 +205,7 @@ export async function createHarness(label: string): Promise<Harness> {
   const allowAll = { decideMany: async (_p: unknown, _action: string, refs: Array<{ type: string; id: string }>) => new Map(refs.map((r) => [`${r.type}:${r.id}`, { allowed: true }])) };
   const resolver = new TargetResolverService(prisma, { resolveSystem: async () => settings.current } as never, allowAll as never, { enrich: async (p: unknown) => p } as never);
   const access = {
-    load: async (userId: string, orgId: string): Promise<Initiator> => ({ principal: { userId, permissions: ['runbooks:run'] } as never, scope: { userId, orgId } }),
+    load: async (userId: string, orgId: string): Promise<Initiator> => ({ principal: { userId, permissions: ['runbooks:run', 'ai:use'] } as never, scope: { userId, orgId } }),
     canRun: () => true,
     resolveTargets: (initiator: Initiator, selector: never, limit?: number) => resolver.resolve({ userId: initiator.scope.userId, activeOrgId: initiator.scope.orgId, permissions: [] } as never, selector, limit === undefined ? {} : { limit }),
     decryptProfile: async (_initiator: Initiator, id: string) => {
@@ -198,10 +224,29 @@ export async function createHarness(label: string): Promise<Harness> {
   const target = new TargetRunHandler(registry, prisma, jobScope, coordinator, lifecycle, access, factory, new SshExecutor(), archive, events, settingsService, credentials as never, fileSource, metrics, factsService as never);
   const advance = new RunAdvanceHandler(registry, jobScope, coordinator, lifecycle);
   const compact = new LogsCompactHandler(registry, prisma, system, jobs, coordinator, lifecycle, approvals, archive);
-  const handlers = new Map<string, JobHandler>([start, target, advance, compact].map((h) => [h.type, h]));
+  const agent = new RunbookAgentHandler(
+    registry,
+    prisma,
+    jobScope,
+    jobs,
+    access,
+    factory,
+    new SshExecutor(),
+    archive,
+    events,
+    settingsService,
+    credentials as never,
+    metrics,
+    ai.ai,
+    ai.aiConfig,
+    lifecycle,
+    audit,
+  );
+  const aiStop = new RunbookAiStopService(prisma, runbooksFake as never, jobs, coordinator, events, audit);
+  const handlers = new Map<string, JobHandler>([start, target, advance, compact, agent].map((h) => [h.type, h]));
 
   const harness: Harness = {
-    db, prisma, system, fixture, bus, storage, secrets, notifications, runs, approvals, compact, archive, settings, files, finishedEvents, userA, userB, handlers, factsService, audit: audit as never,
+    db, prisma, system, fixture, bus, storage, secrets, notifications, runs, approvals, compact, archive, settings, files, finishedEvents, userA, userB, handlers, factsService, ai, script: aiScript, aiStop, audit: audit as never,
     stream: new RunStreamService(prisma, events),
     async addServer(name, over = {}) {
       const row = await prisma.serverProfile.create({
@@ -233,7 +278,7 @@ export async function createHarness(label: string): Promise<Harness> {
     async drain(options = {}) {
       for (let round = 0; round < (options.maxRounds ?? 60); round += 1) {
         if (options.until && (await options.until())) return;
-        const pending = await prisma.job.findMany({ where: { status: 'pending', type: { startsWith: 'runbook.' } }, orderBy: { createdAt: 'asc' } });
+        const pending = await prisma.job.findMany({ where: { status: 'pending', OR: [{ type: { startsWith: 'runbook.' } }, { type: 'ai.runbook.agent' }] }, orderBy: { createdAt: 'asc' } });
         if (pending.length === 0) {
           if (!options.until) return;
           await new Promise((r) => setTimeout(r, 100));
