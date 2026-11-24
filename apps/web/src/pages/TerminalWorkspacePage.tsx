@@ -108,6 +108,8 @@ export default function TerminalWorkspacePage() {
     if (aiOpen) setFilesOpen(false);
   }, [aiOpen]);
   const toggleFiles = useCallback(() => {
+    // The toolbar opens the panel following the terminal, not at an earlier reveal.
+    setFilesReveal(null);
     setFilesOpen((open) => !open);
     setAiOpen(false);
   }, []);
