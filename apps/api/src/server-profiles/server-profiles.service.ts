@@ -425,7 +425,7 @@ export class ServerProfilesService {
     return this.findOne(id, scope);
   }
 
-  /** Forgets the trusted key (and the facts probed through it); the next connect prompts again. */
+  /** Forgets the trusted key; the next connect prompts again. The facts describe the server, not the key, so they stay. */
   async forgetHostKey(id: string, scope: OwnerScope) {
     const profile = await this.findOwned(id, scope);
     await this.prisma.serverProfile.updateMany({

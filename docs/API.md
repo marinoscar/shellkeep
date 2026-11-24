@@ -1365,7 +1365,7 @@ Replacing a different trusted key also needs `confirmHostname` equal to the prof
 | 502 | `SSH_HOST_UNREACHABLE` | the server could not be reached |
 
 #### DELETE /server-profiles/:id/host-key
-Permission `servers:write`. Forgets the trusted key (`fingerprint`, `hostKeyAlgorithm`, `hostKeyTrustedAt` null; the next connection asks again). Returns the updated profile. Audited as `server_profile.host_key_forgotten`.
+Permission `servers:write`. Forgets the trusted key (`fingerprint`, `hostKeyAlgorithm`, `hostKeyTrustedAt` null; the next connection asks again; the probed `facts` stay). Returns the updated profile. Audited as `server_profile.host_key_forgotten`.
 
 #### POST /server-profiles/:id/test
 Permission `servers:read`. `{ "success": true }`, or `{ "success": false, "error": "..." }`. A refused host key adds `"code": "HOST_KEY_UNKNOWN" | "HOST_KEY_MISMATCH"`, `"presented": { "fingerprint", "algorithm" }` and `"expected": "<fingerprint>" | null`. A successful test also refreshes the server facts.
