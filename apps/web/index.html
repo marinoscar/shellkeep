@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget=resizes-visual (#170): the on-screen keyboard shrinks the visual
+         viewport only, so useKeyboardInset can measure it. Chrome 108+ default, pinned for the
+         Android TWA's older engines; resizes-content would make the inset 0 (terminal.md 5.12). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-visual" />
     <meta name="description" content="Browser-based terminal workspace with persistent sessions" />
     <meta name="theme-color" content="%SHELLKEEP_THEME_COLOR%" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
