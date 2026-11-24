@@ -161,7 +161,7 @@ describe('ShellKeep webhook events: raised after the write commits', () => {
       }),
     };
     const audit = { record: jest.fn(async () => { log.push('audit'); }) };
-    const sessions = new SessionsService(prisma as never, audit as never, terminalWebhooks, { require: jest.fn(async () => ({ allowed: true })) } as never);
+    const sessions = new SessionsService(prisma as never, audit as never, terminalWebhooks, { require: jest.fn(async () => ({ allowed: true })) } as never, { enrich: async (p: unknown) => p } as never);
     return { log, emitted, prisma, sessions, terminalWebhooks, webhooks };
   }
 
