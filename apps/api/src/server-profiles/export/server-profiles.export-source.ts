@@ -11,11 +11,13 @@
 //   - The export never decrypts anything and never reads `UserCredentialsService`.
 //   - Own profiles are the rows whose owner is the requester (a group-owned profile they created
 //     is still theirs to export). `includeShared` adds the profiles other people shared with
-//     them, decided by the sharing slice's `accessibleWhere` (`scope: 'shared'`), in each
-//     organization the requester belongs to; a shared profile is metadata only, as the viewer role.
+//     them, decided by the sharing slice's `accessibleWhere` in each organization the requester
+//     belongs to, with the memberships of the slice's own `PrincipalGroupsProvider` (this file never
+//     reads a sharing table); a shared profile is metadata only, as the viewer role.
 // =============================================================================
 
 import { Prisma } from '@prisma/client';
+import type { GroupMembership, Principal } from '@marinoscar/platform-api/core';
 import { accessibleWhere } from '@marinoscar/platform-api/sharing';
 import type { ExportContext, ExportSource, ExportTable } from '@marinoscar/platform-api/exports';
 import { z } from 'zod';
@@ -49,26 +51,34 @@ export type ServerProfilesExportRequest = z.infer<typeof serverProfilesExportReq
 /** The shared profiles are decided per organization; this many ids at most are inlined (the slice's limit is 1,000). */
 const SHARED_INLINE_LIMIT = 100_000;
 
+/** The memberships of a caller in the organization its principal acts in (`PrincipalGroupsProvider.groupsFor`). */
+export type ExportGroupsResolver = (principal: Principal) => Promise<readonly GroupMembership[]>;
+
+let groupsResolver: ExportGroupsResolver | null = null;
+
+/**
+ * Binds how the source reads group memberships. A source is a plain object with no injection, and the
+ * sharing slice forbids a direct read of its tables, so `ServerProfilesExportBinding` hands it the slice's
+ * `PrincipalGroupsProvider` once the application is composed.
+ */
+export function bindExportGroupsResolver(resolver: ExportGroupsResolver | null): void {
+  groupsResolver = resolver;
+}
+
 /** The `where` of the profiles shared with the user (not owned by them), across their organizations. */
 async function sharedProfilesWhere(ctx: ExportContext): Promise<Record<string, unknown> | null> {
+  if (!groupsResolver) throw new Error('The shared server profiles cannot be exported: the sharing groups are not bound');
   const db = ctx.db;
-  const [memberships, groupRows] = await Promise.all([
-    db.membership.findMany({ where: { userId: ctx.subjectId, status: 'active' }, select: { orgId: true } }),
-    db.groupMember.findMany({ where: { userId: ctx.subjectId }, select: { groupId: true, orgId: true, role: true } }),
-  ]);
-  const groups = (groupRows as Array<{ groupId: string; orgId: string; role: string }>).map((g) => ({
-    groupId: g.groupId,
-    orgId: g.orgId,
-    role: g.role,
-  }));
-  const orgIds = [...new Set([...(memberships as Array<{ orgId: string }>).map((m) => m.orgId), ...groups.map((g) => g.orgId)])];
+  const memberships = (await db.membership.findMany({
+    where: { userId: ctx.subjectId, status: 'active' },
+    select: { orgId: true },
+  })) as Array<{ orgId: string }>;
+  const orgIds = [...new Set(memberships.map((membership) => membership.orgId))];
 
   const perOrg: Array<Record<string, unknown>> = [];
   for (const orgId of orgIds) {
-    const principal = {
-      ...actingPrincipal({ userId: ctx.subjectId, orgId, permissions: [], roles: [] }),
-      groups,
-    };
+    const base = actingPrincipal({ userId: ctx.subjectId, orgId, permissions: [], roles: [] });
+    const principal = { ...base, groups: await groupsResolver(base) };
     // As the list route decides it: what the requester's groups own, and what is granted to them or their groups.
     for (const scope of ['groups', 'shared'] as const) {
       const access = await accessibleWhere<Prisma.Sql>(principal, SERVER_PROFILE_RESOURCE, {

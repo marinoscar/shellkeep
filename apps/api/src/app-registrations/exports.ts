@@ -19,6 +19,8 @@ import { SERVER_PROFILES_EXPORT_SOURCE } from '../server-profiles/export/server-
 import { TERMINAL_SESSIONS_EXPORT_SOURCE } from '../terminal/export/terminal-sessions.export-source';
 
 /** ShellKeep's own export sources, registered after the platform's. */
+// `any`: each source is typed by its own request; the registry holds them as one list.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const APP_EXPORT_SOURCES: readonly ExportSource<any>[] = [
   SERVER_PROFILES_EXPORT_SOURCE,
   TERMINAL_SESSIONS_EXPORT_SOURCE,

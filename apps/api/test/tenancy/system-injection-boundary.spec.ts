@@ -57,8 +57,6 @@ const SYSTEM_ALLOWLIST: Record<string, string> = {
  * rules. Relative to apps/api/src, forward slashes.
  */
 const ORG_TABLE_ALLOWLIST: Record<string, string> = {
-  'server-profiles/export/server-profiles.export-source.ts':
-    "reads the requester's `group_members` through the export bypass client (EXPORTS_SYSTEM_DATA, reason `export`), filtered on the requester's user id, to decide which shared profiles `accessibleWhere` may list",
   'main.ts': "counts `org_credentials` through the bypass client, runAsSystem('admin-aggregate')",
   'platform/settings/settings-profile-images.adapter.ts':
     "reads one `storage_objects` row through STORAGE_SYSTEM_DATA.asSystem('admin-aggregate')",

@@ -226,6 +226,20 @@ const TAG_GROUPS: readonly AppOpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'Data export',
+    tags: [
+      {
+        name: 'Exports',
+        description:
+          'Download your own data (#68): the sources the caller may use (`user-data`, `server-profiles`, ' +
+          '`terminal-sessions`, `runbook-runs`, each behind its own permission), queueing an export as a ' +
+          'background job and a 5-minute signed download of a ready file (json, csv zip or xlsx). No export ' +
+          'ever holds an SSH password, private key, passphrase or credential ciphertext, nor terminal ' +
+          'content. Someone else\'s export is 404, never 403.',
+      },
+    ],
+  },
+  {
     name: 'Notifications',
     tags: [
       {

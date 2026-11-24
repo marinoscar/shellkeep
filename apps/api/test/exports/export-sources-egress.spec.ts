@@ -36,6 +36,7 @@ import '../../src/platform/exports/exports.config';
 import {
   SERVER_PROFILES_EXPORT_SOURCE,
   SERVER_PROFILE_EXPORT_COLUMNS,
+  bindExportGroupsResolver,
   serverProfilesExportRequestSchema,
 } from '../../src/server-profiles/export/server-profiles.export-source';
 import {
@@ -175,6 +176,19 @@ describe('ShellKeep export sources', () => {
       expect(calls.map((call) => call.model)).not.toContain('userCredential');
     });
 
+    it('refuses includeShared when the sharing groups are not bound, rather than guessing', async () => {
+      bindExportGroupsResolver(null);
+      const { db } = recordingDb();
+      const req = SERVER_PROFILES_EXPORT_SOURCE.requestSchema.parse({ includeShared: true });
+      await expect(
+        (async () => {
+          for await (const table of SERVER_PROFILES_EXPORT_SOURCE.collect(contextOf(db), req)) {
+            for await (const _row of table.rows) void _row;
+          }
+        })(),
+      ).rejects.toThrow(/not bound/);
+    });
+
     it('with includeShared, adds the profiles shared with the requester and never reads a credential', async () => {
       const calls: Array<{ where: unknown; select: Record<string, true> }> = [];
       const ORG = '55555555-5555-4555-8555-eeeeeeeeeeee';
@@ -182,7 +196,6 @@ describe('ShellKeep export sources', () => {
       const SHARED_ID = '77777777-7777-4777-8777-aaaaaaaaaaaa';
       const db = {
         membership: { findMany: async () => [{ orgId: ORG }] },
-        groupMember: { findMany: async () => [{ groupId: GROUP, orgId: ORG, role: 'viewer' }] },
         grant: { groupBy: async () => [{ resourceId: SHARED_ID }] },
         serverProfile: {
           findMany: async (args: { where: unknown; select: Record<string, true> }) => {
@@ -193,8 +206,13 @@ describe('ShellKeep export sources', () => {
       } as unknown as ExportDb;
       const ctx = contextOf(db);
       const req = SERVER_PROFILES_EXPORT_SOURCE.requestSchema.parse({ includeShared: true });
-      for await (const table of SERVER_PROFILES_EXPORT_SOURCE.collect(ctx, req)) {
-        for await (const _row of table.rows) void _row;
+      bindExportGroupsResolver(async () => [{ groupId: GROUP, orgId: ORG, role: 'viewer' }]);
+      try {
+        for await (const table of SERVER_PROFILES_EXPORT_SOURCE.collect(ctx, req)) {
+          for await (const _row of table.rows) void _row;
+        }
+      } finally {
+        bindExportGroupsResolver(null);
       }
       expect(calls).toHaveLength(1);
       const where = JSON.stringify(calls[0]!.where);
