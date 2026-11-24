@@ -978,4 +978,135 @@ describe('useTerminal', () => {
       expect(sent()).toEqual(['\x0c']);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Hardware keys pass through (#170): a physical key (a `code`, no IME
+  // placeholder) while no on-screen keyboard covers the page reaches the PTY as
+  // xterm encoded it. Armed one-shots still apply to it (and are released); a
+  // LOCKED soft modifier applies to the next SOFT key only.
+  describe('hardware keys pass through (#170)', () => {
+    function setup() {
+      const store = createModifierStore();
+      const inputModifiers = createModifierInputInterceptor(store);
+      renderHook(() => {
+        const containerRef = useRef<HTMLDivElement>(containerDiv);
+        return useTerminal('session-1', containerRef, undefined, { inputModifiers });
+      });
+      const term = getTerminalInstance() as unknown as {
+        onData: ReturnType<typeof vi.fn>;
+        keyHandler: (e: KeyboardEvent) => boolean;
+      };
+      const type = (data: string) => (term.onData.mock.calls[0][0] as (d: string) => void)(data);
+      const sent = () => wsSendFn.mock.calls.map((c) => new TextDecoder().decode(c[0] as Uint8Array));
+      /** A physical key: xterm's keydown handler sees it, then emits `data` in the same task. */
+      const press = (init: KeyboardEventInit, data: string) => {
+        expect(term.keyHandler(new KeyboardEvent('keydown', init))).toBe(true);
+        type(data);
+        act(() => {
+          vi.advanceTimersByTime(1);
+        });
+      };
+      const lock = (modifier: 'ctrl' | 'alt' | 'shift') => {
+        vi.setSystemTime(10_000);
+        store.tap(modifier);
+        store.tap(modifier);
+        expect(store.getSnapshot()[modifier]).toBe('locked');
+      };
+      return { store, term, type, sent, press, lock };
+    }
+
+    it('Esc, arrows, F-keys and Home/End reach the terminal untouched', () => {
+      const { press, sent } = setup();
+      press({ key: 'Escape', code: 'Escape' }, '\x1b');
+      press({ key: 'ArrowLeft', code: 'ArrowLeft' }, '\x1b[D');
+      press({ key: 'F1', code: 'F1' }, '\x1bOP');
+      press({ key: 'F5', code: 'F5' }, '\x1b[15~');
+      press({ key: 'F12', code: 'F12' }, '\x1b[24~');
+      press({ key: 'Home', code: 'Home' }, '\x1b[H');
+      press({ key: 'End', code: 'End' }, '\x1b[F');
+      expect(sent()).toEqual(['\x1b', '\x1b[D', '\x1bOP', '\x1b[15~', '\x1b[24~', '\x1b[H', '\x1b[F']);
+    });
+
+    it('a locked soft Ctrl does not touch a hardware letter, and stays locked for the next soft key', () => {
+      const { store, press, type, sent, lock } = setup();
+      lock('ctrl');
+      press({ key: 'r', code: 'KeyR' }, 'r');
+      press({ key: 's', code: 'KeyS' }, 's');
+      expect(store.getSnapshot().ctrl).toBe('locked');
+      // A soft-keyboard key (no keydown of its own, as on Android) still gets the lock.
+      type('a');
+      expect(sent()).toEqual(['r', 's', '\x01']);
+    });
+
+    it('a locked soft modifier does not touch hardware Esc or F-keys', () => {
+      const { store, press, sent, lock } = setup();
+      lock('shift');
+      press({ key: 'Escape', code: 'Escape' }, '\x1b');
+      press({ key: 'F5', code: 'F5' }, '\x1b[15~');
+      press({ key: 'ArrowUp', code: 'ArrowUp' }, '\x1b[A');
+      expect(sent()).toEqual(['\x1b', '\x1b[15~', '\x1b[A']);
+      expect(store.getSnapshot().shift).toBe('locked');
+    });
+
+    it('an armed one-shot still applies to the next hardware key, once', () => {
+      const { store, press, sent } = setup();
+      store.tap('ctrl');
+      press({ key: 'r', code: 'KeyR' }, 'r');
+      press({ key: 'r', code: 'KeyR' }, 'r');
+      expect(sent()).toEqual(['\x12', 'r']);
+      expect(store.getSnapshot().ctrl).toBe('off');
+    });
+
+    it('with Ctrl locked and Alt armed, a hardware letter gets only Alt', () => {
+      const { store, press, sent, lock } = setup();
+      lock('ctrl');
+      store.tap('alt');
+      press({ key: 'b', code: 'KeyB' }, 'b');
+      expect(sent()).toEqual(['\x1bb']);
+      expect(store.getSnapshot()).toMatchObject({ ctrl: 'locked', alt: 'off' });
+    });
+
+    it('a real Ctrl with Esc or an F-key is sent once as xterm encoded it, the one-shot released', () => {
+      const { store, press, sent } = setup();
+      store.tap('alt');
+      press({ key: 'F5', code: 'F5', ctrlKey: true }, '\x1b[15;5~');
+      expect(store.getSnapshot().alt).toBe('off');
+      store.tap('shift');
+      press({ key: 'Escape', code: 'Escape', altKey: true }, '\x1b\x1b');
+      expect(sent()).toEqual(['\x1b[15;5~', '\x1b\x1b']);
+      expect(store.getSnapshot().shift).toBe('off');
+    });
+
+    it('a soft-keyboard placeholder keydown (Unidentified) is a soft key: the lock applies', () => {
+      const { press, sent, lock } = setup();
+      lock('ctrl');
+      press({ key: 'Unidentified', code: '' }, 'a');
+      expect(sent()).toEqual(['\x01']);
+    });
+
+    describe('while the on-screen keyboard is up', () => {
+      const original = window.visualViewport;
+      beforeEach(() => {
+        Object.defineProperty(window, 'visualViewport', {
+          configurable: true,
+          value: {
+            height: window.innerHeight - 300,
+            offsetTop: 0,
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+          },
+        });
+      });
+      afterEach(() => {
+        Object.defineProperty(window, 'visualViewport', { configurable: true, value: original });
+      });
+
+      it('a key with a physical code is treated as soft: the lock applies', () => {
+        const { press, sent, lock } = setup();
+        lock('ctrl');
+        press({ key: 'a', code: 'KeyA' }, 'a');
+        expect(sent()).toEqual(['\x01']);
+      });
+    });
+  });
 });

@@ -50,6 +50,7 @@ On the admin page choose **Send test notification**. The result reports counts p
 - The TWA opens without a URL bar once the certificate is trusted and the package is installed from the hosted APK.
 - Web Push reaches the phone after notification permission is granted inside the TWA (Android 13 asks for `POST_NOTIFICATIONS`).
 - The terminal's key-shortcut bar and keyboard inset behave in the TWA: [terminal spec](../specs/terminal.md#54-touch-and-mobile-input).
+- With a Bluetooth or USB keyboard: after the first key the key row collapses to a "Keys" pill (while the user setting `shortcuts.options.autoHideWithHardwareKeyboard` is on, the default), real Ctrl, Esc, arrows and F-keys reach the terminal, and typing on the glass brings the row back ([terminal spec §5.12](../specs/terminal.md#512-hardware-keyboards-and-tablets)). The app needs no manifest or Android change for this: `index.html` pins `interactive-widget=resizes-visual`, which is what keeps the keyboard inset measurable in the TWA; never switch it to `resizes-content`.
 
 ## 7. Roll back
 

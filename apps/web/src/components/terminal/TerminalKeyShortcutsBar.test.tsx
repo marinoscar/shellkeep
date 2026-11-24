@@ -373,3 +373,35 @@ describe('TerminalKeyShortcutsBar: modifier toggles and pop-ups (#166)', () => {
     });
   });
 });
+
+describe('TerminalKeyShortcutsBar: collapsed for a hardware keyboard (#170)', () => {
+  it('draws only the Keys pill and the panel toggle, pinned at the right', () => {
+    renderBar({ collapsed: true, onExpand: vi.fn() });
+    expect(screen.queryByRole('toolbar', { name: 'Terminal keys' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Esc' })).not.toBeInTheDocument();
+    const row = screen.getByTestId('terminal-key-row');
+    expect(row).toHaveAttribute('data-collapsed', 'true');
+    const pill = screen.getByRole('button', { name: 'Show key row' });
+    expect(pill).toHaveAttribute('aria-expanded', 'false');
+    expect(pill).toHaveTextContent('Keys');
+    const toggle = screen.getByRole('button', { name: 'Key panel' });
+    // The pill comes right before the toggle, which stays last.
+    expect(pill.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('a tap on the pill asks to expand; the panel toggle still works', async () => {
+    const user = userEvent.setup();
+    const onExpand = vi.fn();
+    const { onTogglePanel } = renderBar({ collapsed: true, onExpand });
+    await user.click(screen.getByRole('button', { name: 'Show key row' }));
+    expect(onExpand).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Key panel' }));
+    expect(onTogglePanel).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws the whole row when not collapsed', () => {
+    renderBar({ collapsed: false });
+    expect(screen.getByRole('toolbar', { name: 'Terminal keys' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show key row' })).not.toBeInTheDocument();
+  });
+});
