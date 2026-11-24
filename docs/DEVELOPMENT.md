@@ -112,7 +112,7 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
 | `infra/compose/.env.example`, `.env.worker.example` | `infra/compose/app.env.example` (ShellKeep variables, appended to `.env.example`) |
 | `infra/nginx/{nginx.conf,csp.conf,csp.dev.conf}`, `infra/nginx/platform/*` | `infra/nginx/app.d/` (`locations/`, `http/`, `server/`, `csp/`, `permissions-policy.conf`) |
 | `infra/otel/otel-collector-config.yaml` | `infra/otel/app-collector.yaml` |
-| `infra/platform-infra.lock.json` | `infra/deploy/` (the legacy VPS installer, replaced by #72) |
+| `infra/platform-infra.lock.json` | none; `shellkeep deploy` (`apps/cli`, #72) deploys the generated files, and the legacy `infra/deploy/` scripts are gone |
 
 ShellKeep's `app.d/locations/`:
 
