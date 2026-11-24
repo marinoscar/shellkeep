@@ -52,7 +52,7 @@ function paneRect(index: number, count: number, direction: SplitDirection, ratio
  * switching tabs never reconnects. A pane that is not on screen is moved out of
  * view with `visibility: hidden` and a far negative `left`, never
  * `display: none`: its `offsetParent` stays non-null and xterm keeps handling
- * scroll (docs/SCROLLING.md, "Common Pitfalls"). It keeps the full area's size,
+ * scroll (docs/specs/terminal.md, "Common Pitfalls"). It keeps the full area's size,
  * so it does not refit to nothing; when it comes back, the debounced
  * `ResizeObserver` of `useTerminal` fits it to its slot and sends `resize`.
  *

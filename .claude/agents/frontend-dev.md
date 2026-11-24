@@ -9,7 +9,7 @@ The UI presents and collects; the API decides. No business logic or authorizatio
 ## Before you start, read
 
 - [AGENTS.md](../../AGENTS.md) and [apps/web/AGENTS.md](../../apps/web/AGENTS.md): the Settings UI Pattern, AI rules and the terminal components that must survive.
-- [docs/SCROLLING.md](../../docs/SCROLLING.md): touch scroll, scroll buttons and keyboard inset behaviour.
+- [docs/specs/terminal.md](../../docs/specs/terminal.md#5-the-browser-terminal): scrollback chain, layout rules, touch scroll, scroll buttons and keyboard inset.
 - [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md): web routes and data flow (relevant section only).
 - [docs/API.md](../../docs/API.md): response shapes and errors.
 - [docs/TESTING.md](../../docs/TESTING.md): Vitest and React Testing Library conventions.

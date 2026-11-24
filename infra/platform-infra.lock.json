@@ -38,7 +38,7 @@
     },
     "env": {
       "files": {
-        "infra/compose/.env.example": "fe04376cea7fa8506a81b7368d05f6e1da2e05fcde299508c1962d851170a3a5",
+        "infra/compose/.env.example": "2a3a8def4a296252f404cc0eba4f043a30866a772566acc3f1b32c18ad9e8405",
         "infra/compose/.env.worker.example": "e59a70b9feaf81939b519673e6fc8bed746240d99060b735ebaf61353f6af3bb"
       }
     },
