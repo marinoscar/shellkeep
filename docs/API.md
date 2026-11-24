@@ -86,6 +86,7 @@ Endpoints returning lists support pagination with the following query parameters
 | server | `{ "type": "auth_expired" }` then close | The access token expired and no fresh `auth` arrived; the client refreshes its token and reconnects |
 | client | `{ "type": "connect", "sessionId": "<uuid>" }` | Attach to a session the caller owns in the current organization |
 | server | `{ "type": "session_error", "code": "NOT_FOUND" }` | Not a UUID, not the caller's, or in another organization (never says which) |
+| server | `{ "type": "session_error", "code": "HOST_KEY_UNKNOWN" \| "HOST_KEY_MISMATCH", "error": "<message>", "presented": { "fingerprint", "algorithm" }, "expected": "<fingerprint>" \| null, "serverProfileId": "<uuid>" }` | The SSH host key was refused **before any credential was sent** (#60). `UNKNOWN`: the profile trusts no key yet (`expected` is null); the user verifies `presented` and trusts it, then the client sends `connect` again. `MISMATCH`: the server shows another key than the trusted `expected`; never retried automatically |
 
 Binary frames are terminal input and output; `resize` and `ping` are unchanged. Each denial is logged as `ws.auth.denied` with the user id and the reason, never the token.
 
@@ -1326,6 +1327,54 @@ The storage system provides file upload and management capabilities with support
 
 ---
 
+### Server Profiles: host keys and facts
+
+SSH host keys are verified before any credential is sent (#60). A profile trusts at most one key (`fingerprint`, OpenSSH `SHA256:` format, with its `hostKeyAlgorithm`); the system setting `ssh.hostKeyPolicy` decides what happens to a server whose key is not trusted yet.
+
+| Policy | Key not trusted yet | Key changed |
+|---|---|---|
+| `tofu_prompt` (default) | refused with `HOST_KEY_UNKNOWN`; the user verifies and trusts it | refused with `HOST_KEY_MISMATCH` |
+| `tofu_auto` | trusted on first contact, audited (`server_profile.host_key_auto_trusted`) | refused with `HOST_KEY_MISMATCH` |
+| `strict` | refused with `HOST_KEY_UNKNOWN` | refused with `HOST_KEY_MISMATCH` |
+
+A changed key is refused under every policy. Every connection path (terminal, test connection, history download, the Doctor probe, the facts probe) goes through one connection factory, so none can skip the check.
+
+A server profile response carries, besides its connection fields and `has*` flags: `fingerprint`, `hostKeyAlgorithm`, `hostKeyTrustedAt` (all null while untrusted), `facts` (null until probed) and `factsProbedAt`. `PATCH` of `hostname` or `port` to a different value clears the trust and the facts.
+
+#### POST /server-profiles/:id/host-key/scan
+Permission `servers:read`. Reads the key the server presents and disconnects; **no credential is sent** and nothing is stored.
+
+```json
+{ "data": {
+  "presented": { "fingerprint": "SHA256:...", "algorithm": "ssh-ed25519" },
+  "trusted": { "fingerprint": "SHA256:...", "algorithm": "ssh-ed25519", "trustedAt": "2026-01-01T00:00:00.000Z" },
+  "matches": true
+} }
+```
+`trusted` is null when the profile trusts no key. `502 SSH_HOST_UNREACHABLE` when the server cannot be reached.
+
+#### POST /server-profiles/:id/host-key/trust
+Permission `servers:write`. Body `{ "fingerprint": "SHA256:...", "confirmHostname"?: "<profile hostname>" }`. Scans again and stores the key only if it equals `fingerprint` (the one the user verified); returns the updated profile and probes the server facts (best effort). Audited as `server_profile.host_key_trusted`.
+
+Replacing a different trusted key also needs `confirmHostname` equal to the profile hostname and is audited as `server_profile.host_key_replaced` with the old and new fingerprints.
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `HOST_KEY_CONFIRMATION_REQUIRED` | replacing a different key without the matching `confirmHostname` |
+| 409 | `HOST_KEY_CHANGED_DURING_TRUST` | the server now presents another key than `fingerprint` |
+| 502 | `SSH_HOST_UNREACHABLE` | the server could not be reached |
+
+#### DELETE /server-profiles/:id/host-key
+Permission `servers:write`. Forgets the trusted key (`fingerprint`, `hostKeyAlgorithm`, `hostKeyTrustedAt` null; the next connection asks again). Returns the updated profile. Audited as `server_profile.host_key_forgotten`.
+
+#### POST /server-profiles/:id/test
+Permission `servers:read`. `{ "success": true }`, or `{ "success": false, "error": "..." }`. A refused host key adds `"code": "HOST_KEY_UNKNOWN" | "HOST_KEY_MISMATCH"`, `"presented": { "fingerprint", "algorithm" }` and `"expected": "<fingerprint>" | null`. A successful test also refreshes the server facts.
+
+#### POST /server-profiles/:id/facts/refresh
+Permission `servers:write`. Probes the server now (one fixed read-only command) and returns `{ "facts": { "kernel", "os", "distroId?", "distroVersion?", "prettyName?", "shell?", "has": [], "packageManager?" }, "factsProbedAt" }`. `409 HOST_KEY_UNKNOWN | HOST_KEY_MISMATCH` (with `details.presented`, `details.expected`, `details.serverProfileId`) when the key is not trusted. `GET /sessions/:id/history` answers the same 409 for a refused key.
+
+---
+
 ### Health
 
 **Public endpoints** - Used for Kubernetes liveness/readiness probes.
@@ -1411,6 +1460,11 @@ Readiness check - includes database connectivity test.
 | `CONFLICT` | 409 | Resource already exists or version mismatch |
 | `NOT_AUTHORIZED` | 403 | Email not in allowlist |
 | `VERSION_MISMATCH` | 409 | Optimistic concurrency conflict (If-Match header) |
+| `HOST_KEY_UNKNOWN` | 409 | The server has no trusted SSH host key yet; verify and trust its fingerprint first |
+| `HOST_KEY_MISMATCH` | 409 | The server presented a different SSH host key than the trusted one; refused before any credential was sent |
+| `HOST_KEY_CHANGED_DURING_TRUST` | 409 | The key presented now is not the fingerprint the user confirmed |
+| `HOST_KEY_CONFIRMATION_REQUIRED` | 400 | Replacing a trusted host key needs the profile hostname typed as `confirmHostname` |
+| `SSH_HOST_UNREACHABLE` | 502 | The SSH server could not be reached to read its host key |
 
 ---
 
