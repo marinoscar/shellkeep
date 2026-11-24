@@ -36,6 +36,9 @@ import { assertTransition, type RunStatus, type TargetStatus } from './state-mac
 
 export type OrgTx = RlsTransactionClient<PrismaService>;
 
+/** The agent job of an `ai_task` step (#64): a plain constant here so the engine imports nothing of the AI code. */
+const RUNBOOK_AGENT_JOB_TYPE = 'ai.runbook.agent';
+
 /** What a finished run tells the post-commit hooks. */
 export interface FinishedRun {
   runId: string;
@@ -101,6 +104,21 @@ export class RunCoordinatorService {
     private readonly jobs: JobsService,
     private readonly settings: RunbookSettingsService,
   ) {}
+
+  /**
+   * Queues the agent job of an `ai_task` step (#64) through the caller's transaction, so the target is parked
+   * if and only if the job exists. `phase: 'resume'` continues a step that waited for an approval.
+   */
+  async enqueueAiAgent(tx: OrgTx, input: { orgId: string; runId: string; targetId: string; stepIndex: number; phase: 'start' | 'resume' }): Promise<void> {
+    await this.jobs.enqueueWithin(tx as unknown as JobsTx, {
+      type: RUNBOOK_AGENT_JOB_TYPE,
+      reason: RUNBOOK_JOB_REASON,
+      orgId: input.orgId,
+      subjectType: RUNBOOK_RUN_TARGET_SUBJECT,
+      subjectId: input.targetId,
+      payload: { runId: input.runId, targetId: input.targetId, stepIndex: input.stepIndex, orgId: input.orgId, phase: input.phase },
+    });
+  }
 
   async advance(tx: OrgTx, runId: string, now: Date = new Date()): Promise<AdvanceOutcome> {
     const outcome = emptyOutcome(runId);

@@ -50,6 +50,12 @@ export interface LogSinkOptions {
   maxBytes: number;
   ports: LogSinkPorts;
   idleFlushMs?: number;
+  /**
+   * A step that spans several jobs (an AI step that waits for an approval, #64) opens a new sink per job:
+   * `seq` continues after the chunks already stored and the byte cap counts the bytes already written.
+   */
+  startSeq?: number;
+  startBytes?: number;
 }
 
 const MAX_LINE = 8_192;
@@ -91,14 +97,16 @@ export class LogSink {
   private readonly timers: Partial<Record<'stdout' | 'stderr', NodeJS.Timeout>> = {};
   private readonly holdback: number;
   private chain: Promise<void> = Promise.resolve();
-  private seq = 0;
-  private written = 0;
+  private seq: number;
+  private written: number;
   private tail = '';
   private closed = false;
 
   truncated = false;
 
   constructor(private readonly options: LogSinkOptions) {
+    this.seq = options.startSeq ?? 0;
+    this.written = options.startBytes ?? 0;
     const longest = options.secrets.reduce((max, secret) => Math.max(max, secret.length), 0);
     // Only a secret with a line break can straddle a line boundary.
     const multiLine = options.secrets.some((secret) => secret.includes('\n'));

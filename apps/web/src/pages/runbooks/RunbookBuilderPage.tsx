@@ -58,6 +58,8 @@ import { StepEditor } from '../../features/runbooks/components/builder/StepEdito
 import { ParametersEditor } from '../../features/runbooks/components/builder/ParametersEditor';
 import { StrategyFields } from '../../features/runbooks/components/StrategyFields';
 import { TargetPicker, toTargetValue } from '../../features/runbooks/components/TargetPicker';
+import { DraftWithAiDialog } from '../../features/runbooks/components/DraftWithAiDialog';
+import { useRunbookAiAvailable } from '../../features/runbooks/hooks/useRunbookAiAvailable';
 import { VersionHistoryDrawer } from '../../features/runbooks/components/VersionHistoryDrawer';
 
 interface Meta {
@@ -99,6 +101,8 @@ export default function RunbookBuilderPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [draftOpen, setDraftOpen] = useState(false);
+  const aiAvailable = useRunbookAiAvailable();
 
   const apply = (rb: RunbookDetail) => {
     const nextMeta = metaOf(rb);
@@ -271,6 +275,11 @@ export default function RunbookBuilderPage() {
               History
             </Button>
           )}
+          {aiAvailable && (
+            <Button variant="outlined" onClick={() => setDraftOpen(true)}>
+              Draft with AI
+            </Button>
+          )}
           <Button variant="outlined" onClick={() => void validate()} disabled={busy !== null}>
             {busy === 'validate' ? 'Validating…' : 'Validate'}
           </Button>
@@ -427,6 +436,21 @@ export default function RunbookBuilderPage() {
         </DialogActions>
       </Dialog>
 
+      {aiAvailable && (
+        <DraftWithAiDialog
+          open={draftOpen}
+          onClose={() => setDraftOpen(false)}
+          onLoad={(draft) => {
+            // Never saved here: the draft only replaces the editor's content.
+            setDefinition(draft.definition);
+            setWarnings(draft.warnings);
+            setRisk(draft.risk ?? null);
+            setSelected(0);
+            setDraftOpen(false);
+            setNotice('Draft loaded. Review it, then Validate and Save.');
+          }}
+        />
+      )}
       {!isNew && id && <VersionHistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} runbookId={id} />}
       <Snackbar open={Boolean(notice)} autoHideDuration={4000} onClose={() => setNotice(null)} message={notice ?? ''} />
     </Box>

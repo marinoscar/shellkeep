@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { AppMetricsService } from '@marinoscar/platform-api/host';
 
 import {
+  RUNBOOK_AI_TOOL_CALLS_METRIC,
   RUNBOOK_APPROVALS_METRIC,
   RUNBOOK_COMMANDS_METRIC,
   RUNBOOK_DESTRUCTIVE_RUNS_METRIC,
@@ -34,6 +35,10 @@ export class EngineMetricsService {
 
   destructiveRun(outcome: DestructiveRunOutcome): void {
     this.safely(() => this.metrics?.add(RUNBOOK_DESTRUCTIVE_RUNS_METRIC, 1, { outcome }));
+  }
+
+  aiToolCall(tool: string, decision: string): void {
+    this.safely(() => this.metrics?.add(RUNBOOK_AI_TOOL_CALLS_METRIC, 1, { tool, decision }));
   }
 
   dryRun(): void {
