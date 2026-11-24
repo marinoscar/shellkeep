@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { UserCredentialsModule } from '@marinoscar/platform-api/credentials';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SshModule } from '../ssh/ssh.module';
 import { ServerProfilesController } from './server-profiles.controller';
 import { ServerProfilesService } from './server-profiles.service';
 
 @Module({
-  imports: [PrismaModule, UserCredentialsModule],
+  imports: [PrismaModule, UserCredentialsModule, SshModule],
   controllers: [ServerProfilesController],
   providers: [ServerProfilesService],
   exports: [ServerProfilesService],

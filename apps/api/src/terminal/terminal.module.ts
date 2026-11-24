@@ -3,6 +3,7 @@ import { UserCredentialsModule } from '@marinoscar/platform-api/credentials';
 import { AuthModule } from '@marinoscar/platform-api/identity';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ServerProfilesModule } from '../server-profiles/server-profiles.module';
+import { SshModule } from '../ssh/ssh.module';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { SshService } from './ssh.service';
@@ -23,6 +24,8 @@ import { LegacySecretsDoctorCheck } from './doctor/legacy-secrets.doctor-check';
   imports: [
     PrismaModule,
     ServerProfilesModule,
+    // The connection factory (host-key verification) every SSH path goes through (#60).
+    SshModule,
     // The identity slice's own module: `AuthService` (its principal resolution)
     // and `JwtService` for `TerminalPrincipalResolver`. Nest modules are
     // singletons, so this is the instance `IdentityModule.forRoot()` mounts.

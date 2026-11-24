@@ -7,6 +7,8 @@
  * out-of-range value before it is sent.
  */
 
+import type { SshSystemSettings } from './ssh-system-settings';
+
 /** The namespace's key in the system settings document. */
 export const TERMINAL_SYSTEM_SETTINGS_KEY = 'terminal';
 
@@ -43,6 +45,8 @@ export const DEFAULT_TERMINAL_SYSTEM_SETTINGS: TerminalSystemSettings = {
 export interface TerminalSystemSettingsDocument {
   version: number;
   terminal?: Partial<TerminalSystemSettings> | null;
+  /** The `ssh` namespace (#60), shown in the same admin page. */
+  ssh?: Partial<SshSystemSettings> | null;
 }
 
 /** The namespace from a document, with the defaults filled in. */

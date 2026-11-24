@@ -13,6 +13,7 @@ const {
   wsSendFn,
   wsResizeFn,
   wsOnFn,
+  wsRetryConnectFn,
 } = vi.hoisted(() => {
   const wsListeners: Map<string, ((...args: unknown[]) => void)[]> = new Map();
   const wsConnectedState = { value: false };
@@ -24,7 +25,8 @@ const {
     if (!wsListeners.has(event)) wsListeners.set(event, []);
     wsListeners.get(event)!.push(cb);
   });
-  return { wsListeners, wsConnectedState, wsConnectFn, wsDisconnectFn, wsSendFn, wsResizeFn, wsOnFn };
+  const wsRetryConnectFn = vi.fn();
+  return { wsListeners, wsConnectedState, wsConnectFn, wsDisconnectFn, wsSendFn, wsResizeFn, wsOnFn, wsRetryConnectFn };
 });
 
 // ---------------------------------------------------------------------------
@@ -85,6 +87,7 @@ vi.mock('../../services/terminal-ws', () => {
     this.send = wsSendFn;
     this.resize = wsResizeFn;
     this.on = wsOnFn;
+    this.retryConnect = wsRetryConnectFn;
   });
   return { TerminalWebSocket: TerminalWebSocketMock };
 });
@@ -663,6 +666,46 @@ describe('useTerminal', () => {
       // api.getAccessToken was already used once for init (returned null, so no init ws)
       // calling reconnect should also check for token and not create WS when null
       expect(vi.mocked(TerminalWebSocket).mock.calls.length).toBe(callsBefore);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('host-key refusal (#60)', () => {
+    const refusal = {
+      code: 'HOST_KEY_UNKNOWN',
+      presented: { fingerprint: 'SHA256:presentedA', algorithm: 'ssh-ed25519' },
+      expected: null,
+      serverProfileId: 'profile-a',
+    };
+
+    it('exposes the refusal from the socket without setting an error', () => {
+      const { result } = renderUseTerminal();
+      act(() => emitWs('host_key', refusal));
+
+      expect(result.current.hostKeyRefusal).toEqual(refusal);
+      expect(result.current.error).toBeNull();
+    });
+
+    it('retryConnect clears the refusal and asks again on the same socket', () => {
+      const { result } = renderUseTerminal();
+      act(() => emitWs('host_key', refusal));
+      const sockets = vi.mocked(TerminalWebSocket).mock.instances.length;
+
+      act(() => result.current.retryConnect());
+
+      expect(result.current.hostKeyRefusal).toBeNull();
+      expect(wsRetryConnectFn).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(TerminalWebSocket).mock.instances).toHaveLength(sockets);
+    });
+
+    it('dismissHostKey closes the prompt and reports the message', () => {
+      const { result } = renderUseTerminal();
+      act(() => emitWs('host_key', refusal));
+
+      act(() => result.current.dismissHostKey('not trusted'));
+
+      expect(result.current.hostKeyRefusal).toBeNull();
+      expect(result.current.error).toBe('not trusted');
     });
   });
 

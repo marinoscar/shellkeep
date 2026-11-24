@@ -6,11 +6,10 @@
 //
 //   - `terminal.doctorProbeProfileId` unset                      -> skip
 //   - the profile no longer exists                               -> warn
-//   - the profile has no pinned host key (`fingerprint` null)    -> warn (full
-//     verification and trust-on-first-use land in #60; nothing is sent to a host
-//     whose key nobody has pinned)
-//   - otherwise connect with the profile's credentials, verify the presented key
-//     against `fingerprint` BEFORE authenticating, run exactly
+//   - the profile has no pinned host key (`fingerprint` null)    -> warn (nothing is
+//     sent to a host whose key nobody has trusted; the Doctor never trusts a key)
+//   - otherwise connect through the SSH connection factory (#60), which verifies the
+//     presented key against `fingerprint` BEFORE authenticating, run exactly
 //     `command -v tmux && tmux -V`, disconnect:
 //       tmux found                                               -> pass (the version)
 //       tmux missing, key mismatch, auth or network failure      -> fail
@@ -32,6 +31,7 @@ import {
 } from '@marinoscar/platform-api/doctor';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { SshConnectionFactory } from '../../ssh/ssh-connection.factory';
 import { SSH_CREDENTIAL_PURPOSE, sshCredentialName, type SshSecretField } from '../../server-profiles/ssh-credentials';
 import { TMUX_PROBE_TIMEOUT_MS, probeTmux } from './tmux-probe';
 
@@ -58,6 +58,7 @@ export class TmuxProbeDoctorCheck implements DoctorCheck, OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly settings: SystemSettingsService,
     private readonly credentials: UserCredentialsService,
+    private readonly ssh: SshConnectionFactory,
   ) {}
 
   onModuleInit(): void {
@@ -78,11 +79,13 @@ export class TmuxProbeDoctorCheck implements DoctorCheck, OnModuleInit {
       select: {
         id: true,
         userId: true,
+        orgId: true,
         hostname: true,
         port: true,
         username: true,
         authMethod: true,
         fingerprint: true,
+        hostKeyAlgorithm: true,
       },
     });
     if (!profile) {
@@ -98,7 +101,7 @@ export class TmuxProbeDoctorCheck implements DoctorCheck, OnModuleInit {
         status: 'warn',
         detail: 'The probe server has no pinned host key, so it is not contacted',
         remedy:
-          'Pin the host key of the probe server profile (host-key trust arrives with the host-key verification work); ' +
+          'Open the probe server profile and trust its host key (Servers, Host key, Scan, Trust); ' +
           'until then the probe never connects to an unverified host.',
       };
     }
@@ -111,7 +114,10 @@ export class TmuxProbeDoctorCheck implements DoctorCheck, OnModuleInit {
       secret('passphrase'),
     ]);
 
-    const result = await probeTmux({
+    const result = await probeTmux(this.ssh, {
+      id: profile.id,
+      userId: profile.userId,
+      orgId: profile.orgId,
       hostname: profile.hostname,
       port: profile.port,
       username: profile.username,
@@ -120,6 +126,7 @@ export class TmuxProbeDoctorCheck implements DoctorCheck, OnModuleInit {
       privateKey,
       passphrase,
       fingerprint: profile.fingerprint,
+      hostKeyAlgorithm: profile.hostKeyAlgorithm,
     });
 
     switch (result.kind) {

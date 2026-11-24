@@ -5,6 +5,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { TerminalWebSocket } from '../services/terminal-ws';
 import { api } from '../services/api';
+import type { HostKeyRefusal } from '../types/terminal';
 
 /**
  * Apply attributes to the xterm.js helper textarea that suppress the
@@ -49,6 +50,7 @@ function openSocket(
   terminal: Terminal,
   setIsConnected: (connected: boolean) => void,
   setError: (error: string | null) => void,
+  setHostKeyRefusal: (refusal: HostKeyRefusal | null) => void,
 ): TerminalWebSocket {
   // The socket reads the session's current access token on every (re)connect
   // and re-authenticates in-band after each refresh (#47).
@@ -81,12 +83,18 @@ function openSocket(
     setError(err.message);
   });
 
+  // An unknown or changed host key (#60): the view prompts the user.
+  ws.on('host_key', (refusal: HostKeyRefusal) => {
+    setHostKeyRefusal(refusal);
+  });
+
   return ws;
 }
 
 export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivElement | null>) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hostKeyRefusal, setHostKeyRefusal] = useState<HostKeyRefusal | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const wsRef = useRef<TerminalWebSocket | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -169,7 +177,7 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
 
-    const ws = openSocket(sessionId, terminal, setIsConnected, setError);
+    const ws = openSocket(sessionId, terminal, setIsConnected, setError, setHostKeyRefusal);
     wsRef.current = ws;
 
     // Terminal input -> the CURRENT socket. Subscribed once per terminal, so a
@@ -229,15 +237,36 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
   const reconnect = useCallback(() => {
     wsRef.current?.disconnect();
     setError(null);
+    setHostKeyRefusal(null);
     const terminal = terminalRef.current;
     if (api.getAccessToken() && terminal) {
       // Only the socket is replaced: the terminal's single input subscription
       // already routes to whatever `wsRef.current` is.
-      const ws = openSocket(sessionId, terminal, setIsConnected, setError);
+      const ws = openSocket(sessionId, terminal, setIsConnected, setError, setHostKeyRefusal);
       wsRef.current = ws;
       ws.connect();
     }
   }, [sessionId]);
+
+  /**
+   * The host key was trusted (#60): ask for the session again on the same
+   * socket (the gateway kept it open after the refusal).
+   */
+  const retryConnect = useCallback(() => {
+    setHostKeyRefusal(null);
+    setError(null);
+    if (wsRef.current) {
+      wsRef.current.retryConnect();
+    } else {
+      reconnect();
+    }
+  }, [reconnect]);
+
+  /** The user declined the host-key prompt: close it and report `message`. */
+  const dismissHostKey = useCallback((message: string) => {
+    setHostKeyRefusal(null);
+    setError(message);
+  }, []);
 
   const search = useCallback((term: string) => {
     searchAddonRef.current?.findNext(term);
@@ -248,5 +277,15 @@ export function useTerminal(sessionId: string, containerRef: RefObject<HTMLDivEl
     wsRef.current?.send(encoder.encode(data));
   }, []);
 
-  return { isConnected, error, reconnect, search, terminal: terminalRef, sendInput };
+  return {
+    isConnected,
+    error,
+    reconnect,
+    search,
+    terminal: terminalRef,
+    sendInput,
+    hostKeyRefusal,
+    retryConnect,
+    dismissHostKey,
+  };
 }

@@ -77,5 +77,8 @@
   "notifications": {
     "browserEnabled": true,
     "disabledEvents": []
+  },
+  "ssh": {
+    "hostKeyPolicy": "tofu_prompt"
   }
 }

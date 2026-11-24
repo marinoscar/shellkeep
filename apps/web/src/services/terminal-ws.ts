@@ -1,4 +1,5 @@
 import { api } from './api';
+import { readHostKeyRefusal } from '../lib/terminal/host-key';
 
 export type TerminalWsEventType =
   | 'data'
@@ -10,7 +11,13 @@ export type TerminalWsEventType =
   /** The access token expired and could not be refreshed: sign in again (no reconnect). */
   | 'expired'
   /** A maintenance window is open: no new terminal session may start (no reconnect, #46). */
-  | 'maintenance';
+  | 'maintenance'
+  /**
+   * The server's host key is unknown or changed (#60): the payload is a
+   * `HostKeyRefusal`. The socket stays open; `retryConnect()` asks again once
+   * the user trusted the key.
+   */
+  | 'host_key';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- listeners receive differently shaped payloads per event
 type Listener = (...args: any[]) => void;
@@ -100,6 +107,13 @@ export const EXPIRED_MESSAGE = 'Your session has expired. Sign in again to recon
  */
 export const MAINTENANCE_MESSAGE =
   'ShellKeep is in maintenance. New terminal sessions are paused; try again later.';
+/** Shown after the user declined to trust an unknown host key (#60). */
+export const HOST_KEY_UNTRUSTED_MESSAGE =
+  'The server\'s host key is not trusted, so the connection was not opened.';
+/** Shown after the user cancelled on a changed host key (#60). */
+export const HOST_KEY_MISMATCH_MESSAGE =
+  'The server\'s host key changed, so the connection was refused. Nothing was sent.';
+
 /** The `reason` of the gateway's maintenance refusal (`TERMINAL_MAINTENANCE_REASON`). */
 export const MAINTENANCE_REASON = 'maintenance';
 
@@ -268,7 +282,14 @@ export class TerminalWebSocket {
         this.startPing();
         this.emit('connect', null);
         break;
-      case 'session_error':
+      case 'session_error': {
+        // A host-key refusal (#60): the socket stays open and no credential was
+        // sent. The view prompts; after trust it calls `retryConnect()`.
+        const refusal = readHostKeyRefusal(message);
+        if (refusal) {
+          this.emit('host_key', refusal);
+          break;
+        }
         this.emit(
           'error',
           new Error(
@@ -278,6 +299,7 @@ export class TerminalWebSocket {
           ),
         );
         break;
+      }
       case 'session_ended':
         this._connected = false;
         this.emit('disconnect', message.reason);
@@ -286,6 +308,22 @@ export class TerminalWebSocket {
         // Heartbeat response, no action needed
         break;
     }
+  }
+
+  /**
+   * Ask for the session again on the open, authenticated socket (after the
+   * user trusted a host key, #60), or open a fresh socket when that one is gone.
+   */
+  retryConnect(): void {
+    if (this.ws && this.authenticated && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'connect', sessionId: this.sessionId }));
+      return;
+    }
+    const old = this.ws;
+    this.ws = null; // its close event must not schedule a reconnect
+    old?.close();
+    this.reconnectAttempts = 0;
+    this.connect();
   }
 
   disconnect(): void {

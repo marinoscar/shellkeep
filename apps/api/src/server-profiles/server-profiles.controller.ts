@@ -25,6 +25,9 @@ import { PERMISSIONS } from '../common/constants/roles.constants';
 import { CreateServerProfileDto } from './dto/create-server-profile.dto';
 import { UpdateServerProfileDto } from './dto/update-server-profile.dto';
 import { ServerProfilesQueryDto } from './dto/server-profiles-query.dto';
+import { HostKeyError } from '../ssh/host-key.error';
+import { hostKeyErrorToHttp } from '../ssh/host-key-http';
+import { TrustHostKeyDto } from './dto/trust-host-key.dto';
 
 @ApiTags('Server Profiles')
 @Controller('server-profiles')
@@ -115,5 +118,82 @@ export class ServerProfilesController {
     @CurrentOrg() orgId: string,
   ) {
     return this.serverProfilesService.testConnection(id, { userId, orgId });
+  }
+
+  @Post(':id/host-key/scan')
+  @Auth({ permissions: [PERMISSIONS.SERVERS_READ] })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Read the host key a server presents (no credential is sent) and compare it with the trusted one',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: '`{ presented: { fingerprint, algorithm }, trusted: { fingerprint, algorithm, trustedAt } | null, matches }`',
+  })
+  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 502, description: 'SSH_HOST_UNREACHABLE: the server could not be reached' })
+  async scanHostKey(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
+  ) {
+    return this.serverProfilesService.scanHostKey(id, { userId, orgId });
+  }
+
+  @Post(':id/host-key/trust')
+  @Auth({ permissions: [PERMISSIONS.SERVERS_WRITE] })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Trust the host key the server presents now (replacing a different one needs confirmHostname)',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'The updated server profile' })
+  @ApiResponse({ status: 400, description: 'HOST_KEY_CONFIRMATION_REQUIRED: replacing a trusted key without confirmHostname' })
+  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 409, description: 'HOST_KEY_CHANGED_DURING_TRUST: the server presents another key than the one confirmed' })
+  @ApiResponse({ status: 502, description: 'SSH_HOST_UNREACHABLE: the server could not be reached' })
+  async trustHostKey(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
+    @Body() dto: TrustHostKeyDto,
+  ) {
+    return this.serverProfilesService.trustHostKey(id, { userId, orgId }, dto);
+  }
+
+  @Delete(':id/host-key')
+  @Auth({ permissions: [PERMISSIONS.SERVERS_WRITE] })
+  @ApiOperation({ summary: 'Forget the trusted host key; the next connection asks the user again' })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'The updated server profile' })
+  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  async forgetHostKey(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
+  ) {
+    return this.serverProfilesService.forgetHostKey(id, { userId, orgId });
+  }
+
+  @Post(':id/facts/refresh')
+  @Auth({ permissions: [PERMISSIONS.SERVERS_WRITE] })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Probe the server (OS, shell, package manager, tools) now' })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiResponse({ status: 200, description: '`{ facts, factsProbedAt }`' })
+  @ApiResponse({ status: 404, description: 'Server profile not found' })
+  @ApiResponse({ status: 409, description: 'HOST_KEY_UNKNOWN or HOST_KEY_MISMATCH: the host key is not trusted' })
+  async refreshFacts(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentOrg() orgId: string,
+  ) {
+    try {
+      return await this.serverProfilesService.refreshFacts(id, { userId, orgId });
+    } catch (error) {
+      if (error instanceof HostKeyError) throw hostKeyErrorToHttp(error, id);
+      throw error;
+    }
   }
 }

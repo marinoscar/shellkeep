@@ -4,6 +4,10 @@ import { ServerProfilesService } from './server-profiles.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AUDIT_SINK } from '@marinoscar/platform-api/core';
 import { UserCredentialsService } from '@marinoscar/platform-api/credentials';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { HostKeyError } from '../ssh/host-key.error';
+import { ServerFactsService } from '../ssh/server-facts.service';
+import { SshConnectionFactory } from '../ssh/ssh-connection.factory';
 
 describe('ServerProfilesService', () => {
   let service: ServerProfilesService;
@@ -27,9 +31,15 @@ describe('ServerProfilesService', () => {
   const stored = (...fields: string[]) =>
     credentials.list.mockResolvedValue(fields.map((field) => ({ purpose: 'ssh', name: nameOf(field) })));
 
+  // The connection factory and the facts probe: the host-key logic of the service is proven here
+  // against doubles; the factory itself is proven in `ssh/ssh-connection.factory.spec.ts`.
+  const ssh = { open: jest.fn(), scan: jest.fn() };
+  const facts = { probe: jest.fn(), tryProbeClient: jest.fn() };
+
   const mockProfile = {
     id: mockProfileId,
     userId: mockUserId,
+    orgId: mockOrgId,
     name: 'My Server',
     hostname: 'example.com',
     port: 22,
@@ -55,6 +65,8 @@ describe('ServerProfilesService', () => {
         ServerProfilesService,
         { provide: AUDIT_SINK, useValue: auditSink },
         { provide: UserCredentialsService, useValue: credentials },
+        { provide: SshConnectionFactory, useValue: ssh },
+        { provide: ServerFactsService, useValue: facts },
         {
           provide: PrismaService,
           useValue: {
@@ -64,6 +76,7 @@ describe('ServerProfilesService', () => {
               count: jest.fn(),
               create: jest.fn(),
               update: jest.fn(),
+              updateMany: jest.fn().mockResolvedValue({ count: 1 }),
               delete: jest.fn(),
             },
           },
@@ -462,6 +475,265 @@ describe('ServerProfilesService', () => {
           color: 'default',
         }),
       ).resolves.toMatchObject({ id: mockProfileId });
+    });
+  });
+
+  describe('host key trust', () => {
+    const FP_A = 'SHA256:' + 'A'.repeat(43);
+    const FP_B = 'SHA256:' + 'B'.repeat(43);
+    const presentedA = { fingerprint: FP_A, algorithm: 'ssh-ed25519' };
+    const untrusted = { ...mockProfile, fingerprint: null, hostKeyAlgorithm: null, hostKeyTrustedAt: null };
+    const trusted = {
+      ...mockProfile,
+      fingerprint: FP_A,
+      hostKeyAlgorithm: 'ssh-ed25519',
+      hostKeyTrustedAt: new Date('2026-01-01'),
+    };
+    const find = (row: unknown) => (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(row);
+    const actions = () => auditSink.record.mock.calls.map(([event]) => event.action);
+
+    beforeEach(() => {
+      facts.probe.mockResolvedValue({ kernel: 'Linux 6 x86_64', os: 'linux', has: [] });
+    });
+
+    it('scans without storing: reports the presented key, the trusted one and whether they match', async () => {
+      find(trusted);
+      ssh.scan.mockResolvedValue(presentedA);
+
+      const result = await service.scanHostKey(mockProfileId, mockScope);
+
+      expect(result).toEqual({
+        presented: presentedA,
+        trusted: { fingerprint: FP_A, algorithm: 'ssh-ed25519', trustedAt: trusted.hostKeyTrustedAt },
+        matches: true,
+      });
+      expect(ssh.scan).toHaveBeenCalledWith(trusted);
+      expect(prisma.serverProfile.updateMany).not.toHaveBeenCalled();
+      expect(auditSink.record).not.toHaveBeenCalled();
+    });
+
+    it('reports trusted null and matches false for a profile that trusts nothing', async () => {
+      find(untrusted);
+      ssh.scan.mockResolvedValue(presentedA);
+      await expect(service.scanHostKey(mockProfileId, mockScope)).resolves.toMatchObject({ trusted: null, matches: false });
+    });
+
+    it('answers 502 SSH_HOST_UNREACHABLE when the server cannot be reached', async () => {
+      find(untrusted);
+      ssh.scan.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      await expect(service.scanHostKey(mockProfileId, mockScope)).rejects.toMatchObject({
+        response: { code: 'SSH_HOST_UNREACHABLE' },
+      });
+    });
+
+    it('trusts the confirmed key, records who and when, audits once and probes the facts', async () => {
+      find(untrusted);
+      ssh.scan.mockResolvedValue(presentedA);
+
+      await service.trustHostKey(mockProfileId, mockScope, { fingerprint: FP_A });
+
+      expect(prisma.serverProfile.updateMany).toHaveBeenCalledWith({
+        where: { id: mockProfileId, userId: mockUserId, orgId: mockOrgId },
+        data: {
+          fingerprint: FP_A,
+          hostKeyAlgorithm: 'ssh-ed25519',
+          hostKeyTrustedAt: expect.any(Date),
+          hostKeyTrustedBy: mockUserId,
+        },
+      });
+      expect(actions()).toEqual(['server_profile.host_key_trusted']);
+      expect(auditSink.record).toHaveBeenCalledWith(
+        expect.objectContaining({ meta: { hostname: 'example.com', fingerprint: FP_A, algorithm: 'ssh-ed25519' } }),
+      );
+      expect(facts.probe).toHaveBeenCalledTimes(1);
+    });
+
+    it('answers 409 HOST_KEY_CHANGED_DURING_TRUST and stores nothing when the key is not the confirmed one', async () => {
+      find(untrusted);
+      ssh.scan.mockResolvedValue({ fingerprint: FP_B, algorithm: 'ssh-ed25519' });
+
+      const failure = service.trustHostKey(mockProfileId, mockScope, { fingerprint: FP_A });
+
+      await expect(failure).rejects.toBeInstanceOf(ConflictException);
+      await expect(failure).rejects.toMatchObject({ response: { code: 'HOST_KEY_CHANGED_DURING_TRUST' } });
+      expect(prisma.serverProfile.updateMany).not.toHaveBeenCalled();
+      expect(auditSink.record).not.toHaveBeenCalled();
+    });
+
+    it('answers 400 when replacing a different key without the typed hostname, before any network', async () => {
+      find(trusted);
+
+      const failure = service.trustHostKey(mockProfileId, mockScope, { fingerprint: FP_B });
+
+      await expect(failure).rejects.toBeInstanceOf(BadRequestException);
+      await expect(failure).rejects.toMatchObject({ response: { code: 'HOST_KEY_CONFIRMATION_REQUIRED' } });
+      await expect(
+        service.trustHostKey(mockProfileId, mockScope, { fingerprint: FP_B, confirmHostname: 'wrong.example.test' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(ssh.scan).not.toHaveBeenCalled();
+      expect(prisma.serverProfile.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('replaces a different key with the typed hostname and audits old and new fingerprints', async () => {
+      find(trusted);
+      ssh.scan.mockResolvedValue({ fingerprint: FP_B, algorithm: 'ssh-ed25519' });
+
+      await service.trustHostKey(mockProfileId, mockScope, { fingerprint: FP_B, confirmHostname: 'example.com' });
+
+      expect(actions()).toEqual(['server_profile.host_key_replaced']);
+      expect(auditSink.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          meta: expect.objectContaining({ oldFingerprint: FP_A, newFingerprint: FP_B }),
+        }),
+      );
+    });
+
+    it('still succeeds when the facts probe after trust fails', async () => {
+      find(untrusted);
+      ssh.scan.mockResolvedValue(presentedA);
+      facts.probe.mockRejectedValue(new Error('auth failed'));
+      await expect(service.trustHostKey(mockProfileId, mockScope, { fingerprint: FP_A })).resolves.toBeDefined();
+    });
+
+    it('forgets the key and the facts audited once; the next connect prompts again', async () => {
+      find(trusted);
+
+      await service.forgetHostKey(mockProfileId, mockScope);
+
+      expect(prisma.serverProfile.updateMany).toHaveBeenCalledWith({
+        where: { id: mockProfileId, userId: mockUserId, orgId: mockOrgId },
+        data: { fingerprint: null, hostKeyAlgorithm: null, hostKeyTrustedAt: null, hostKeyTrustedBy: null },
+      });
+      expect(actions()).toEqual(['server_profile.host_key_forgotten']);
+    });
+
+    it('answers 404 for a profile of another owner on every host-key route', async () => {
+      find(null);
+      await expect(service.scanHostKey(mockProfileId, mockScope)).rejects.toThrow(NotFoundException);
+      await expect(service.trustHostKey(mockProfileId, mockScope, { fingerprint: FP_A })).rejects.toThrow(NotFoundException);
+      await expect(service.forgetHostKey(mockProfileId, mockScope)).rejects.toThrow(NotFoundException);
+    });
+
+    it('clears the trust and the facts when the hostname changes', async () => {
+      find(trusted);
+      (prisma.serverProfile.update as jest.Mock).mockResolvedValue(untrusted);
+
+      await service.update(mockProfileId, mockScope, { hostname: 'other.example.test' });
+
+      const data = (prisma.serverProfile.update as jest.Mock).mock.calls[0][0].data;
+      expect(data).toMatchObject({
+        hostname: 'other.example.test',
+        fingerprint: null,
+        hostKeyAlgorithm: null,
+        hostKeyTrustedAt: null,
+        hostKeyTrustedBy: null,
+        factsProbedAt: null,
+      });
+      expect(data).toHaveProperty('facts');
+    });
+
+    it('clears the trust when the port changes, and keeps it when hostname and port are unchanged', async () => {
+      find(trusted);
+      (prisma.serverProfile.update as jest.Mock).mockResolvedValue(trusted);
+
+      await service.update(mockProfileId, mockScope, { port: 2222 });
+      expect((prisma.serverProfile.update as jest.Mock).mock.calls[0][0].data).toMatchObject({ fingerprint: null });
+
+      await service.update(mockProfileId, mockScope, { hostname: 'example.com', port: 22, name: 'Renamed' });
+      expect((prisma.serverProfile.update as jest.Mock).mock.calls[1][0].data).not.toHaveProperty('fingerprint');
+    });
+
+    it('returns the trust fields and the facts in a profile response', async () => {
+      find({ ...trusted, facts: { kernel: 'Linux 6 x86_64', os: 'linux', has: ['tmux'] }, factsProbedAt: new Date('2026-01-02') });
+
+      await expect(service.findOne(mockProfileId, mockScope)).resolves.toMatchObject({
+        fingerprint: FP_A,
+        hostKeyAlgorithm: 'ssh-ed25519',
+        hostKeyTrustedAt: trusted.hostKeyTrustedAt,
+        facts: { os: 'linux', has: ['tmux'] },
+        factsProbedAt: new Date('2026-01-02'),
+      });
+    });
+
+    it('reports an untrusted profile with null trust fields and no facts', async () => {
+      find(untrusted);
+      await expect(service.findOne(mockProfileId, mockScope)).resolves.toMatchObject({
+        fingerprint: null,
+        hostKeyAlgorithm: null,
+        hostKeyTrustedAt: null,
+        facts: null,
+        factsProbedAt: null,
+      });
+    });
+  });
+
+  describe('testConnection and facts', () => {
+    const FP = 'SHA256:' + 'C'.repeat(43);
+    const row = { ...mockProfile, fingerprint: FP, hostKeyAlgorithm: 'ssh-ed25519', facts: null, factsProbedAt: null };
+    const find = (value: unknown) => (prisma.serverProfile.findFirst as jest.Mock).mockResolvedValue(value);
+
+    it('succeeds over the factory (purpose test), probing the facts on the same connection', async () => {
+      find(row);
+      const client = { end: jest.fn() };
+      ssh.open.mockResolvedValue(client);
+      facts.tryProbeClient.mockResolvedValue(null);
+
+      await expect(service.testConnection(mockProfileId, mockScope)).resolves.toEqual({ success: true });
+
+      expect(ssh.open).toHaveBeenCalledWith(expect.objectContaining({ id: mockProfileId, fingerprint: FP }), { purpose: 'test' });
+      expect(facts.tryProbeClient).toHaveBeenCalledWith(client, expect.objectContaining({ id: mockProfileId }));
+      expect(client.end).toHaveBeenCalled();
+    });
+
+    it.each([
+      ['HOST_KEY_UNKNOWN', undefined],
+      ['HOST_KEY_MISMATCH', FP],
+    ] as const)('reports a %s refusal with both fingerprints and audits the code', async (code, expected) => {
+      find(row);
+      const presented = { fingerprint: 'SHA256:' + 'D'.repeat(43), algorithm: 'ssh-ed25519' };
+      ssh.open.mockRejectedValue(new HostKeyError(code, presented, expected, mockProfileId));
+
+      const result = await service.testConnection(mockProfileId, mockScope);
+
+      expect(result).toEqual({ success: false, error: expect.any(String), code, presented, expected: expected ?? null });
+      expect(auditSink.record).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'server_profile.test', meta: { hostname: 'example.com', success: false, code } }),
+      );
+    });
+
+    it('reports any other failure as an error message without a code', async () => {
+      find(row);
+      ssh.open.mockRejectedValue(new Error('All configured authentication methods failed'));
+      await expect(service.testConnection(mockProfileId, mockScope)).resolves.toEqual({
+        success: false,
+        error: 'All configured authentication methods failed',
+      });
+    });
+
+    it('forces a probe on refresh', async () => {
+      find(row);
+      const probed = { kernel: 'Linux 6 x86_64', os: 'linux', has: ['tmux'] };
+      facts.probe.mockResolvedValue(probed);
+      await expect(service.refreshFacts(mockProfileId, mockScope)).resolves.toMatchObject({ facts: probed });
+    });
+
+    it('serves fresh cached facts without connecting, and probes when they are older than the max age', async () => {
+      const cached = { kernel: 'Linux 6 x86_64', os: 'linux', has: [] };
+      find({ ...row, facts: cached, factsProbedAt: new Date(Date.now() - 60_000) });
+      await expect(service.getFacts(mockProfileId, mockScope)).resolves.toEqual(cached);
+      expect(facts.probe).not.toHaveBeenCalled();
+
+      find({ ...row, facts: cached, factsProbedAt: new Date(Date.now() - 25 * 60 * 60 * 1000) });
+      facts.probe.mockResolvedValue({ ...cached, kernel: 'Linux 7 x86_64' });
+      await expect(service.getFacts(mockProfileId, mockScope)).resolves.toMatchObject({ kernel: 'Linux 7 x86_64' });
+      expect(facts.probe).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to the cached facts when the lazy probe fails', async () => {
+      const cached = { kernel: 'Linux 6 x86_64', os: 'linux', has: [] };
+      find({ ...row, facts: cached, factsProbedAt: new Date(0) });
+      facts.probe.mockRejectedValue(new Error('unreachable'));
+      await expect(service.getFacts(mockProfileId, mockScope)).resolves.toEqual(cached);
     });
   });
 });
