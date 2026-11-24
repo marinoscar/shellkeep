@@ -55,6 +55,16 @@ const REGISTERED_JOB_TYPES: Readonly<Record<string, string>> = {
   'db.backup.sweep': 'Backup sweep',
   'db.restore.run': 'Database restore',
   'db.restore.old-db-drop': 'Restore cleanup',
+  // The AI slice (#55): background runs, the catalogue and key rechecks and the two retention purges.
+  // Every ai.* type is server-only (no node ever holds a provider key).
+  'ai.response.run': 'AI background response',
+  'ai.image.generate': 'AI image generation',
+  'ai.audio.transcribe': 'AI audio transcription',
+  'ai.audio.speech': 'AI speech synthesis',
+  'ai.catalog.refresh': 'AI model catalog refresh',
+  'ai.keys.recheck': 'AI key recheck',
+  'ai.runs.purge': 'AI run purge',
+  'ai.usage.purge': 'AI usage purge',
 };
 
 /** Types registered without a label of their own, shown as the type string. */
