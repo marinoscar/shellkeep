@@ -76,6 +76,28 @@ export interface RunbookVersionSummary {
 
 export interface RunbookVersionView extends RunbookVersionSummary {
   definition: RunbookDefinition;
+  /** The destructive-command assessment of the definition (#67). */
+  risk?: RunbookRisk;
+}
+
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+/** One step's finding (#67): the reasons, never the command text. */
+export interface RiskFinding {
+  stepId: string;
+  stepIndex: number;
+  kind: RunbookStepKind | string;
+  risk: RiskLevel;
+  destructive: boolean;
+  reasons: string[];
+  lines?: number[];
+}
+
+/** `risk` of the validate and read routes (#67). Saving is never blocked by it. */
+export interface RunbookRisk {
+  destructive: boolean;
+  risk: RiskLevel;
+  findings: RiskFinding[];
 }
 
 export interface RunbookView {
@@ -109,6 +131,8 @@ export interface RunbookListItem extends RunbookView {
 /** `GET /api/runbooks/:id`: the latest version embedded. */
 export interface RunbookDetail extends Omit<RunbookView, 'latestVersion'> {
   latestVersion: RunbookVersionView | null;
+  /** The latest version's assessment (#67). */
+  risk?: RunbookRisk;
 }
 
 export interface DefinitionWarning {
@@ -129,6 +153,7 @@ export interface ValidationResult {
   definition: RunbookDefinition;
   definitionSha256: string;
   warnings: DefinitionWarning[];
+  risk?: RunbookRisk;
 }
 
 export interface TargetPreviewServer {
@@ -214,6 +239,12 @@ export interface RunSummary {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+  /** A dry run (#67): probes only, nothing changed. */
+  dryRun?: boolean;
+  /** The definition was destructive when it was launched (#67). */
+  destructive?: boolean;
+  /** `APPROVAL_REJECTED`, `APPROVAL_EXPIRED`, ... (#67). */
+  errorCode?: string | null;
 }
 
 export interface RunStepRow {
@@ -258,6 +289,8 @@ export interface RunDetail extends RunSummary {
   cancelRequestedAt: string | null;
   counts: { total: number } & Partial<Record<TargetStatus, number>>;
   targets: RunTargetRow[];
+  /** The run's approvals (#67), a pending `destructive_run` among them while it waits. */
+  approvals?: RunbookApproval[];
 }
 
 /** The first frame of a run stream. */
@@ -283,8 +316,64 @@ export interface CreateRunInput {
   secretRefs?: Record<string, string>;
   targets?: Partial<TargetSelector>;
   strategy?: Partial<RunStrategy>;
-  // TODO(#67): the dry-run flag and the destructive confirmation land here once the safety API
-  // (worktrees/runbook-safety) is on main; RunLauncherDialog already collects both (`SAFETY_HOOKS`).
+  /** Probes only (#67): no confirmation, no approval, nothing changed. */
+  dryRun?: boolean;
+  /** A destructive runbook's confirmation (#67): the exact name and the resolved server count. */
+  confirm?: { runbookName: string; targetCount: number };
+}
+
+/** `202` of a run start. */
+export interface StartRunResult {
+  runId: string;
+  status?: string;
+  dryRun?: boolean;
+  /** The two-person rule held the run until someone else approves it (#67). */
+  awaitingApproval?: boolean;
+  approvalId?: string | null;
+}
+
+/** `details` of `428 RUNBOOK_CONFIRMATION_REQUIRED` (#67). */
+export interface ConfirmationRequired {
+  runbookName: string;
+  targetCount: number;
+  requiresApproval: boolean;
+  findings: RiskFinding[];
+}
+
+/** One row of a run's audit trail (#67). */
+export interface RunAuditItem {
+  at: string;
+  kind: 'event' | 'command';
+  event: string | null;
+  userId: string | null;
+  approverUserId: string | null;
+  serverProfileId: string | null;
+  serverName: string | null;
+  stepIndex: number | null;
+  stepName: string | null;
+  origin: string | null;
+  commandPreview: string | null;
+  commandSha256: string | null;
+  exitCode: number | null;
+  signal: string | null;
+  timedOut: boolean | null;
+  durationMs: number | null;
+  outcome: string | null;
+  detail: string | null;
+  dryRun: boolean | null;
+}
+
+export interface RunAuditPage extends Page<RunAuditItem> {
+  events: number;
+  commands: number;
+}
+
+/** A row of the org-wide command log `GET /api/runbook-commands` (#67). */
+export interface RunbookCommandRow extends RunAuditItem {
+  id: string;
+  runId: string;
+  runbookId: string;
+  runbookName: string;
 }
 
 export type ApprovalKind = 'gate' | 'ai_command' | 'ai_plan' | 'destructive_run' | (string & {});

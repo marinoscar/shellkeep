@@ -16,7 +16,10 @@ import type {
   RunbookView,
   RunDetail,
   RunStatus,
+  RunAuditPage,
+  RunbookCommandRow,
   RunListItem,
+  StartRunResult,
   RunTrigger,
   TargetPreview,
   TargetSelector,
@@ -107,7 +110,7 @@ export const listRunbookSecrets = (): Promise<RunbookSecret[]> => api.get('/runb
 export const putRunbookSecret = (name: string, body: { value: string; label?: string }): Promise<RunbookSecret> =>
   api.put(`/runbook-secrets/${encodeURIComponent(name)}`, body);
 
-export const startRun = (runbookId: string, input: CreateRunInput): Promise<{ runId: string }> =>
+export const startRun = (runbookId: string, input: CreateRunInput): Promise<StartRunResult> =>
   api.post(`/runbooks/${runbookId}/runs`, input);
 
 export interface ListRunsParams {
@@ -165,3 +168,32 @@ export const decideApproval = (
   comment?: string,
 ): Promise<{ id: string; status: string }> =>
   api.post(`/runbook-approvals/${id}/decision`, { decision, ...(comment ? { comment } : {}) });
+
+/** A run's audit trail (#67), oldest first. */
+export const getRunAudit = (id: string, page = 1, pageSize = 200): Promise<RunAuditPage> =>
+  api.get(`/runbook-runs/${id}/audit${query({ page, pageSize })}`);
+
+/** Download a run's audit trail as a file (#67): CSV (formula-safe) or JSON. */
+export async function downloadRunAudit(id: string, format: 'csv' | 'json'): Promise<void> {
+  const blob = await api.getBlob(`/runbook-runs/${id}/audit/export${query({ format })}`);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `run-${id}-audit.${format}`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export interface ListCommandsParams {
+  serverId?: string;
+  userId?: string;
+  runId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** The org-wide command log (#67): what runbooks ran, newest first. */
+export const listRunbookCommands = (params: ListCommandsParams = {}): Promise<Page<RunbookCommandRow>> =>
+  api.get(`/runbook-commands${query({ ...params })}`);
