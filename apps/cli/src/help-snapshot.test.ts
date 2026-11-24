@@ -14,7 +14,7 @@ import { APP_CLI_OPTIONS } from './app.js';
 // =============================================================================
 //
 // `__snapshots__/help-snapshot.json` holds the help text of `servers`,
-// `sessions`, `runbook` and their subcommands: the flags, descriptions and order scripts
+// `sessions`, `runbook`, `files` and their subcommands: the flags, descriptions and order scripts
 // and the README rely on. A difference here is a flag or a description someone
 // changed; update the snapshot deliberately (`UPDATE_HELP_SNAPSHOT=1`), review
 // the diff, and bump the CLI version (PATCH, or MINOR for a new command).
@@ -28,7 +28,7 @@ import { APP_CLI_OPTIONS } from './app.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_PATH = join(HERE, '__snapshots__', 'help-snapshot.json');
-const OWN_GROUPS = ['servers', 'sessions', 'runbook'];
+const OWN_GROUPS = ['servers', 'sessions', 'runbook', 'files'];
 
 /** The help text of every ShellKeep command, keyed by its path (`shellkeep servers list`). */
 export function collectOwnHelp(program: Command): Record<string, string> {
@@ -69,6 +69,12 @@ describe('--help of the ShellKeep commands', () => {
       'shellkeep runbook run',
       'shellkeep runbook status',
       'shellkeep runbook logs',
+      'shellkeep files',
+      'shellkeep files ls',
+      'shellkeep files cat',
+      'shellkeep files get',
+      'shellkeep files put',
+      'shellkeep files archive',
     ]);
   });
 

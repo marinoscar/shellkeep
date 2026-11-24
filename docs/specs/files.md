@@ -131,3 +131,7 @@ Issue #158. A folder is downloaded as a `tar.gz` built by a queue job (it outliv
 **Limits.** The remote login shell must be POSIX-compatible: the single-quote escaping of the path (`'\''`) is not understood by csh-style shells, so a folder whose name contains a single quote cannot be archived on such a server (the job fails with `ARCHIVE_TAR_FAILED`).
 
 **Web.** See [File browser](#file-browser): the folder row's **Download as archive** menu item.
+
+## CLI
+
+Issue #159. `shellkeep files ls|cat|get|put|archive <server> ...` over the routes above, with the device-flow personal access token ([README](../../apps/cli/README.md#files) is the usage source of truth). Code: `apps/cli/src/commands/files-*.ts`. `<server>` is a profile name or id. `cat` reads one window at a time (`--tail` walks backwards, overlapping each window by 4 bytes so a character split between two windows is not lost); `get` and `archive` stream to a `.part` file and rename it; `put` streams the file with its `Content-Length`; `archive` polls the status route and downloads the presigned URL without the bearer token. A binary file or `FILE_TOO_LARGE` on `cat` points to `get`; a 409 `FILE_EXISTS` on `put` points to `--overwrite`.

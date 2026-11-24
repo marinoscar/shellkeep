@@ -73,6 +73,20 @@ It needs an interactive terminal. `SHELLKEEP_DEBUG=1` prints frame sizes and mes
 
 The gateway accepts a `pat_` token as well as an access JWT.
 
+## Files
+
+Reads and writes files on a server over SFTP, through the files API (the access of opening a terminal on that server: `sessions:write` plus the right to connect). `<server>` is a server profile **name** (exact, then case-insensitive) or id; a name that matches nothing or several profiles is exit 2. Nothing is buffered: downloads, uploads and `cat` move one chunk or window at a time.
+
+| Command | API | Notes |
+|---|---|---|
+| `files ls <server> [path] [--all] [--long] [--json]` | `GET /api/server-profiles/:id/files` | `path` defaults to `~`. One name per line, folders with a trailing `/`; `--all` shows dotfiles; `--long` adds type and mode, size and modified time (UTC), and a link's target. `--json` is `{ path, truncated, entries[] }` |
+| `files cat <server> <path> [--tail N \| --head N] [--json]` | `GET .../files/content` | Prints a text file window by window (the server caps a window; a file above its paged limit is refused). `--head` stops once it has N lines; `--tail` reads backwards from the end. A binary file (`FILE_IS_BINARY`) or one that is too large (`FILE_TOO_LARGE`) fails with exit 3 and a hint to use `get`. `--json` is one object per window (`{ path, offset, length, size, eof, text }`) |
+| `files get <server> <path> [dest] [--force] [--json]` | `POST .../files/download-token`, `GET /api/files/download/:token` | Streams to disk. `dest` is a file, or an existing directory (the remote name is used); the default is the current directory. Refuses to replace a file without `--force` (exit 1). It is written to `.<name>.shellkeep-<hex>.part` next to the destination and renamed when complete, so a failed or short download leaves nothing. Progress goes to stderr on a terminal |
+| `files put <server> <local> <remote-dir> [--name N] [--overwrite] [--json]` | `POST .../files/upload` | Streams the file as `application/octet-stream` with its length, with progress on a terminal. A name already taken is a 409: the error says to use `--overwrite` (exit 3). The server writes to a temp name and renames, so a reader never sees half a file |
+| `files archive <server> <path> [dest] [--no-wait] [--force] [--timeout s] [--json]` | `POST .../files/archive`, `GET /api/files/archives/:id`, `.../download` | Starts the `files.archive` job for a folder, polls every 2 s (dots on a terminal) until it is ready, then downloads the `tar.gz` through the presigned storage URL (sent without your token, never printed). `--no-wait` prints the archive id and stops. A failed or expired archive, or `--timeout` (default 1800 s), is exit 1 (the build keeps going on the server) |
+
+Exit codes are the CLI's: `0` success; `1` the command failed (destination exists, a short download, a failed archive); `2` usage (bad arguments, unknown or ambiguous server, no such local file); `3` the API answered with an error (not found, too large, binary, 409); `4` the server could not be reached; `5` log in again. The token never reaches argv, a URL printed by the command, or an error.
+
 ## Runbooks
 
 Runs are queued on the server and executed over SSH by the runbook engine; the CLI starts them and reads their state. Every command has `--json`, which carries a fixed field list (no parameter values, no secret names, no hostnames).
@@ -218,4 +232,4 @@ npm run test:run --workspace=cli
 npm run test:infra          # just the infra conformance (compose config per mode, nginx -t)
 ```
 
-The tests include the platform's conformance suites (`cli`, `deployRegistrations`, `tui`), the pinned `--help` of the ShellKeep commands (`UPDATE_HELP_SNAPSHOT=1` rewrites `src/__snapshots__/help-snapshot.json`; review the diff), a fake terminal gateway for `sessions attach`, a fake runbook API and SSE server for `runbook` (exit codes, reconnect with `Last-Event-ID`), and the adoption fixture. The version lives only in `apps/cli/package.json`; bump it per [AGENTS.md](AGENTS.md).
+The tests include the platform's conformance suites (`cli`, `deployRegistrations`, `tui`), the pinned `--help` of the ShellKeep commands (`UPDATE_HELP_SNAPSHOT=1` rewrites `src/__snapshots__/help-snapshot.json`; review the diff), a fake terminal gateway for `sessions attach`, a fake runbook API and SSE server for `runbook` (exit codes, reconnect with `Last-Event-ID`), a stub HTTP server for `files` (`src/__support__/files-stub.ts`: real sockets, so streaming and bodies are real), and the adoption fixture. The version lives only in `apps/cli/package.json`; bump it per [AGENTS.md](AGENTS.md).
