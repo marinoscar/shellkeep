@@ -145,8 +145,17 @@ describeWithDb('Runbook schedules (real Postgres, real shell)', () => {
       const now = new Date(created.nextRunAt!.getTime() + 1000);
       const results = await Promise.all([tick.tick(now), tick.tick(now)]);
       expect(results.reduce((n, r) => n + r.fired, 0)).toBe(1);
-      expect(results.reduce((n, r) => n + r.raced, 0)).toBe(1);
       expect(await runsOf(created.id)).toHaveLength(1);
+    });
+
+    it('the claim of one slot is won by exactly one of many racing ticks (guarded update, no row lock)', async () => {
+      const { runbookId } = await h.addRunbook('claim-race', { schemaVersion: 1, steps: [cmd('s1', 'true')] } as never);
+      const created = await create(runbookId);
+      const now = new Date(created.nextRunAt!.getTime() + 1000);
+      const claim = (tick as unknown as { claim(org: string, id: string, at: Date): Promise<unknown> }).claim.bind(tick);
+      const claims = await Promise.all(Array.from({ length: 6 }, () => claim(ORG_A, created.id, now)));
+      expect(claims.filter((row) => row !== null)).toHaveLength(1);
+      expect((await rowOf(created.id)).nextRunAt!.getTime()).toBeGreaterThan(now.getTime());
     });
 
     it('overlap skip skips while the previous run is active; allow does not', async () => {
