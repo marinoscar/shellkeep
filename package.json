@@ -11,6 +11,7 @@
   "scripts": {
     "api": "npm -w apps/api",
     "web": "npm -w apps/web",
+    "cli": "npm -w apps/cli",
     "api:dev": "npm -w apps/api run start:dev",
     "web:dev": "npm -w apps/web run dev",
     "api:test": "npm -w apps/api test",
@@ -25,7 +26,7 @@
     "check:single-instance": "node scripts/check-single-instance.mjs",
     "test:scripts": "node --test scripts/__tests__/*.test.mjs",
     "platform:infra:sync": "platform-infra sync",
-    "test:infra": "node --test tests/infra/infra-conformance.test.mts"
+    "test:infra": "npm run test:run --workspace=cli -- src/infra-conformance.test.ts"
   },
   "overrides": {
     "@nestjs/common": "^11.1.12",

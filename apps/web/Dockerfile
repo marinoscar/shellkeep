@@ -20,6 +20,9 @@ FROM base AS deps
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
+# Every workspace manifest is required: `npm ci` validates the whole workspace set against
+# the lockfile, even when installing one workspace (apps/cli is the shellkeep CLI).
+COPY apps/cli/package.json ./apps/cli/
 COPY packages ./packages/
 RUN npm ci --workspace=web --include-workspace-root
 

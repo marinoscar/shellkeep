@@ -3,11 +3,22 @@
   "version": "1.0.0",
   "private": true,
   "description": "Cross-app product identity (identity.json), read by platform-infra sync and the CLI.",
+  "type": "commonjs",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
   "files": [
+    "index.js",
+    "index.d.ts",
     "identity.json"
   ],
   "scripts": {
-    "typecheck": "echo 'No TypeScript sources - nothing to check'",
+    "typecheck": "echo 'No TypeScript sources (hand-written index.d.ts) - nothing to check'",
     "lint": "echo 'No linter configured'"
   }
 }
