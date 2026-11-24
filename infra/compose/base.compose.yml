@@ -5,7 +5,7 @@
 #   docker compose -f base.compose.yml -f dev.compose.yml up
 #
 # With observability:
-#   docker compose -f base.compose.yml -f dev.compose.yml -f otel.compose.yml up
+#   docker compose -f base.compose.yml -f dev.compose.yml -f telemetry.compose.yml up
 #
 # Production:
 #   docker compose -f base.compose.yml -f prod.compose.yml up
