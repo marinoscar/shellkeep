@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { githubRawManifest, type CreateCliOptions } from '@marinoscar/platform-cli';
+import type { ProxyStreamPathRegistration } from '@marinoscar/platform-cli/deploy';
 import { androidCommand, androidDeployStep, androidTuiScreen } from '@marinoscar/platform-cli/android';
 import type { TuiMenuSlots, TuiThemeOverrides } from '@marinoscar/platform-cli/tui';
 import { ANDROID_IDENTITY_SOURCE, APP_NAME, BRAND, CLI_NAME, REPO_SLUG, TAGLINE } from '@shellkeep/shared';
@@ -92,8 +93,11 @@ export function readVersion(): string {
  * Routes the VPS host proxy must stream (no buffering, long timeout): the same
  * routes `infra/nginx/app.d/locations/` gives the inner nginx.
  *
- *   - `/api/terminal/ws`: the terminal WebSocket (`terminal-ws.conf`);
- *   - `/api/runbook-runs`: the runbook run log streams (`runbook-streams.conf`);
+ *   - `/api/terminal/ws`: the terminal WebSocket (`terminal-ws.conf`). Registered with
+ *     `websocket: true` so the host-proxy location forwards `Upgrade $http_upgrade` and
+ *     `Connection "upgrade"` (platform 0.1.0-next.41); a plain string would render
+ *     `Connection ''` and the upgrade would be dropped (#189);
+ *   - `/api/runbook-runs`: the runbook run log streams (`runbook-streams.conf`), SSE (plain string);
  *   - `/api/ai/terminal`: the terminal AI assistant streams (`ai-terminal-streams.conf`).
  *
  * NO TRAILING SLASH. nginx answers a request for a proxied prefix location's
@@ -102,7 +106,11 @@ export function readVersion(): string {
  * reads that as a different route. The platform matches a location by PREFIX,
  * so the bare prefix still covers `/:id/logs/stream`.
  */
-export const APP_STREAM_PATHS: readonly string[] = ['/api/terminal/ws', '/api/runbook-runs', '/api/ai/terminal'];
+export const APP_STREAM_PATHS: ReadonlyArray<string | ProxyStreamPathRegistration> = [
+  { path: '/api/terminal/ws', websocket: true },
+  '/api/runbook-runs',
+  '/api/ai/terminal',
+];
 
 /**
  * The manifests the deploy version step writes the release version into.
