@@ -1,6 +1,6 @@
 # Runbook: deploy ShellKeep to a VPS
 
-How to put ShellKeep on a server with the `shellkeep` CLI, keep it updated and take it off again. The CLI is [`@marinoscar/platform-cli`](https://www.npmjs.com/package/@marinoscar/platform-cli) (pinned `0.1.0-next.39`) composed with ShellKeep's identity; its `deploy` group is the whole pipeline, there is no deploy script. Flag-level reference and exit codes: [apps/cli/README.md](../../apps/cli/README.md#deploying-to-a-server). The host proxy and the terminal WebSocket: [ssl-nginx-setup.md](../ssl-nginx-setup.md). Examples use `app.example.test`.
+How to put ShellKeep on a server with the `shellkeep` CLI, keep it updated and take it off again. The CLI is [`@marinoscar/platform-cli`](https://www.npmjs.com/package/@marinoscar/platform-cli) (pinned `0.1.0-next.41`) composed with ShellKeep's identity; its `deploy` group is the whole pipeline, there is no deploy script. Flag-level reference and exit codes: [apps/cli/README.md](../../apps/cli/README.md#deploying-to-a-server). The host proxy and the terminal WebSocket: [ssl-nginx-setup.md](../ssl-nginx-setup.md). Examples use `app.example.test`.
 
 Run every command below as `root` on the server.
 

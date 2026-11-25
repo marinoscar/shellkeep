@@ -1,6 +1,6 @@
 # Architecture
 
-> **Audience:** developers · **Status:** current for `@marinoscar/platform-*@0.1.0-next.39` (`npm run check:platform-pin`)
+> **Audience:** developers · **Status:** current for `@marinoscar/platform-*@0.1.0-next.41` (`npm run check:platform-pin`)
 
 ShellKeep is a browser-based terminal workspace: persistent tmux-backed SSH sessions, an AI assistant for the terminal and Fleet Runbooks that run a procedure across many servers. It is a **host of the EnterpriseAppBase platform packages** (`@marinoscar/platform-*`) plus its own domain. The platform owns sign-in, settings, credentials, jobs, storage, notifications, AI, backups, telemetry and the rest; this repository owns servers, terminal sessions, Terminal AI and runbooks. Deviations from the platform are listed in [platform-adoption/local-exceptions.md](platform-adoption/local-exceptions.md); an exception without a row there is a bug.
 
