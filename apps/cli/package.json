@@ -27,8 +27,8 @@
     "test:ci": "vitest run --coverage --passWithNoTests --reporter=junit --outputFile=junit.xml"
   },
   "dependencies": {
-    "@marinoscar/platform-cli": "0.1.0-next.39",
-    "@marinoscar/platform-infra": "0.1.0-next.39",
+    "@marinoscar/platform-cli": "0.1.0-next.41",
+    "@marinoscar/platform-infra": "0.1.0-next.41",
     "@shellkeep/shared": "*",
     "commander": "^14.0.2",
     "ink": "^7.1.1",
