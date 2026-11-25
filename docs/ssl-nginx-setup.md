@@ -15,7 +15,7 @@ Browser ──HTTPS :443──> host proxy (TLS, certificate) ──> 127.0.0.1:
 
 1. **Forward to `127.0.0.1:<APP_BIND_PORT>`** (8323) and set `Host`, `X-Forwarded-For`, `X-Forwarded-Proto`.
 2. **Pass WebSocket upgrades** (`Upgrade` and `Connection` headers) for `/api/terminal/ws`.
-3. **Not buffer or time out the streaming routes** the inner nginx already streams: `/api/terminal/ws`, `/api/runbook-runs` (log SSE) and `/api/ai/terminal` (assistant SSE). A 60 second read timeout closes an idle terminal (the browser sees code 1006). The CLI sets this up for you (`proxy.streamPaths`).
+3. **Not buffer or time out the streaming routes** the inner nginx already streams: `/api/terminal/ws`, `/api/runbook-runs` (log SSE) and `/api/ai/terminal` (assistant SSE). A 60 second read timeout closes an idle terminal (the browser sees code 1006). The CLI sets this up for you (`proxy.streamPaths`; the terminal route is registered as a WebSocket, so its location forwards the upgrade headers).
 4. **Allow large bodies** where the app does: the terminal's image paste uploads up to 100 MiB through `POST /api/storage/objects` (set `client_max_body_size` accordingly at the host).
 5. **Terminate TLS** with a certificate for the app's host name; the app sets HSTS itself.
 

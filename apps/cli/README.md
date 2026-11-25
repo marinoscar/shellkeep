@@ -161,7 +161,7 @@ The exit codes: `0` success; `1` a step failed, or `status` found it unhealthy; 
 
 ### Streaming routes at the host proxy
 
-The VPS host proxy must not buffer or time out the routes the inner nginx already streams: `/api/terminal/ws`, `/api/runbook-runs` and `/api/ai/terminal` (`proxy.streamPaths` in `src/app.ts`, matching `infra/nginx/app.d/locations/`). They are written without a trailing slash on purpose: nginx answers a request for a proxied prefix location's URI without its slash with a 301.
+The VPS host proxy must not buffer or time out the routes the inner nginx already streams: `/api/terminal/ws`, `/api/runbook-runs` and `/api/ai/terminal` (`proxy.streamPaths` in `src/app.ts`, matching `infra/nginx/app.d/locations/`; the terminal WebSocket is registered with `websocket: true`, so its host-proxy location forwards `Upgrade $http_upgrade` and `Connection "upgrade"` while the two SSE routes keep `Connection ''`). They are written without a trailing slash on purpose: nginx answers a request for a proxied prefix location's URI without its slash with a 301.
 
 ### Adopting an existing install
 

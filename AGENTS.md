@@ -4,7 +4,7 @@ Shared rules for AI assistants working on this codebase (loaded by OpenCode, and
 
 ## Program status (read first)
 
-ShellKeep is mid-retrofit onto the `@marinoscar/platform-*` packages (pinned `0.1.0-next.39`; program epic #30, Phase 0 epic #31). Until a slice is adopted its code still lives in `apps/api/src` and `apps/web/src`. Rules marked **applies from #N** bind once issue #N lands; paths written in backticks and marked *(target)* do not exist yet. Never invent a path: `ls` or `grep` it first.
+ShellKeep is mid-retrofit onto the `@marinoscar/platform-*` packages (pinned `0.1.0-next.41`; program epic #30, Phase 0 epic #31). Until a slice is adopted its code still lives in `apps/api/src` and `apps/web/src`. Rules marked **applies from #N** bind once issue #N lands; paths written in backticks and marked *(target)* do not exist yet. Never invent a path: `ls` or `grep` it first.
 
 ## Project overview
 

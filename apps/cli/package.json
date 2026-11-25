@@ -1,6 +1,6 @@
 {
   "name": "cli",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "The shellkeep command-line client: @marinoscar/platform-cli composed with ShellKeep's identity, deploy checks and terminal commands.",
   "type": "module",
@@ -27,8 +27,8 @@
     "test:ci": "vitest run --coverage --passWithNoTests --reporter=junit --outputFile=junit.xml"
   },
   "dependencies": {
-    "@marinoscar/platform-cli": "0.1.0-next.39",
-    "@marinoscar/platform-infra": "0.1.0-next.39",
+    "@marinoscar/platform-cli": "0.1.0-next.41",
+    "@marinoscar/platform-infra": "0.1.0-next.41",
     "@shellkeep/shared": "*",
     "commander": "^14.0.2",
     "ink": "^7.1.1",

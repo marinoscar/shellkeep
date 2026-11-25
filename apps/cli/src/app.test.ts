@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createCli, cliIdentity, envPrefix, configDirName } from '@marinoscar/platform-cli';
 import { androidTuiScreen, deployAndroidEnvVar } from '@marinoscar/platform-cli/android';
-import { parseEnvExample } from '@marinoscar/platform-cli/deploy';
+import { listRegisteredProxyStreamPaths, parseEnvExample } from '@marinoscar/platform-cli/deploy';
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
 import { getTuiRootMenuSlots, resolveTuiMenuSlot, resolveTuiTheme, tuiMenuScreens } from '@marinoscar/platform-cli/tui';
 import { cleanup, renderTuiMenu, stripAnsi } from '@marinoscar/platform-cli/tui/testing';
@@ -29,6 +29,8 @@ const REPO = join(HERE, '..', '..', '..');
 const packageVersion = (JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8')) as { version: string }).version;
 
 beforeEach(() => resetCliForTests());
+
+const streamPathNames = (): string[] => APP_STREAM_PATHS.map((entry) => (typeof entry === 'string' ? entry : entry.path));
 
 describe('the CLI identity', () => {
   it('is shellkeep, derived from identity.json', () => {
@@ -70,16 +72,28 @@ describe('deploy options', () => {
   });
 
   it('streams the terminal WebSocket and the runbook run routes at the host proxy, without a trailing slash', () => {
-    expect(APP_STREAM_PATHS).toEqual(expect.arrayContaining(['/api/terminal/ws', '/api/runbook-runs']));
-    for (const path of APP_STREAM_PATHS) expect(path.endsWith('/')).toBe(false);
+    expect(streamPathNames()).toEqual(expect.arrayContaining(['/api/terminal/ws', '/api/runbook-runs']));
+    for (const path of streamPathNames()) expect(path.endsWith('/')).toBe(false);
     expect(APP_CLI_OPTIONS.proxy?.streamPaths).toEqual(APP_STREAM_PATHS);
+  });
+
+  it('registers only the terminal WebSocket as a websocket route, so the host proxy forwards its upgrade (#189)', () => {
+    createCli(APP_CLI_OPTIONS);
+    const registered = listRegisteredProxyStreamPaths();
+    const byPath = new Map(registered.map((location) => [location.path, location]));
+    // `websocket: true` renders `Upgrade $http_upgrade` and `Connection "upgrade"`; otherwise `Connection ''`.
+    expect(byPath.get('/api/terminal/ws')).toMatchObject({ websocket: true, buffering: false });
+    for (const path of ['/api/runbook-runs', '/api/ai/terminal']) {
+      expect(byPath.get(path)).toMatchObject({ buffering: false });
+      expect(byPath.get(path)?.websocket).not.toBe(true);
+    }
   });
 
   it('streams the same routes infra/nginx/app.d/locations gives the inner nginx', () => {
     const locations = ['terminal-ws.conf', 'runbook-streams.conf', 'ai-terminal-streams.conf']
       .map((file) => readFileSync(join(REPO, 'infra', 'nginx', 'app.d', 'locations', file), 'utf8'))
       .join('\n');
-    for (const path of APP_STREAM_PATHS) expect(locations).toContain(path);
+    for (const path of streamPathNames()) expect(locations).toContain(path);
   });
 
   it('registers the three ShellKeep deploy checks and no node executor', () => {
